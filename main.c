@@ -30,6 +30,22 @@ static void usage(FILE *out)
         usage(stderr); \
     } while (0)
 
+static const char *const OPTION_EXISTS = (void *)1U;
+typedef struct {
+    const char *t[127]; // non-extended ASCII table
+    int index;
+} GetOption;
+
+static GetOption getoption(int argc, char *const *argv, const char *optstr)
+{
+    GetOption o;
+    memset(&o, 0, sizeof(GetOption));
+    for (int opt; (opt = getopt(argc, argv, optstr)) != -1; )
+        o.t[opt] = optarg != NULL ? optarg : OPTION_EXISTS;
+    o.index = optind;
+    return o;
+}
+
 typedef struct {
     const char *path;
     const char *script;
@@ -55,52 +71,23 @@ static double parse_posnum(const char *s)
 static Option parse_opt(int argc, char *const *argv)
 {
     Option o = {
-        .path = NULL,
-        .script = NULL,
-        .print = false,
-        .parse_only = false,
-        .cputime = false,
-        .memory = false,
-        .heap_stat = false,
-        .init_heap_size_mib = 0.0,
-        .stress_gc = false,
-        .interacitve = false,
+        .init_heap_size_mib = -1,
     };
-    int opt;
-    while ((opt = getopt(argc, argv, "e:H:MPpSsTh")) != -1) {
-        switch (opt) {
-        case 'e':
-            o.script = optarg;
-            break;
-        case 'H':
-            o.init_heap_size_mib = parse_posnum(optarg);
-            break;
-        case 'M':
-            o.memory = true;
-            break;
-        case 'P':
-            o.parse_only = o.print = true;
-            break;
-        case 'p':
-            o.print = true;
-            break;
-        case 'S':
-            o.stress_gc = true;
-            break;
-        case 's':
-            o.heap_stat = true;
-            break;
-        case 'T':
-            o.cputime = true;
-            break;
-        case 'h':
-            usage(stdout);
-        case '?':
-        default:
-            usage(stderr);
-        }
-    }
-    o.path = argv[optind];
+    GetOption go = getoption(argc, argv, "e:H:MPpSsTh");
+    if (go.t['?'])
+        usage(stderr);
+    if (go.t['h'])
+        usage(stdout);
+    o.script = go.t['e'];
+    if (go.t['H'])
+        o.init_heap_size_mib = parse_posnum(go.t['H']);
+    o.memory = go.t['M'];
+    o.parse_only = o.print = go.t['P'];
+    o.print = go.t['p'];
+    o.stress_gc = go.t['S'];
+    o.heap_stat = go.t['s'];
+    o.cputime = go.t['T'];
+    o.path = argv[go.index];
     if (o.path == NULL && o.script == NULL)
         o.interacitve = true;
     if (o.path != NULL && o.script != NULL)
