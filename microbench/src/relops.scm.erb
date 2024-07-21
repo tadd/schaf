@@ -1,0 +1,14 @@
+(define (rel)
+<%
+l = [*0..10]
+%w[= < > <= >=].each do |op|
+    256.times do
+-%>
+    (<%= op %> <%= l.sample %> <%= l.sample %>)
+<%   end -%>
+
+<% end -%>)
+
+(do ((i 0 (+ i 1)))
+    ((= i 5000) #t)
+  (rel))

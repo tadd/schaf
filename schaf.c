@@ -1704,72 +1704,75 @@ static Value proc_integer_p(UNUSED Table *env, Value obj)
     return OF_BOOL(value_is_int(obj));
 }
 
+typedef enum {
+    RELOP_EQ,
+    RELOP_LT,
+    RELOP_GT,
+    RELOP_LE,
+    RELOP_GE,
+} RelOp;
+
+static Value relop(RelOp op, Value args)
+{
+    static const char *names[] = {
+        [RELOP_EQ] = "=",
+        [RELOP_LT] = "<",
+        [RELOP_GT] = ">",
+        [RELOP_LE] = "<=",
+        [RELOP_GE] = ">=",
+    };
+
+    const char *const name = names[op];
+    expect_arity_min(name, 2, args);
+
+    int64_t x = value_get_int(name, car(args));
+    while ((args = cdr(args)) != Qnil) {
+        int64_t y = value_get_int(name, car(args));
+        switch (op) {
+        case RELOP_EQ:
+            if (x != y) return Qfalse;
+            break;
+        case RELOP_LT:
+            if (x >= y) return Qfalse;
+            break;
+        case RELOP_GT:
+            if (x <= y) return Qfalse;
+            break;
+        case RELOP_LE:
+            if (x >  y) return Qfalse;
+            break;
+        case RELOP_GE:
+            if (x <  y) return Qfalse;
+            break;
+        }
+        x = y;
+    }
+    return Qtrue;
+}
+
 static Value proc_numeq(UNUSED Table *env, Value args)
 {
-    expect_arity_min("=", 2, args);
-
-    int64_t x = value_get_int("=", car(args));
-    for (args = cdr(args); x == value_get_int("=", car(args)); ) {
-        if ((args = cdr(args)) == Qnil)
-            return Qtrue;
-    }
-    return Qfalse;
+    return relop(RELOP_EQ, args);
 }
 
 static Value proc_lt(UNUSED Table *env, Value args)
 {
-    expect_arity_min("<", 2, args);
-
-    int64_t x = value_get_int("<", car(args));
-    while ((args = cdr(args)) != Qnil) {
-        int64_t y = value_get_int("<", car(args));
-        if (x >= y)
-            return Qfalse;
-        x = y;
-    }
-    return Qtrue;
+    return relop(RELOP_LT, args);
 }
 
 static Value proc_gt(UNUSED Table *env, Value args)
 {
-    expect_arity_min(">", 2, args);
-
-    int64_t x = value_get_int(">", car(args));
-    while ((args = cdr(args)) != Qnil) {
-        int64_t y = value_get_int(">", car(args));
-        if (x <= y)
-            return Qfalse;
-        x = y;
-    }
-    return Qtrue;
+    return relop(RELOP_GT, args);
 }
 
 static Value proc_le(UNUSED Table *env, Value args)
 {
-    expect_arity_min("<=", 2, args);
-
-    int64_t x = value_get_int("<=", car(args));
-    while ((args = cdr(args)) != Qnil) {
-        int64_t y = value_get_int("<=", car(args));
-        if (x > y)
-            return Qfalse;
-        x = y;
-    }
-    return Qtrue;
+    return relop(RELOP_LE, args);
 }
 
 static Value proc_ge(UNUSED Table *env, Value args)
 {
-    expect_arity_min(">=", 2, args);
-
-    int64_t x = value_get_int(">=", car(args));
-    while ((args = cdr(args)) != Qnil) {
-        int64_t y = value_get_int(">=", car(args));
-        if (x < y)
-            return Qfalse;
-        x = y;
-    }
-    return Qtrue;
+    return relop(RELOP_GE, args);
 }
 
 static Value proc_zero_p(UNUSED Table *env, Value obj)
