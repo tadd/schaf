@@ -1704,72 +1704,50 @@ static Value proc_integer_p(UNUSED Table *env, Value obj)
     return OF_BOOL(value_is_int(obj));
 }
 
+typedef bool (*RelOpFunc)(int64_t x, int64_t y);
+static Value relop(const char *name, RelOpFunc func, Value args)
+{
+    expect_arity_min(name, 2, args);
+
+    int64_t x = value_get_int(name, car(args));
+    while ((args = cdr(args)) != Qnil) {
+        int64_t y = value_get_int(name, car(args));
+        if (!func(x, y))
+            return Qfalse;
+        x = y;
+    }
+    return Qtrue;
+}
+
+static inline bool relop_eq(int64_t x, int64_t y) { return x == y; }
+static inline bool relop_lt(int64_t x, int64_t y) { return x <  y; }
+static inline bool relop_le(int64_t x, int64_t y) { return x <= y; }
+static inline bool relop_gt(int64_t x, int64_t y) { return x >  y; }
+static inline bool relop_ge(int64_t x, int64_t y) { return x >= y; }
+
 static Value proc_numeq(UNUSED Table *env, Value args)
 {
-    expect_arity_min("=", 2, args);
-
-    int64_t x = value_get_int("=", car(args));
-    for (args = cdr(args); x == value_get_int("=", car(args)); ) {
-        if ((args = cdr(args)) == Qnil)
-            return Qtrue;
-    }
-    return Qfalse;
+    return relop("=", relop_eq, args);
 }
 
 static Value proc_lt(UNUSED Table *env, Value args)
 {
-    expect_arity_min("<", 2, args);
-
-    int64_t x = value_get_int("<", car(args));
-    while ((args = cdr(args)) != Qnil) {
-        int64_t y = value_get_int("<", car(args));
-        if (x >= y)
-            return Qfalse;
-        x = y;
-    }
-    return Qtrue;
+    return relop("<", relop_lt, args);
 }
 
 static Value proc_gt(UNUSED Table *env, Value args)
 {
-    expect_arity_min(">", 2, args);
-
-    int64_t x = value_get_int(">", car(args));
-    while ((args = cdr(args)) != Qnil) {
-        int64_t y = value_get_int(">", car(args));
-        if (x <= y)
-            return Qfalse;
-        x = y;
-    }
-    return Qtrue;
+    return relop(">", relop_gt, args);
 }
 
 static Value proc_le(UNUSED Table *env, Value args)
 {
-    expect_arity_min("<=", 2, args);
-
-    int64_t x = value_get_int("<=", car(args));
-    while ((args = cdr(args)) != Qnil) {
-        int64_t y = value_get_int("<=", car(args));
-        if (x > y)
-            return Qfalse;
-        x = y;
-    }
-    return Qtrue;
+    return relop("<=", relop_le, args);
 }
 
 static Value proc_ge(UNUSED Table *env, Value args)
 {
-    expect_arity_min(">=", 2, args);
-
-    int64_t x = value_get_int(">=", car(args));
-    while ((args = cdr(args)) != Qnil) {
-        int64_t y = value_get_int(">=", car(args));
-        if (x < y)
-            return Qfalse;
-        x = y;
-    }
-    return Qtrue;
+    return relop(">=", relop_ge, args);
 }
 
 static Value proc_zero_p(UNUSED Table *env, Value obj)
