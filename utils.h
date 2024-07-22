@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define ATTR(x) __attribute__((x))
+#define ATTR(x) [[gnu::x]]
 #define UNREACHABLE() error("unreachable"), __builtin_unreachable()
 #define ATTR_XMALLOC ATTR(malloc) ATTR(used) ATTR(returns_nonnull)
 
