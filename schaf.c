@@ -269,17 +269,17 @@ static void expect_cfunc_arity(int64_t actual)
           CFUNCARG_MAX, actual);
 }
 
-static Value value_of_cfunc(const char *name, cfunc_t cfunc, int64_t arity)
+static Value value_of_cfunc(const char *name, void *cfunc, int64_t arity)
 {
     expect_cfunc_arity(arity);
     CFunc *f = obj_new(sizeof(CFunc), TAG_CFUNC);
     f->name = xstrdup(name);
     f->proc.arity = arity;
-    f->cfunc = cfunc;
+    f->f = cfunc;
     return (Value) f;
 }
 
-static Value value_of_syntax(const char *name, cfunc_t cfunc, int64_t arity)
+static Value value_of_syntax(const char *name, void *cfunc, int64_t arity)
 {
     Value sp = value_of_cfunc(name, cfunc, arity);
     VALUE_TAG(sp) = TAG_SYNTAX;
@@ -309,7 +309,7 @@ static jmp_buf jmp_runtime_error, jmp_exit;
 static uint8_t exit_status; // to be portable
 static char errmsg[BUFSIZ];
 
-ATTR(noreturn)
+[[gnu::noreturn]]
 void raise_error(jmp_buf buf, const char *fmt, ...)
 {
     va_list ap;
@@ -319,7 +319,7 @@ void raise_error(jmp_buf buf, const char *fmt, ...)
     longjmp(buf, 1);
 }
 
-ATTR(noreturn)
+[[gnu::noreturn]]
 void runtime_error(const char *fmt, ...)
 {
     size_t nprep = 0;
@@ -394,29 +394,21 @@ static Value apply_cfunc(Table *env, Value proc, Value args)
     Value p = args;
     for (int i = 0; i < n; i++, p = cdr(p))
         a[i] = car(p);
-    cfunc_t f = cf->cfunc;
     curr_cfunc_name = cf->name;
-#if defined(__clang__) && __clang_major__ >= 15
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-non-prototype"
-#endif
     switch (n) {
     case -1:
-        return (*f)(env, args);
+        return cf->f1(env, args);
     case 0:
-        return (*f)(env);
+        return cf->f0(env);
     case 1:
-        return (*f)(env, a[0]);
+        return cf->f1(env, a[0]);
     case 2:
-        return (*f)(env, a[0], a[1]);
+        return cf->f2(env, a[0], a[1]);
     case 3:
-        return (*f)(env, a[0], a[1], a[2]);
+        return cf->f3(env, a[0], a[1], a[2]);
     default:
         error("arity too large: %"PRId64, n);
     }
-#if defined(__clang__) && __clang_major__ >= 15
-#pragma clang diagnostic pop
-#endif
 }
 
 static Value append2(Value l1, Value l2)
@@ -472,7 +464,7 @@ static Value apply_closure(Value proc, Value args)
     return eval_body(clenv, cl->body); // XXX: table_free(clenv)?
 }
 
-ATTR(noreturn) ATTR(noinline)
+[[gnu::noreturn]] [[gnu::noinline]]
 static void jump(Continuation *cont)
 {
     call_stack = cont->call_stack;
@@ -482,7 +474,7 @@ static void jump(Continuation *cont)
 
 #define GET_SP(p) uintptr_t v##p = 0, *p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
 
-ATTR(noreturn) ATTR(noinline)
+[[gnu::noreturn]] [[gnu::noinline]]
 static void apply_continuation(Value f, Value args)
 {
     GET_SP(sp);
@@ -514,12 +506,12 @@ static Value apply(Table *env, Value proc, Value args)
 }
 
 // Note: Do not mistake this for "(define-syntax ...)" which related to macros
-static void define_syntax(Table *env, const char *name, cfunc_t cfunc, int64_t arity)
+static void define_syntax(Table *env, const char *name, void *cfunc, int64_t arity)
 {
     env_put(env, value_of_symbol(name), value_of_syntax(name, cfunc, arity));
 }
 
-static void define_procedure(Table *env, const char *name, cfunc_t cfunc, int64_t arity)
+static void define_procedure(Table *env, const char *name, void *cfunc, int64_t arity)
 {
     env_put(env, value_of_symbol(name), value_of_cfunc(name, cfunc, arity));
 }
@@ -597,7 +589,7 @@ static Value eval(Table *env, Value v)
     return eval_apply(env, v);
 }
 
-ATTR(format(printf, 1, 2))
+[[gnu::format(printf, 1, 2)]]
 static int append_error_message(const char *fmt, ...)
 {
     size_t len = strlen(errmsg);
@@ -766,7 +758,7 @@ static Value load_inner(const char *path)
 // Built-in Procedures / Syntax
 //
 
-#define UNUSED ATTR(unused)
+#define UNUSED [[maybe_unused]]
 // 4.1. Primitive expression types
 // 4.1.2. Literal expressions
 static Value syn_quote(UNUSED Table *env, Value datum)
@@ -1776,7 +1768,7 @@ static Value value_of_continuation(void)
     return (Value) c;
 }
 
-ATTR(noinline)
+[[gnu::noinline]]
 static bool continuation_set(Value c)
 {
     GET_SP(sp); // must be the first!
@@ -1882,7 +1874,7 @@ static Value proc_load(UNUSED Table *env, Value path)
 }
 
 // Extensions from R7RS (scheme process-context)
-ATTR(noreturn)
+[[gnu::noreturn]]
 static Value proc_exit(UNUSED Table *env, Value args)
 {
     expect_arity_range(0, 1, args);

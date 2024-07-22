@@ -36,11 +36,16 @@ typedef struct {
     int64_t arity;
 } Procedure;
 
-typedef Value (*cfunc_t)(/*ANYARGS*/);
 typedef struct {
     Procedure proc;
     char *name;
-    cfunc_t cfunc;
+    union {
+        void *f;
+        Value (*f0)(Table *);
+        Value (*f1)(Table *, Value);
+        Value (*f2)(Table *, Value, Value);
+        Value (*f3)(Table *, Value, Value, Value);
+    };
 } CFunc;
 
 typedef struct {
@@ -74,7 +79,7 @@ extern Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
 
 Value iparse(FILE *in, const char *filename);
 void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col);
-ATTR(noreturn) void raise_error(jmp_buf buf, const char *fmt, ...);
+[[gnu::noreturn]] void raise_error(jmp_buf buf, const char *fmt, ...);
 Value reverse(Value l);
 void *obj_new(size_t size, ValueTag t);
 

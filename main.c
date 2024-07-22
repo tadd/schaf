@@ -8,7 +8,7 @@
 #include "schaf.h"
 #include "utils.h"
 
-ATTR(noreturn)
+[[gnu::noreturn]]
 static void usage(FILE *out)
 {
     fprintf(out, "Usage: schaf [-e <source>] [-pPTMh] <file>\n");
@@ -23,7 +23,7 @@ static void usage(FILE *out)
     exit(out == stdout ? 0 : 2);
 }
 
-ATTR(format(printf, 1, 2))
+[[gnu::format(printf, 1, 2)]]
 static void opt_error(const char *fmt, ...)
 {
     va_list ap;
