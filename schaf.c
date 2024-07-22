@@ -361,7 +361,7 @@ static jmp_buf jmp_runtime_error, jmp_exit;
 static uint8_t exit_status; // to be portable
 static char errmsg[BUFSIZ];
 
-ATTR(noreturn)
+[[gnu::noreturn]]
 void raise_error(jmp_buf buf, const char *fmt, ...)
 {
     va_list ap;
@@ -371,7 +371,7 @@ void raise_error(jmp_buf buf, const char *fmt, ...)
     longjmp(buf, 1);
 }
 
-ATTR(noreturn)
+[[gnu::noreturn]]
 static void runtime_error(const char *fmt, ...)
 {
     size_t nprep = 0;
@@ -498,7 +498,7 @@ static Value apply_closure(Value proc, Value args)
     return eval_body(clenv, cl->body); // XXX: table_free(clenv)?
 }
 
-ATTR(noreturn) ATTR(noinline)
+[[gnu::noreturn]] [[gnu::noinline]]
 static void jump(Continuation *cont)
 {
     call_stack = cont->call_stack;
@@ -508,7 +508,7 @@ static void jump(Continuation *cont)
 
 #define GET_SP(p) uintptr_t v##p = 0, *p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
 
-ATTR(noreturn) ATTR(noinline)
+[[gnu::noreturn]] [[gnu::noinline]]
 static void apply_continuation(Value f, Value args)
 {
     GET_SP(sp);
@@ -624,7 +624,7 @@ static Value eval(Table *env, Value v)
     return eval_apply(env, v);
 }
 
-ATTR(format(printf, 1, 2))
+[[gnu::format(printf, 1, 2)]]
 static int append_error_message(const char *fmt, ...)
 {
     size_t len = strlen(errmsg);
@@ -1802,7 +1802,7 @@ static Value value_of_continuation(void)
     return (Value) c;
 }
 
-ATTR(noinline)
+[[gnu::noinline]]
 static bool continuation_set(Value c)
 {
     GET_SP(sp); // must be the first!
@@ -1908,7 +1908,7 @@ static Value proc_load(UNUSED Table *env, Value path)
 }
 
 // Extensions from R7RS (scheme process-context)
-ATTR(noreturn)
+[[gnu::noreturn]]
 static Value proc_exit(UNUSED Table *env, Value args)
 {
     expect_arity_range(0, 1, args);

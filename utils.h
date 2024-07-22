@@ -13,14 +13,13 @@
 #define UNPOISON(p, n) //nothing
 #endif
 
-#define ATTR(x) __attribute__((x))
-#define UNUSED ATTR(unused)
+#define UNUSED [[maybe_unused]]
 #define UNREACHABLE() \
     error("%s:%d: %s: unreachable", __FILE__, __LINE__, __func__), \
     __builtin_unreachable()
-#define ATTR_XMALLOC ATTR(malloc) ATTR(used) ATTR(returns_nonnull)
+#define ATTR_XMALLOC [[nodiscard]] [[gnu::malloc]] [[gnu::returns_nonnull]]
 
-ATTR(noreturn) ATTR(format(printf, 1, 2)) void error(const char *fmt, ...);
+[[gnu::noreturn]] [[gnu::format(printf, 1, 2)]] void error(const char *fmt, ...);
 ATTR_XMALLOC void *xmalloc(size_t size);
 ATTR_XMALLOC void *xcalloc(size_t nmem, size_t memsize);
 ATTR_XMALLOC char *xstrdup(const char *s);
@@ -38,6 +37,6 @@ Table *table_put(Table *t, uint64_t key, uint64_t val); // `val` can't be TABLE_
 bool table_set(Table *t, uint64_t key, uint64_t val); // set if found
 uint64_t table_get(const Table *t, uint64_t key);
 void table_foreach(const Table *t, TableForeachFunc f, void *data);
-void table_dump(const Table *t) UNUSED; // for debug
+UNUSED void table_dump(const Table *t); // for debug
 
 #endif
