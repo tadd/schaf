@@ -55,8 +55,6 @@ const Value Qfalse = 0b00100U;
 const Value Qtrue  = 0b01100U;
 const Value Qundef = 0b10100U; // may be an error or something
 
-static const int64_t CFUNCARG_MAX = 3;
-
 //
 // Runtime-locals (aka global variables)
 //
@@ -276,7 +274,7 @@ static void expect_cfunc_arity(int64_t actual)
 {
     if (actual <= CFUNCARG_MAX)
         return;
-    bug("arity too large: expected ..%"PRId64" but got %"PRId64,
+    bug("arity too large: expected ..%d but got %"PRId64,
         CFUNCARG_MAX, actual);
 }
 
@@ -339,12 +337,33 @@ static Value value_of_cfunc(const char *name, void *cfunc, int64_t arity)
     default:
         bug("invalid arity: %"PRId64, arity);
     }
+    f->typed = false;
     return (Value) f;
+}
+
+static Value value_of_cfunc_typed(const char *name, void *cfunc, int64_t arity, int8_t types[])
+{
+    expect_cfunc_arity(arity);
+    Value func = value_of_cfunc(name, cfunc, arity);
+    CFunc *f = CFUNC(func);
+    f->typed = true;
+    if (arity > 0)
+        memcpy(f->types, types, sizeof(int8_t) * arity);
+    else if (arity < 0)
+        f->types[0] = types[0];
+    return func;
 }
 
 static Value value_of_syntax(const char *name, void *cfunc, int64_t arity)
 {
     Value sp = value_of_cfunc(name, cfunc, arity);
+    VALUE_TAG(sp) = TAG_SYNTAX;
+    return sp;
+}
+
+static Value value_of_syntax_typed(const char *name, void *cfunc, int64_t arity, int8_t types[])
+{
+    Value sp = value_of_cfunc_typed(name, cfunc, arity, types);
     VALUE_TAG(sp) = TAG_SYNTAX;
     return sp;
 }
@@ -420,6 +439,8 @@ const char *error_message(void)
 
 static Value expect_type(Type expected, Value v)
 {
+    if (expected == TYPE_ANY)
+        return Qfalse;
     Type t = value_type_of(v);
     if (LIKELY(t == expected))
         return Qfalse;
@@ -573,6 +594,22 @@ static void apply_continuation(Value f, Value args)
     jump(cont);
 }
 
+static void expect_arg_types(Value cfunc, Value args)
+{
+    CFunc *f = CFUNC(cfunc);
+    int64_t arity = f->proc.arity;
+    if (arity == 0 || !f->typed)
+        return;
+    int8_t *types = f->types;
+    if (arity < 0) {
+        for (; args != Qnil; args = cdr(args))
+            expect_type(*types, car(args));
+    } else {
+        for (; args != Qnil; args = cdr(args))
+            expect_type(*types++, car(args));
+    }
+}
+
 // expects proc and args have been evaluated if necessary
 static Value apply(Value env, Value proc, Value args)
 {
@@ -580,6 +617,7 @@ static Value apply(Value env, Value proc, Value args)
     switch (VALUE_TAG(proc)) {
     case TAG_SYNTAX:
     case TAG_CFUNC:
+        expect_arg_types(proc, args);
         return apply_cfunc(env, proc, args);
     case TAG_CLOSURE:
         return apply_closure(proc, args);
@@ -599,6 +637,38 @@ static void define_syntax(Value env, const char *name, void *cfunc, int64_t arit
 static void define_procedure(Value env, const char *name, void *cfunc, int64_t arity)
 {
     env_put(env, value_of_symbol(name), value_of_cfunc(name, cfunc, arity));
+}
+
+static void decode_types(int64_t arity, va_list ap, int8_t types[])
+{
+    if (arity < 0)
+        arity = 1;
+    for (int i = 0; i < arity; i++)
+        types[i] = va_arg(ap, Type);
+}
+
+static void define_procedure_typed(Value env, const char *name, void *cfunc,
+                                   int64_t arity, ...)
+{
+    expect_cfunc_arity(arity);
+    int8_t types[CFUNCARG_MAX];
+    va_list ap;
+    va_start(ap, arity);
+    decode_types(arity, ap, types);
+    va_end(ap);
+    env_put(env, value_of_symbol(name), value_of_cfunc_typed(name, cfunc, arity, types));
+}
+
+static void define_syntax_typed(Value env, const char *name, void *cfunc,
+                                int64_t arity, ...)
+{
+    expect_cfunc_arity(arity);
+    int8_t types[CFUNCARG_MAX];
+    va_list ap;
+    va_start(ap, arity);
+    decode_types(arity, ap, types);
+    va_end(ap);
+    env_put(env, value_of_symbol(name), value_of_syntax_typed(name, cfunc, arity, types));
 }
 
 static Value assq(Value key, Value l);
@@ -1269,6 +1339,8 @@ static Value syn_define(Value env, Value args)
     case TYPE_UNDEF:
         return runtime_error("the first argument expected symbol or pair but got %s",
                              value_type_to_string(t));
+    case TYPE_ANY:
+        break;
     }
     UNREACHABLE();
 }
@@ -1299,6 +1371,8 @@ static bool equal(Value x, Value y)
     case TYPE_PROC:
     case TYPE_UNDEF:
         return false;
+    case TYPE_ANY:
+        break;
     }
     UNREACHABLE();
 }
@@ -1994,6 +2068,8 @@ static void fdisplay(FILE* f, Value v)
     case TYPE_UNDEF:
         fprintf(f, "<undef>");
         break;
+    case TYPE_ANY:
+        UNREACHABLE();
     }
 }
 
@@ -2131,7 +2207,7 @@ void sch_init(uintptr_t *sp)
     // 4.1.5. Conditionals
     define_syntax(e, "if", syn_if, -1);
     // 4.1.6. Assignments
-    define_syntax(e, "set!", syn_set, 2);
+    define_syntax_typed(e, "set!", syn_set, 2, TYPE_SYMBOL, TYPE_ANY);
     // 4.2. Derived expression types
     // 4.2.1. Conditionals
     define_syntax(e, "cond", syn_cond, -1);
@@ -2171,27 +2247,27 @@ void sch_init(uintptr_t *sp)
     // 6.2.5. Numerical operations
     define_procedure(e, "number?", proc_integer_p, 1); // alias
     define_procedure(e, "integer?", proc_integer_p, 1);
-    define_procedure(e, "=", proc_numeq, -1);
-    define_procedure(e, "<", proc_lt, -1);
-    define_procedure(e, ">", proc_gt, -1);
-    define_procedure(e, "<=", proc_le, -1);
-    define_procedure(e, ">=", proc_ge, -1);
+    define_procedure_typed(e, "=", proc_numeq, -1, TYPE_INT);
+    define_procedure_typed(e, "<", proc_lt, -1, TYPE_INT);
+    define_procedure_typed(e, ">", proc_gt, -1, TYPE_INT);
+    define_procedure_typed(e, "<=", proc_le, -1, TYPE_INT);
+    define_procedure_typed(e, ">=", proc_ge, -1, TYPE_INT);
     define_procedure(e, "zero?", proc_zero_p, 1);
     define_procedure(e, "positive?", proc_positive_p, 1);
     define_procedure(e, "negative?", proc_negative_p, 1);
     define_procedure(e, "odd?", proc_odd_p, 1);
     define_procedure(e, "even?", proc_even_p, 1);
-    define_procedure(e, "max", proc_max, -1);
-    define_procedure(e, "min", proc_min, -1);
-    define_procedure(e, "+", proc_add, -1);
-    define_procedure(e, "*", proc_mul, -1);
-    define_procedure(e, "-", proc_sub, -1);
-    define_procedure(e, "/", proc_div, -1);
-    define_procedure(e, "abs", proc_abs, 1);
-    define_procedure(e, "quotient", proc_quotient, 2);
-    define_procedure(e, "remainder", proc_remainder, 2);
-    define_procedure(e, "modulo", proc_modulo, 2);
-    define_procedure(e, "expt", proc_expt, 2);
+    define_procedure_typed(e, "max", proc_max, -1, TYPE_INT);
+    define_procedure_typed(e, "min", proc_min, -1, TYPE_INT);
+    define_procedure_typed(e, "+", proc_add, -1, TYPE_INT);
+    define_procedure_typed(e, "*", proc_mul, -1, TYPE_INT);
+    define_procedure_typed(e, "-", proc_sub, -1, TYPE_INT);
+    define_procedure_typed(e, "/", proc_div, -1, TYPE_INT);
+    define_procedure_typed(e, "abs", proc_abs, 1, TYPE_INT);
+    define_procedure_typed(e, "quotient", proc_quotient, 2, TYPE_INT, TYPE_INT);
+    define_procedure_typed(e, "remainder", proc_remainder, 2, TYPE_INT, TYPE_INT);
+    define_procedure_typed(e, "modulo", proc_modulo, 2, TYPE_INT, TYPE_INT);
+    define_procedure_typed(e, "expt", proc_expt, 2, TYPE_INT, TYPE_INT);
     // 6.3. Other data types
     // 6.3.1. Booleans
     define_procedure(e, "not", proc_not, 1);
@@ -2223,15 +2299,15 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "symbol?", proc_symbol_p, 1);
     // 6.3.5. Strings
     define_procedure(e, "string?", proc_string_p, 1);
-    define_procedure(e, "string-length", proc_string_length, 1);
-    define_procedure(e, "string=?", proc_string_eq, 2);
+    define_procedure_typed(e, "string-length", proc_string_length, 1, TYPE_STRING);
+    define_procedure_typed(e, "string=?", proc_string_eq, 2, TYPE_STRING, TYPE_STRING);
     // 6.4. Control features
     define_procedure(e, "procedure?", proc_procedure_p, 1);
     define_procedure(e, "apply", proc_apply, -1);
     define_procedure(e, "map", proc_map, -1);
     define_procedure(e, "for-each", proc_for_each, -1);
-    define_procedure(e, "call/cc", proc_callcc, 1); // alias
-    define_procedure(e, "call-with-current-continuation", proc_callcc, 1);
+    define_procedure_typed(e, "call/cc", proc_callcc, 1, TYPE_PROC); // alias
+    define_procedure_typed(e, "call-with-current-continuation", proc_callcc, 1, TYPE_PROC);
     //- values
     //- call-with-values
     //- dynamic-wind

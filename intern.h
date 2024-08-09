@@ -44,8 +44,14 @@ typedef struct {
     int64_t arity;
 } Procedure;
 
+enum {
+    CFUNCARG_MAX = 3,
+};
+
 typedef struct CFunc {
     Procedure proc;
+    bool typed;
+    int8_t types[CFUNCARG_MAX];
     char *name;
     Value (*applier)(Value env, struct CFunc *f, Value args);
     union {
