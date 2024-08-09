@@ -7,6 +7,7 @@
 #include "utils.h"
 
 typedef enum {
+    TYPE_ANY,
 // immediate
     TYPE_BOOL,
     TYPE_INT,
