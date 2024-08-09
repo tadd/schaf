@@ -19,6 +19,7 @@ typedef enum {
     TYPE_PROC,
     TYPE_ENV,
     TYPE_PORT,
+    TYPE_ANY,
 } Type;
 
 typedef enum {
@@ -61,8 +62,14 @@ typedef struct {
     Value (*apply)(Value env, Value proc, Value args);
 } Procedure;
 
+enum {
+    CFUNCARG_MAX = 3,
+};
+
 typedef struct CFunc {
     Procedure proc;
+    bool typed;
+    int8_t types[CFUNCARG_MAX];
     char *name;
     union {
         void *cfunc;
