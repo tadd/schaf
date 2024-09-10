@@ -11,20 +11,20 @@
 #include "utils.h"
 
 typedef enum {
-    TOK_TYPE_LPAREN,
-    TOK_TYPE_RPAREN,
-    TOK_TYPE_QUOTE,
-    TOK_TYPE_GRAVE,
-    TOK_TYPE_COMMA,
-    TOK_TYPE_SPLICE,
-    TOK_TYPE_INT,
-    TOK_TYPE_DOT,
-    TOK_TYPE_STRING,
-    TOK_TYPE_IDENT,
-    TOK_TYPE_TRUE,
+    TOK_TYPE_QUOTE = '\'',
+    TOK_TYPE_LPAREN = '(',
+    TOK_TYPE_RPAREN = ')',
+    TOK_TYPE_COMMA = ',',
+    TOK_TYPE_DOT = '.',
+    TOK_TYPE_GRAVE = '`',
     TOK_TYPE_FALSE,
+    TOK_TYPE_TRUE,
+    TOK_TYPE_IDENT,
+    TOK_TYPE_INT,
+    TOK_TYPE_SPLICE,
+    TOK_TYPE_STRING,
     TOK_TYPE_VECTOR_LPAREN,
-    TOK_TYPE_EOF
+    TOK_TYPE_EOF = EOF
 } TokenType;
 
 typedef struct {
@@ -33,19 +33,16 @@ typedef struct {
 } Token;
 
 // singletons
-#define TOKEN_VAL(t, v) ((Token) { .type = TOK_TYPE_ ## t, .value = v })
-#define TOKEN_C(t) TOKEN_VAL(t, 0)
-static const Token TOK_LPAREN = TOKEN_C(LPAREN);
-static const Token TOK_RPAREN = TOKEN_C(RPAREN);
-static const Token TOK_QUOTE = TOKEN_C(QUOTE);
-static const Token TOK_GRAVE = TOKEN_C(GRAVE);
-static const Token TOK_COMMA = TOKEN_C(COMMA);
+#define TOKEN(t, v) ((Token) { .type = t, .value = v })
+#define TOKEN_T(t) TOKEN(t, 0)
+#define TOKEN_C(t) TOKEN_T(TOK_TYPE_ ## t)
+static const Token TOK_COMMA = TOKEN_T(',');
+static const Token TOK_DOT = TOKEN_T('.');
 static const Token TOK_SPLICE = TOKEN_C(SPLICE);
-static const Token TOK_DOT = TOKEN_C(DOT);
 static const Token TOK_TRUE = TOKEN_C(TRUE);
 static const Token TOK_FALSE = TOKEN_C(FALSE);
 static const Token TOK_VECTOR_LPAREN = TOKEN_C(VECTOR_LPAREN);
-static const Token TOK_EOF = { .type = TOK_TYPE_EOF }; // avoid conflict with "EOF" in stdio.h
+static const Token TOK_EOF = TOKEN_T(EOF);
 static Token TOK_DOT2_v = TOKEN_C(IDENT);
 static Token TOK_DOT3_v = TOKEN_C(IDENT);
 static Token TOK_PLUS_v = TOKEN_C(IDENT);
@@ -65,15 +62,15 @@ DEF_CONST_TOKEN_FUNC(MINUS, "-")
 // and ctor-s
 static inline Token token_int(int64_t i)
 {
-    return TOKEN_VAL(INT, sch_integer_new(i));
+    return TOKEN(TOK_TYPE_INT, sch_integer_new(i));
 }
 static inline Token token_string(const char *s)
 {
-    return TOKEN_VAL(STRING, sch_string_new(s));
+    return TOKEN(TOK_TYPE_STRING, sch_string_new(s));
 }
 static inline Token token_ident(const char *s)
 {
-    return TOKEN_VAL(IDENT, sch_symbol_new(s));
+    return TOKEN(TOK_TYPE_IDENT, sch_symbol_new(s));
 }
 
 typedef struct {
@@ -373,13 +370,10 @@ static Token lex(Parser *p)
     int c = fgetc(p->in);
     switch (c) {
     case '(':
-        return TOK_LPAREN;
     case ')':
-        return TOK_RPAREN;
     case '\'':
-        return TOK_QUOTE;
     case '`':
-        return TOK_GRAVE;
+        return TOKEN_T(c);
     case ',':
         return lex_comma_or_splice(p);
     case '.':
@@ -410,35 +404,31 @@ static const char *token_stringify(Token t)
     static char buf[BUFSIZ];
 
     switch (t.type) {
-    case TOK_TYPE_LPAREN:
-        return "(";
-    case TOK_TYPE_RPAREN:
-        return ")";
-    case TOK_TYPE_QUOTE:
-        return "'";
-    case TOK_TYPE_GRAVE:
-        return "`";
-    case TOK_TYPE_COMMA:
-        return ",";
-    case TOK_TYPE_SPLICE:
-        return ",@";
-    case TOK_TYPE_DOT:
-        return ".";
-    case TOK_TYPE_VECTOR_LPAREN:
-        return "#(";
+    case '(':
+    case ')':
+    case '\'':
+    case '`':
+    case ',':
+    case '.':
+        snprintf(buf, sizeof(buf), "%c", t.type);
+        break;
     case TOK_TYPE_INT:
         snprintf(buf, sizeof(buf), "%"PRId64, sch_integer_to_cint(t.value));
         break;
-    case TOK_TYPE_IDENT:
-        return sch_symbol_to_cstr(t.value);
     case TOK_TYPE_STRING:
         snprintf(buf, sizeof(buf), "\"%s\"", STRING(t.value));
         break;
+    case TOK_TYPE_IDENT:
+        return sch_symbol_to_cstr(t.value);
+    case TOK_TYPE_SPLICE:
+        return ",@";
+    case TOK_TYPE_VECTOR_LPAREN:
+        return "#(";
     case TOK_TYPE_TRUE:
         return "#t";
     case TOK_TYPE_FALSE:
         return "#f";
-    case TOK_TYPE_EOF:
+    case EOF:
         return "EOF";
     }
     return buf;
@@ -452,7 +442,7 @@ static Value parse_dotted_pair(Parser *p, Value l, Value last)
         parse_error(p, "expression", "'.'");
     Value e = parse_expr(p);
     Token t = lex(p);
-    if (t.type != TOK_TYPE_RPAREN)
+    if (t.type != ')')
         parse_error(p, "')'", "'%s'", token_stringify(t));
     PAIR(last)->cdr = e;
     return l;
@@ -522,19 +512,19 @@ static Value parse_expr(Parser *p)
 {
     Token t = lex(p);
     switch (t.type) {
-    case TOK_TYPE_LPAREN:
+    case '(':
         return parse_list(p); // parse til ')'
-    case TOK_TYPE_RPAREN:
+    case ')':
         parse_error(p, "expression", "')'");
-    case TOK_TYPE_QUOTE:
+    case '\'':
         return parse_quoted(p, SYM_QUOTE);
-    case TOK_TYPE_GRAVE:
+    case '`':
         return parse_quoted(p, SYM_QUASIQUOTE);
-    case TOK_TYPE_COMMA:
+    case ',':
         return parse_quoted(p, SYM_UNQUOTE);
     case TOK_TYPE_SPLICE:
         return parse_quoted(p, SYM_UNQUOTE_SPLICING);
-    case TOK_TYPE_DOT:
+    case '.':
         parse_error(p, "expression", "'.'");
     case TOK_TYPE_VECTOR_LPAREN:
         return parse_vector(p); // parse til ')'
@@ -546,7 +536,7 @@ static Value parse_expr(Parser *p)
     case TOK_TYPE_INT:
     case TOK_TYPE_IDENT:
         return t.value;
-    case TOK_TYPE_EOF:
+    case EOF:
         break;
     }
     return Qundef;
