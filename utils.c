@@ -80,7 +80,7 @@ struct Table {
     List **body;
 };
 
-const uint64_t TABLE_NOT_FOUND = UINT64_MAX-1;
+const uint64_t TABLE_NOT_FOUND = UINT64_MAX;
 
 Table *table_inherit(const Table *p)
 {

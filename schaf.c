@@ -33,27 +33,29 @@ static const char *TYPE_NAMES[] = {
 };
 
 #define VALUE_TAG(v) (*(ValueTag*)(v))
-#define OF_BOOL(v) ((v) ? Qtrue : Qfalse)
 
 // Value (uintptr_t):
-//   0b.....000 Pointer (Unchangeable pattern!)
-//   0b.......1 Integer
-//   0b......10 Symbol
-//   0b0--00100 #f
-//   0b0--01100 #t
-//   0b0-010100 <undef>
+//   0b......000 Pointer (Unchangeable pattern!)
+//   0b........1 #f
+//   0b.......10 Integer
+//   0b.....1100 Symbol
+//   0b0----0100 #t
+//   0b0--010100 nil
+//   0b0-0100100 <undef>
 typedef const uintptr_t Flag;
-static Flag FLAG_NBIT_SYM = 2;
-static Flag FLAG_NBIT_INT = 1;
-static Flag FLAG_MASK     = 0b111; // for 64 bit machine
-static Flag FLAG_MASK_SYM =  0b11;
-static Flag FLAG_MASK_INT =   0b1;
-static Flag FLAG_SYM      =  0b10;
-static Flag FLAG_INT      =   0b1;
-const Value Qnil   = 0b11100U;
-const Value Qfalse = 0b00100U;
-const Value Qtrue  = 0b01100U;
-const Value Qundef = 0b10100U; // may be an error or something
+static Flag FLAG_NBIT_SYM = 4;
+static Flag FLAG_NBIT_INT = 2;
+static Flag FLAG_MASK     =  0b111; // for 64 bit machines
+static Flag FLAG_MASK_SYM = 0b1111;
+static Flag FLAG_MASK_INT =   0b11;
+static Flag FLAG_SYM      = 0b1100;
+static Flag FLAG_INT      =   0b10;
+const Value Qfalse = 0b000101U;
+const Value Qtrue  = 0b000100U;
+const Value Qnil   = 0b010100U;
+const Value Qundef = 0b100100U; // may be an error or something
+#define OF_BOOL(v) ((!(v)) | 0b100U)
+// #define OF_BOOL(v) ((v) ? Qtrue : Qfalse)
 
 static const int64_t CFUNCARG_MAX = 3;
 
@@ -77,7 +79,7 @@ static Value source_data = Qnil; // (a)list of AST: (filename syntax_list newlin
 
 inline bool value_is_int(Value v)
 {
-    return v & FLAG_MASK_INT;
+    return (v & FLAG_MASK_INT) == FLAG_INT;
 }
 
 inline bool value_is_symbol(Value v)
@@ -183,7 +185,7 @@ inline int64_t value_to_int(Value x)
     return (int64_t) x >> FLAG_NBIT_INT;
 #else
     int64_t i = x;
-    return (i - 1) / (1 << FLAG_NBIT_INT);
+    return (i - (int)FLAG_NBIT_INT) / (1 << FLAG_NBIT_INT);
 #endif
 }
 
