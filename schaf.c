@@ -24,25 +24,25 @@
 //
 
 // Value (uintptr_t):
-//   0b.....000 Pointer (Unchangeable pattern!)
-//   0b.......1 Integer
-//   0b......10 Symbol
-//   0b0--00100 #f
-//   0b0--01100 #t
-//   0b0-010100 null
-//   0b0-011100 <undef>
-static const uintptr_t FLAG_NBIT_INT = 1;
-static const uintptr_t FLAG_NBIT_SYM = 2;
-static const uintptr_t FLAG_MASK_INT =   0b1;
-static const uintptr_t FLAG_MASK_SYM =  0b11;
-static const uintptr_t FLAG_MASK_IMM = 0b111; // for 64 bit machine
-static const uintptr_t FLAG_INT      =   0b1;
-static const uintptr_t FLAG_SYM      =  0b10;
-const Value SCH_FALSE = 0b00100U;
-const Value SCH_TRUE  = 0b01100U;
-const Value SCH_NULL  = 0b10100U; // emtpy list
-const Value SCH_UNDEF = 0b11100U; // may be an error or something internal
-#define BOOL_VAL(v) ((!!(v) << 3U) | 0b100U)
+//   0b......000 Pointer (Unchangeable pattern!)
+//   0b........1 #f
+//   0b.......10 Integer
+//   0b.....1100 Symbol
+//   0b0----0100 #t
+//   0b0--010100 nil
+//   0b0-0100100 <undef>
+static const uintptr_t FLAG_NBIT_INT = 2;
+static const uintptr_t FLAG_NBIT_SYM = 4;
+static const uintptr_t FLAG_MASK_INT =   0b11;
+static const uintptr_t FLAG_MASK_SYM = 0b1111;
+static const uintptr_t FLAG_MASK_IMM =  0b111; // for 64 bit machines
+static const uintptr_t FLAG_INT      =   0b10;
+static const uintptr_t FLAG_SYM      = 0b1100;
+const Value SCH_FALSE = 0b000101U;
+const Value SCH_TRUE  = 0b000100U;
+const Value SCH_NULL  = 0b010100U; // emtpy list
+const Value SCH_UNDEF = 0b100100U; // may be an error or something
+#define BOOL_VAL(v) ((!(v)) | 0b100U)
 
 static const int64_t CFUNCARG_MAX = 3;
 
@@ -75,7 +75,7 @@ static Value current_input_port = Qfalse, current_output_port = Qfalse;
 
 inline bool sch_value_is_integer(Value v)
 {
-    return v & FLAG_MASK_INT;
+    return (v & FLAG_MASK_INT) == FLAG_INT;
 }
 
 inline bool sch_value_is_symbol(Value v)
@@ -233,7 +233,7 @@ inline int64_t sch_integer_to_cint(Value x)
     return ((int64_t) x) >> FLAG_NBIT_INT;
 #else
     int64_t i = x;
-    return (i - 1) / (1 << FLAG_NBIT_INT);
+    return (i - (int)FLAG_NBIT_INT) / (1 << FLAG_NBIT_INT);
 #endif
 }
 
