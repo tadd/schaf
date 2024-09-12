@@ -14,9 +14,6 @@ typedef enum {
     TOK_TYPE_LPAREN,
     TOK_TYPE_RPAREN,
     TOK_TYPE_QUOTE,
-    TOK_TYPE_GRAVE,
-    TOK_TYPE_COMMA,
-    TOK_TYPE_SPLICE,
     TOK_TYPE_INT,
     TOK_TYPE_DOT,
     TOK_TYPE_STRING,
@@ -35,9 +32,6 @@ typedef struct {
 DEF_TOKEN(LPAREN);
 DEF_TOKEN(RPAREN);
 DEF_TOKEN(QUOTE);
-DEF_TOKEN(GRAVE);
-DEF_TOKEN(COMMA);
-DEF_TOKEN(SPLICE);
 DEF_TOKEN(DOT);
 static const Token TOK_EOF = { .type = TOK_TYPE_EOF }; // avoid conflict with stdio.h
 
@@ -125,15 +119,6 @@ static void skip_token_atmosphere(Parser *p)
             put_newline_pos(p);
     }
     ungetc(c, p->in);
-}
-
-static Token lex_comma_or_splice(Parser *p)
-{
-    int c = fgetc(p->in);
-    if (c == '@')
-        return TOK_SPLICE;
-    ungetc(c, p->in);
-    return TOK_COMMA;
 }
 
 static Token lex_dots(Parser *p)
@@ -257,10 +242,6 @@ static Token lex(Parser *p)
         return TOK_RPAREN;
     case '\'':
         return TOK_QUOTE;
-    case '`':
-        return TOK_GRAVE;
-    case ',':
-        return lex_comma_or_splice(p);
     case '.':
         return lex_dots(p);
     case '"':
@@ -298,12 +279,6 @@ static const char *token_stringify(Token t)
         return ")";
     case TOK_TYPE_QUOTE:
         return "'";
-    case TOK_TYPE_GRAVE:
-        return "`";
-    case TOK_TYPE_COMMA:
-        return ",";
-    case TOK_TYPE_SPLICE:
-        return ",@";
     case TOK_TYPE_DOT:
         return ".";
     case TOK_TYPE_INT:
@@ -389,19 +364,13 @@ static Value parse_expr(Parser *p)
         parse_error(p, "expression", "')'");
     case TOK_TYPE_QUOTE:
         return parse_quoted(p, SYM_QUOTE);
-    case TOK_TYPE_GRAVE:
-        return parse_quoted(p, SYM_QUASIQUOTE);
-    case TOK_TYPE_COMMA:
-        return parse_quoted(p, SYM_UNQUOTE);
-    case TOK_TYPE_SPLICE:
-        return parse_quoted(p, SYM_UNQUOTE_SPLICING);
-    case TOK_TYPE_DOT:
         parse_error(p, "expression", "'.'");
     case TOK_TYPE_STRING:
     case TOK_TYPE_INT:
     case TOK_TYPE_CONST:
     case TOK_TYPE_IDENT:
         return t.value;
+    case TOK_TYPE_DOT:
     case TOK_TYPE_EOF:
         break;
     }
