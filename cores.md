@@ -12,6 +12,10 @@ We'll define these as the "minimal" feature set.
 * if
 * set!
 * define
+* apply
+* eval
+* display
+* eq?
 
 ## Syntax
 
