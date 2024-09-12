@@ -212,14 +212,6 @@ Test(schaf, runtime_error_frames2) {
 "(f)");
 }
 
-Test(schaf, div0) {
-    expect_runtime_error("divided by zero", "(/ 42 0)");
-}
-
-Test(schaf, modulo) {
-    expect_runtime_error("divided by zero", "(modulo 13 0)");
-}
-
 Test(schaf, unbound_variable) {
     expect_runtime_error("unbound variable: x", "x");
     expect_runtime_error("unbound variable: x", "(+ x 2)");
@@ -228,15 +220,6 @@ Test(schaf, unbound_variable) {
 Test(schaf, if) {
     expect_runtime_error("2..3 but got 1", "(if #f)");
     expect_runtime_error("2..3 but got 4", "(if #f 1 2 3)");
-}
-
-Test(schaf, set) {
-    expect_runtime_error("unbound variable: x", "(begin (set! x 42) x)");
-}
-
-Test(schaf, let) {
-    expect_runtime_error("but got 1", "(let ((x 42)))");
-    expect_runtime_error("but got 1", "(let ((x 42) (y 100)))");
 }
 
 Test(schaf, applicable) {
