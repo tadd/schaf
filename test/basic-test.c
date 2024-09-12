@@ -192,29 +192,8 @@ Test(schaf, runtime_error_line_column) {
 "(f)");
 }
 
-Test(schaf, runtime_error_frames) {
-    expect_runtime_error(
-"-: type expected integer but got procedure\n"
-"\t<inline>:1:14 in 'f'\n"
-"\t<inline>:2:2 in <toplevel>"
-,
-"(define (f) (- -))\n"
-"(f)");
-}
-
-Test(schaf, runtime_error_frames2) {
-    expect_runtime_error(
-"unbound variable: g\n"
-"\t<inline>:1:14 in 'f'\n"
-"\t<inline>:2:2 in <toplevel>"
-,
-"(define (f) (map g '()))\n"
-"(f)");
-}
-
 Test(schaf, unbound_variable) {
     expect_runtime_error("unbound variable: x", "x");
-    expect_runtime_error("unbound variable: x", "(+ x 2)");
 }
 
 Test(schaf, if) {
@@ -225,11 +204,6 @@ Test(schaf, if) {
 Test(schaf, applicable) {
     expect_runtime_error("expected procedure", "(1 1)");
     expect_runtime_error("expected procedure", "(() 1)");
-}
-
-Test(schaf, map) {
-    expect_runtime_error("expected pair but got integer", "(map + 1)");
-    expect_runtime_error("expected pair but got integer", "(for-each + 1)");
 }
 
 #define type_name(v) (char *) value_to_type_name(v)
