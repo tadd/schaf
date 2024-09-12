@@ -1,3 +1,18 @@
+;; (define (not v)
+;;   (eq? v #f))
+
+;; (define (for-each f l)
+;;   (if (not (eq? l '()))
+;;       (begin
+;;         (f (car l))
+;;         (for-each f (cdr l)))))
+
+;; (define (list . a) a)
+
+;; (define (newline)
+;;   (display "
+;; "))
+
 (define tests '())
 (define n-failure 0)
 (define n-success 0)
@@ -5,7 +20,7 @@
 (define test-name #f)
 
 (define (describe name f)
-  (set! tests `((,name . ,f) . ,tests)))
+  (set! tests (cons (cons name f) tests)))
 ;;(define context describe)
 
 (define (xdescribe name f);; ignored case
@@ -24,27 +39,11 @@
     (display* " to <" y ">")))
 
 (define fail-message-procs
-  `((,> . ,(msg-proc-2 ">"))
-    (,= . ,(msg-proc-2 "="))
-    (,string=? . ,(msg-proc-2 "string=?"))
-    (,equal? . ,(msg-proc-2 "equal?"))
-    (,eq? . ,(msg-proc-2 "eq?"))
-    (,eqv? . ,(msg-proc-2 "eqv?"))
-    (,boolean? . ,(msg-proc-1 "boolean?"))
-    (,even? . ,(msg-proc-1 "even?"))
-    (,integer? . ,(msg-proc-1 "integer?"))
-    (,list? . ,(msg-proc-1 "list?"))
-    (,negative? . ,(msg-proc-1 "negative?"))
-    (,null? . ,(msg-proc-1 "null?"))
-    (,number? . ,(msg-proc-1 "number?"))
-    (,odd? . ,(msg-proc-1 "odd?"))
-    (,pair? . ,(msg-proc-1 "pair?"))
-    (,port? . ,(msg-proc-1 "port?"))
-    (,positive? . ,(msg-proc-1 "positive?"))
-    (,procedure? . ,(msg-proc-1 "procedure?"))
-    (,string? . ,(msg-proc-1 "string?"))
-    (,symbol? . ,(msg-proc-1 "symbol?"))
-    (,zero? . ,(msg-proc-1 "zero?"))))
+  (list (cons > (msg-proc-2 ">"))
+        (cons equal? (msg-proc-2 "equal?"))
+        (cons eq? (msg-proc-2 "eq?"))
+        (cons eqv? (msg-proc-2 "eqv?"))
+        (cons null? (msg-proc-1 "null?"))))
 
 (define (succeed)
   (set! n-success (+ n-success 1)))
