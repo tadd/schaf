@@ -17,7 +17,11 @@ We'll define these as the "minimal" feature set.
 * display
 * eq?
 
-## Syntax
+## Others
+
+Just a list
+
+### Syntax
 
 * quote / `'`
 * `#t`/`#f`
@@ -30,7 +34,7 @@ We'll define these as the "minimal" feature set.
 * define (?)
 * define-syntax (?)
 
-## Procedures
+### Procedures
 
 * eqv?
 * eq?
@@ -112,6 +116,7 @@ We'll define these as the "minimal" feature set.
 * dynamic-wind
 * eval
 * scheme-report-environment
+* null?
 * null-environment
 * input-port?
 * output-port?
