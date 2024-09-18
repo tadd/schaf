@@ -1,4 +1,4 @@
-(load "./libtest.scm")
+(load "./lib.scm")
 
 (describe "parsing comments" (lambda ()
   (expect = 1 1 ; foo

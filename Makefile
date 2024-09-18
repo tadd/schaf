@@ -1,6 +1,6 @@
 CC=gcc
 OPTFLAGS=-O0 -ggdb3
-CFLAGS=-std=gnu17 -Wall -Wextra $(OPTFLAGS) $(XCFLAGS)
+CFLAGS=-std=gnu17 -Wall -Wextra -I. $(OPTFLAGS) $(XCFLAGS)
 LIBS=-lm
 ANALYZER=-fanalyzer
 SANITIZER=-fsanitize=undefined #,address
@@ -8,7 +8,7 @@ TIMEOUT=timeout 2
 
 OBJ_COMMON=schaf.o utils.o table.o
 OBJ=$(OBJ_COMMON) main.o
-OBJ_TEST=$(OBJ_COMMON) basic-test.o
+OBJ_TEST=$(OBJ_COMMON) test/basic-test.o
 
 all: schaf test
 
@@ -26,12 +26,12 @@ test-c-san: basic-test-san
 	$(TIMEOUT) ./$<
 
 test-scheme: schaf
-	$(TIMEOUT) ./$< test.scm
+	$(TIMEOUT) ./$< test/test.scm
 test-scheme-san: schaf-san
-	$(TIMEOUT) ./$< test.scm
+	$(TIMEOUT) ./$< test/test.scm
 
 clean:
-	rm -f schaf basic-test *-san *.o
+	rm -f schaf basic-test *-san *.o test/*.o
 
 analyze: $(OBJ:.o=.analyzer)
 
@@ -45,7 +45,7 @@ basic-test-san: $(OBJ_TEST:.o=.san.o)
 	$(CC) $(CFLAGS) $(SANITIZER) -o $@ $^ $(LIBS) -lcriterion
 
 %.o: %.c
-	$(CC) $(CFLAGS) -c $<
+	$(CC) $(CFLAGS) -c $< -o $@
 
 %.s: %.c
 	$(CC) $(CFLAGS) -S -fverbose-asm -c $<
