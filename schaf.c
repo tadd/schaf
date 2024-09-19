@@ -66,15 +66,23 @@ static const int64_t CFUNCARG_MAX = 3;
 // Environment: list of Frames
 // Frame: Table of 'symbol => <value>
 static Table *toplevel_environment;
+// FIXME: Table of name => symbol value
 static Value symbol_names = Qnil; // ("name0" "name1" ...)
 Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
     SYM_RARROW;
 static const volatile void *stack_base = NULL;
 #define INIT_STACK() void *basis; stack_base = &basis
 static const char *load_basedir = NULL;
+// FIXME: array<Value> with push/pop operation
 static Value call_stack = Qnil; // list of pairs
+// FIXME: hash map: Value filename => struct { syntax_list; newline_positions; }
 static Value source_data = Qnil; // (a)list of AST: (filename syntax_list newline_positions)
 // newline_positions: list of pos | int
+
+// FIXME:
+// AST: (syntax_list filename function_locations newline_positions)
+// =>
+// struct AST { syntax_list; filename; metadata; };
 
 //
 // value_is_*: Type Checks

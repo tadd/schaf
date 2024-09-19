@@ -52,6 +52,7 @@ typedef struct {
     FILE *in;
     const char *filename;
     Token prev_token;
+    // FIXME: array<uint64_t?>
     Value newline_pos; // list of pos | int
 } Parser;
 
