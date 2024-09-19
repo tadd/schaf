@@ -63,6 +63,7 @@ typedef struct {
 
 typedef struct {
     Procedure proc;
+    // FIXME: ordered hash map
     Value env;
     Value params;
     Value body;
@@ -115,14 +116,19 @@ static const int64_t CFUNCARG_MAX = 7;
 // Runtime-locals (aka global variables)
 //
 
+// FIXME: ordered hash map: Symbol => Value
 static Value toplevel_environment = Qnil; // alist of ('symbol . <value>)
+// FIXME: array<const char *>
 static Value symbol_names = Qnil; // ("name0" "name1" ...)
 static Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
     SYM_RARROW;
 static const volatile void *stack_base = NULL;
 #define INIT_STACK() void *basis; stack_base = &basis
 static const char *load_basedir = NULL;
-static Value call_stack = Qnil;
+// FIXME: array<Value> with push/pop operation
+static Value *call_stack = NULL;
+// FIXME: hash map: Value filename => metadata
+//        | metadata = native struct of (filename function_locations newline_positions)
 static Value source_data = Qnil;
 
 //
@@ -440,7 +446,9 @@ typedef struct {
     FILE *in;
     const char *filename;
     Token prev_token;
+    // FIXME: hash map: pointer => location struct (pos . sym)
     Value function_locations; //  alist of '(id . (pos . sym)) | id = (pointer >> 3)
+    // FIXME: array<uint64_t?>
     Value newline_pos; // list of pos | int
 } Parser;
 
