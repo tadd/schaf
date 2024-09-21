@@ -30,8 +30,15 @@ static void list_free(List *l)
 
 // Table
 
+enum {
+    TABLE_INIT_SIZE = 1,
+    TABLE_TOO_MANY_FACTOR = 3,
+    TABLE_RESIZE_FACTOR = 2,
+};
+
 struct Table {
-    List *body;
+    size_t size, body_size;
+    List **body;
     const Table *parent;
 };
 
@@ -40,7 +47,9 @@ const uint64_t TABLE_NOT_FOUND = UINT64_MAX-1;
 Table *table_inherit(const Table *p)
 {
     Table *t = xmalloc(sizeof(Table));
-    t->body = NULL;
+    t->size = 0;
+    t->body_size = TABLE_INIT_SIZE;
+    t->body = xcalloc(TABLE_INIT_SIZE, sizeof(List *)); // set NULL
     t->parent = p;
     return t;
 }
@@ -54,7 +63,9 @@ void table_free(Table *t)
 {
     if (t == NULL)
         return;
-    list_free(t->body);
+    for (size_t i = 0; i < t->body_size; i++)
+        list_free(t->body[i]);
+    free(t->body);
     free(t);
 }
 
@@ -66,14 +77,73 @@ static size_t list_length(List *l)
         len++;
     return len;
 }
+
+void table_dump(const Table *t)
+{
+    fprintf(stderr, "size, body_size: %zu, %zu\n", t->size, t->body_size);
+    for (size_t i = 0; i < t->body_size; i++) {
+        fprintf(stderr, "body[%zu]: %zu\n", i, list_length(t->body[i]));
+    }
+}
 #endif
+
+static uint64_t table_hash(uint64_t x) // simplified xorshift
+{
+    x ^= x << 7U;
+    x ^= x >> 9U;
+    return x;
+}
+
+static inline List **table_body(const Table *t, uint64_t key)
+{
+    uint64_t i = table_hash(key) % t->body_size;
+    return &t->body[i];
+}
+
+static inline bool table_too_many_elements(const Table *t)
+{
+    return t->size > t->body_size * TABLE_TOO_MANY_FACTOR;
+}
+
+static void list_append(List **p, List *l)
+{
+    if (*p == NULL) {
+        *p = l;
+        return;
+    }
+    List *q;
+    for (q = *p; q->next != NULL; q = q->next)
+        ;
+    q->next = l;
+}
+
+static void table_resize(Table *t)
+{
+    const size_t old_body_size = t->body_size;
+    List **old_body = t->body;
+    t->body_size *= TABLE_RESIZE_FACTOR;
+    t->body = xcalloc(t->body_size, sizeof(List *)); // set NULL
+    for (size_t i = 0; i < old_body_size; i++) {
+        for (List *l = old_body[i], *next; l != NULL; l = next) {
+            next = l->next;
+            l->next = NULL;
+            List **p = table_body(t, l->key);
+            list_append(p, l);
+        }
+    }
+    free(old_body);
+}
 
 // `value` can't be TABLE_NOT_FOUND
 Table *table_put(Table *t, uint64_t key, uint64_t value)
 {
     if (value == TABLE_NOT_FOUND)
         error("%s: got invalid value == TABLE_NOT_FOUND", __func__);
-    t->body = list_new(key, value, t->body);
+    if (table_too_many_elements(t))
+        table_resize(t);
+    List **p = table_body(t, key);
+    *p = list_new(key, value, *p); // prepend even if the same key exists
+    t->size++;
     return t;
 }
 
@@ -90,7 +160,8 @@ static List *find1(const List *p, uint64_t key)
 static List *find(const Table *t, uint64_t key)
 {
     for (; t != NULL; t = t->parent) {
-        List *found = find1(t->body, key);
+        const List *b = *table_body(t, key);
+        List *found = find1(b, key);
         if (found != NULL)
             return found;
     }
@@ -116,8 +187,8 @@ bool table_set(Table *t, uint64_t key, uint64_t value)
 
 void table_foreach(const Table *t, TableForeachFunc f, void *data)
 {
-    for (; t != NULL; t = t->parent) {
-        for (const List *l = t->body; l != NULL; l = l->next) {
+    for (size_t i = 0; i < t->body_size; i++) {
+        for (const List *l = t->body[i]; l != NULL; l = l->next) {
             (*f)(l->key, l->value, data);
         }
     }
