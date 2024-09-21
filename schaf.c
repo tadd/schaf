@@ -75,7 +75,7 @@ typedef struct {
     volatile void *sp;
     void *shelter;
     size_t shelter_len;
-    Value call_stack;
+    Value *call_stack;
     jmp_buf state;
     Value retval;
 } Continuation;
@@ -929,19 +929,22 @@ static inline void expect_nonnull(const char *msg, Value l)
 
 static void call_stack_push(Value l)
 {
-    call_stack = cons(pair_to_id(l), call_stack);
+    scary_push(&call_stack, pair_to_id(l));
 }
 
 static void call_stack_pop(void)
 {
-    expect_nonnull("apply", call_stack);
-    call_stack = cdr(call_stack);
+    if (scary_length(call_stack) == 0)
+        error("apply: call stack underflow");
+    scary_pop(call_stack);
 }
 
 ATTR(noreturn) ATTR(noinline)
 static void jump(Continuation *cont)
 {
-    call_stack = cont->call_stack;
+    if (call_stack != NULL)
+        scary_free(call_stack);
+    call_stack = scary_dup(cont->call_stack);
     memcpy((void *) cont->sp, cont->shelter, cont->shelter_len);
     longjmp(cont->state, 1);
 }
@@ -1139,14 +1142,13 @@ static Value find_location_by_pair_id(Value id, Value *pfilename)
     return Qfalse;
 }
 
-static void dump_callee_name(Value callers)
+static void dump_callee_name(int64_t i)
 {
-    if (callers == Qnil) {
+    if (i < 0) {
         append_error_message("<toplevel>");
         return;
     }
-    Value id = car(callers);
-    Value found = find_location_by_pair_id(id, NULL);
+    Value found = find_location_by_pair_id(call_stack[i], NULL);
     if (found == Qfalse)
         append_error_message("<unknown>");
     else {
@@ -1155,34 +1157,42 @@ static void dump_callee_name(Value callers)
     }
 }
 
-static void dump_frame(Value id, Value callers)
+static void dump_frame(int64_t i)
 {
-    Value filename, found = find_location_by_pair_id(id, &filename);
+    Value filename, found = find_location_by_pair_id(call_stack[i], &filename);
     if (found == Qfalse) {
         append_error_message("\n\t<unknown>");
         return;
     }
     dump_line_column(filename, cadr(found));
-    dump_callee_name(callers);
+    dump_callee_name(i-1);
 }
 
 static void dump_stack_trace()
 {
-    for (Value p = call_stack, next; p != Qnil; p = next) {
-        next = cdr(p);
-        dump_frame(car(p), next);
-    }
+    size_t len = scary_length(call_stack);
+    for (int64_t i = len-1; i >= 0; i--)
+        dump_frame(i);
 }
 
-static void fdisplay(FILE* f, Value v);
+static void dump_raw_call_stack(void)
+{
+    fprintf(stderr, "(");
+    size_t len = scary_length(call_stack);
+    for (size_t i = 0; i < len; i++) {
+        if (i > 0)
+            fprintf(stderr, " ");
+        fprintf(stderr, "%p", (void *) call_stack[i]);
+    }
+    fprintf(stderr, ")\n");
+}
 
 static void call_stack_check_consistency(void)
 {
-    if (call_stack == Qnil)
+    if (scary_length(call_stack) == 0)
         return;
     fprintf(stderr, "BUG: got non-null call stack: ");
-    fdisplay(stderr, call_stack);
-    fprintf(stderr, "\n");
+    dump_raw_call_stack();
 }
 
 static Value iload(FILE *in, const char *filename)
@@ -1196,7 +1206,8 @@ static Value iload(FILE *in, const char *filename)
         return Qundef;
     }
     INIT_STACK();
-    call_stack = Qnil;
+    if (call_stack == NULL)
+        call_stack = scary_new(sizeof(Value));
     Value ret = eval_body(&toplevel_environment, l);
     call_stack_check_consistency();
     return ret;
@@ -2277,7 +2288,7 @@ static bool continuation_set(Value c)
     cont->shelter_len = stack_base - sp;
     cont->shelter = xmalloc(cont->shelter_len);
     memcpy(cont->shelter, (void *) sp, cont->shelter_len);
-    cont->call_stack = call_stack;
+    cont->call_stack = scary_dup(call_stack);
     return setjmp(cont->state) != 0;
 }
 
@@ -2291,6 +2302,8 @@ static Value proc_callcc(Value *env, Value proc)
 }
 
 // 6.6.3. Output
+static void fdisplay(FILE* f, Value v);
+
 static void display_list(FILE *f, Value l)
 {
     fprintf(f, "(");
