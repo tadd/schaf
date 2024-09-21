@@ -24,6 +24,14 @@ void *xmalloc(size_t size)
     return p;
 }
 
+void *xcalloc(size_t nmem, size_t memsize)
+{
+    void *p = calloc(nmem, memsize);
+    if (p == NULL)
+        error("calloc(%zu, %zu) failed", nmem, memsize);
+    return p;
+}
+
 void *xrealloc(void *q, size_t size)
 {
     void *p = realloc(q, size);
