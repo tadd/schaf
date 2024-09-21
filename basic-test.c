@@ -5,6 +5,7 @@
 #include <criterion/new/assert.h>
 
 #include "schaf.h"
+#include "utils.h"
 
 #define expect_stringify(exp, v) do { \
         char *s = stringify(v); \
@@ -217,4 +218,29 @@ Test(schaf, applicable) {
 Test(schaf, map) {
     expect_runtime_error("expected pair but got integer", "(map + 1)");
     expect_runtime_error("expected pair but got integer", "(for-each + 1)");
+}
+
+Test(table, get_put) {
+    Table *t = table_new();
+    table_put(t, 1, 100);
+    cr_assert(eq(int, 100, table_get(t, 1)));
+    table_put(t, 2, 200);
+    table_put(t, 3, 300);
+    table_put(t, 4, 400);
+    cr_assert(eq(int, 100, table_get(t, 1)));
+    cr_assert(eq(int, 200, table_get(t, 2)));
+    cr_assert(eq(int, 300, table_get(t, 3)));
+    cr_assert(eq(int, 400, table_get(t, 4)));
+    table_put(t, 1, 42);
+    cr_assert(eq(int, 42, table_get(t, 1)));
+    cr_assert(eq(int, 200, table_get(t, 2)));
+    cr_assert(eq(int, 300, table_get(t, 3)));
+    cr_assert(eq(int, 400, table_get(t, 4)));
+
+    for (int i = 1; i <= 17; i++)
+        table_put(t, i, i*10000000);
+    for (int i = 1; i <= 17; i++)
+        cr_assert(eq(int, i*10000000, table_get(t, i)));
+
+    table_free(t);
 }
