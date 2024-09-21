@@ -6,6 +6,7 @@
 
 #include "schaf.h"
 #include "table.h"
+#include "utils.h"
 
 #define expect_stringify(exp, v) do { \
         char *s = stringify(v); \
