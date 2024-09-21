@@ -6,7 +6,7 @@ ANALYZER=-fanalyzer
 SANITIZER=-fsanitize=undefined #,address
 TIMEOUT=timeout 2
 
-OBJ_COMMON=schaf.o utils.o
+OBJ_COMMON=schaf.o utils.o scary.o
 OBJ=$(OBJ_COMMON) main.o
 OBJ_TEST=$(OBJ_COMMON) basic-test.o
 
