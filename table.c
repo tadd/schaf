@@ -29,15 +29,24 @@ static void list_free(List *l)
 
 // Table
 
+enum {
+    TABLE_INIT_SIZE = 1,
+    TABLE_TOO_MANY_FACTOR = 3,
+    TABLE_RESIZE_FACTOR = 2,
+};
+
 struct Table {
-    List *body;
+    size_t size, body_size;
+    List **body;
     const Table *parent;
 };
 
 Table *table_inherit(const Table *p)
 {
     Table *t = xmalloc(sizeof(Table));
-    t->body = NULL;
+    t->size = 0;
+    t->body_size = TABLE_INIT_SIZE;
+    t->body = xcalloc(TABLE_INIT_SIZE, sizeof(List *)); // set NULL
     t->parent = p;
     return t;
 }
@@ -51,7 +60,9 @@ void table_free(Table *t)
 {
     if (t == NULL)
         return;
-    list_free(t->body);
+    for (size_t i = 0; i < t->body_size; i++)
+        list_free(t->body[i]);
+    free(t->body);
     free(t);
 }
 
@@ -63,14 +74,74 @@ static size_t list_length(List *l)
         len++;
     return len;
 }
+
+void table_dump(const Table *t)
+{
+    fprintf(stderr, "size, body_size: %zu, %zu\n", t->size, t->body_size);
+    for (size_t i = 0; i < t->body_size; i++) {
+        fprintf(stderr, "body[%zu]: %zu\n", i, list_length(t->body[i]));
+    }
+}
 #endif
+
+static uint64_t table_hash(uint64_t x) // simplified xorshift
+{
+    x ^= x << 7U;
+    x ^= x >> 9U;
+    return x;
+}
+
+static inline List **table_body(const Table *t, uint64_t key)
+{
+    uint64_t i = table_hash(key) % t->body_size;
+    return &t->body[i];
+}
+
+static inline bool table_too_many_elements(const Table *t)
+{
+    return t->size > t->body_size * TABLE_TOO_MANY_FACTOR;
+}
+
+static void list_append(List **p, List *l)
+{
+    if (*p == NULL) {
+        *p = l;
+        return;
+    }
+    List *q;
+    for (q = *p; q->next != NULL; q = q->next)
+        ;
+    q->next = l;
+}
+
+static void table_resize(Table *t)
+{
+    const size_t body_size = t->body_size;
+    List *body[body_size];
+    memcpy(body, t->body, sizeof(List *) * t->body_size);
+    t->body_size *= TABLE_RESIZE_FACTOR;
+    t->body = xrealloc(t->body, sizeof(List *) * t->body_size);
+    memset(t->body, 0, sizeof(List *) * t->body_size);
+    for (size_t i = 0; i < body_size; i++) {
+        for (List *l = body[i], *next; l != NULL; l = next) {
+            next = l->next;
+            l->next = NULL;
+            List **p = table_body(t, l->key);
+            list_append(p, l);
+        }
+    }
+}
 
 // `value` can't be 0
 Table *table_put(Table *t, uint64_t key, uint64_t value)
 {
     if (value == 0)
         error("%s: got invalid value == 0", __func__);
-    t->body = list_new(key, value, t->body);
+    if (table_too_many_elements(t))
+        table_resize(t);
+    List **p = table_body(t, key);
+    *p = list_new(key, value, *p); // prepend even if the same key exists
+    t->size++;
     return t;
 }
 
@@ -87,7 +158,8 @@ static List *find1(const List *p, uint64_t key)
 static List *find(const Table *t, uint64_t key)
 {
     for (; t != NULL; t = t->parent) {
-        List *found = find1(t->body, key);
+        const List *b = *table_body(t, key);
+        List *found = find1(b, key);
         if (found != NULL)
             return found;
     }
