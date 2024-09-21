@@ -128,7 +128,7 @@ static const char *load_basedir = NULL;
 // FIXME: array<Value> with push/pop operation
 static Value *call_stack = NULL;
 // FIXME: hash map: Value filename => metadata
-//        | metadata = native struct of (filename function_locations newline_positions)
+//        | metadata = native struct of (function_locations newline_positions)
 static Value source_data = Qnil;
 
 //
