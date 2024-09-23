@@ -178,12 +178,55 @@ void table_dump(const Table *t)
     }
 }
 
+#if 1
+// RAPID_SEED = UINT64_C(0xbdd89aa982704029);
+// RAPID_SEED_64 = RAPID_SEED ^ (rapid_mix(RAPID_SEED ^ secret[0], secret[1]) ^ 8U);
+static const uint64_t RAPID_SEED_64 = UINT64_C(0x763305bbe7bea53e);
+static const uint64_t RAPID_SECRET[] = {
+    UINT64_C(0x2d358dccaa6c78a5),
+    UINT64_C(0x8bb84b93962eacc9),
+};
+typedef __uint128_t uint128_t;
+static inline void rapid_mum(uint64_t *a, uint64_t *b)
+{
+    uint128_t r = *a;
+    r *= *b;
+    *a = (uint64_t) r;
+    *b = (uint64_t) (r >> 64U);
+}
+static inline uint64_t rapid_mix(uint64_t a, uint64_t b)
+{
+    rapid_mum(&a, &b);
+    return a ^ b;
+}
+// rapidhash for 64bit-fixed inputs
+static inline uint64_t rapidhash64(uint64_t x)
+{
+    // static const size_t len = 8;
+    static const uint64_t seed = RAPID_SEED_64;
+    static const uint64_t *const secret = RAPID_SECRET;
+
+    const uint32_t *p = (uint32_t *) &x;
+    uint64_t l = p[0], h = p[1];
+    uint64_t a = (l << 32U) | h;
+    uint64_t b = x;
+    a ^= secret[1];
+    b ^= seed;
+    rapid_mum(&a, &b);
+    return rapid_mix(a ^ secret[0] ^ 8U, b ^ secret[1]);
+}
+static inline uint64_t table_hash(uint64_t x)
+{
+    return rapidhash64(x);
+}
+#else
 static inline uint64_t table_hash(uint64_t x)
 {
     x ^= x << 7;
     x ^= x >> 9;
     return x; // xorshift64-based
 }
+#endif
 
 static inline uint64_t body_index(const Table *t, uint64_t key)
 {
