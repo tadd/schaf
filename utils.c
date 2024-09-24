@@ -186,13 +186,16 @@ static const uint64_t RAPID_SECRET[] = {
     UINT64_C(0x2d358dccaa6c78a5),
     UINT64_C(0x8bb84b93962eacc9),
 };
-typedef __uint128_t uint128_t;
 static inline void rapid_mum(uint64_t *a, uint64_t *b)
 {
-    uint128_t r = *a;
-    r *= *b;
-    *a = (uint64_t) r;
-    *b = (uint64_t) (r >> 64U);
+    // r = *a * *b, *a = lower(r), *b = upper(r);
+    uint64_t ah = *a >> 32U, al = (uint32_t) *a;
+    uint64_t bh = *b >> 32U, bl = (uint32_t) *b;
+    uint64_t ch = ah * bh, cm0 = ah * bl, cm1 = bh * al, cl = al * bl;
+    uint64_t t = cl + (cm0 << 32U), rl = t + (cm1 << 32U);
+    uint64_t rh = ch + (cm0 >> 32U) + (cm1 >> 32U) + (t < cl) + (rl < t);
+    *a = rl;
+    *b = rh;
 }
 static inline uint64_t rapid_mix(uint64_t a, uint64_t b)
 {
