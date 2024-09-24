@@ -114,12 +114,30 @@ static void list_append(List **p, List *l)
     q->next = l;
 }
 
+static size_t next_size(size_t curr)
+{
+    static const size_t prime_max = 823117;
+    static const size_t primes[] = {
+        1, 2, 5, 11, 23, 47, 97, 197, 397, 797, 1597, 3203, 6421,
+        12853, 25717, 51437, 102877, 205759, 411527, prime_max,
+    };
+    static const size_t size = sizeof(primes) / sizeof(primes[0]);
+    if (curr >= prime_max)
+        goto last;
+    for (size_t i = 0; i < size-1; i++) {
+        if (primes[i] == curr)
+            return primes[i+1];
+    }
+ last:
+    return curr*2+1;
+}
+
 static void table_resize(Table *t)
 {
     const size_t body_size = t->body_size;
     List *body[body_size];
     memcpy(body, t->body, sizeof(List *) * t->body_size);
-    t->body_size *= TABLE_RESIZE_FACTOR;
+    t->body_size = next_size(t->body_size);
     t->body = xrealloc(t->body, sizeof(List *) * t->body_size);
     memset(t->body, 0, sizeof(List *) * t->body_size);
     for (size_t i = 0; i < body_size; i++) {
