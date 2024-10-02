@@ -125,7 +125,6 @@ static Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLIC
 static const volatile void *stack_base = NULL;
 #define INIT_STACK() void *basis; stack_base = &basis
 static const char *load_basedir = NULL;
-// FIXME: array<Value> with push/pop operation
 static Value *call_stack = NULL;
 // FIXME: hash map: Value filename => metadata
 //        | metadata = native struct of (function_locations newline_positions)
