@@ -128,8 +128,11 @@ static const char *load_basedir = NULL;
 static Value *call_stack = NULL;
 // FIXME: hash map: Value filename => metadata
 //        | metadata = native struct of (function_locations newline_positions)
-static Value source_data = Qnil;
+// static Value source_data = Qnil;
+// alist of (filename . (10 20 30 ...))
 static Value filename_to_newline_pos = Qnil;
+// alist of (id . (filename pos sym))
+static Value pair_id_to_function_location = Qnil;
 
 //
 // value_is_*: Type Checks
@@ -1133,13 +1136,8 @@ static void dump_line_column(Value vfilename, Value vpos)
 
 static Value find_location_by_pair_id(Value id)
 {
-    for (Value p = source_data; p != Qnil; p = cdr(p)) {
-        Value locations = cadar(p);
-        Value found = assq(id, locations);
-        if (found != Qfalse)
-            return cdr(found);
-    }
-    return Qfalse;
+    Value found = assq(id, pair_id_to_function_location);
+    return (found == Qfalse) ? Qfalse : cdr(found);
 }
 
 static void dump_callee_name(int64_t i)
@@ -1195,12 +1193,21 @@ static void call_stack_check_consistency(void)
     dump_raw_call_stack();
 }
 
+static void record_metadata(Value metadata)
+{
+    Value filename = car(metadata);
+    Value function_locations = cadr(metadata);
+    pair_id_to_function_location =
+        append2(function_locations, pair_id_to_function_location);
+    Value newline_pos = caddr(metadata);
+    Value pos = cons(filename, newline_pos);
+    filename_to_newline_pos = cons(pos, filename_to_newline_pos);
+}
+
 static Value iload(FILE *in, const char *filename)
 {
-    Value ast = iparse(in, filename), l = car(ast), metadata = cdr(ast);
-    Value vfilename = car(metadata), newline_pos = caddr(metadata);
-    source_data = cons(metadata, source_data);
-    filename_to_newline_pos = cons(cons(vfilename, newline_pos), filename_to_newline_pos);
+    Value ast = iparse(in, filename), l = car(ast), meta = cdr(ast);
+    record_metadata(meta);
     if (l == Qundef)
         return Qundef;
     if (setjmp(jmp_runtime_error) != 0) {
@@ -1217,10 +1224,8 @@ static Value iload(FILE *in, const char *filename)
 
 static Value iload_inner(FILE *in, const char *path)
 {
-    Value ast = iparse(in, path), l = car(ast), metadata = cdr(ast);
-    Value vfilename = car(metadata), newline_pos = caddr(metadata);
-    source_data = cons(metadata, source_data);
-    filename_to_newline_pos = cons(cons(vfilename, newline_pos), filename_to_newline_pos);
+    Value ast = iparse(in, path), l = car(ast), meta = cdr(ast);
+    record_metadata(meta);
     if (l == Qundef)
         return Qundef;
     return eval_body(&toplevel_environment, l);
