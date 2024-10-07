@@ -1137,7 +1137,7 @@ static Value find_location_by_pair_id(Value id)
         Value locations = cadar(p);
         Value found = assq(id, locations);
         if (found != Qfalse)
-            return found;
+            return cdr(found);
     }
     return Qfalse;
 }
@@ -1152,7 +1152,7 @@ static void dump_callee_name(int64_t i)
     if (found == Qfalse)
         append_error_message("<unknown>");
     else {
-        const char *name = value_to_string(cadddr(found));
+        const char *name = value_to_string(caddr(found));
         append_error_message("'%s'", name);
     }
 }
@@ -1164,7 +1164,7 @@ static void dump_frame(int64_t i)
         append_error_message("\n\t<unknown>");
         return;
     }
-    dump_line_column(cadr(found), caddr(found));
+    dump_line_column(car(found), cadr(found));
     dump_callee_name(i-1);
 }
 
