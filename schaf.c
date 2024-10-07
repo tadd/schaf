@@ -127,6 +127,7 @@ static const volatile void *stack_base = NULL;
 static const char *load_basedir = NULL;
 static Value call_stack = Qnil;
 static Value source_data = Qnil;
+static Value filename_to_newline_pos = Qnil;
 
 //
 // value_is_*: Type Checks
@@ -1124,12 +1125,12 @@ static int append_error_message(const char *fmt, ...)
 static void dump_line_column(Value vfilename, Value vpos)
 {
     int64_t pos = value_to_int(vpos), line, col;
-    Value data = assq(vfilename, source_data);
-    if (data == Qnil) {
+    Value found = assq(vfilename, filename_to_newline_pos);
+    if (found == Qfalse) {
         append_error_message("\n\t<unknown>");
         return;
     }
-    Value newline_pos = caddr(data);
+    Value newline_pos = cdr(found);
     pos_to_line_col(pos, newline_pos, &line, &col);
     const char *filename = value_to_string(vfilename);
     append_error_message("\n\t%s:%"PRId64":%"PRId64" in ", filename, line, col);
@@ -1197,8 +1198,10 @@ static void call_stack_check_consistency(void)
 
 static Value iload(FILE *in, const char *filename)
 {
-    Value ast = iparse(in, filename), l = car(ast);
-    source_data = cons(cdr(ast), source_data);
+    Value ast = iparse(in, filename), l = car(ast), metadata = cdr(ast);
+    Value vfilename = car(metadata), newline_pos = caddr(metadata);
+    source_data = cons(metadata, source_data);
+    filename_to_newline_pos = cons(cons(vfilename, newline_pos), filename_to_newline_pos);
     if (l == Qundef)
         return Qundef;
     if (setjmp(jmp_runtime_error) != 0) {
@@ -1214,8 +1217,10 @@ static Value iload(FILE *in, const char *filename)
 
 static Value iload_inner(FILE *in, const char *path)
 {
-    Value ast = iparse(in, path), l = car(ast);
-    source_data = cons(cdr(ast), source_data);
+    Value ast = iparse(in, path), l = car(ast), metadata = cdr(ast);
+    Value vfilename = car(metadata), newline_pos = caddr(metadata);
+    source_data = cons(metadata, source_data);
+    filename_to_newline_pos = cons(cons(vfilename, newline_pos), filename_to_newline_pos);
     if (l == Qundef)
         return Qundef;
     return eval_body(toplevel_environment, l);
