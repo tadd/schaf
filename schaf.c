@@ -436,7 +436,7 @@ typedef struct {
     const char *filename;
     Token prev_token;
     // FIXME: hash map: pointer => location struct (pos . sym)
-    Value function_locations; //  alist of '(id . (pos . sym)) | id = (pointer >> 3)
+    Value function_locations; // alist of '(id . (filename pos sym)) | id = (pointer >> 3)
     // FIXME: array<uint64_t?>
     Value newline_pos; // list of pos | int
 } Parser;
@@ -733,10 +733,18 @@ static inline Value pair_to_id(Value p)
     return value_of_int(p >> 3U); // we assume 64 bit machines
 }
 
+static inline Value list2(Value x, Value y);
+
+static inline Value list4(Value w, Value x, Value y, Value z)
+{
+    return cons(w, cons(x, list2(y, z)));
+}
+
 static void record_location(Parser *p, Value pair, int64_t pos, Value sym)
 {
     int64_t id = pair_to_id(pair);
-    Value loc = cons(id, cons(value_of_int(pos), sym));
+    Value vfilename = value_of_symbol(p->filename);
+    Value loc = list4(id, vfilename, value_of_int(pos), sym);
     p->function_locations = cons(loc, p->function_locations);
 }
 
@@ -1003,11 +1011,6 @@ static Value lookup(Value env, Value name)
     return cdr(found);
 }
 
-static inline Value list4(Value w, Value x, Value y, Value z)
-{
-    return cons(w, cons(x, list2(y, z)));
-}
-
 // AST: (syntax_list filename function_locations newline_positions)
 static Value ast_new(Parser *p, Value syntax_list)
 {
@@ -1128,16 +1131,13 @@ static void dump_line_column(Value vfilename, Value vpos)
     append_error_message("\n\t%s:%"PRId64":%"PRId64" in ", filename, line, col);
 }
 
-static Value find_location_by_pair_id(Value id, Value *pfilename)
+static Value find_location_by_pair_id(Value id)
 {
     for (Value p = source_data; p != Qnil; p = cdr(p)) {
-        Value filename = caar(p), locations = cadar(p);
+        Value locations = cadar(p);
         Value found = assq(id, locations);
-        if (found != Qfalse) {
-            if (pfilename)
-                *pfilename = filename;
+        if (found != Qfalse)
             return found;
-        }
     }
     return Qfalse;
 }
@@ -1148,23 +1148,23 @@ static void dump_callee_name(int64_t i)
         append_error_message("<toplevel>");
         return;
     }
-    Value found = find_location_by_pair_id(call_stack[i], NULL);
+    Value found = find_location_by_pair_id(call_stack[i]);
     if (found == Qfalse)
         append_error_message("<unknown>");
     else {
-        const char *name = value_to_string(cddr(found));
+        const char *name = value_to_string(cadddr(found));
         append_error_message("'%s'", name);
     }
 }
 
 static void dump_frame(int64_t i)
 {
-    Value filename, found = find_location_by_pair_id(call_stack[i], &filename);
+    Value found = find_location_by_pair_id(call_stack[i]);
     if (found == Qfalse) {
         append_error_message("\n\t<unknown>");
         return;
     }
-    dump_line_column(filename, cadr(found));
+    dump_line_column(cadr(found), caddr(found));
     dump_callee_name(i-1);
 }
 
