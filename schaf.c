@@ -126,11 +126,11 @@ static const volatile void *stack_base = NULL;
 #define INIT_STACK() void *basis; stack_base = &basis
 static const char *load_basedir = NULL;
 static Value *call_stack = NULL;
-// FIXME: hash map: Value filename => metadata
-//        | metadata = native struct of (function_locations newline_positions)
-// static Value source_data = Qnil;
+// FIXME: hash map: Value filename => array<uint64_t?>
 // alist of (filename . (10 20 30 ...))
 static Value filename_to_newline_pos = Qnil;
+// FIXME: hash map: pair pointer => location
+//        | location = native struct of (filename pos sym)
 // alist of (id . (filename pos sym))
 static Value pair_id_to_function_location = Qnil;
 
@@ -438,7 +438,7 @@ typedef struct {
     FILE *in;
     const char *filename;
     Token prev_token;
-    // FIXME: hash map: pointer => location struct (pos . sym)
+    // FIXME: hash map: pointer => location struct (filename pos sym)
     Value function_locations; // alist of '(id . (filename pos sym)) | id = (pointer >> 3)
     // FIXME: array<uint64_t?>
     Value newline_pos; // list of pos | int
