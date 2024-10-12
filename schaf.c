@@ -241,15 +241,15 @@ inline Symbol value_to_symbol(Value v)
     return (Symbol) v >> FLAG_NBIT_SYM;
 }
 
-static const char *name_nth(const char *list[], int64_t n)
+static const char *name_nth(const char *list[], uint64_t n)
 {
-    const int64_t len = scary_length(list);
+    size_t len = scary_length(list);
     return (n < len) ? list[n] : NULL;
 }
 
 static const char *unintern(Symbol sym)
 {
-    const char *name = name_nth(symbol_names, (int64_t) sym);
+    const char *name = name_nth(symbol_names, sym);
     if (name == NULL) // fatal; every known symbols should have a name
         error("symbol %lu not found", sym);
     return name;
@@ -278,8 +278,7 @@ static inline Value list1(Value x)
 static Symbol intern(const char *name)
 {
     // find
-    int64_t i;
-    const int64_t len = scary_length(symbol_names);
+    size_t i, len = scary_length(symbol_names);
     for (i = 0; i < len; i++) {
         if (strcmp(symbol_names[i], name) == 0)
             return i;
