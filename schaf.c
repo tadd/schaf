@@ -731,7 +731,7 @@ static Value append_at(Value last, Value elem)
     return p;
 }
 
-static inline Value pair_to_id(Value p)
+static inline Value ptr_to_id(uintptr_t p)
 {
     return value_of_int(p >> 3U); // we assume 64 bit machines
 }
@@ -745,7 +745,7 @@ static inline Value list4(Value w, Value x, Value y, Value z)
 
 static void record_location(Parser *p, Value pair, int64_t pos, Value sym)
 {
-    int64_t id = pair_to_id(pair);
+    Value id = ptr_to_id(pair);
     Value vfilename = value_of_symbol(p->filename);
     Value loc = list4(id, vfilename, value_of_int(pos), sym);
     p->function_locations = cons(loc, p->function_locations);
@@ -940,7 +940,7 @@ static inline void expect_nonnull(const char *msg, Value l)
 
 static void call_stack_push(Value l)
 {
-    scary_push(&call_stack, pair_to_id(l));
+    scary_push(&call_stack, ptr_to_id(l));
 }
 
 static void call_stack_pop(void)
