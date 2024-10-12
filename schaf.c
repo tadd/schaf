@@ -1014,14 +1014,25 @@ static Value lookup(Value env, Value name)
     return cdr(found);
 }
 
-// AST: (syntax_list filename function_locations newline_positions)
-static Value ast_new(Parser *p, Value syntax_list)
+typedef struct {
+    Value ast;
+    Value filename;
+    Value function_locations;
+    Value newline_pos;
+} ParseTree;
+
+// tree: (syntax_list filename function_locations newline_positions)
+static ParseTree *parse_tree_new(Parser *p, Value list)
 {
-    Value filename = value_of_symbol(p->filename);
-    return list4(syntax_list, filename, p->function_locations, reverse(p->newline_pos));
+    ParseTree *tree = xmalloc(sizeof(ParseTree));
+    tree->ast = list;
+    tree->filename = value_of_symbol(p->filename);
+    tree->function_locations = p->function_locations;
+    tree->newline_pos = reverse(p->newline_pos); // move
+    return tree;
 }
 
-static Value parse_program(Parser *p)
+static ParseTree *parse_program(Parser *p)
 {
     Value v = Qnil, last = Qnil;
     for (Value expr; (expr = parse_expr(p)) != Qundef; ) {
@@ -1029,19 +1040,19 @@ static Value parse_program(Parser *p)
         if (v == Qnil)
             v = last;
     }
-    return ast_new(p, v);
+    return parse_tree_new(p, v);
 }
 
-static Value iparse(FILE *in, const char *filename)
+static ParseTree *iparse(FILE *in, const char *filename)
 {
     Parser *p = parser_new(in, filename);
-    Value ast;
+    ParseTree *tree;
     if (setjmp(jmp_parse_error) == 0)
-        ast = parse_program(p); // success
+        tree = parse_program(p); // success
     else
-        ast = ast_new(p, Qundef); // got an error
+        tree = parse_tree_new(p, Qundef); // got an error
     free(p);
-    return ast;
+    return tree;
 }
 
 Value parse(const char *path)
@@ -1049,17 +1060,21 @@ Value parse(const char *path)
     FILE *in = fopen(path, "r");
     if (in == NULL)
         error("parse: can't open file: %s", path);
-    Value ast = iparse(in, path);
+    ParseTree* ast = iparse(in, path);
     fclose(in);
-    return car(ast);
+    Value l = ast->ast;
+    free(ast);
+    return l;
 }
 
 Value parse_string(const char *in)
 {
     FILE *f = fmemopen((char *) in, strlen(in), "r");
-    Value ast = iparse(f, "<inline>");
+    ParseTree *tree = iparse(f, "<inline>");
     fclose(f);
-    return car(ast);
+    Value l = tree->ast;
+    free(tree);
+    return l;
 }
 
 //
@@ -1193,21 +1208,19 @@ static void call_stack_check_consistency(void)
     dump_raw_call_stack();
 }
 
-static void record_metadata(Value metadata)
+static void record_metadata(ParseTree *tree)
 {
-    Value filename = car(metadata);
-    Value function_locations = cadr(metadata);
     pair_id_to_function_location =
-        append2(function_locations, pair_id_to_function_location);
-    Value newline_pos = caddr(metadata);
-    Value pos = cons(filename, newline_pos);
+        append2(tree->function_locations, pair_id_to_function_location);
+    Value pos = cons(tree->filename, tree->newline_pos);
     filename_to_newline_pos = cons(pos, filename_to_newline_pos);
 }
 
 static Value iload(FILE *in, const char *filename)
 {
-    Value ast = iparse(in, filename), l = car(ast), meta = cdr(ast);
-    record_metadata(meta);
+    ParseTree* src = iparse(in, filename);
+    Value l = src->ast;
+    record_metadata(src);
     if (l == Qundef)
         return Qundef;
     if (setjmp(jmp_runtime_error) != 0) {
@@ -1224,8 +1237,9 @@ static Value iload(FILE *in, const char *filename)
 
 static Value iload_inner(FILE *in, const char *path)
 {
-    Value ast = iparse(in, path), l = car(ast), meta = cdr(ast);
-    record_metadata(meta);
+    ParseTree *tree = iparse(in, path);
+    Value l = tree->ast;
+    record_metadata(tree);
     if (l == Qundef)
         return Qundef;
     return eval_body(&toplevel_environment, l);
