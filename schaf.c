@@ -126,11 +126,8 @@ static const volatile void *stack_base = NULL;
 #define INIT_STACK() void *basis; stack_base = &basis
 static const char *load_basedir = NULL;
 static Value *call_stack = NULL;
-static Table *filename_to_newline_pos; // Value => array<uint64_t>
-// FIXME: hash map: pair pointer => location
-//        | location = native struct of (filename pos sym)
-// alist of (id . (filename pos sym))
-static Value pair_id_to_function_location = Qnil;
+static Table *filename_to_newline_pos; // Value (Pair) => array<uint64_t>
+static Table *pair_id_to_function_location; // Value (Pair) => Location
 
 //
 // value_is_*: Type Checks
@@ -432,11 +429,25 @@ static const Token
 #define TOK_CONST(c) TOK_V(CONST, c)
 
 typedef struct {
+    Value filename;
+    uint64_t pos;
+    Value sym;
+} Location;
+
+static Location *location_new(Value filename, uint64_t pos, Value sym)
+{
+    Location *loc = xmalloc(sizeof(Location));
+    loc->filename = filename;
+    loc->pos = pos;
+    loc->sym = sym;
+    return loc;
+}
+
+typedef struct {
     FILE *in;
     const char *filename;
     Token prev_token;
-    // FIXME: hash map: pointer => location struct (filename pos sym)
-    Value function_locations; // alist of '(id . (filename pos sym)) | id = (pointer >> 3)
+    Table *function_locations; // Value (Pair) => Location
     uint64_t *newline_pos; // array<uint64_t>
 } Parser;
 
@@ -729,30 +740,11 @@ static Value append_at(Value last, Value elem)
     return p;
 }
 
-static inline Value ptr_to_id(uintptr_t p)
-{
-    return value_of_int(p >> 3U); // we assume 64 bit machines
-}
-
-static inline void *id_to_ptr(Value id)
-{
-    uintptr_t u = value_to_int(id);
-    return (void *) (u << 3U);
-}
-
-static inline Value list2(Value x, Value y);
-
-static inline Value list4(Value w, Value x, Value y, Value z)
-{
-    return cons(w, cons(x, list2(y, z)));
-}
-
 static void record_location(Parser *p, Value pair, int64_t pos, Value sym)
 {
-    Value id = ptr_to_id(pair);
     Value vfilename = value_of_symbol(p->filename);
-    Value loc = list4(id, vfilename, value_of_int(pos), sym);
-    p->function_locations = cons(loc, p->function_locations);
+    Location *loc = location_new(vfilename, pos, sym);
+    table_put(p->function_locations, pair, (uintptr_t) loc);
 }
 
 static Value parse_list(Parser *p)
@@ -827,7 +819,7 @@ static Parser *parser_new(FILE *in, const char *filename)
     p->in = in;
     p->filename = filename;
     p->prev_token = TOK_EOF; // we use this since we never postpone EOF things
-    p->function_locations = Qnil;
+    p->function_locations = table_new();
     p->newline_pos = scary_new(sizeof(uint64_t));
     return p;
 }
@@ -944,7 +936,7 @@ static inline void expect_nonnull(const char *msg, Value l)
 
 static void call_stack_push(Value l)
 {
-    scary_push(&call_stack, ptr_to_id(l));
+    scary_push(&call_stack, l);
 }
 
 static void call_stack_pop(void)
@@ -1021,7 +1013,7 @@ static Value lookup(Value env, Value name)
 typedef struct {
     Value ast;
     Value filename;
-    Value function_locations;
+    Table *function_locations;
     uint64_t *newline_pos;
 } ParseTree;
 
@@ -1030,7 +1022,7 @@ static ParseTree *parse_tree_new(Parser *p, Value list)
     ParseTree *tree = xmalloc(sizeof(ParseTree));
     tree->ast = list;
     tree->filename = value_of_symbol(p->filename);
-    tree->function_locations = p->function_locations;
+    tree->function_locations = p->function_locations; // move
     tree->newline_pos = p->newline_pos; // move
     return tree;
 }
@@ -1138,7 +1130,7 @@ static int append_error_message(const char *fmt, ...)
     return n;
 }
 
-static void dump_line_column(Value vfilename, Value vpos)
+static void dump_line_column(Value vfilename, uint64_t pos)
 {
     const uint64_t *newline_pos =
         (uint64_t *) table_get(filename_to_newline_pos, vfilename);
@@ -1146,17 +1138,15 @@ static void dump_line_column(Value vfilename, Value vpos)
         append_error_message("\n\t<unknown>");
         return;
     }
-    uint64_t pos = value_to_int(vpos);
     uint64_t line, col;
     pos_to_line_col(pos, newline_pos, &line, &col);
     const char *filename = value_to_string(vfilename);
     append_error_message("\n\t%s:%"PRId64":%"PRId64" in ", filename, line, col);
 }
 
-static Value find_location_by_pair_id(Value id)
+static Location *find_location_by_pair(Value pair)
 {
-    Value found = assq(id, pair_id_to_function_location);
-    return (found == Qfalse) ? Qfalse : cdr(found);
+    return (Location *) table_get(pair_id_to_function_location, pair);
 }
 
 static void dump_callee_name(int64_t i)
@@ -1165,23 +1155,23 @@ static void dump_callee_name(int64_t i)
         append_error_message("<toplevel>");
         return;
     }
-    Value found = find_location_by_pair_id(call_stack[i]);
-    if (found == Qfalse)
+    Location *loc = find_location_by_pair(call_stack[i]);
+    if (loc == NULL)
         append_error_message("<unknown>");
     else {
-        const char *name = value_to_string(caddr(found));
+        const char *name = value_to_string(loc->sym);
         append_error_message("'%s'", name);
     }
 }
 
 static void dump_frame(int64_t i)
 {
-    Value found = find_location_by_pair_id(call_stack[i]);
-    if (found == Qfalse) {
+    Location *loc = find_location_by_pair(call_stack[i]);
+    if (loc == NULL) {
         append_error_message("\n\t<unknown>");
         return;
     }
-    dump_line_column(car(found), cadr(found));
+    dump_line_column(loc->filename, loc->pos);
     dump_callee_name(i-1);
 }
 
@@ -1214,8 +1204,7 @@ static void call_stack_check_consistency(void)
 
 static void record_metadata(ParseTree *tree)
 {
-    pair_id_to_function_location =
-        append2(tree->function_locations, pair_id_to_function_location);
+    table_merge(pair_id_to_function_location, tree->function_locations);
     uint64_t val = (uintptr_t) tree->newline_pos;
     table_put(filename_to_newline_pos, tree->filename, val);
 }
@@ -2447,6 +2436,7 @@ static void initialize(void)
     SYM_UNQUOTE_SPLICING = value_of_symbol("unquote-splicing");
     SYM_RARROW = value_of_symbol("=>");
     filename_to_newline_pos = table_new();
+    pair_id_to_function_location = table_new();
 
     Value *e = &toplevel_environment;
 
