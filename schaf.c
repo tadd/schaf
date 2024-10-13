@@ -448,11 +448,11 @@ typedef struct {
     Value newline_pos; // list of pos | int
 } Parser;
 
-static void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col)
+static void pos_to_line_col(uint64_t pos, Value newline_pos, uint64_t *line, uint64_t *col)
 {
-    int64_t nline = 0, last = 0;
+    uint64_t nline = 0, last = 0;
     for (Value p = newline_pos; p != Qnil; p = cdr(p), nline++) {
-        int n = value_to_int(car(p));
+        uint64_t n = value_to_int(car(p));
         if (n > pos)
             break;
         last = n;
@@ -467,8 +467,8 @@ ATTR(noreturn)
 static void parse_error(Parser *p, const char *expected, const char *actual, ...)
 {
     Value newline_pos = reverse(p->newline_pos);
-    int64_t pos = ftell(p->in);
-    int64_t line, col;
+    uint64_t pos = ftell(p->in);
+    uint64_t line, col;
     pos_to_line_col(pos, newline_pos, &line, &col);
     int n = snprintf(errmsg, sizeof(errmsg),
                      "%s:%"PRId64":%"PRId64": expected %s but got ",
@@ -1124,7 +1124,7 @@ static int append_error_message(const char *fmt, ...)
 
 static void dump_line_column(Value vfilename, Value vpos)
 {
-    int64_t pos = value_to_int(vpos), line, col;
+    uint64_t pos = value_to_int(vpos), line, col;
     Value found = assq(vfilename, filename_to_newline_pos);
     if (found == Qfalse) {
         append_error_message("\n\t<unknown>");
