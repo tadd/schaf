@@ -285,3 +285,21 @@ Test(table, inherit_nested) {
     table_free(u);
     table_free(t);
 }
+
+Test(table, merge) {
+    Table *t = table_new();
+    for (size_t i = 1; i <= 11; i++)
+        table_put(t, i, i*13);
+    Table *u = table_new();
+    for (size_t i = 5; i <= 17; i++)
+        table_put(u, i, i*19);
+    table_merge(t, u);
+
+    for (int i = 1; i < 5; i++)
+        cr_assert(eq(sz, i*13, table_get(t, i)));
+    for (int i = 5; i <= 17; i++)
+        cr_assert(eq(sz, i*19, table_get(t, i)));
+
+    table_free(t);
+    table_free(u);
+}

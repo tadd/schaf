@@ -190,6 +190,16 @@ uint64_t table_get(const Table *t, uint64_t key)
     return l == NULL ? 0 : l->value;
 }
 
+void table_merge(Table *dst, const Table *src)
+{
+    const size_t size = src->body_size;
+    for (size_t i = 0; i < size; i++) {
+        for (List *l = src->body[i]; l != NULL; l = l->next) {
+            table_put(dst, l->key, l->value);
+        }
+    }
+}
+
 bool table_set(Table *t, uint64_t key, uint64_t value)
 {
     if (value == 0)
