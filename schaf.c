@@ -127,7 +127,7 @@ static const volatile void *stack_base = NULL;
 static const char *load_basedir = NULL;
 static Value *call_stack = NULL;
 // FIXME: hash map: Value filename => array<uint64_t?>
-// alist of (filename . (10 20 30 ...))
+// alist of (filename . id<array<uint64_t>>)
 static Value filename_to_newline_pos = Qnil;
 // FIXME: hash map: pair pointer => location
 //        | location = native struct of (filename pos sym)
@@ -439,15 +439,16 @@ typedef struct {
     Token prev_token;
     // FIXME: hash map: pointer => location struct (filename pos sym)
     Value function_locations; // alist of '(id . (filename pos sym)) | id = (pointer >> 3)
-    // FIXME: array<uint64_t?>
-    Value newline_pos; // list of pos | int
+    uint64_t *newline_pos; // array<uint64_t>
 } Parser;
 
-static void pos_to_line_col(uint64_t pos, Value newline_pos, uint64_t *line, uint64_t *col)
+static void pos_to_line_col(uint64_t pos, const uint64_t *newline_pos,
+                            uint64_t *line, uint64_t *col)
 {
-    uint64_t nline = 0, last = 0;
-    for (Value p = newline_pos; p != Qnil; p = cdr(p), nline++) {
-        uint64_t n = value_to_int(car(p));
+    uint64_t nline, last = 0;
+    size_t l = scary_length(newline_pos);
+    for (nline = 0; nline < l; nline++) {
+        uint64_t n = newline_pos[nline];
         if (n > pos)
             break;
         last = n;
@@ -461,12 +462,11 @@ static Value reverse(Value l);
 ATTR(noreturn)
 static void parse_error(Parser *p, const char *expected, const char *actual, ...)
 {
-    Value newline_pos = reverse(p->newline_pos);
     uint64_t pos = ftell(p->in);
     uint64_t line, col;
-    pos_to_line_col(pos, newline_pos, &line, &col);
+    pos_to_line_col(pos, p->newline_pos, &line, &col);
     int n = snprintf(errmsg, sizeof(errmsg),
-                     "%s:%"PRId64":%"PRId64": expected %s but got ",
+                     "%s:%"PRIu64":%"PRIu64": expected %s but got ",
                      p->filename, line, col, expected);
     va_list ap;
     va_start(ap, actual);
@@ -477,7 +477,8 @@ static void parse_error(Parser *p, const char *expected, const char *actual, ...
 
 static inline void put_newline_pos(Parser *p)
 {
-    p->newline_pos = cons(value_of_int(ftell(p->in)), p->newline_pos);
+    uint64_t pos = ftell(p->in);
+    scary_push(&p->newline_pos, pos);
 }
 
 static void skip_token_atmosphere(Parser *p)
@@ -735,6 +736,12 @@ static inline Value ptr_to_id(uintptr_t p)
     return value_of_int(p >> 3U); // we assume 64 bit machines
 }
 
+static inline void *id_to_ptr(Value id)
+{
+    uintptr_t u = value_to_int(id);
+    return (void *) (u << 3U);
+}
+
 static inline Value list2(Value x, Value y);
 
 static inline Value list4(Value w, Value x, Value y, Value z)
@@ -823,7 +830,7 @@ static Parser *parser_new(FILE *in, const char *filename)
     p->filename = filename;
     p->prev_token = TOK_EOF; // we use this since we never postpone EOF things
     p->function_locations = Qnil;
-    p->newline_pos = Qnil;
+    p->newline_pos = scary_new(sizeof(uint64_t));
     return p;
 }
 
@@ -1017,7 +1024,7 @@ typedef struct {
     Value ast;
     Value filename;
     Value function_locations;
-    Value newline_pos;
+    uint64_t *newline_pos;
 } ParseTree;
 
 // tree: (syntax_list filename function_locations newline_positions)
@@ -1027,7 +1034,7 @@ static ParseTree *parse_tree_new(Parser *p, Value list)
     tree->ast = list;
     tree->filename = value_of_symbol(p->filename);
     tree->function_locations = p->function_locations;
-    tree->newline_pos = reverse(p->newline_pos); // move
+    tree->newline_pos = p->newline_pos; // move
     return tree;
 }
 
@@ -1050,7 +1057,7 @@ static ParseTree *iparse(FILE *in, const char *filename)
         tree = parse_program(p); // success
     else
         tree = parse_tree_new(p, Qundef); // got an error
-    free(p);
+    free(p); // p->newline_pos is moved into tree
     return tree;
 }
 
@@ -1136,13 +1143,14 @@ static int append_error_message(const char *fmt, ...)
 
 static void dump_line_column(Value vfilename, Value vpos)
 {
-    uint64_t pos = value_to_int(vpos), line, col;
     Value found = assq(vfilename, filename_to_newline_pos);
     if (found == Qfalse) {
         append_error_message("\n\t<unknown>");
         return;
     }
-    Value newline_pos = cdr(found);
+    uint64_t *newline_pos = id_to_ptr(cdr(found));
+    uint64_t pos = (uint64_t) value_to_int(vpos);
+    uint64_t line, col;
     pos_to_line_col(pos, newline_pos, &line, &col);
     const char *filename = value_to_string(vfilename);
     append_error_message("\n\t%s:%"PRId64":%"PRId64" in ", filename, line, col);
@@ -1211,7 +1219,8 @@ static void record_metadata(ParseTree *tree)
 {
     pair_id_to_function_location =
         append2(tree->function_locations, pair_id_to_function_location);
-    Value pos = cons(tree->filename, tree->newline_pos);
+    Value id = ptr_to_id((uintptr_t) tree->newline_pos);
+    Value pos = cons(tree->filename, id);
     filename_to_newline_pos = cons(pos, filename_to_newline_pos);
 }
 
