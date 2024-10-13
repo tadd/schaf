@@ -126,7 +126,7 @@ static const volatile void *stack_base = NULL;
 #define INIT_STACK() void *basis; stack_base = &basis
 static const char *load_basedir = NULL;
 static Value *call_stack = NULL;
-static Table *filename_to_newline_pos; // Value (Pair) => array<uint64_t>
+static Table *filename_to_newline_pos; // Value => array<uint64_t>
 static Table *pair_id_to_function_location; // Value (Pair) => Location
 
 //
@@ -743,7 +743,7 @@ static Value append_at(Value last, Value elem)
 
 static void record_location(Parser *p, Value pair, int64_t pos, Value sym)
 {
-    if (p->vfilename == Qfalse)
+    if (p->vfilename == Qfalse) // cache Symbol
         p->vfilename = value_of_symbol(p->filename);
     Location *loc = location_new(p->vfilename, pos, sym);
     table_put(p->function_locations, pair, (uintptr_t) loc);
@@ -1013,44 +1013,33 @@ static Value lookup(Value env, Value name)
     return cdr(found);
 }
 
-typedef struct {
-    Value ast;
-    Value filename;
-    Table *function_locations;
-    uint64_t *newline_pos;
-} ParseTree;
-
-static ParseTree *parse_tree_new(Parser *p, Value list)
+static Value parse_program(Parser *p)
 {
-    ParseTree *tree = xmalloc(sizeof(ParseTree));
-    tree->ast = list;
-    tree->filename = value_of_symbol(p->filename);
-    tree->function_locations = p->function_locations; // move
-    tree->newline_pos = p->newline_pos; // move
-    return tree;
-}
-
-static ParseTree *parse_program(Parser *p)
-{
-    Value v = Qnil, last = Qnil;
+    Value l = Qnil, last = Qnil;
     for (Value expr; (expr = parse_expr(p)) != Qundef; ) {
         last = append_at(last, expr);
-        if (v == Qnil)
-            v = last;
+        if (l == Qnil)
+            l = last;
     }
-    return parse_tree_new(p, v);
+    return l;
 }
 
-static ParseTree *iparse(FILE *in, const char *filename)
+static void record_metadata(Parser *p)
+{
+    table_merge(pair_id_to_function_location, p->function_locations);
+    table_put(filename_to_newline_pos, value_of_symbol(p->filename),
+                  (uintptr_t) p->newline_pos);
+}
+
+static Value iparse(FILE *in, const char *filename)
 {
     Parser *p = parser_new(in, filename);
-    ParseTree *tree;
+    Value l = Qundef;
     if (setjmp(jmp_parse_error) == 0)
-        tree = parse_program(p); // success
-    else
-        tree = parse_tree_new(p, Qundef); // got an error
-    free(p); // some members are moved into tree
-    return tree;
+        l = parse_program(p); // success
+    record_metadata(p);
+    free(p);
+    return l;
 }
 
 Value parse(const char *path)
@@ -1058,20 +1047,16 @@ Value parse(const char *path)
     FILE *in = fopen(path, "r");
     if (in == NULL)
         error("parse: can't open file: %s", path);
-    ParseTree* ast = iparse(in, path);
+    Value l = iparse(in, path);
     fclose(in);
-    Value l = ast->ast;
-    free(ast);
     return l;
 }
 
 Value parse_string(const char *in)
 {
     FILE *f = fmemopen((char *) in, strlen(in), "r");
-    ParseTree *tree = iparse(f, "<inline>");
+    Value l = iparse(f, "<inline>");
     fclose(f);
-    Value l = tree->ast;
-    free(tree);
     return l;
 }
 
@@ -1205,18 +1190,9 @@ static void call_stack_check_consistency(void)
     dump_raw_call_stack();
 }
 
-static void record_metadata(ParseTree *tree)
-{
-    table_merge(pair_id_to_function_location, tree->function_locations);
-    uint64_t val = (uintptr_t) tree->newline_pos;
-    table_put(filename_to_newline_pos, tree->filename, val);
-}
-
 static Value iload(FILE *in, const char *filename)
 {
-    ParseTree* src = iparse(in, filename);
-    Value l = src->ast;
-    record_metadata(src);
+    Value l = iparse(in, filename);
     if (l == Qundef)
         return Qundef;
     if (setjmp(jmp_runtime_error) != 0) {
@@ -1233,9 +1209,7 @@ static Value iload(FILE *in, const char *filename)
 
 static Value iload_inner(FILE *in, const char *path)
 {
-    ParseTree *tree = iparse(in, path);
-    Value l = tree->ast;
-    record_metadata(tree);
+    Value l = iparse(in, path);
     if (l == Qundef)
         return Qundef;
     return eval_body(&toplevel_environment, l);
