@@ -126,9 +126,7 @@ static const volatile void *stack_base = NULL;
 #define INIT_STACK() void *basis; stack_base = &basis
 static const char *load_basedir = NULL;
 static Value *call_stack = NULL;
-// FIXME: hash map: Value filename => array<uint64_t?>
-// alist of (filename . id<array<uint64_t>>)
-static Value filename_to_newline_pos = Qnil;
+static Table *filename_to_newline_pos; // Value => array<uint64_t>
 // FIXME: hash map: pair pointer => location
 //        | location = native struct of (filename pos sym)
 // alist of (id . (filename pos sym))
@@ -1027,7 +1025,6 @@ typedef struct {
     uint64_t *newline_pos;
 } ParseTree;
 
-// tree: (syntax_list filename function_locations newline_positions)
 static ParseTree *parse_tree_new(Parser *p, Value list)
 {
     ParseTree *tree = xmalloc(sizeof(ParseTree));
@@ -1143,13 +1140,13 @@ static int append_error_message(const char *fmt, ...)
 
 static void dump_line_column(Value vfilename, Value vpos)
 {
-    Value found = assq(vfilename, filename_to_newline_pos);
-    if (found == Qfalse) {
+    const uint64_t *newline_pos =
+        (uint64_t *) table_get(filename_to_newline_pos, vfilename);
+    if (newline_pos == NULL) {
         append_error_message("\n\t<unknown>");
         return;
     }
-    uint64_t *newline_pos = id_to_ptr(cdr(found));
-    uint64_t pos = (uint64_t) value_to_int(vpos);
+    uint64_t pos = value_to_int(vpos);
     uint64_t line, col;
     pos_to_line_col(pos, newline_pos, &line, &col);
     const char *filename = value_to_string(vfilename);
@@ -1219,9 +1216,8 @@ static void record_metadata(ParseTree *tree)
 {
     pair_id_to_function_location =
         append2(tree->function_locations, pair_id_to_function_location);
-    Value id = ptr_to_id((uintptr_t) tree->newline_pos);
-    Value pos = cons(tree->filename, id);
-    filename_to_newline_pos = cons(pos, filename_to_newline_pos);
+    uint64_t val = (uintptr_t) tree->newline_pos;
+    table_put(filename_to_newline_pos, tree->filename, val);
 }
 
 static Value iload(FILE *in, const char *filename)
@@ -2450,6 +2446,7 @@ static void initialize(void)
     SYM_UNQUOTE = value_of_symbol("unquote");
     SYM_UNQUOTE_SPLICING = value_of_symbol("unquote-splicing");
     SYM_RARROW = value_of_symbol("=>");
+    filename_to_newline_pos = table_new();
 
     Value *e = &toplevel_environment;
 
