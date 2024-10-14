@@ -746,7 +746,7 @@ static void record_location(Parser *p, Value pair, int64_t pos, Value sym)
     if (p->vfilename == Qfalse) // cache Symbol
         p->vfilename = value_of_symbol(p->filename);
     Location *loc = location_new(p->vfilename, pos, sym);
-    table_put(p->function_locations, pair, (uintptr_t) loc);
+    table_put(p->function_locations, pair, (uint64_t) loc);
 }
 
 static Value parse_list(Parser *p)
@@ -1028,7 +1028,7 @@ static void record_metadata(Parser *p)
 {
     table_merge(pair_to_function_location, p->function_locations);
     table_put(filename_to_newline_pos, value_of_symbol(p->filename),
-                  (uintptr_t) p->newline_pos);
+              (uint64_t) p->newline_pos);
 }
 
 static Value iparse(FILE *in, const char *filename)
