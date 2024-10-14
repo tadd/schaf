@@ -127,7 +127,7 @@ static const volatile void *stack_base = NULL;
 static const char *load_basedir = NULL;
 static Value *call_stack = NULL;
 static Table *filename_to_newline_pos; // Value => array<uint64_t>
-static Table *pair_id_to_function_location; // Value (Pair) => Location
+static Table *pair_to_function_location; // Value (Pair) => Location
 
 //
 // value_is_*: Type Checks
@@ -1026,7 +1026,7 @@ static Value parse_program(Parser *p)
 
 static void record_metadata(Parser *p)
 {
-    table_merge(pair_id_to_function_location, p->function_locations);
+    table_merge(pair_to_function_location, p->function_locations);
     table_put(filename_to_newline_pos, value_of_symbol(p->filename),
                   (uintptr_t) p->newline_pos);
 }
@@ -1134,7 +1134,7 @@ static void dump_line_column(Value vfilename, uint64_t pos)
 
 static Location *find_location_by_pair(Value pair)
 {
-    return (Location *) table_get(pair_id_to_function_location, pair);
+    return (Location *) table_get(pair_to_function_location, pair);
 }
 
 static void dump_callee_name(int64_t i)
@@ -2413,7 +2413,7 @@ static void initialize(void)
     SYM_UNQUOTE_SPLICING = value_of_symbol("unquote-splicing");
     SYM_RARROW = value_of_symbol("=>");
     filename_to_newline_pos = table_new();
-    pair_id_to_function_location = table_new();
+    pair_to_function_location = table_new();
 
     Value *e = &toplevel_environment;
 
