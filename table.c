@@ -38,17 +38,38 @@ enum {
 struct Table {
     size_t size, body_size;
     List **body;
+    TableHashFunc hash;
+    TableEqualFunc eq;
     const Table *parent;
 };
 
-Table *table_inherit(const Table *p)
+static inline bool direct_equal(uint64_t x, uint64_t y)
+{
+    return x == y;
+}
+
+static inline uint64_t direct_hash(uint64_t x) // simplified xorshift
+{
+    x ^= x << 7U;
+    x ^= x >> 9U;
+    return x;
+}
+
+Table *table_new_full(const Table *parent, TableHashFunc hash, TableEqualFunc eq)
 {
     Table *t = xmalloc(sizeof(Table));
     t->size = 0;
     t->body_size = TABLE_INIT_SIZE;
     t->body = xcalloc(TABLE_INIT_SIZE, sizeof(List *)); // set NULL
-    t->parent = p;
+    t->hash = hash;
+    t->eq = eq;
+    t->parent = parent;
     return t;
+}
+
+Table *table_inherit(const Table *p)
+{
+    return table_new_full(p, direct_hash, direct_equal);
 }
 
 Table *table_new(void)
@@ -84,16 +105,9 @@ void table_dump(const Table *t)
 }
 #endif
 
-static uint64_t table_hash(uint64_t x) // simplified xorshift
-{
-    x ^= x << 7U;
-    x ^= x >> 9U;
-    return x;
-}
-
 static inline List **table_body(const Table *t, uint64_t key)
 {
-    uint64_t i = table_hash(key) % t->body_size;
+    uint64_t i = (*t->hash)(key) % t->body_size;
     return &t->body[i];
 }
 
@@ -163,10 +177,10 @@ Table *table_put(Table *t, uint64_t key, uint64_t value)
     return t;
 }
 
-static List *find1(const List *p, uint64_t key)
+static List *find1(const List *p, uint64_t key, TableEqualFunc eq)
 {
     for (const List *l = p; l != NULL; l = l->next) {
-        if (l->key == key) // direct
+        if ((*eq)(l->key, key))
             return (List *) l;
     }
     return NULL;
@@ -177,7 +191,7 @@ static List *find(const Table *t, uint64_t key)
 {
     for (; t != NULL; t = t->parent) {
         const List *b = *table_body(t, key);
-        List *found = find1(b, key);
+        List *found = find1(b, key, t->eq);
         if (found != NULL)
             return found;
     }
