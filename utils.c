@@ -53,16 +53,37 @@ typedef struct List {
 struct Table {
     size_t size, body_size;
     List **body;
+    TableHashFunc hash;
+    TableEqualFunc eq;
 };
+
+static inline bool direct_equal(uint64_t x, uint64_t y)
+{
+    return x == y;
+}
+
+static inline uint64_t direct_hash(uint64_t x) // simplified xorshift
+{
+    x ^= x << 7U;
+    x ^= x >> 9U;
+    return x;
+}
 
 Table *table_new(void)
 {
+    return table_new_full(direct_hash, direct_equal);
+}
+
+Table *table_new_full(TableHashFunc hash, TableEqualFunc eq)
+{
     Table *t = xmalloc(sizeof(Table));
-    t->body = xmalloc(sizeof(List *) * TABLE_INIT_SIZE); // set NULL
+    t->body = xmalloc(sizeof(List *) * TABLE_INIT_SIZE);
     t->size = 0;
     t->body_size = TABLE_INIT_SIZE;
     for (size_t i = 0; i < t->body_size; i++)
         t->body[i] = NULL;
+    t->hash = hash ? hash : direct_hash;
+    t->eq = eq;
     return t;
 }
 
@@ -123,16 +144,9 @@ void table_dump(const Table *t)
 }
 #endif
 
-static uint64_t table_hash(uint64_t x) // simplified xorshift
-{
-    x ^= x << 7U;
-    x ^= x >> 9U;
-    return x;
-}
-
 static inline List **table_body(const Table *t, uint64_t key)
 {
-    uint64_t i = table_hash(key) % t->body_size;
+    uint64_t i = (*t->hash)(key) % t->body_size;
     return &t->body[i];
 }
 
@@ -197,7 +211,7 @@ uint64_t table_get(const Table *t, uint64_t key)
 {
     const List *l = *table_body(t, key);
     for (; l != NULL; l = l->next) {
-        if (l->key == key)
+        if ((*t->eq)(l->key, key))
             return l->value;
     }
     return 0; // not found
