@@ -24,11 +24,19 @@ void *xmalloc(size_t size)
     return p;
 }
 
+static void *xcalloc(size_t nmem, size_t memsize)
+{
+    void *p = calloc(nmem, memsize);
+    if (p == NULL)
+        error("calloc(%zu, %zu) failed", nmem, memsize);
+    return p;
+}
+
 void *xrealloc(void *q, size_t size)
 {
     void *p = realloc(q, size);
     if (p == NULL)
-        error("realloc(ptr, %zu) failed", size);
+        error("realloc(%p, %zu) failed", q, size);
     return p;
 }
 
@@ -181,9 +189,9 @@ static size_t next_prime(size_t curr)
         1, 2, 5, 11, 23, 47, 97, 197, 397, 797, 1597, 3203, 6421,
         12853, 25717, 51437, 102877, 205759, 411527, prime_max,
     };
-    static const size_t size = sizeof(primes) / sizeof(primes[0]);
     if (prime_max <= curr)
         goto last;
+    static const size_t size = sizeof(primes) / sizeof(primes[0]);
     for (size_t i = 0; i < size; i++) {
         if (primes[i] > curr)
             return primes[i];
@@ -194,15 +202,13 @@ static size_t next_prime(size_t curr)
 
 static void table_resize(Table *t)
 {
-    const size_t body_size = t->body_size;
-    List *body[body_size];
-    memcpy(body, t->body, sizeof(List *) * t->body_size);
+    const size_t old_body_size = t->body_size;
+    List *old_body[old_body_size];
+    memcpy(old_body, t->body, sizeof(List *) * t->body_size);
     t->body_size = next_prime(t->body_size);
-    t->body = xrealloc(t->body, sizeof(List *) * t->body_size);
-    for (size_t i = 0; i < t->body_size; i++)
-        t->body[i] = NULL;
-    for (size_t i = 0; i < body_size; i++) {
-        for (List *l = body[i], *next; l != NULL; l = next) {
+    t->body = xcalloc(sizeof(List *), t->body_size);
+    for (size_t i = 0; i < old_body_size; i++) {
+        for (List *l = old_body[i], *next; l != NULL; l = next) {
             List **p = table_body(t, l->key);
             next = l->next;
             l->next = NULL;
