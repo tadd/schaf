@@ -174,7 +174,7 @@ static inline bool table_too_many_elements(const Table *t)
 }
 
 // "next" is twice or more larger than `curr`
-static size_t next_size(size_t curr)
+static size_t next_prime(size_t curr)
 {
     static const size_t prime_max = 823117;
     static const size_t primes[] = {
@@ -182,11 +182,11 @@ static size_t next_size(size_t curr)
         12853, 25717, 51437, 102877, 205759, 411527, prime_max,
     };
     static const size_t size = sizeof(primes) / sizeof(primes[0]);
-    if (curr >= prime_max)
+    if (prime_max <= curr)
         goto last;
-    for (size_t i = 0; i < size-1; i++) {
-        if (primes[i] == curr)
-            return primes[i+1];
+    for (size_t i = 0; i < size; i++) {
+        if (primes[i] > curr)
+            return primes[i];
     }
   last:
     return curr*2+1;
@@ -197,7 +197,7 @@ static void table_resize(Table *t)
     const size_t body_size = t->body_size;
     List *body[body_size];
     memcpy(body, t->body, sizeof(List *) * t->body_size);
-    t->body_size = next_size(t->body_size);
+    t->body_size = next_prime(t->body_size);
     t->body = xrealloc(t->body, sizeof(List *) * t->body_size);
     for (size_t i = 0; i < t->body_size; i++)
         t->body[i] = NULL;
