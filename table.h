@@ -10,6 +10,7 @@ typedef uint64_t (*TableHashFunc)(uint64_t x);
 
 Table *table_new(void);
 Table *table_inherit(const Table *t);
+Table *table_new_str(void);
 Table *table_new_full(const Table *p, TableHashFunc hash, TableEqualFunc eq);
 void table_free(Table *t);
 Table *table_put(Table *t, uint64_t key, uint64_t val); // `val` can't be 0

@@ -67,6 +67,24 @@ Table *table_new_full(const Table *parent, TableHashFunc hash, TableEqualFunc eq
     return t;
 }
 
+static uint64_t str_hash(uint64_t x) // modified djb2
+{
+    uint64_t h = 30011;
+    for (const char *s = (char *) x; *s != '\0'; s++)
+        h = h * 61 + *s;
+    return h;
+}
+
+static inline bool str_equal(uint64_t s, uint64_t t)
+{
+    return strcmp((const char *) s, (const char *) t) == 0;
+}
+
+Table *table_new_str(void)
+{
+    return table_new_full(NULL, str_hash, str_equal);
+}
+
 Table *table_inherit(const Table *p)
 {
     return table_new_full(p, direct_hash, direct_equal);
