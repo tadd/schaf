@@ -154,11 +154,11 @@ static size_t next_size(size_t curr)
         12853, 25717, 51437, 102877, 205759, 411527, prime_max,
     };
     static const size_t size = sizeof(primes) / sizeof(primes[0]);
-    if (curr >= prime_max)
+    if (prime_max <= curr)
         goto last;
-    for (size_t i = 0; i < size-1; i++) {
-        if (primes[i] == curr)
-            return primes[i+1];
+    for (size_t i = 0; i < size; i++) {
+        if (primes[i] > curr)
+            return primes[i];
     }
  last:
     return curr*2+1;
