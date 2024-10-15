@@ -119,7 +119,9 @@ static const int64_t CFUNCARG_MAX = 7;
 
 // FIXME: ordered hash map: Symbol => Value
 static Value toplevel_environment = Qnil; // alist of ('symbol . <value>)
-static const char **symbol_names; // ("name0" "name1" ...)
+static Table *name_to_symbol;
+static const char **symbol_to_name; // [symbol-1] => name
+static Symbol next_symbol;
 static Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
     SYM_RARROW;
 static const volatile void *stack_base = NULL;
@@ -236,18 +238,11 @@ inline Symbol value_to_symbol(Value v)
     return (Symbol) v >> FLAG_NBIT_SYM;
 }
 
-static const char *name_nth(const char *list[], uint64_t n)
-{
-    size_t len = scary_length(list);
-    return (n < len) ? list[n] : NULL;
-}
-
 static const char *unintern(Symbol sym)
 {
-    const char *name = name_nth(symbol_names, sym);
-    if (name == NULL) // fatal; every known symbols should have a name
+    if (sym < 1 || sym >= next_symbol) // fatal; every known symbols should have a name
         error("symbol %lu not found", sym);
-    return name;
+    return symbol_to_name[sym-1]; // symbols begin from 1
 }
 
 inline const char *value_to_string(Value v)
@@ -273,15 +268,14 @@ static inline Value list1(Value x)
 static Symbol intern(const char *name)
 {
     // find
-    size_t i, len = scary_length(symbol_names);
-    for (i = 0; i < len; i++) {
-        if (strcmp(symbol_names[i], name) == 0)
-            return i;
+    Symbol sym = (Symbol) table_get(name_to_symbol, (uint64_t) name);
+    if (sym == 0) { // or put
+        sym = next_symbol++;
+        const char *s = xstrdup(name);
+        table_put(name_to_symbol, (uint64_t) s, sym);
+        scary_push(&symbol_to_name, s);
     }
-    // or put at `i`
-    const char *s = xstrdup(name);
-    scary_push(&symbol_names, s);
-    return i;
+    return sym;
 }
 
 inline Value value_of_symbol(const char *s)
@@ -2405,7 +2399,9 @@ static void initialize(void)
 {
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
-    symbol_names = scary_new(sizeof(const char *));
+    next_symbol = 1;
+    name_to_symbol = table_new_str();
+    symbol_to_name = scary_new(sizeof(const char *));
     SYM_ELSE = value_of_symbol("else");
     SYM_QUOTE = value_of_symbol("quote");
     SYM_QUASIQUOTE = value_of_symbol("quasiquote");
