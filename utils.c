@@ -57,11 +57,6 @@ struct Table {
     TableEqualFunc eq;
 };
 
-static inline bool direct_equal(uint64_t x, uint64_t y)
-{
-    return x == y;
-}
-
 static inline uint64_t direct_hash(uint64_t x) // simplified xorshift
 {
     x ^= x << 7U;
@@ -69,9 +64,32 @@ static inline uint64_t direct_hash(uint64_t x) // simplified xorshift
     return x;
 }
 
+static inline bool direct_equal(uint64_t x, uint64_t y)
+{
+    return x == y;
+}
+
 Table *table_new(void)
 {
     return table_new_full(direct_hash, direct_equal);
+}
+
+static uint64_t str_hash(uint64_t x) // modified djb2
+{
+    uint64_t h = 30011;
+    for (const char *s = (char *) x; *s != '\0'; s++)
+        h = h * 61 + *s;
+    return h;
+}
+
+static inline bool str_equal(uint64_t s, uint64_t t)
+{
+    return strcmp((const char *) s, (const char *) t) == 0;
+}
+
+Table *table_new_str(void)
+{
+    return table_new_full(str_hash, str_equal);
 }
 
 Table *table_new_full(TableHashFunc hash, TableEqualFunc eq)
