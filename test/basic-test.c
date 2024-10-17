@@ -339,6 +339,7 @@ Test(table, get_put) {
     for (int i = 1; i <= 17; i++)
         cr_expect(eq(llong, i*10000000, table_get(t, i)));
 
+    table_dump(t);
     table_free(t);
 }
 
