@@ -135,6 +135,7 @@ enum {
     TABLE_TOO_MANY_FACTOR = 2,
 };
 
+
 struct Table {
     size_t size, body_size;
     List **body;
@@ -194,12 +195,48 @@ void table_dump(const Table *t)
     }
 }
 
+#if 1 // pbhash
+
+static uint64_t hround(uint64_t h, uint64_t l)
+{
+    h ^= l;
+    h--;
+    h ^= h >> 30U;
+    h *= UINT64_C(0xbf58476d1ce4e5b9);
+    h ^= h >> 27U;
+    h *= UINT64_C(0x94d049bb133111eb);
+    h ^= h >> 31U;
+    return h;
+}
+
+// Pearson Block Hash
+static uint64_t pbhash(const void *key, size_t len)
+{
+    const uint64_t *q = key;
+    uint64_t h = 0, orig_len = (uint64_t) len;
+    for (; len >= 8; len -= 8)
+        h = hround(h, *q++);
+    h = ~h;
+    for (const uint8_t *b = (void *) q; len > 0; len--)
+        h = hround(h, *b++);
+    return hround(~h, orig_len);
+}
+
+static inline uint64_t table_hash(uint64_t x)
+{
+    return pbhash(&x, 8);
+}
+
+#else
+
 static inline uint64_t table_hash(uint64_t x)
 {
     x ^= x << 7;
     x ^= x >> 9;
     return x; // xorshift64-based
 }
+
+#endif
 
 static inline uint64_t body_index(const Table *t, uint64_t key)
 {
