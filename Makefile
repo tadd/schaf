@@ -60,8 +60,8 @@ microbench:
 	@$(MAKE) -C $@
 
 utils.o: utils.h
-schaf.o main.o: schaf.h utils.h
-basic-test.o: schaf.h
+schaf.o main.o basic-test.o: schaf.h utils.h
+schaf.o scary.o: scary.h
 
 .PHONY: all clean test test-c test-scheme analyze sanitize \
 	test-san test-c-san test-scheme-san \
