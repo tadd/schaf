@@ -108,7 +108,7 @@ Table *table_new_full(TableHashFunc hash, TableEqualFunc eq)
     t->body_size = TABLE_INIT_SIZE;
     for (size_t i = 0; i < t->body_size; i++)
         t->body[i] = NULL;
-    t->hash = hash ? hash : direct_hash;
+    t->hash = hash != NULL ? hash : direct_hash;
     t->eq = eq;
     return t;
 }
@@ -189,9 +189,10 @@ static size_t next_prime(size_t curr)
         1, 2, 5, 11, 23, 47, 97, 197, 397, 797, 1597, 3203, 6421,
         12853, 25717, 51437, 102877, 205759, 411527, prime_max,
     };
+    static const size_t size = sizeof(primes) / sizeof(primes[0]);
+
     if (prime_max <= curr)
         goto last;
-    static const size_t size = sizeof(primes) / sizeof(primes[0]);
     for (size_t i = 0; i < size; i++) {
         if (primes[i] > curr)
             return primes[i];
