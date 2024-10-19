@@ -171,7 +171,7 @@ static void table_resize(Table *t)
     memcpy(body, t->body, sizeof(List *) * t->body_size);
     t->body_size = next_size(t->body_size);
     t->body = xrealloc(t->body, sizeof(List *) * t->body_size);
-    memset(t->body, 0, sizeof(List *) * t->body_size);
+    memset(t->body, 0, sizeof(List *) * t->body_size); // set NULL
     for (size_t i = 0; i < body_size; i++) {
         for (List *l = body[i], *next; l != NULL; l = next) {
             next = l->next;
