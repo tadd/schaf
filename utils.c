@@ -103,7 +103,7 @@ Table *table_new_str(void)
 Table *table_new_full(TableHashFunc hash, TableEqualFunc eq)
 {
     Table *t = xmalloc(sizeof(Table));
-    t->body = xmalloc(sizeof(List *) * TABLE_INIT_SIZE);
+    t->body = xcalloc(sizeof(List *), TABLE_INIT_SIZE); // set NULL
     t->size = 0;
     t->body_size = TABLE_INIT_SIZE;
     for (size_t i = 0; i < t->body_size; i++)
@@ -207,7 +207,7 @@ static void table_resize(Table *t)
     List *old_body[old_body_size];
     memcpy(old_body, t->body, sizeof(List *) * t->body_size);
     t->body_size = next_prime(t->body_size);
-    t->body = xcalloc(sizeof(List *), t->body_size);
+    t->body = xcalloc(sizeof(List *), t->body_size); // set NULL
     for (size_t i = 0; i < old_body_size; i++) {
         for (List *l = old_body[i], *next; l != NULL; l = next) {
             List **p = table_body(t, l->key);
