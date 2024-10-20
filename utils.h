@@ -19,9 +19,10 @@ ATTR_XMALLOC char *xstrdup(const char *s);
 typedef struct Table Table;
 typedef bool (*TableEqualFunc)(uint64_t x, uint64_t y);
 typedef uint64_t (*TableHashFunc)(uint64_t x);
+typedef void (*TableFreeFunc)(void *p);
 Table *table_new(void);
 Table *table_new_str(void);
-Table *table_new_full(TableHashFunc hash, TableEqualFunc eq);
+Table *table_new_full(TableHashFunc hash, TableEqualFunc eq, TableFreeFunc free_key);
 void table_free(Table *t);
 void table_put(Table *t, uint64_t key, uint64_t val); // `val` can't be 0
 uint64_t table_get(const Table *t, uint64_t key);

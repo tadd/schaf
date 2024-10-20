@@ -63,6 +63,7 @@ struct Table {
     List **body;
     TableHashFunc hash;
     TableEqualFunc eq;
+    TableFreeFunc free_key;
 };
 
 static inline uint64_t direct_hash(uint64_t x) // simplified xorshift
@@ -77,9 +78,11 @@ static inline bool direct_equal(uint64_t x, uint64_t y)
     return x == y;
 }
 
+static inline void free_nop(ATTR(unused) void *p) { }
+
 Table *table_new(void)
 {
-    return table_new_full(direct_hash, direct_equal);
+    return table_new_full(direct_hash, direct_equal, free_nop);
 }
 
 static uint64_t str_hash(uint64_t x) // modified djb2
@@ -97,10 +100,12 @@ static inline bool str_equal(uint64_t s, uint64_t t)
 
 Table *table_new_str(void)
 {
-    return table_new_full(str_hash, str_equal);
+    return table_new_full(str_hash, str_equal, free); // expects strdup for keys
 }
 
-Table *table_new_full(TableHashFunc hash, TableEqualFunc eq)
+#define PTR_OR(x, y) (((x) != NULL) ? (x) : (y))
+
+Table *table_new_full(TableHashFunc hash, TableEqualFunc eq, TableFreeFunc free_key)
 {
     Table *t = xmalloc(sizeof(Table));
     t->body = xcalloc(sizeof(List *), TABLE_INIT_SIZE); // set NULL
@@ -108,8 +113,9 @@ Table *table_new_full(TableHashFunc hash, TableEqualFunc eq)
     t->body_size = TABLE_INIT_SIZE;
     for (size_t i = 0; i < t->body_size; i++)
         t->body[i] = NULL;
-    t->hash = hash != NULL ? hash : direct_hash;
-    t->eq = eq;
+    t->hash = PTR_OR(hash, direct_hash);
+    t->eq = PTR_OR(eq, direct_equal);
+    t->free_key = PTR_OR(free_key, free_nop);
     return t;
 }
 
@@ -122,10 +128,11 @@ static List *list_new(uint64_t key, uint64_t value)
     return l;
 }
 
-static void list_free(List *l)
+static void list_free(List *l, TableFreeFunc free_key)
 {
     for (List *next; l != NULL; l = next) {
         next = l->next;
+        (*free_key)((void *) l->key);
         free(l);
     }
 }
@@ -147,7 +154,7 @@ void table_free(Table *t)
     if (t == NULL)
         return;
     for (size_t i = 0; i < t->body_size; i++)
-        list_free(t->body[i]);
+        list_free(t->body[i], t->free_key);
     free(t->body);
     free(t);
 }
