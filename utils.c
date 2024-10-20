@@ -269,12 +269,33 @@ static inline List *table_find_pair(const Table *t, uint64_t key)
     return table_find_pair_raw(p, key, t->eq);
 }
 
+static List *table_pair(const Table *t, uint64_t key)
+{
+    List **body = table_find_listp(t, key);
+    for (List *l = *body; l != NULL; l = l->next) {
+        if ((*t->eq)(l->key, key))
+            return l;
+    }
+    return NULL;
+}
+
 uint64_t table_get(const Table *t, uint64_t key)
 {
     const List *l = table_find_pair(t, key);
     if (l == NULL) // not found
         return 0;
     return l->value;
+}
+
+bool table_set(Table *t, uint64_t key, uint64_t value)
+{
+    if (value == 0)
+        error("%s: got invalid value == 0", __func__);
+    List *l = table_pair(t, key);
+    if (l == NULL)
+        return false; // did nothing
+    l->value = value; // overwrite!
+    return true;
 }
 
 bool table_set_or_put(Table *t, uint64_t key, uint64_t value)
