@@ -337,3 +337,20 @@ Test(table, resize_keeping_order) {
     }
     table_free(t);
 }
+
+Test(table, set) {
+    Table *t = table_new();
+    table_put(t, 1, 123);
+    table_put(t, 2, 456);
+
+    bool s1 = table_set(t, 2, 789); // overwrite!
+    bool s2 = table_set(t, 3, 210); // ignored
+
+    cr_assert(s1);
+    cr_assert(not(s2));
+    cr_assert(eq(int, 123, table_get(t, 1)));
+    cr_assert(eq(int, 789, table_get(t, 2)));
+    cr_assert(eq(int, 0, table_get(t, 3))); // still not found!
+
+    table_free(t);
+}
