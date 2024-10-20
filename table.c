@@ -188,17 +188,35 @@ static void table_resize(Table *t)
     }
 }
 
-// `value` can't be 0
-Table *table_put(Table *t, uint64_t key, uint64_t value)
+static inline bool table_ensure_size(Table *t)
+{
+    if (table_too_many_elements(t)) {
+        table_resize(t);
+        return true;
+    }
+    return false;
+}
+
+static Table *table_put_raw(Table *t, List **p, uint64_t key, uint64_t value)
 {
     if (value == 0)
         error("%s: got invalid value == 0", __func__);
     if (table_too_many_elements(t))
         table_resize(t);
-    List **p = table_body(t, key);
     *p = list_new(key, value, *p); // prepend even if the same key exists
     t->size++;
     return t;
+}
+
+
+// `value` can't be 0
+Table *table_put(Table *t, uint64_t key, uint64_t value)
+{
+    if (value == 0)
+        error("%s: got invalid value == 0", __func__);
+    table_ensure_size(t);
+    List **p = table_body(t, key);
+    return table_put_raw(t, p, key, value);
 }
 
 static List *find1(const List *p, uint64_t key, TableEqualFunc eq)
@@ -226,6 +244,22 @@ uint64_t table_get(const Table *t, uint64_t key)
 {
     const List *l = find(t, key);
     return l == NULL ? 0 : l->value;
+}
+
+bool table_set_or_put(Table *t, uint64_t key, uint64_t value)
+{
+    if (value == 0)
+        error("%s: got invalid value == 0", __func__);
+    List **p = table_body(t, key);
+    List *l = find1(*p, key, t->eq);
+    if (l == NULL) { // to put
+        if (table_ensure_size(t))
+            p = table_body(t, key); // recalc
+        table_put_raw(t, p, key, value);
+        return false; // not overwritten
+    }
+    l->value = value; // overwrite!
+    return true;
 }
 
 void table_merge(Table *dst, const Table *src)

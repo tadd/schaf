@@ -323,3 +323,20 @@ Test(table, string_keys) {
 
     table_free(t);
 }
+
+Test(table, set_or_put) {
+    Table *t = table_new();
+    table_put(t, 1, 123);
+    table_put(t, 2, 456);
+
+    bool s1 = table_set_or_put(t, 2, 789); // overwrite!
+    bool s2 = table_set_or_put(t, 3, 210); // just add
+
+    cr_assert(s1);
+    cr_assert(not(s2));
+    cr_assert(eq(int, 123, table_get(t, 1)));
+    cr_assert(eq(int, 789, table_get(t, 2)));
+    cr_assert(eq(int, 210, table_get(t, 3)));
+
+    table_free(t);
+}
