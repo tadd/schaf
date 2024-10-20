@@ -304,15 +304,22 @@ Test(table, merge) {
     table_free(u);
 }
 
-Test(table, string_keys) {
-    const char *s[] = { "foo", "bar" };
-    Table *t = table_new_str();
-    table_put(t, (uintptr_t) xstrdup(s[0]), 12);
-    table_put(t, (uintptr_t) xstrdup(s[1]), 34);
-    table_put(t, (uintptr_t) xstrdup(s[0]), 56);
+static inline uint64_t keydup(uint64_t s)
+{
+    return (uint64_t) xstrdup((char *) s);
+}
 
-    cr_assert(eq(int, 56, table_get(t, (uintptr_t) "foo")));
-    cr_assert(eq(int, 34, table_get(t, (uintptr_t) "bar")));
+Test(table, string_keys) {
+    uint64_t k_foo = (uint64_t) "foo";
+    uint64_t k_bar = (uint64_t) "bar";
+
+    Table *t = table_new_str();
+    table_put(t, keydup(k_foo), 12);
+    table_put(t, keydup(k_bar), 34);
+    table_put(t, keydup(k_foo), 56);
+
+    cr_assert(eq(int, 56, table_get(t, k_foo)));
+    cr_assert(eq(int, 34, table_get(t, k_bar)));
 
     table_free(t);
 }
