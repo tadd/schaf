@@ -52,6 +52,7 @@ struct Table {
     TableHashFunc hash;
     TableEqualFunc eq;
     TableFreeFunc free_key;
+    const Table *parent;
 };
 
 static inline uint64_t direct_hash(uint64_t x) // simplified xorshift
@@ -104,7 +105,15 @@ Table *table_new_full(TableHashFunc hash, TableEqualFunc eq, TableFreeFunc free_
     t->hash = PTR_OR(hash, direct_hash);
     t->eq = PTR_OR(eq, direct_equal);
     t->free_key = PTR_OR(free_key, free_nop);
+    t->parent = NULL;
     return t;
+}
+
+Table *table_inherit(const Table *t)
+{
+    Table *u = table_new_full(t->hash, t->eq, t->free_key);
+    u->parent = t;
+    return u;
 }
 
 void table_free(Table *t)
@@ -222,18 +231,14 @@ static List *table_find_pair_raw(List **p, uint64_t key, TableEqualFunc eq)
     return NULL;
 }
 
+// chained!
 static inline List *table_find_pair(const Table *t, uint64_t key)
 {
-    List **p = table_find_listp(t, key);
-    return table_find_pair_raw(p, key, t->eq);
-}
-
-static List *table_pair(const Table *t, uint64_t key)
-{
-    List **body = table_find_listp(t, key);
-    for (List *l = *body; l != NULL; l = l->next) {
-        if ((*t->eq)(l->key, key))
-            return l;
+    for (const Table *curr = t; curr != NULL; curr = curr->parent) {
+        List **p = table_find_listp(curr, key);
+        List *found = table_find_pair_raw(p, key, curr->eq);
+        if (found != NULL)
+            return found;
     }
     return NULL;
 }
@@ -250,7 +255,7 @@ bool table_set(Table *t, uint64_t key, uint64_t value)
 {
     if (value == 0)
         error("%s: got invalid value == 0", __func__);
-    List *l = table_pair(t, key);
+    List *l = table_find_pair(t, key);
     if (l == NULL)
         return false; // did nothing
     l->value = value; // overwrite!
@@ -261,12 +266,9 @@ bool table_set_or_put(Table *t, uint64_t key, uint64_t value)
 {
     if (value == 0)
         error("%s: got invalid value == 0", __func__);
-    List **p = table_find_listp(t, key);
-    List *l = table_find_pair_raw(p, key, t->eq);
+    List *l = table_find_pair(t, key);
     if (l == NULL) { // to put
-        if (table_ensure_size(t))
-            p = table_find_listp(t, key); // recalc
-        table_put_raw(t, p, key, value);
+        table_put(t, key, value);
         return false; // not overwritten
     }
     l->value = value; // overwrite!

@@ -318,7 +318,46 @@ Test(table, set_or_put) {
     cr_assert(eq(int, 123, table_get(t, 1)));
     cr_assert(eq(int, 789, table_get(t, 2)));
     cr_assert(eq(int, 210, table_get(t, 3)));
+    table_free(t);
+}
 
+Test(table, inherit) {
+    Table *t = table_new();
+    table_put(t, 1, 12);
+    table_put(t, 2, 34);
+
+    Table *u = table_inherit(t);
+    table_put(u, 2, 20);
+    table_put(u, 3, 30);
+
+    cr_assert(eq(int, 12, table_get(t, 1)));
+    cr_assert(eq(int, 34, table_get(t, 2)));
+    cr_assert(eq(int,  0, table_get(t, 3)));
+
+    cr_assert(eq(int, 12, table_get(u, 1)));
+    cr_assert(eq(int, 20, table_get(u, 2)));
+    cr_assert(eq(int, 30, table_get(u, 3)));
+
+    table_free(u);
+    table_free(t);
+}
+
+Test(table, inherit_set) {
+    Table *t = table_new();
+    table_put(t, 1, 10);
+    cr_assert(eq(int, 10, table_get(t, 1)));
+
+    Table *u = table_inherit(t);
+    table_put(u, 2, 20);
+    table_set(u, 1, 30);
+
+    cr_assert(eq(int, 30, table_get(t, 1)));
+    cr_assert(eq(int,  0, table_get(t, 2)));
+
+    cr_assert(eq(int, 30, table_get(u, 1)));
+    cr_assert(eq(int, 20, table_get(u, 2)));
+
+    table_free(u);
     table_free(t);
 }
 
