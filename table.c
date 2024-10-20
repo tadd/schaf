@@ -19,10 +19,11 @@ static List *list_new(uint64_t key, uint64_t value, List *next)
     return l;
 }
 
-static void list_free(List *l)
+static void list_free(List *l, ATTR(unused) TableFreeFunc free_key)
 {
     for (List *curr = l, *next = NULL; curr != NULL; curr = next) {
         next = curr->next;
+        /* (*free_key)((void  *) l->key); */
         free(curr);
     }
 }
@@ -40,6 +41,7 @@ struct Table {
     List **body;
     TableHashFunc hash;
     TableEqualFunc eq;
+    TableFreeFunc free_key;
     const Table *parent;
 };
 
@@ -55,7 +57,8 @@ static inline uint64_t direct_hash(uint64_t x) // simplified xorshift
     return x;
 }
 
-Table *table_new_full(const Table *parent, TableHashFunc hash, TableEqualFunc eq)
+Table *table_new_full(const Table *parent,
+                      TableHashFunc hash, TableEqualFunc eq, TableFreeFunc free_key)
 {
     Table *t = xmalloc(sizeof(Table));
     t->size = 0;
@@ -63,6 +66,7 @@ Table *table_new_full(const Table *parent, TableHashFunc hash, TableEqualFunc eq
     t->body = xcalloc(TABLE_INIT_SIZE, sizeof(List *)); // set NULL
     t->hash = hash;
     t->eq = eq;
+    t->free_key = free_key;
     t->parent = parent;
     return t;
 }
@@ -82,12 +86,14 @@ static inline bool str_equal(uint64_t s, uint64_t t)
 
 Table *table_new_str(void)
 {
-    return table_new_full(NULL, str_hash, str_equal);
+    return table_new_full(NULL, str_hash, str_equal, free); // expects strdup for keys
 }
+
+static inline void free_nop(ATTR(unused) void *p) { }
 
 Table *table_inherit(const Table *p)
 {
-    return table_new_full(p, direct_hash, direct_equal);
+    return table_new_full(p, direct_hash, direct_equal, free_nop);
 }
 
 Table *table_new(void)
@@ -100,7 +106,7 @@ void table_free(Table *t)
     if (t == NULL)
         return;
     for (size_t i = 0; i < t->body_size; i++)
-        list_free(t->body[i]);
+        list_free(t->body[i], t->free_key);
     free(t->body);
     free(t);
 }

@@ -7,11 +7,12 @@
 typedef struct Table Table;
 typedef bool (*TableEqualFunc)(uint64_t x, uint64_t y);
 typedef uint64_t (*TableHashFunc)(uint64_t x);
+typedef void (*TableFreeFunc)(void *p);
 
 Table *table_new(void);
 Table *table_inherit(const Table *t);
 Table *table_new_str(void);
-Table *table_new_full(const Table *p, TableHashFunc hash, TableEqualFunc eq);
+Table *table_new_full(const Table *p, TableHashFunc hash, TableEqualFunc eq, TableFreeFunc free_key);
 void table_free(Table *t);
 Table *table_put(Table *t, uint64_t key, uint64_t val); // `val` can't be 0
 bool table_set(Table *t, uint64_t key, uint64_t val); // set (only) if found
