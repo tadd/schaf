@@ -33,7 +33,6 @@ static void list_free(List *l, ATTR(unused) TableFreeFunc free_key)
 enum {
     TABLE_INIT_SIZE = 1,
     TABLE_TOO_MANY_FACTOR = 3,
-    TABLE_RESIZE_FACTOR = 2,
 };
 
 struct Table {
@@ -152,6 +151,7 @@ static void list_append(List **p, List *l)
     q->next = l;
 }
 
+// "next" is twice or more larger than `curr`
 static size_t next_size(size_t curr)
 {
     static const size_t prime_max = 823117;
