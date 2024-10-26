@@ -137,18 +137,6 @@ static void list_free(List *l, TableFreeFunc free_key)
     }
 }
 
-static void list_append(List **p, List *l)
-{
-    if (*p == NULL) {
-        *p = l;
-        return;
-    }
-    List *q;
-    for (q = *p; q->next != NULL; q = q->next)
-        ;
-    q->next = l;
-}
-
 static List *list_reverse(const List *l)
 {
     List *ret = NULL;
@@ -227,12 +215,14 @@ static void table_resize(Table *t)
     t->body_size = next_prime(t->body_size);
     t->body = xcalloc(sizeof(List *), t->body_size); // set NULL
     for (size_t i = 0; i < old_body_size; i++) {
-        for (List *l = old_body[i], *next; l != NULL; l = next) {
-            List **p = table_find_listp(t, l->key);
+        List *rev = list_reverse(old_body[i]);
+        for (List *l = rev, *next; l != NULL; l = next) {
             next = l->next;
-            l->next = NULL;
-            list_append(p, l);
+            List **p = table_find_listp(t, l->key);
+            l->next = *p; // prepend
+            *p = l;
         }
+        list_free(old_body[i], free_nop);
     }
 }
 

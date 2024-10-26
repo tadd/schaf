@@ -320,3 +320,20 @@ Test(table, set_or_put) {
 
     table_free(t);
 }
+
+Test(table, resize_keeping_order) {
+    Table *t = table_new();
+    for (size_t i = 1; i <= 100; i++) {
+        table_put(t, 1, i*10);
+        cr_assert(eq(sz, i*10, table_get(t, 1)));
+    }
+    for (size_t i = 1; i <= 100; i++) {
+        table_put(t, i*2, i);
+        cr_assert(eq(sz, i, table_get(t, i*2)));
+    }
+    for (size_t i = 1; i <= 100; i++) {
+        table_put(t, 1, i*10);
+        cr_assert(eq(sz, i*10, table_get(t, 1)));
+    }
+    table_free(t);
+}
