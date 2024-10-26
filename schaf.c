@@ -17,6 +17,8 @@
 #include "schaf.h"
 #include "utils.h"
 #include "scary.h"
+#include "table.h"
+#include "utils.h"
 
 //
 // Types
