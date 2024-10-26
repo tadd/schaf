@@ -263,6 +263,27 @@ Test(table, merge) {
     table_free(u);
 }
 
+Test(table, merge_precedence) {
+    Table *t = table_new();
+    for (size_t i = 1; i <= 3; i++) {
+        table_put(t, 1, i*10);
+        cr_assert(eq(sz, i*10, table_get(t, 1)));
+    }
+
+    Table *u = table_new();
+    for (size_t i = 1; i <= 3; i++) {
+        table_put(u, 1, i*20);
+        cr_assert(eq(sz, i*20, table_get(u, 1)));
+    }
+
+    table_merge(t, u);
+    // the latest entry of `u` should take precedence in `t` too
+    cr_assert(eq(sz, 60, table_get(t, 1)));
+
+    table_free(t);
+    table_free(u);
+}
+
 static inline uint64_t keydup(uint64_t s)
 {
     return (uint64_t) xstrdup((char *) s);
