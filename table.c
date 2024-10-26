@@ -3,15 +3,48 @@
 #include "utils.h"
 #include "table.h"
 
-enum {
-    TABLE_INIT_SIZE = 1,
-    TABLE_TOO_MANY_FACTOR = 3,
-};
+// List
 
 typedef struct List {
     uint64_t key, value;
     struct List *next;
 } List;
+
+static List *list_new(uint64_t key, uint64_t value)
+{
+    List *l = xmalloc(sizeof(List));
+    l->key = key;
+    l->value = value;
+    l->next = NULL;
+    return l;
+}
+
+static void list_free(List *l, TableFreeFunc free_key)
+{
+    for (List *next; l != NULL; l = next) {
+        next = l->next;
+        (*free_key)((void *) l->key);
+        free(l);
+    }
+}
+
+static List *list_reverse(const List *l)
+{
+    List *ret = NULL;
+    for (const List *p = l; p != NULL; p = p->next) {
+        List *e = list_new(p->key, p->value);
+        e->next = ret;
+        ret = e;
+    }
+    return ret;
+}
+
+// Table
+
+enum {
+    TABLE_INIT_SIZE = 1,
+    TABLE_TOO_MANY_FACTOR = 3,
+};
 
 struct Table {
     size_t size, body_size;
@@ -72,35 +105,6 @@ Table *table_new_full(TableHashFunc hash, TableEqualFunc eq, TableFreeFunc free_
     t->eq = PTR_OR(eq, direct_equal);
     t->free_key = PTR_OR(free_key, free_nop);
     return t;
-}
-
-static List *list_new(uint64_t key, uint64_t value)
-{
-    List *l = xmalloc(sizeof(List));
-    l->key = key;
-    l->value = value;
-    l->next = NULL;
-    return l;
-}
-
-static void list_free(List *l, TableFreeFunc free_key)
-{
-    for (List *next; l != NULL; l = next) {
-        next = l->next;
-        (*free_key)((void *) l->key);
-        free(l);
-    }
-}
-
-static List *list_reverse(const List *l)
-{
-    List *ret = NULL;
-    for (const List *p = l; p != NULL; p = p->next) {
-        List *e = list_new(p->key, p->value);
-        e->next = ret;
-        ret = e;
-    }
-    return ret;
 }
 
 void table_free(Table *t)
