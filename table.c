@@ -292,8 +292,9 @@ const Table *table_get_parent(const Table *t)
     return t->parent;
 }
 
-Table *table_set_parent(Table *t, const Table *parent)
+const Table *table_set_parent(Table *t, const Table *parent)
 {
+    const Table *oldp = t->parent;
     t->parent = parent;
-    return t;
+    return oldp;
 }
