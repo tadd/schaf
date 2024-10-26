@@ -19,5 +19,7 @@ uint64_t table_get(const Table *t, uint64_t key);
 bool table_set_or_put(Table *t, uint64_t key, uint64_t val);
 bool table_set(Table *t, uint64_t key, uint64_t val); // set only if found
 Table *table_merge(Table *dst, const Table *src);
+const Table *table_get_parent(const Table *t);
+Table *table_set_parent(Table *t, const Table *parent);
 
 #endif
