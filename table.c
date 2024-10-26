@@ -286,3 +286,14 @@ Table *table_merge(Table *dst, const Table *src)
     }
     return dst;
 }
+
+const Table *table_get_parent(const Table *t)
+{
+    return t->parent;
+}
+
+Table *table_set_parent(Table *t, const Table *parent)
+{
+    t->parent = parent;
+    return t;
+}
