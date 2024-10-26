@@ -309,7 +309,7 @@ Table *table_merge(Table *dst, const Table *src)
     for (size_t i = 0; i < size; i++) {
         List *rev = list_reverse(src->body[i]);
         for (List *l = rev; l != NULL; l = l->next)
-            table_put(dst, l->key, l->value);
+            table_set_or_put(dst, l->key, l->value);
         list_free(rev, free_nop);
     }
     return dst;
