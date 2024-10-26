@@ -5,6 +5,7 @@
 #include <criterion/new/assert.h>
 
 #include "schaf.h"
+#include "table.h"
 #include "utils.h"
 
 #define expect_stringify(exp, v) do { \
