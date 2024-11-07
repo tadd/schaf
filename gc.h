@@ -65,6 +65,7 @@ typedef struct {
 
 #define SCH_STACK_INIT(p) void *p; gc_stack_init(&p)
 
+bool value_is_procedure(Value v);
 void gc_init(void);
 void gc_add_root(const Value *r);
 void gc_stack_init(const volatile void *b);

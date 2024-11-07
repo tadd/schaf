@@ -36,25 +36,7 @@ static const char *TYPE_NAMES[] = {
 
 // singletons
 static const Pair PAIR_NIL = { .tag = TAG_PAIR, .car = 0, .cdr = 0 };
-// Value (uintptr_t):
-//   0b.....000 Pointer (Unchangeable pattern!)
-//   0b.......1 Integer
-//   0b......10 Symbol
-//   0b0--00100 #f
-//   0b0--01100 #t
-//   0b0-010100 <undef>
-typedef const uintptr_t Flag;
-static Flag FLAG_NBIT_SYM = 2;
-static Flag FLAG_NBIT_INT = 1;
-static Flag FLAG_MASK     = 0b111; // for 64 bit machine
-static Flag FLAG_MASK_SYM =  0b11;
-static Flag FLAG_MASK_INT =   0b1;
-static Flag FLAG_SYM      =  0b10;
-static Flag FLAG_INT      =   0b1;
 const Value Qnil = (Value) &PAIR_NIL;
-const Value Qfalse = 0b00100U;
-const Value Qtrue  = 0b01100U;
-const Value Qundef = 0b10100U; // may be an error or something
 
 static const int64_t CFUNCARG_MAX = 7;
 
@@ -63,7 +45,6 @@ static const int64_t CFUNCARG_MAX = 7;
 //
 
 static Value toplevel_environment = Qnil; // alist of ('symbol . <value>)
-static Value symbol_names = Qnil; // ("name0" "name1" ...)
 static Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
     SYM_RARROW;
 static const char *load_basedir = NULL;
@@ -71,177 +52,9 @@ static Value call_stack = Qnil;
 static Value source_data = Qnil;
 static bool initialized;
 
-//
-// value_is_*: Type Checks
-//
-
-inline bool value_is_int(Value v)
-{
-    return v & FLAG_MASK_INT;
-}
-
-inline bool value_is_symbol(Value v)
-{
-    return (v & FLAG_MASK_SYM) == FLAG_SYM;
-}
-
-bool value_is_immediate(Value v)
-{
-    return v & FLAG_MASK;
-}
-
-static inline bool value_tag_is(Value v, ValueTag expected)
-{
-    return !value_is_immediate(v) && VALUE_TAG(v) == expected;
-}
-
-inline bool value_is_string(Value v)
-{
-    return value_tag_is(v, TAG_STR);
-}
-
-static inline bool value_is_procedure(Value v)
-{
-    if (value_is_immediate(v))
-        return false;
-    switch (VALUE_TAG(v)) {
-    case TAG_SYNTAX:
-    case TAG_CFUNC:
-    case TAG_CLOSURE:
-    case TAG_CONTINUATION:
-        return true;
-    default:
-        return false;
-    }
-}
-
-inline bool value_is_pair(Value v)
-{
-    return value_tag_is(v, TAG_PAIR);
-}
-
-inline bool value_is_nil(Value v)
-{
-    return v == Qnil;
-}
-
-static Type immediate_type_of(Value v)
-{
-    if (value_is_int(v))
-        return TYPE_INT;
-    if (value_is_symbol(v))
-        return TYPE_SYMBOL;
-    if (v == Qtrue || v == Qfalse)
-        return TYPE_BOOL;
-    if (v == Qundef)
-        return TYPE_UNDEF;
-    UNREACHABLE();
-}
-
-Type value_type_of(Value v)
-{
-    if (value_is_immediate(v))
-        return immediate_type_of(v);
-    ValueTag t = VALUE_TAG(v);
-    switch (t) {
-    case TAG_STR:
-    case TAG_PAIR:
-        return (Type) t;
-    case TAG_CFUNC:
-    case TAG_SYNTAX:
-    case TAG_CLOSURE:
-    case TAG_CONTINUATION:
-        return TYPE_PROC;
-    }
-    UNREACHABLE();
-}
-
 static inline const char *value_type_to_string(Type t)
 {
     return TYPE_NAMES[t];
-}
-
-// value_to_*: Convert internal data to external plain C
-
-inline int64_t value_to_int(Value x)
-{
-#if __x86_64__
-    return (int64_t) x >> FLAG_NBIT_INT;
-#else
-    int64_t i = x;
-    return (i - 1) / (1 << FLAG_NBIT_INT);
-#endif
-}
-
-inline Symbol value_to_symbol(Value v)
-{
-    return (Symbol) v >> FLAG_NBIT_SYM;
-}
-
-static const char *name_nth(Value list, int64_t n)
-{
-    for (int64_t i = 0; i < n; i++) {
-        list = cdr(list);
-        if (list == Qnil)
-            return NULL;
-    }
-    Value name = car(list);
-    return STRING(name)->body;
-}
-
-static const char *unintern(Symbol sym)
-{
-    const char *name = name_nth(symbol_names, (int64_t) sym);
-    if (name == NULL) // fatal; every known symbols should have a name
-        error("symbol %lu not found", sym);
-    return name;
-}
-
-inline const char *value_to_string(Value v)
-{
-    if (value_is_symbol(v))
-        return unintern(value_to_symbol(v));
-    return STRING(v)->body;
-}
-
-// value_of_*: Convert external plain C data to internal
-
-inline Value value_of_int(int64_t i)
-{
-    Value v = i;
-    return v << FLAG_NBIT_INT | FLAG_INT;
-}
-
-static inline Value list1(Value x)
-{
-    return cons(x, Qnil);
-}
-
-static Symbol intern(const char *name)
-{
-    Value last = Qnil;
-    int64_t i = 0;
-    // find
-    for (Value p = symbol_names; p != Qnil; last = p, p = cdr(p)) {
-        Value v = car(p);
-        if (strcmp(STRING(v)->body, name) == 0)
-            return i;
-        i++;
-    }
-    // or put at `i`
-    Value s = value_of_string(name);
-    Value next = list1(s);
-    if (last == Qnil)
-        symbol_names = next;
-    else
-        PAIR(last)->cdr = next;
-    return i;
-}
-
-inline Value value_of_symbol(const char *s)
-{
-    Symbol sym = intern(s);
-    return (Value) (sym << FLAG_NBIT_SYM | FLAG_SYM);
 }
 
 static void *obj_new(size_t size, ValueTag t)
@@ -669,6 +482,11 @@ static Value parse_dotted_pair(Parser *p, Value l, Value last)
     return l;
 }
 
+static inline Value list1(Value x)
+{
+    return cons(x, Qnil);
+}
+
 static Value append_at(Value last, Value elem)
 {
     Value p = list1(elem);
@@ -1036,7 +854,7 @@ static Value eval_apply(Value *env, Value symproc, Value args)
 {
     Value proc = eval(env, symproc);
     expect_type("eval", TYPE_PROC, proc);
-    if (!value_tag_is(proc, TAG_SYNTAX))
+    if (VALUE_TAG(proc) != TAG_SYNTAX)
         args = map_eval(env, args);
     Value ret = apply(env, proc, args);
     call_stack_pop();
@@ -2370,7 +2188,6 @@ void sch_initialize(void)
     SYM_RARROW = value_of_symbol("=>");
 
     gc_add_root(&toplevel_environment);
-    gc_add_root(&symbol_names);
     gc_add_root(&call_stack);
     gc_add_root(&source_data);
 

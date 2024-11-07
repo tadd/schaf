@@ -24,7 +24,6 @@ typedef uintptr_t Symbol;
 
 extern const Value Qnil, Qundef, Qfalse, Qtrue;
 
-bool value_is_immediate(Value v);
 bool value_is_int(Value v);
 bool value_is_symbol(Value v);
 bool value_is_string(Value v);
