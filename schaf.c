@@ -17,6 +17,7 @@
 #include "schaf.h"
 #include "table.h"
 #include "utils.h"
+#include "gc.h"
 
 //
 // Types
