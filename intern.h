@@ -78,9 +78,12 @@ ATTR_HIDDEN Value reverse(Value l);
 ATTR_HIDDEN void *obj_new(size_t size, ValueTag t);
 
 ATTR_HIDDEN void gc_init(void);
+ATTR_HIDDEN void gc_add_root(const Value *r);
+ATTR_HIDDEN void gc_set_topenv(Table **env);
 ATTR_HIDDEN void gc_stack_init(const volatile void *b);
 ATTR_HIDDEN size_t gc_stack_get_size(const volatile void *sp);
 ATTR_HIDDEN ATTR_XMALLOC void *gc_malloc(size_t size);
+ATTR_HIDDEN ATTR_XMALLOC void *gc_calloc(size_t nmem, size_t memsize);
 
 static inline Value list1(Value x)
 {
