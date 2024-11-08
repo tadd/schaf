@@ -3,6 +3,7 @@
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1733,7 +1734,10 @@ static Value proc_for_each(Table *env, Value args)
 static Value value_of_continuation(void)
 {
     Continuation *c = obj_new(sizeof(Continuation), TAG_CONTINUATION);
+    memset(&c->sp, 0, sizeof(Continuation) - offsetof(Continuation, sp));
     c->proc.arity = 1; // by spec
+    c->call_stack = Qnil;
+    c->retval = Qfalse;
     return (Value) c;
 }
 
@@ -1911,7 +1915,12 @@ void sch_init(void)
     DEF_SYMBOL(UNQUOTE_SPLICING, "unquote-splicing");
     DEF_SYMBOL(RARROW, "=>");
 
+    gc_add_root(&symbol_names);
+    gc_add_root(&call_stack);
+    gc_add_root(&source_data);
+
     toplevel_environment = table_new();
+    gc_set_topenv(&toplevel_environment);
     Table *e = toplevel_environment;
 
     // 4. Expressions

@@ -18,6 +18,7 @@ static void usage(FILE *out)
     fprintf(out, "  -P\t\tonly parse then exit before evaluation. implies -p\n");
     fprintf(out, "  -T\t\tprint consumed CPU time at exit\n");
     fprintf(out, "  -M\t\tprint memory usage (VmHWM) at exit\n");
+    fprintf(out, "  -s\t\tprint heap statistics before/after GC\n");
     fprintf(out, "  -H <MiB>\tspecify initial heap size\n");
     fprintf(out, "  -S\t\tput stress on GC\n");
     fprintf(out, "  -h\t\tprint this help\n");
@@ -43,6 +44,7 @@ typedef struct {
     bool parse_only;
     bool cputime;
     bool memory;
+    bool heap_stat;
     size_t init_heap_size;
     bool stress_gc;
 } Option;
@@ -65,6 +67,7 @@ static Option parse_opt(int argc, char *const *argv)
         .parse_only = false,
         .cputime = false,
         .memory = false,
+        .heap_stat = false,
         .init_heap_size = 0,
         .stress_gc = false,
     };
@@ -93,6 +96,9 @@ static Option parse_opt(int argc, char *const *argv)
             break;
         case 'S':
             o.stress_gc = true;
+            break;
+        case 's':
+            o.heap_stat = true;
             break;
         case '?':
             usage(stderr);
@@ -147,6 +153,7 @@ int main(int argc, char **argv)
     if (o.cputime)
         atexit(print_cputime);
     sch_set_gc_stress(o.stress_gc);
+    sch_set_gc_print_stat(o.heap_stat);
     if (o.init_heap_size > 0)
         sch_set_gc_init_size(o.init_heap_size);
 
