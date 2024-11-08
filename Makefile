@@ -6,7 +6,7 @@ ANALYZER = -fanalyzer
 SANITIZER = -fsanitize=undefined #,address
 TIMEOUT = timeout 2
 
-OBJ_COMMON = parse.o schaf.o utils.o
+OBJ_COMMON = gc.o parse.o schaf.o utils.o
 OBJ = $(OBJ_COMMON) main.o
 OBJ_TEST = $(OBJ_COMMON) test/basic-test.o
 
@@ -40,6 +40,7 @@ microbench: schaf
 %.san.o: %.c
 	$(CC) $(CFLAGS) $(SANITIZER) -c $< -o $@
 
+gc.o: intern.h utils.h
 main.o: schaf.h utils.h
 parse.o: intern.h schaf.h utils.h
 schaf.o: intern.h schaf.h utils.h
