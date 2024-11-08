@@ -33,60 +33,6 @@ static const char *TYPE_NAMES[] = {
     [TYPE_PROC] = "procedure",
 };
 
-typedef enum { // has the same values as Type
-    TAG_PAIR    = TYPE_PAIR,
-    TAG_STR     = TYPE_STR,
-    TAG_CFUNC   = TYPE_PROC + 1,
-    TAG_SYNTAX, // almost a C Function
-    TAG_CLOSURE,
-    TAG_CONTINUATION,
-} ValueTag;
-
-typedef struct Pair {
-    ValueTag tag; // common
-    Value car, cdr;
-} Pair;
-
-typedef struct {
-    ValueTag tag;
-    char body[];
-} String;
-
-typedef struct {
-    ValueTag tag;
-    int64_t arity;
-} Procedure;
-
-typedef Value (*cfunc_t)(/*ANYARGS*/);
-typedef struct {
-    Procedure proc;
-    cfunc_t cfunc;
-} CFunc;
-
-typedef struct {
-    Procedure proc;
-    Table *env;
-    Value params;
-    Value body;
-} Closure;
-
-typedef struct {
-    Procedure proc;
-    volatile void *sp;
-    void *shelter;
-    size_t shelter_len;
-    Value call_stack;
-    jmp_buf state;
-    Value retval;
-} Continuation;
-
-#define VALUE_TAG(v) (*(ValueTag*)(v))
-#define PAIR(v) ((Pair *) v)
-#define STRING(v) ((String *) v)
-#define PROCEDURE(v) ((Procedure *) v)
-#define CFUNC(v) ((CFunc *) v)
-#define CLOSURE(v) ((Closure *) v)
-#define CONTINUATION(v) ((Continuation *) v)
 #define OF_BOOL(v) ((v) ? Qtrue : Qfalse)
 
 // singletons
@@ -143,14 +89,14 @@ inline bool value_is_symbol(Value v)
     return (v & FLAG_MASK_SYM) == FLAG_SYM;
 }
 
-static inline bool is_immediate(Value v)
+static inline bool value_is_immediate(Value v)
 {
     return v & FLAG_MASK;
 }
 
 static inline bool value_tag_is(Value v, ValueTag expected)
 {
-    return !is_immediate(v) && VALUE_TAG(v) == expected;
+    return !value_is_immediate(v) && VALUE_TAG(v) == expected;
 }
 
 inline bool value_is_string(Value v)
@@ -160,7 +106,7 @@ inline bool value_is_string(Value v)
 
 static inline bool value_is_procedure(Value v)
 {
-    if (is_immediate(v))
+    if (value_is_immediate(v))
         return false;
     switch (VALUE_TAG(v)) {
     case TAG_SYNTAX:
@@ -198,7 +144,7 @@ static Type immediate_type_of(Value v)
 
 Type value_type_of(Value v)
 {
-    if (is_immediate(v))
+    if (value_is_immediate(v))
         return immediate_type_of(v);
     ValueTag t = VALUE_TAG(v);
     switch (t) {
@@ -815,7 +761,9 @@ static Value parse_expr(Parser *p)
 
 static Parser *parser_new(FILE *in, const char *filename)
 {
-    Parser *p = xmalloc(sizeof(Parser));
+    Parser *p = malloc(sizeof(Parser));
+    if (p == NULL)
+        error("malloc(%zu) failed", sizeof(Parser));
     p->in = in;
     p->filename = filename;
     p->prev_token = TOK_EOF; // we use this since we never postpone EOF things
@@ -2278,7 +2226,9 @@ static bool continuation_set(Value c)
     Continuation *cont = CONTINUATION(c);
     cont->sp = sp;
     cont->shelter_len = stack_base - sp;
-    cont->shelter = xmalloc(cont->shelter_len);
+    cont->shelter = malloc(cont->shelter_len);
+    if (cont->shelter == NULL)
+        error("malloc(%zu) failed", cont->shelter_len);
     memcpy(cont->shelter, (void *) sp, cont->shelter_len);
     cont->call_stack = call_stack;
     return setjmp(cont->state) != 0;
@@ -2431,6 +2381,7 @@ CXRS(DEF_CXR_BUILTIN)
 
 void sch_init(void)
 {
+    gc_init();
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
     SYM_ELSE = value_of_symbol("else");
