@@ -1,7 +1,7 @@
 #!/bin/bash -eu
 
 nloop=10
-benchflags=-TM
+benchflags='-TM -H 192'
 
 run() {
     set -o pipefail

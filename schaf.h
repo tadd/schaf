@@ -25,9 +25,12 @@ typedef uintptr_t Symbol;
 
 extern const Value Qnil, Qundef, Qfalse, Qtrue;
 
+#define SCH_STACK_INIT() void *sch_stack_base; gc_stack_init(&sch_stack_base)
 void sch_init(void);
+#define SCH_INIT() SCH_STACK_INIT(); sch_init()
 
 bool value_is_null(Value v);
+bool value_is_immediate(Value v);
 bool value_is_int(Value v);
 bool value_is_symbol(Value v);
 bool value_is_string(Value v);
@@ -57,5 +60,8 @@ Value load(const char *path);
 Value eval_string(const char *s);
 
 const char *error_message(void);
+
+void sch_set_gc_print_stat(bool b);
+void sch_set_gc_init_size(size_t mib);
 
 #endif
