@@ -67,8 +67,6 @@ static Table *toplevel_environment;
 static Value symbol_names = Qnil; // ("name0" "name1" ...)
 Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
     SYM_RARROW;
-static const volatile void *stack_base = NULL;
-#define INIT_STACK() void *basis; stack_base = &basis
 static const char *load_basedir = NULL;
 static Value call_stack = Qnil; // list of pairs
 static Value source_data = Qnil; // (a)list of AST: (filename syntax_list newline_positions)
@@ -88,14 +86,14 @@ inline bool value_is_symbol(Value v)
     return (v & FLAG_MASK_SYM) == FLAG_SYM;
 }
 
-static inline bool is_immediate(Value v)
+bool value_is_immediate(Value v)
 {
     return v & FLAG_MASK;
 }
 
 static inline bool value_tag_is(Value v, ValueTag expected)
 {
-    return !is_immediate(v) && VALUE_TAG(v) == expected;
+    return !value_is_immediate(v) && VALUE_TAG(v) == expected;
 }
 
 inline bool value_is_string(Value v)
@@ -105,7 +103,7 @@ inline bool value_is_string(Value v)
 
 static inline bool value_is_procedure(Value v)
 {
-    if (is_immediate(v))
+    if (value_is_immediate(v))
         return false;
     switch (VALUE_TAG(v)) {
     case TAG_SYNTAX:
@@ -140,7 +138,7 @@ static Type immediate_type_of(Value v)
 
 Type value_type_of(Value v)
 {
-    if (is_immediate(v))
+    if (value_is_immediate(v))
         return immediate_type_of(v);
     ValueTag t = VALUE_TAG(v);
     switch (t) {
@@ -247,7 +245,7 @@ inline Value value_of_symbol(const char *s)
 
 void *obj_new(size_t size, ValueTag t)
 {
-    void *p = xmalloc(size);
+    void *p = gc_malloc(size);
     VALUE_TAG(p) = t;
     return p;
 }
@@ -1756,7 +1754,7 @@ static bool continuation_set(Value c)
     GET_SP(sp); // must be the first!
     Continuation *cont = CONTINUATION(c);
     cont->sp = sp;
-    cont->shelter_len = stack_base - sp;
+    cont->shelter_len = gc_stack_get_size(sp);
     cont->shelter = xmalloc(cont->shelter_len);
     memcpy(cont->shelter, (void *) sp, cont->shelter_len);
     cont->call_stack = call_stack;
@@ -1903,6 +1901,12 @@ static Value syn_defined_p(Table *env, Value name)
     return OF_BOOL(lookup(env, name) != Qundef);
 }
 
+int sch_fin(void)
+{
+    gc_fin();
+    return exit_status;
+}
+
 int sch_exit_status(void)
 {
     return exit_status;
@@ -1918,6 +1922,7 @@ CXRS(DEF_CXR_BUILTIN)
 
 void sch_init(void)
 {
+    gc_init();
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
 #define DEF_SYMBOL(var, name) SYM_##var = value_of_symbol(name)

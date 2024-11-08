@@ -26,6 +26,7 @@ typedef uintptr_t Symbol;
 extern const Value Qnil, Qundef, Qfalse, Qtrue;
 
 void sch_init(void);
+int sch_fin(void);
 int sch_exit_status(void);
 
 bool value_is_null(Value v);
@@ -58,5 +59,8 @@ Value load(const char *path);
 Value eval_string(const char *s);
 
 const char *error_message(void);
+
+void sch_set_gc_print_stat(bool b);
+void sch_set_gc_init_size(size_t mib);
 
 #endif
