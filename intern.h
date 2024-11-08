@@ -59,6 +59,8 @@ typedef struct {
     Value retval;
 } Continuation;
 
+#define VALUE_TAG(v) (*(ValueTag *)(v))
+
 #define PAIR(v) ((Pair *) v)
 #define LOCATED_PAIR(v) ((LocatedPair *) v)
 #define STRING(v) ((String *) v)
@@ -75,6 +77,13 @@ ATTR_HIDDEN ATTR(noreturn) void raise_error(jmp_buf buf, const char *fmt, ...);
 ATTR_HIDDEN Value reverse(Value l);
 ATTR_HIDDEN void *obj_new(size_t size, ValueTag t);
 
+ATTR_HIDDEN void gc_init(void);
+ATTR_HIDDEN void gc_add_root(const Value *r);
+ATTR_HIDDEN void gc_stack_init(const volatile void *b);
+ATTR_HIDDEN size_t gc_stack_get_size(const volatile void *sp);
+ATTR_HIDDEN ATTR_XMALLOC void *gc_malloc(size_t size);
+ATTR_HIDDEN ATTR_XMALLOC void *gc_calloc(size_t nmem, size_t memsize);
+
 static inline Value list1(Value x)
 {
     return cons(x, Qnil);
@@ -86,5 +95,6 @@ static inline Value list2(Value x, Value y)
 }
 
 #define DUMMY_PAIR() ((Value) &(Pair) { .tag = TAG_PAIR, .car = Qundef, .cdr = Qnil })
+#define SCH_STACK_INIT(p) void *p; gc_stack_init(&p)
 
 #endif // INTERN_H

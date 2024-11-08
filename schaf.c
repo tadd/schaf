@@ -32,7 +32,6 @@ static const char *TYPE_NAMES[] = {
     [TYPE_PROC] = "procedure",
 };
 
-#define VALUE_TAG(v) (*(ValueTag*)(v))
 #define OF_BOOL(v) ((v) ? Qtrue : Qfalse)
 
 // singletons
@@ -69,8 +68,6 @@ static Table *toplevel_environment;
 static Value symbol_names = Qnil; // ("name0" "name1" ...)
 Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
     SYM_RARROW;
-static const volatile void *stack_base = NULL;
-#define INIT_STACK() void *basis; stack_base = &basis
 static const char *load_basedir = NULL;
 static Value call_stack = Qnil; // list of pairs
 static Value source_data = Qnil; // (a)list of AST: (filename syntax_list newline_positions)
@@ -90,14 +87,14 @@ inline bool value_is_symbol(Value v)
     return (v & FLAG_MASK_SYM) == FLAG_SYM;
 }
 
-static inline bool is_immediate(Value v)
+bool value_is_immediate(Value v)
 {
     return v & FLAG_MASK;
 }
 
 static inline bool value_tag_is(Value v, ValueTag expected)
 {
-    return !is_immediate(v) && VALUE_TAG(v) == expected;
+    return !value_is_immediate(v) && VALUE_TAG(v) == expected;
 }
 
 inline bool value_is_string(Value v)
@@ -107,7 +104,7 @@ inline bool value_is_string(Value v)
 
 static inline bool value_is_procedure(Value v)
 {
-    if (is_immediate(v))
+    if (value_is_immediate(v))
         return false;
     switch (VALUE_TAG(v)) {
     case TAG_SYNTAX:
@@ -140,7 +137,7 @@ static Type immediate_type_of(Value v)
 
 Type value_type_of(Value v)
 {
-    if (is_immediate(v))
+    if (value_is_immediate(v))
         return immediate_type_of(v);
     ValueTag t = VALUE_TAG(v);
     switch (t) {
@@ -247,7 +244,7 @@ inline Value value_of_symbol(const char *s)
 
 void *obj_new(size_t size, ValueTag t)
 {
-    void *p = xmalloc(size);
+    void *p = gc_malloc(size);
     VALUE_TAG(p) = t;
     return p;
 }
@@ -342,6 +339,7 @@ static void expect_type_or(const char *header, Type e1, Type e2, Value v)
                   header, value_type_to_string(e1), value_type_to_string(e2),
                   value_type_to_string(t));
 }
+
 
 static void expect_arity_range(const char *func, int64_t min, int64_t max, Value args)
 {
@@ -692,7 +690,6 @@ static Value iload(FILE *in, const char *filename)
         dump_stack_trace();
         return Qundef;
     }
-    INIT_STACK();
     call_stack = Qnil;
     Value ret = eval_body(toplevel_environment, l);
     call_stack_check_consistency();
@@ -1734,6 +1731,11 @@ static Value value_of_continuation(void)
 {
     Continuation *c = obj_new(sizeof(Continuation), TAG_CONTINUATION);
     c->proc.arity = 1; // by spec
+    c->sp = c->shelter = NULL;
+    c->shelter_len = 0;
+    c->call_stack = Qnil;
+    memset(c->state, 0, sizeof(jmp_buf));
+    c->retval = Qfalse;
     return (Value) c;
 }
 
@@ -1743,8 +1745,10 @@ static bool continuation_set(Value c)
     GET_SP(sp); // must be the first!
     Continuation *cont = CONTINUATION(c);
     cont->sp = sp;
-    cont->shelter_len = stack_base - sp;
-    cont->shelter = xmalloc(cont->shelter_len);
+    cont->shelter_len = gc_stack_get_size(sp);
+    cont->shelter = malloc(cont->shelter_len);
+    if (cont->shelter == NULL)
+        error("malloc(%zu) failed", cont->shelter_len);
     memcpy(cont->shelter, (void *) sp, cont->shelter_len);
     cont->call_stack = call_stack;
     return setjmp(cont->state) != 0;
@@ -1897,6 +1901,7 @@ CXRS(DEF_CXR_BUILTIN)
 
 void sch_init(void)
 {
+    gc_init();
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
     SYM_ELSE = value_of_symbol("else");
@@ -1906,8 +1911,13 @@ void sch_init(void)
     SYM_UNQUOTE_SPLICING = value_of_symbol("unquote-splicing");
     SYM_RARROW = value_of_symbol("=>");
 
+    gc_add_root(&symbol_names);
+    gc_add_root(&call_stack);
+    gc_add_root(&source_data);
+
     toplevel_environment = table_new();
     Table *e = toplevel_environment;
+    // gc_add_root(&toplevel_environment);
 
     // 4. Expressions
 

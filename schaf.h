@@ -26,6 +26,7 @@ extern const Value Qnil, Qundef, Qfalse, Qtrue;
 
 void sch_init(void);
 
+bool value_is_immediate(Value v);
 bool value_is_int(Value v);
 bool value_is_symbol(Value v);
 bool value_is_string(Value v);
@@ -55,5 +56,8 @@ Value load(const char *path);
 Value eval_string(const char *s);
 
 const char *error_message(void);
+
+void sch_set_gc_print_stat(bool b);
+void sch_set_gc_init_size(size_t mib);
 
 #endif
