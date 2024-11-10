@@ -20,9 +20,14 @@ typedef struct Chunk {
     struct Chunk *next;
 } Chunk;
 
+enum {
+    ROOT_SIZE = 0x10
+};
 static const size_t INIT_SIZE = 25 * (1024 * 1024); // MiB
 static void *heap;
 static Chunk free_list[1];
+static const Value *root[ROOT_SIZE];
+static long nroot;
 
 void gc_init(void)
 {
@@ -69,9 +74,100 @@ static void *allocate(size_t size)
     return NULL;
 }
 
+void gc_add_root(const Value *r)
+{
+    if (nroot == ROOT_SIZE)
+        error("%s: too many roots added", __func__);
+    root[nroot++] = r;
+}
+
+static inline Header *get_header(Value v)
+{
+    return HEADER(v) - 1;
+}
+
+static void mark(Value v);
+
+static void mark_env_each(uint64_t key, uint64_t val, ATTR(unused) void *data)
+{
+    mark(key);
+    mark(val);
+}
+
+static void mark_env(Table *env)
+{
+    table_foreach(env, mark_env_each, NULL);
+}
+
+static void mark(Value v)
+{
+    if (value_is_immediate(v) || v == Qnil)
+        return;
+    Header *h = get_header(v);
+    if (h->living)
+        return;
+    h->living = true;
+    switch (VALUE_TAG(v)) {
+    case TAG_PAIR: {
+        Pair *p = PAIR(v);
+        mark(p->car);
+        mark(p->cdr);
+        return;
+    }
+    case TAG_CLOSURE: {
+        Closure *p = CLOSURE(v);
+        mark_env(p->env);
+        mark(p->params);
+        mark(p->body);
+        return;
+    }
+    case TAG_CONTINUATION: {
+        Continuation *p = CONTINUATION(v);
+        mark(p->call_stack);
+        mark(p->retval);
+        return;
+    }
+    case TAG_STR:
+    case TAG_CFUNC:
+    case TAG_SYNTAX:
+        return;
+    }
+}
+
+static void mark_roots(void)
+{
+    for (size_t i = 0; i < ROOT_SIZE; i++) {
+        if (root[i] != NULL)
+            mark(*root[i]);
+    }
+}
+
+static void sweep(void)
+{
+    uint8_t *p = heap;
+    uint8_t *endp = p + INIT_SIZE;
+    for (Header *h; p < endp; p += h->size + sizeof(Header)) {
+        h = HEADER(p);
+        if (h->allocated && !h->living)
+            xfree(h);
+        h->living = false;
+    }
+    fprintf(stderr, "sweep() done\n");
+}
+
+static void gc(void)
+{
+    mark_roots();
+    sweep();
+}
+
 void *xmalloc(size_t size)
 {
     void *p = allocate(size);
+    if (p == NULL) {
+        gc();
+        p = allocate(size);
+    }
     if (p == NULL)
         error("out of memory; %s(%zu) failed", __func__, size);
     return p;

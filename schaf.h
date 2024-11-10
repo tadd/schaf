@@ -25,6 +25,7 @@ extern const Value Qnil, Qundef, Qfalse, Qtrue;
 
 void sch_init(void);
 
+bool value_is_immediate(Value v);
 bool value_is_int(Value v);
 bool value_is_symbol(Value v);
 bool value_is_string(Value v);

@@ -64,5 +64,6 @@ typedef struct {
 } Continuation;
 
 void gc_init(void);
+void gc_add_root(const Value *r);
 
 #endif
