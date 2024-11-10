@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -142,6 +143,67 @@ static void mark_roots(void)
     }
 }
 
+ATTR(unused)
+static void heap_dump(void)
+{
+    uint8_t *p = heap;
+    uint8_t *endp = p + INIT_SIZE;
+    fprintf(stderr, "begin: %p..%p\n", p, endp);
+    bool ellipsis = false;
+    for (Header *h, *prev = NULL; p < endp; p += h->size + sizeof(Header), prev = h) {
+        h = HEADER(p);
+        if (prev != NULL && h->size == prev->size &&
+            h->allocated == prev->allocated && h->living == prev->living) {
+            if (!ellipsis) {
+                fprintf(stderr, "[..]\n");
+                ellipsis = true;
+            }
+            continue;
+        }
+        ellipsis = false;
+        fprintf(stderr, "[%p] size: %zu, alloc: %d, liv: %d\n",
+                h, h->size, h->allocated, h->living);
+    }
+    fprintf(stderr, "end: %p..%p\n", p, endp);
+}
+
+#define TABMAX 1024
+
+ATTR(unused)
+static void heap_stat_table(size_t tab[])
+{
+    for (size_t i = 0; i < TABMAX; i++) {
+        if (tab[i] > 0)
+            fprintf(stderr, "  [%zu] %zu\n", i, tab[i]);
+    }
+}
+
+ATTR(unused)
+static void heap_stat(void)
+{
+    uint8_t *p = heap;
+    uint8_t *endp = p + INIT_SIZE;
+    size_t used = 0;
+    size_t tab_used[TABMAX+1] = { 0, }, tab_free[TABMAX+1] = { 0, };
+    for (Header *h; p < endp; p += h->size + sizeof(Header)) {
+        h = HEADER(p);
+        size_t i = h->size > TABMAX ? TABMAX : h->size;
+        if (h->allocated) {
+            used += sizeof(Header) + h->size;
+            tab_used[i]++;
+        } else
+            tab_free[i]++;
+    }
+    int n = ceil(log10(INIT_SIZE));
+    long r = lround(((double) used / INIT_SIZE) * 1000);
+    fprintf(stderr, "heap usage: %*zu / %*zu (%3ld.%1ld%%)\n",
+            n, used, n, INIT_SIZE, r/10, r%10);
+    fprintf(stderr, "used dist:\n");
+    heap_stat_table(tab_used);
+    fprintf(stderr, "free dist:\n");
+    heap_stat_table(tab_free);
+}
+
 static void sweep(void)
 {
     uint8_t *p = heap;
@@ -152,13 +214,16 @@ static void sweep(void)
             xfree(h);
         h->living = false;
     }
-    fprintf(stderr, "sweep() done\n");
 }
 
 static void gc(void)
 {
+    //fprintf(stderr, "gc begin\n");
+    //heap_stat();
     mark_roots();
     sweep();
+    //heap_stat();
+    //fprintf(stderr, "gc end\n");
 }
 
 void *xmalloc(size_t size)
