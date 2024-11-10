@@ -13,7 +13,9 @@ typedef struct List {
 
 static List *list_new(uint64_t key, uint64_t value, List *next)
 {
-    List *l = xmalloc(sizeof(List));
+    List *l = malloc(sizeof(List));
+    if (l == NULL)
+        error("malloc(%zu) failed", sizeof(List));
     l->key = key;
     l->value = value;
     l->next = next;

@@ -89,7 +89,7 @@ inline bool value_is_symbol(Value v)
     return (v & FLAG_MASK_SYM) == FLAG_SYM;
 }
 
-static inline bool value_is_immediate(Value v)
+bool value_is_immediate(Value v)
 {
     return v & FLAG_MASK;
 }
@@ -2391,8 +2391,13 @@ void sch_init(void)
     SYM_UNQUOTE_SPLICING = value_of_symbol("unquote-splicing");
     SYM_RARROW = value_of_symbol("=>");
 
+    gc_add_root(&symbol_names);
+    gc_add_root(&call_stack);
+    gc_add_root(&source_data);
+
     toplevel_environment = table_new();
     Table *e = toplevel_environment;
+    // gc_add_root(&toplevel_environment);
 
     // 4. Expressions
 
