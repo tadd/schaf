@@ -66,5 +66,6 @@ typedef struct {
 void gc_init(void);
 void gc_add_root(const Value *r);
 void gc_print_stat(bool b);
+void gc_init_size(size_t mib);
 
 #endif
