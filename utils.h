@@ -11,7 +11,6 @@
 
 ATTR(noreturn) ATTR(format(printf, 1, 2)) void error(const char *fmt, ...);
 ATTR_XMALLOC void *xmalloc(size_t size);
-ATTR_XMALLOC void *xrealloc(void *p, size_t size);
 ATTR_XMALLOC char *xstrdup(const char *s);
 void xfree(void *p);
 
