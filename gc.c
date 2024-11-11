@@ -32,7 +32,7 @@ static const Value *root[ROOT_SIZE];
 static long nroot;
 static bool print_stat;
 
-void gc_init_size(size_t init_mib)
+void gc_set_init_size(size_t init_mib)
 {
     init_size = init_mib * MiB;
 }
@@ -210,7 +210,7 @@ static void sweep(void)
     }
 }
 
-void gc_print_stat(bool b)
+void gc_set_print_stat(bool b)
 {
     print_stat = b;
 }
