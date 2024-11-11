@@ -5,8 +5,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "gc.h"
 #include "schaf.h"
-#include "utils.h"
 
 ATTR(noreturn)
 static void usage(FILE *out)
@@ -17,6 +17,7 @@ static void usage(FILE *out)
     fprintf(out, "  -P\t\tonly parse then exit before evaluation. implies -p\n");
     fprintf(out, "  -T\t\tprint consumed CPU time at exit\n");
     fprintf(out, "  -M\t\tprint memory usage (VmHWM) at exit\n");
+    fprintf(out, "  -s\t\tprint heap statistics before/after GC\n");
     fprintf(out, "  -h\t\tprint this help\n");
     exit(out == stdout ? 0 : 2);
 }
@@ -40,6 +41,7 @@ typedef struct {
     bool parse_only;
     bool cputime;
     bool memory;
+    bool heap_stat;
 } Option;
 
 static Option parse_opt(int argc, char *const *argv)
@@ -51,9 +53,10 @@ static Option parse_opt(int argc, char *const *argv)
         .parse_only = false,
         .cputime = false,
         .memory = false,
+        .heap_stat = false,
     };
     int opt;
-    while ((opt = getopt(argc, argv, "e:hPpTM")) != -1) {
+    while ((opt = getopt(argc, argv, "e:hPpTMs")) != -1) {
         switch (opt) {
         case 'e':
             o.script = optarg;
@@ -71,6 +74,9 @@ static Option parse_opt(int argc, char *const *argv)
             break;
         case 'M':
             o.memory = true;
+            break;
+        case 's':
+            o.heap_stat = true;
             break;
         case '?':
             usage(stderr);
@@ -117,6 +123,7 @@ int main(int argc, char **argv)
     sch_init();
     Option o = parse_opt(argc, argv);
     Value v;
+    gc_print_stat(o.heap_stat);
     if (o.parse_only)
         v = o.script ? parse_string(o.script) : parse(o.path);
     else
