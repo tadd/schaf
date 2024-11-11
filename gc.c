@@ -258,16 +258,23 @@ static void add_to_free_list(void *p)
 
 static void sweep(void)
 {
+    static Header dummy = { .size = 0, .allocated = true, .living = false };
     uint8_t *p = heap, *endp = p + init_size;
     size_t offset;
-    for (Header *h; p < endp; p += offset) {
+    for (Header *h, *prev = &dummy; p < endp; p += offset) {
         h = HEADER(p);
         offset = h->size + sizeof(Header);
-        if (h->living)
+        if (h->living) {
             h->living = false;
-        else if (h->allocated) {
-            add_to_free_list(h);
-            h->allocated = false;
+            prev = h;
+        } else if (h->allocated) {
+            if (!prev->allocated)
+                prev->size += offset;
+            else {
+                add_to_free_list(h);
+                h->allocated = false;
+                prev = h;
+            }
         }
     }
 }
