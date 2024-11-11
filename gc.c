@@ -245,18 +245,6 @@ void *xmalloc(size_t size)
     return p;
 }
 
-void *xrealloc(void *q, size_t size)
-{
-    void *p = allocate(size);
-    if (p == NULL)
-        error("out of memory; %s(ptr, %zu) failed", __func__, size);
-    Header *op = p, *oq = q;
-    memcpy(p, q, oq->size);
-    xfree(q);
-    op->size = size;
-    return p;
-}
-
 void xfree(void *p)
 {
     Chunk *ch = p;
