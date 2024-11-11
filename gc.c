@@ -27,7 +27,7 @@ enum {
 };
 static size_t init_size = 25 * MiB;
 static void *heap;
-static Chunk free_list[1];
+static Chunk *free_list;
 static const Value *root[ROOT_SIZE];
 static long nroot;
 static bool print_stat;
@@ -47,24 +47,29 @@ void gc_init(void)
     ch->h.allocated = false;
     ch->h.living = false;
     ch->next = NULL;
-    free_list->next = ch; // free_list itself is never used as a chunk
+    free_list = ch;
 }
 
 static void *allocate_from_list(Chunk *prev, Chunk *curr, size_t size)
 {
     uint8_t *p = (uint8_t *) curr;
     size_t hsize = size + sizeof(Header);
+    Chunk *next;
     if (curr->h.size == hsize)
-        prev->next = curr->next;
+        next = curr->next;
     else {
         Header h = curr->h;
         h.size -= hsize;
-        Chunk *next = curr->next;
+        Chunk *chnext = curr->next;
         Chunk *ch = (Chunk *)(p + hsize);
         ch->h = h;
-        ch->next = next;
-        prev->next = ch;
+        ch->next = chnext;
+        next = ch;
     }
+    if (prev != NULL)
+        prev->next = next;
+    else
+        free_list = next;
     Header *o = HEADER(p);
     o->size = size;
     o->allocated = true;
@@ -75,7 +80,7 @@ static void *allocate_from_list(Chunk *prev, Chunk *curr, size_t size)
 static void *allocate(size_t size)
 {
     size_t hsize = size + sizeof(Header);
-    for (Chunk *prev = free_list, *curr; (curr = prev->next) != NULL; prev = curr) {
+    for (Chunk *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = curr->next) {
         if (curr->h.size >= hsize) // First-fit
             return allocate_from_list(prev, curr, size);
     }
@@ -255,6 +260,6 @@ void xfree(void *p)
 {
     Chunk *ch = p;
     ch->h.allocated = false;
-    ch->next = free_list->next; // prepend
-    free_list->next = ch;
+    ch->next = free_list; // prepend
+    free_list = ch;
 }
