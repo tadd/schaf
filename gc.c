@@ -22,22 +22,28 @@ typedef struct Chunk {
 } Chunk;
 
 enum {
-    ROOT_SIZE = 0x10
+    ROOT_SIZE = 0x10,
+    MiB = 1024 * 1024,
 };
-static const size_t INIT_SIZE = 25 * (1024 * 1024); // MiB
+static size_t init_size = 25 * MiB;
 static void *heap;
 static Chunk free_list[1];
 static const Value *root[ROOT_SIZE];
 static long nroot;
 static bool print_stat;
 
+void gc_set_init_size(size_t init_mib)
+{
+    init_size = init_mib * MiB;
+}
+
 void gc_init(void)
 {
-    heap = malloc(INIT_SIZE);
+    heap = malloc(init_size);
     if (heap == NULL)
-        error("out of memory; initial malloc(%zu) failed", INIT_SIZE);
+        error("out of memory; initial malloc(%zu) failed", init_size);
     Chunk *ch = heap;
-    ch->h.size = INIT_SIZE - sizeof(Header);
+    ch->h.size = init_size - sizeof(Header);
     ch->h.allocated = false;
     ch->h.living = false;
     ch->next = NULL;
@@ -148,7 +154,7 @@ ATTR(unused)
 static void heap_dump(void)
 {
     uint8_t *p = heap;
-    uint8_t *endp = p + INIT_SIZE;
+    uint8_t *endp = p + init_size;
     fprintf(stderr, "begin: %p..%p\n", p, endp);
     bool ellipsis = false;
     for (Header *h, *prev = NULL; p < endp; p += h->size + sizeof(Header), prev = h) {
@@ -184,7 +190,7 @@ static void heap_stat(const char *header)
     if (header != NULL)
         debug("%s", header);
     uint8_t *p = heap;
-    uint8_t *endp = p + INIT_SIZE;
+    uint8_t *endp = p + init_size;
     size_t used = 0;
     size_t tab_used[TABMAX+1] = { 0, }, tab_free[TABMAX+1] = { 0, };
     for (Header *h; p < endp; p += h->size + sizeof(Header)) {
@@ -196,10 +202,10 @@ static void heap_stat(const char *header)
         } else
             tab_free[i]++;
     }
-    int n = ceil(log10(INIT_SIZE));
-    long r = lround(((double) used / INIT_SIZE) * 1000);
+    int n = ceil(log10(init_size));
+    long r = lround(((double) used / init_size) * 1000);
     debug("heap usage: %*zu / %*zu (%3ld.%1ld%%)",
-          n, used, n, INIT_SIZE, r/10, r%10);
+          n, used, n, init_size, r/10, r%10);
     debug("used dist:");
     heap_stat_table(tab_used);
     debug("free dist:");
@@ -209,7 +215,7 @@ static void heap_stat(const char *header)
 static void sweep(void)
 {
     uint8_t *p = heap;
-    uint8_t *endp = p + INIT_SIZE;
+    uint8_t *endp = p + init_size;
     for (Header *h; p < endp; p += h->size + sizeof(Header)) {
         h = HEADER(p);
         if (h->allocated && !h->living)
@@ -218,7 +224,7 @@ static void sweep(void)
     }
 }
 
-void gc_print_stat(bool b)
+void gc_set_print_stat(bool b)
 {
     print_stat = b;
 }
