@@ -29,6 +29,7 @@ static void *heap;
 static Chunk free_list[1];
 static const Value *root[ROOT_SIZE];
 static long nroot;
+static bool print_stat;
 
 void gc_init(void)
 {
@@ -164,9 +165,10 @@ static void heap_stat_table(size_t tab[])
     }
 }
 
-ATTR(unused)
-static void heap_stat(void)
+static void heap_stat(const char *header)
 {
+    if (header != NULL)
+        debug("%s", header);
     uint8_t *p = heap;
     uint8_t *endp = p + INIT_SIZE;
     size_t used = 0;
@@ -202,14 +204,19 @@ static void sweep(void)
     }
 }
 
+void gc_print_stat(bool b)
+{
+    print_stat = b;
+}
+
 static void gc(void)
 {
-    //fprintf(stderr, "gc begin\n");
-    //heap_stat();
+    if (print_stat)
+        heap_stat("GC begin");
     mark_roots();
     sweep();
-    //heap_stat();
-    //fprintf(stderr, "gc end\n");
+    if (print_stat)
+        heap_stat("GC end");
 }
 
 void *xmalloc(size_t size)
