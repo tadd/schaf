@@ -74,6 +74,7 @@ static const volatile void *stack_base = NULL;
 static const char *load_basedir = NULL;
 static Value call_stack = Qnil;
 static Value source_data = Qnil;
+static bool initialized;
 
 //
 // value_is_*: Type Checks
@@ -992,6 +993,7 @@ static Value iparse(FILE *in, const char *filename)
 
 Value parse(const char *path)
 {
+    sch_init();
     FILE *in = fopen(path, "r");
     if (in == NULL)
         error("parse: can't open file: %s", path);
@@ -1002,6 +1004,7 @@ Value parse(const char *path)
 
 Value parse_string(const char *in)
 {
+    sch_init();
     FILE *f = fmemopen((char *) in, strlen(in), "r");
     Value ast = iparse(f, "<inline>");
     fclose(f);
@@ -1172,6 +1175,7 @@ static Value iload_inner(FILE *in, const char *path)
 
 Value eval_string(const char *in)
 {
+    sch_init();
     FILE *f = fmemopen((char *) in, strlen(in), "r");
     Value v = iload(f, "<inline>");
     fclose(f);
@@ -1194,6 +1198,7 @@ static FILE *open_loadable(const char *path)
 
 Value load(const char *path)
 {
+    sch_init();
     FILE *in = open_loadable(path);
     Value retval = iload(in, path);
     fclose(in);
@@ -2381,6 +2386,8 @@ CXRS(DEF_CXR_BUILTIN)
 
 void sch_init(void)
 {
+    if (initialized)
+        return;
     gc_init();
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
@@ -2533,4 +2540,6 @@ void sch_init(void)
     define_procedure(e, "print", proc_print, -1); // like Gauche
     define_procedure(e, "_cputime", proc_cputime, 0);
     define_syntax(e, "_defined?", syn_defined_p, 1);
+
+    initialized = true;
 }

@@ -104,7 +104,7 @@ static void mark(Value v)
     }
     case TAG_CLOSURE: {
         Closure *p = CLOSURE(v);
-        mark(p->env);
+        // mark(p->env);
         mark(p->params);
         mark(p->body);
         return;

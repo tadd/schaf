@@ -52,6 +52,7 @@ Value parse(const char *path);
 Value parse_string(const char *in);
 Value load(const char *path);
 Value eval_string(const char *s);
+void initialize(void);
 
 const char *error_message(void);
 
