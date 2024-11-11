@@ -196,11 +196,11 @@ static void heap_stat(void)
     }
     int n = ceil(log10(INIT_SIZE));
     long r = lround(((double) used / INIT_SIZE) * 1000);
-    fprintf(stderr, "heap usage: %*zu / %*zu (%3ld.%1ld%%)\n",
-            n, used, n, INIT_SIZE, r/10, r%10);
-    fprintf(stderr, "used dist:\n");
+    debug("heap usage: %*zu / %*zu (%3ld.%1ld%%)",
+          n, used, n, INIT_SIZE, r/10, r%10);
+    debug("used dist:");
     heap_stat_table(tab_used);
-    fprintf(stderr, "free dist:\n");
+    debug("free dist:");
     heap_stat_table(tab_free);
 }
 
