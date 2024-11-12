@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -26,7 +27,7 @@ enum {
     ROOT_SIZE = 0x10,
     MiB = 1024 * 1024,
 };
-static size_t init_size = 13 * MiB;
+static size_t init_size = 1 * MiB;
 static void *heap;
 static Chunk *free_list;
 static const Value *root[ROOT_SIZE];
@@ -39,6 +40,16 @@ void gc_set_init_size(size_t init_mib)
     init_size = init_mib * MiB;
 }
 
+#if 1
+#define sizeassert(s) do { \
+     assert(s > 0); \
+     assert(s != Qnil); \
+     assert(s < init_size); \
+ } while (0)
+#else
+#define sizeassert(s)
+#endif
+
 void gc_init(void)
 {
     heap = malloc(init_size);
@@ -46,20 +57,34 @@ void gc_init(void)
         error("out of memory; initial malloc(%zu) failed", init_size);
     Chunk *ch = heap;
     ch->h.size = init_size - sizeof(Header);
+    sizeassert(ch->h.size);
     ch->h.allocated = false;
     ch->h.living = false;
     ch->next = NULL;
     free_list = ch;
 }
 
+static void assert_freelist(void)
+{
+    for (Chunk *pv = NULL, *cr = free_list; cr != NULL; pv = cr, cr = cr->next) {
+        (void) pv;
+        assert(!cr->h.allocated);
+        sizeassert(cr->h.size);
+    }
+}
+
 static void *allocate_from_list(Chunk *prev, Chunk *curr, size_t size)
 {
+    sizeassert(size);
+    assert_freelist();
     uint8_t *p = (uint8_t *) curr;
     size_t hsize = size + sizeof(Header);
+    sizeassert(hsize);
     Chunk *next = curr->next;
     if (curr->h.size > hsize) {
         Header h = curr->h;
         h.size -= hsize;
+        sizeassert(h.size);
         Chunk *ch = (Chunk *)(p + hsize);
         ch->h = h;
         ch->next = next;
@@ -70,9 +95,14 @@ static void *allocate_from_list(Chunk *prev, Chunk *curr, size_t size)
     else
         prev->next = next;
     Header *o = HEADER(p);
+    sizeassert(size);
     o->size = size;
+    sizeassert(o->size);
     o->allocated = true;
-    return o + 1; // user of allocation use curr->next space and so-on
+    void *ret = o + 1; // user of allocation use curr->next space and so-on
+    memset(ret, 0x00, size); // calloc it
+    assert_freelist();
+    return ret;
 }
 
 static inline size_t align(size_t size)
@@ -83,10 +113,14 @@ static inline size_t align(size_t size)
 static void *allocate(size_t size)
 {
     size = align(size);
+    sizeassert(size);
     size_t hsize = size + sizeof(Header);
     for (Chunk *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = curr->next) {
-        if (curr->h.size >= hsize) // First-fit
+        assert(!curr->h.allocated);
+        if (curr->h.size >= hsize) { // First-fit
+            //assert(((uintptr_t) curr & 0xFFF) != 0x1e0);
             return allocate_from_list(prev, curr, size);
+        }
     }
     return NULL;
 }
@@ -118,14 +152,17 @@ static void mark(Value v)
     if (value_is_immediate(v) || v == Qnil)
         return;
     Header *h = get_header(v);
+    sizeassert(h->size);
     if (h->living)
         return;
     h->living = true;
+    sizeassert(h->size);
     switch (VALUE_TAG(v)) {
     case TAG_PAIR: {
         Pair *p = PAIR(v);
         mark(p->car);
         mark(p->cdr);
+        sizeassert(h->size);
         return;
     }
     case TAG_CLOSURE: {
@@ -133,17 +170,20 @@ static void mark(Value v)
         mark(p->env);
         mark(p->params);
         mark(p->body);
+        sizeassert(h->size);
         return;
     }
     case TAG_CONTINUATION: {
         Continuation *p = CONTINUATION(v);
         mark(p->call_stack);
         mark(p->retval);
+        sizeassert(h->size);
         return;
     }
     case TAG_STR:
     case TAG_CFUNC:
     case TAG_SYNTAX:
+        sizeassert(h->size);
         return;
     }
 }
@@ -200,6 +240,9 @@ static void heap_dump(void)
     bool ellipsis = false;
     for (Header *h, *prev = NULL; p < endp; p += offset, prev = h) {
         h = HEADER(p);
+        if ((uintptr_t)prev == Qnil) {
+            abort();
+        }
         offset = h->size + sizeof(Header);
         if (prev != NULL && h->size == prev->size &&
             h->allocated == prev->allocated && h->living == prev->living) {
@@ -215,6 +258,19 @@ static void heap_dump(void)
     }
     fprintf(stderr, "end: %p..%p\n", p, endp);
 }
+
+ATTR(unused)
+static void heap_dump_freelist(void)
+{
+    debug("freelist begin");
+    for (Chunk *p = free_list; p != NULL; p = p->next) {
+        debug("[%p] %zu", p, p->h.size);
+        size_t size = p->h.size;
+        sizeassert(size);
+    }
+    debug("freelist end");
+}
+
 
 #define TABMAX 1024
 
@@ -258,8 +314,49 @@ static void heap_stat(const char *header)
 static void add_to_free_list(void *p)
 {
     Chunk *ch = p;
+    assert(ch);
+    sizeassert(ch->h.size);
+    memset(&ch->h + 1, 0, ch->h.size);
+    sizeassert(ch->h.size);
     ch->next = free_list; // prepend
+    sizeassert(ch->h.size);
     free_list = ch;
+}
+
+static inline void hassert(const Header *h, long i)
+{
+    assert(h);
+    bool fail = false;
+    if (!h || (Value)h == Qnil ||
+        h->size == 0 || h->size > init_size)
+        fail = true;
+    if (fail)
+        debug("[%p (%ld)]", h, i);
+    sizeassert(h->size);
+    /* assert(h->living >= 0); */
+    /* assert(h->living <= 1); */
+    /* assert(h->allocated >= 0); */
+    /* assert(h->allocated <= 1); */
+}
+
+static inline void assert_heap(const char *header)
+{
+    uint8_t *p = heap, *endp = p + init_size;
+    if (header)
+        debug("%s: [%p, %p)", header, p, endp);
+    size_t offset;
+    long i = 0;
+    for (Header *h, *prev; p < endp; p += offset, prev = h) {
+        h = HEADER(p);
+        offset = h->size + sizeof(Header);
+        if (h->size == 0 || (i >= 37199 && i <= 37201)) {
+            fprintf(stderr, "%zu[%ld]: ", h->size, i);
+            debug("h, prev: %p, %p", h, prev);
+        }
+        hassert(h, i);
+        i++;
+    }
+    debug("\n%s: done (%ld)", header, i);
 }
 
 static void sweep(void)
@@ -267,7 +364,10 @@ static void sweep(void)
     static Header dummy = { .size = 0, .allocated = true, .living = false };
     uint8_t *p = heap, *endp = p + init_size;
     size_t offset;
-    for (Header *h, *prev = &dummy; p < endp; p += offset) {
+    assert_heap("before sweep");
+    assert_freelist();
+    for (Header *h, *prev = &dummy, *ph = NULL; p < endp; p += offset, ph = h) {
+        (void) ph;
         h = HEADER(p);
         offset = h->size + sizeof(Header);
         if (h->living) {
@@ -282,7 +382,10 @@ static void sweep(void)
                 prev = h;
             }
         }
+        sizeassert(h->size);
     }
+    assert_freelist();
+    assert_heap("after sweep");
 }
 
 void gc_set_print_stat(bool b)
@@ -301,16 +404,24 @@ static void mark_all(void)
 
 static void gc(void)
 {
-    if (print_stat)
-        heap_stat("GC begin");
+    debug("GC begin");
+    if (print_stat) {
+        heap_stat(NULL);
+        /* heap_dump(); */
+    }
     mark_all();
     sweep();
-    if (print_stat)
-        heap_stat("GC end");
+    if (print_stat) {
+        heap_stat(NULL);
+        /* heap_dump(); */
+    }
+    debug("GC end");
 }
 
 void *xmalloc(size_t size)
 {
+    sizeassert(size);
+
     void *p = allocate(size);
     if (p == NULL) {
         gc();
