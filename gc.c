@@ -54,22 +54,19 @@ static void *allocate_from_list(Chunk *prev, Chunk *curr, size_t size)
 {
     uint8_t *p = (uint8_t *) curr;
     size_t hsize = size + sizeof(Header);
-    Chunk *next;
-    if (curr->h.size == hsize)
-        next = curr->next;
-    else {
+    Chunk *next = curr->next;
+    if (curr->h.size > hsize) {
         Header h = curr->h;
         h.size -= hsize;
-        Chunk *chnext = curr->next;
         Chunk *ch = (Chunk *)(p + hsize);
         ch->h = h;
-        ch->next = chnext;
+        ch->next = next;
         next = ch;
     }
-    if (prev != NULL)
-        prev->next = next;
-    else
+    if (prev == NULL)
         free_list = next;
+    else
+        prev->next = next;
     Header *o = HEADER(p);
     o->size = size;
     o->allocated = true;
