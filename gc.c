@@ -225,7 +225,10 @@ static void sweep(void)
     size_t offset;
     for (Header *h; p < endp; p += offset) {
         h = HEADER(p);
-        if (h->allocated && !h->living)
+        offset = h->size + sizeof(Header);
+        if (h->living)
+            h->living = false;
+        else if (h->allocated)
             xfree(h);
         h->living = false;
     }
