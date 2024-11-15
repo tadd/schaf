@@ -214,7 +214,7 @@ static void sweep(void)
         offset = h->size + sizeof(Header);
         if (h->living)
             h->living = false;
-        else if (h->allocated && !h->living)
+        else if (h->allocated)
             xfree(h);
     }
 }
