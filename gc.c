@@ -168,13 +168,13 @@ static void heap_dump(void)
         if (prev != NULL && h->size == prev->size &&
             h->allocated == prev->allocated && h->living == prev->living) {
             if (!ellipsis) {
-                fprintf(stderr, "[..]\n");
+                fprintf(stderr, "  [..]\n");
                 ellipsis = true;
             }
             continue;
         }
         ellipsis = false;
-        fprintf(stderr, "[%p] size: %zu, alloc: %d, liv: %d\n",
+        fprintf(stderr, "  [%p] size: %zu, alloc: %d, liv: %d\n",
                 h, h->size, h->allocated, h->living);
     }
     fprintf(stderr, "end: %p..%p\n", p, endp);
@@ -185,9 +185,9 @@ static void heap_dump(void)
 ATTR(unused)
 static void heap_stat_table(size_t tab[])
 {
-    for (size_t i = 0; i < TABMAX; i++) {
+    for (size_t i = 0; i <= TABMAX; i++) {
         if (tab[i] > 0)
-            fprintf(stderr, "  [%zu] %zu\n", i, tab[i]);
+            fprintf(stderr, "    [%zu] %zu\n", i, tab[i]);
     }
 }
 
@@ -211,11 +211,11 @@ static void heap_stat(const char *header)
     }
     int n = ceil(log10(init_size));
     long r = lround(((double) used / init_size) * 1000);
-    debug("heap usage: %*zu / %*zu (%3ld.%1ld%%)",
+    debug("  heap usage: %*zu / %*zu (%3ld.%1ld%%)",
           n, used, n, init_size, r/10, r%10);
-    debug("used dist:");
+    debug("  used dist:");
     heap_stat_table(tab_used);
-    debug("free dist:");
+    debug("  free dist:");
     heap_stat_table(tab_free);
 }
 
