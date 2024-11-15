@@ -144,12 +144,13 @@ static void mark_roots(void)
 ATTR(unused)
 static void heap_dump(void)
 {
-    uint8_t *p = heap;
-    uint8_t *endp = p + init_size;
+    uint8_t *p = heap, *endp = p + init_size;
     fprintf(stderr, "begin: %p..%p\n", p, endp);
+    size_t offset;
     bool ellipsis = false;
-    for (Header *h, *prev = NULL; p < endp; p += h->size + sizeof(Header), prev = h) {
+    for (Header *h, *prev = NULL; p < endp; p += offset, prev = h) {
         h = HEADER(p);
+        offset = h->size + sizeof(Header);
         if (prev != NULL && h->size == prev->size &&
             h->allocated == prev->allocated && h->living == prev->living) {
             if (!ellipsis) {
@@ -180,15 +181,16 @@ static void heap_stat(const char *header)
 {
     if (header != NULL)
         debug("%s", header);
-    uint8_t *p = heap;
-    uint8_t *endp = p + init_size;
+    uint8_t *p = heap, *endp = p + init_size;
+    size_t offset;
     size_t used = 0;
     size_t tab_used[TABMAX+1] = { 0, }, tab_free[TABMAX+1] = { 0, };
-    for (Header *h; p < endp; p += h->size + sizeof(Header)) {
+    for (Header *h; p < endp; p += offset) {
         h = HEADER(p);
+        offset = h->size + sizeof(Header);
         size_t i = h->size > TABMAX ? TABMAX : h->size;
         if (h->allocated) {
-            used += sizeof(Header) + h->size;
+            used += offset;
             tab_used[i]++;
         } else
             tab_free[i]++;
@@ -205,13 +207,15 @@ static void heap_stat(const char *header)
 
 static void sweep(void)
 {
-    uint8_t *p = heap;
-    uint8_t *endp = p + init_size;
-    for (Header *h; p < endp; p += h->size + sizeof(Header)) {
+    uint8_t *p = heap, *endp = p + init_size;
+    size_t offset;
+    for (Header *h; p < endp; p += offset) {
         h = HEADER(p);
-        if (h->allocated && !h->living)
+        offset = h->size + sizeof(Header);
+        if (h->living)
+            h->living = false;
+        else if (h->allocated && !h->living)
             xfree(h);
-        h->living = false;
     }
 }
 
