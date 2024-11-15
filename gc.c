@@ -29,7 +29,7 @@ static size_t init_size = 25 * MiB;
 static void *heap;
 static Chunk *free_list;
 static const Value *root[ROOT_SIZE];
-static long nroot;
+static size_t nroot;
 static bool print_stat;
 
 void gc_set_init_size(size_t init_mib)
@@ -135,9 +135,8 @@ static void mark(Value v)
 
 static void mark_roots(void)
 {
-    for (size_t i = 0; i < ROOT_SIZE; i++) {
-        if (root[i] != NULL)
-            mark(*root[i]);
+    for (size_t i = 0; i < nroot; i++) {
+        mark(*root[i]);
     }
 }
 
