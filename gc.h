@@ -65,6 +65,7 @@ typedef struct {
 
 void gc_init(void);
 void gc_add_root(const Value *r);
+void gc_stack_init(const volatile void *b);
 void gc_set_print_stat(bool b);
 void gc_set_init_size(size_t mib);
 
