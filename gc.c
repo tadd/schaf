@@ -31,6 +31,7 @@ static Chunk *free_list;
 static const Value *root[ROOT_SIZE];
 static size_t nroot;
 static bool print_stat;
+static const volatile void *stack_base;
 
 void gc_set_init_size(size_t init_mib)
 {
@@ -81,6 +82,11 @@ static void *allocate(size_t size)
             return allocate_from_list(prev, curr, size);
     }
     return NULL;
+}
+
+void gc_stack_init(const volatile void *b)
+{
+    stack_base = b;
 }
 
 void gc_add_root(const Value *r)
@@ -135,6 +141,42 @@ static void mark_roots(void)
     for (size_t i = 0; i < nroot; i++) {
         mark(*root[i]);
     }
+}
+
+static bool in_heap_range(uintptr_t v)
+{
+    if (v < sizeof(Header)) // cannot get Header*
+        return false;
+    const void *p = get_header(v);
+    return p >= heap && p < heap + init_size;
+}
+
+static bool in_heap(uintptr_t v)
+{
+    if (value_is_immediate(v) || v == Qnil ||
+        v % 8U != 0 || !in_heap_range(v))
+        return false;
+    ValueTag t = VALUE_TAG((Value) v);
+    return t >= TAG_PAIR && t <= TAG_SYNTAX; // need to be precise more?
+}
+
+static void mark_maybe(uintptr_t v)
+{
+    if (in_heap(v)) {
+        //debug("marking: %zx", v);
+        mark((Value) v);
+    }
+}
+
+#define GET_SP(p) volatile void *p = &p
+
+ATTR(noinline)
+static void mark_stack(void)
+{
+    GET_SP(sp);
+    uintptr_t *beg = (uintptr_t *) sp, *end = (uintptr_t *) stack_base;
+    for (uintptr_t *p = beg; p < end; p++)
+        mark_maybe(*p);
 }
 
 ATTR(unused)
@@ -220,11 +262,20 @@ void gc_set_print_stat(bool b)
     print_stat = b;
 }
 
+static void mark_all(void)
+{
+    mark_roots();
+    jmp_buf jmp;
+    memset(&jmp, 0, sizeof(jmp_buf));
+    setjmp(jmp);
+    mark_stack(); // mark register values in jmp too
+}
+
 static void gc(void)
 {
     if (print_stat)
         heap_stat("GC begin");
-    mark_roots();
+    mark_all();
     sweep();
     if (print_stat)
         heap_stat("GC end");
