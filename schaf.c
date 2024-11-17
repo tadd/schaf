@@ -2221,6 +2221,11 @@ static Value value_of_continuation(void)
 {
     Continuation *c = obj_new(sizeof(Continuation), TAG_CONTINUATION);
     c->proc.arity = 1; // by spec
+    c->sp = c->shelter = NULL;
+    c->shelter_len = 0;
+    c->call_stack = Qnil;
+    memset(c->state, 0, sizeof(jmp_buf));
+    c->retval = Qfalse;
     return (Value) c;
 }
 
