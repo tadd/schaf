@@ -6,6 +6,13 @@
 #include "schaf.h"
 #include "utils.h"
 
+// shortcuts
+typedef SchValue Value;
+#define Qnil SCH_NULL
+#define Qfalse SCH_FALSE
+#define Qtrue SCH_TRUE
+#define Qundef SCH_UNDEF
+
 typedef enum {
 // immediate
     TYPE_BOOL,

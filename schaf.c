@@ -41,10 +41,10 @@ static const uintptr_t FLAG_MASK_SYM =  0b11;
 static const uintptr_t FLAG_MASK_INT =   0b1;
 static const uintptr_t FLAG_SYM      =  0b10;
 static const uintptr_t FLAG_INT      =   0b1;
-const Value Qnil   = 0b11100U;
-const Value Qfalse = 0b00100U;
-const Value Qtrue  = 0b01100U;
-const Value Qundef = 0b10100U; // may be an error or something
+const Value SCH_NULL  = 0b11100U; // emtpy list
+const Value SCH_FALSE = 0b00100U;
+const Value SCH_TRUE  = 0b01100U;
+const Value SCH_UNDEF = 0b10100U; // may be an error or something
 
 static const int64_t CFUNCARG_MAX = 3;
 
@@ -433,7 +433,7 @@ static Value runtime_error(const char *fmt, ...)
     return (Value) e;
 }
 
-const char *error_message(void)
+const char *sch_error_message(void)
 {
     return errmsg;
 }
@@ -795,7 +795,7 @@ static Value iload_inner(FILE *in, const char *path)
     return eval_body(env_toplevel, src->ast);
 }
 
-Value eval_string(const char *in)
+Value sch_eval_string(const char *in)
 {
     FILE *f = fmemopen((char *) in, strlen(in), "r");
     Value v = iload(f, "<inline>");
@@ -822,7 +822,7 @@ static FILE *open_loadable(const char *path)
     return in;
 }
 
-Value load(const char *path)
+Value sch_load(const char *path)
 {
     FILE *in = open_loadable(path);
     if (in == NULL)
@@ -1003,7 +1003,7 @@ static Value let(Value env, Value var, Value bindings, Value body)
         Value b = car(p);
         EXPECT(type, TYPE_PAIR, b);
         if (length(b) != 2)
-            return runtime_error("malformed binding in let: %s", stringify(b));
+            return runtime_error("malformed binding in let: %s", sch_stringify(b));
         Value ident = car(b), expr = cadr(b);
         EXPECT(type, TYPE_SYMBOL, ident);
         if (named)
@@ -1041,7 +1041,7 @@ static Value let_star(Value env, Value bindings, Value body)
         Value b = car(p);
         EXPECT(type, TYPE_PAIR, b);
         if (length(b) != 2)
-            return runtime_error("malformed binding in let: %s", stringify(b));
+            return runtime_error("malformed binding in let: %s", sch_stringify(b));
         Value ident = car(b), expr = cadr(b);
         EXPECT(type, TYPE_SYMBOL, ident);
         letenv = env_inherit(letenv);
@@ -2426,7 +2426,7 @@ static void fdisplay(FILE* f, Value v)
     fdisplay_rec(f, v, Qnil);
 }
 
-char *stringify(Value v)
+char *sch_stringify(Value v)
 {
     char *s;
     size_t size = 0;
@@ -2441,7 +2441,7 @@ char *stringify(Value v)
     return s;
 }
 
-void display(Value v)
+void sch_display(Value v)
 {
     fdisplay(stdout, v);
 }
@@ -2570,7 +2570,7 @@ static Value proc_print(UNUSED Value env, Value l)
     Value obj = Qnil;
     for (Value p = l, next; p != Qnil; p = next)  {
         obj = car(p);
-        display(obj);
+        sch_display(obj);
         next = cdr(p);
         if (next != Qnil)
             printf(" ");

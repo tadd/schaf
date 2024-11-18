@@ -619,7 +619,7 @@ Value parse_datum(FILE *in, const char *filename)
     return datum;
 }
 
-Value parse(const char *path)
+Value sch_parse(const char *path)
 {
     FILE *in = fopen(path, "r");
     if (in == NULL)
@@ -629,7 +629,7 @@ Value parse(const char *path)
     return ast;
 }
 
-Value parse_string(const char *in)
+Value sch_parse_string(const char *in)
 {
     FILE *f = fmemopen((char *) in, strlen(in), "r");
     Value ast = iparse_ast(f, "<inline>");

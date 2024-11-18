@@ -147,12 +147,12 @@ static int repl(void)
         printf("schaf$ ");
         if (!fgets(buf, sizeof(buf), stdin)) // read,
             break;
-        Value v = eval_string(buf); // eval,
-        if (v == Qundef) {
-            printf("error: %s\n", error_message());
+        SchValue v = sch_eval_string(buf); // eval,
+        if (v == SCH_UNDEF) {
+            printf("error: %s\n", sch_error_message());
             continue;
         }
-        display(v); // print!
+        sch_display(v); // print!
         printf("\n");
     }
     return 0;
@@ -169,15 +169,15 @@ int main(int argc, char **argv)
     SCH_INIT();
     if (o.interacitve)
         return repl();
-    Value v;
+    SchValue v;
     if (o.parse_only)
-        v = o.script ? parse_string(o.script) : parse(o.path);
+        v = o.script ? sch_parse_string(o.script) : sch_parse(o.path);
     else
-        v = o.script ? eval_string(o.script) : load(o.path);
-    if (v == Qundef)
-        error("%s", error_message()); // runtime error occurred
+        v = o.script ? sch_eval_string(o.script) : sch_load(o.path);
+    if (v == SCH_UNDEF)
+        error("%s", sch_error_message()); // runtime error occurred
     if (o.print) {
-        display(v);
+        sch_display(v);
         printf("\n");
     }
     if (o.cputime)

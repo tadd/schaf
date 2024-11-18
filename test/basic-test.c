@@ -8,7 +8,7 @@
 #include "schaf.h"
 
 #define expect_stringify(exp, v) do { \
-        char *s = stringify(v); \
+        char *s = sch_stringify(v); \
         cr_expect_str_eq(s, exp); \
         free(s); \
     } while (0)
@@ -43,13 +43,13 @@
 #define expect_string_eq(exp, act) cr_expect_str_eq(act, exp)
 #define expect_error(pattern, v) do { \
         expect_int_eq(Qundef, v); \
-        char *m = strstr(error_message(), pattern); \
+        char *m = strstr(sch_error_message(), pattern); \
         cr_expect_not_null(m, "actual string:\n\"%s\"\ndid not include:\n\"%s\"", \
-                           error_message(), pattern); \
+                           sch_error_message(), pattern); \
     } while (0)
 
 #define expect_no_error(v) \
-    cr_expect_neq(v, Qundef, "got error with a message: '%s'", error_message())
+    cr_expect_neq(v, Qundef, "got error with a message: '%s'", sch_error_message())
 #define expect_vx_eq(t, n, exp, act) do { \
         Value a = act; \
         expect_no_error(a); \
@@ -68,7 +68,7 @@
 #define expect_list_eq_parsed(exp, act) expect_x_eq_parsed(list, exp, act)
 #define expect_pair_eq_parsed(ecar, ecdr, act) expect_pair_eq(ecar, ecdr, parse_expr_string(act))
 #define expect_parse_error(exp, act) expect_error(exp, parse_expr_string(act))
-#define expect_runtime_error(exp, act) expect_error(exp, eval_string(act))
+#define expect_runtime_error(exp, act) expect_error(exp, sch_eval_string(act))
 
 static void test_sch_init(void)
 {
@@ -82,7 +82,7 @@ TestSuite(schaf, .init = test_sch_init, .fini = test_sch_fin);
 
 static Value parse_expr_string(const char *in)
 {
-    Value v = parse_string(in);
+    Value v = sch_parse_string(in);
     if (v == Qundef || v == Qnil)
         return v;
     return car(v);
