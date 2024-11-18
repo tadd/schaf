@@ -16,25 +16,31 @@
 
 #include "schaf.h"
 #include "utils.h"
+// shortcuts
+#define car sch_car
+#define cdr sch_cdr
+#define cons sch_cons
+typedef SchValue Value;
+typedef SchSymbol Symbol;
 
 //
 // Types
 //
 
 static const char *TYPE_NAMES[] = {
-    [TYPE_BOOL] = "boolean",
-    [TYPE_INT] = "integer",
-    [TYPE_SYMBOL] = "symbol",
-    [TYPE_UNDEF] = "undef",
-    [TYPE_PAIR] = "pair",
-    [TYPE_STR] = "string",
-    [TYPE_PROC] = "procedure",
+    [SCH_TYPE_BOOL] = "boolean",
+    [SCH_TYPE_INT] = "integer",
+    [SCH_TYPE_SYMBOL] = "symbol",
+    [SCH_TYPE_UNDEF] = "undef",
+    [SCH_TYPE_PAIR] = "pair",
+    [SCH_TYPE_STR] = "string",
+    [SCH_TYPE_PROC] = "procedure",
 };
 
 typedef enum { // has the same values as Type
-    TAG_PAIR    = TYPE_PAIR,
-    TAG_STR     = TYPE_STR,
-    TAG_CFUNC   = TYPE_PROC + 1,
+    TAG_PAIR    = SCH_TYPE_PAIR,
+    TAG_STR     = SCH_TYPE_STR,
+    TAG_CFUNC   = SCH_TYPE_PROC + 1,
     TAG_SYNTAX, // almost a C Function
     TAG_CLOSURE,
     TAG_CONTINUATION,
@@ -104,10 +110,15 @@ static Flag FLAG_MASK_SYM =  0b11;
 static Flag FLAG_MASK_INT =   0b1;
 static Flag FLAG_SYM      =  0b10;
 static Flag FLAG_INT      =   0b1;
-const Value Qnil = (Value) &PAIR_NIL;
-const Value Qfalse = 0b00100U;
-const Value Qtrue  = 0b01100U;
-const Value Qundef = 0b10100U; // may be an error or something
+const Value SCH_Qnil = (Value) &PAIR_NIL;
+const Value SCH_Qfalse = 0b00100U;
+const Value SCH_Qtrue  = 0b01100U;
+const Value SCH_Qundef = 0b10100U; // may be an error or something
+// shortcuts
+#define Qnil SCH_Qnil
+#define Qfalse SCH_Qfalse
+#define Qtrue SCH_Qtrue
+#define Qundef SCH_Qundef
 
 static const int64_t CFUNCARG_MAX = 7;
 
@@ -129,12 +140,12 @@ static Value source_data = Qnil;
 // value_is_*: Type Checks
 //
 
-inline bool value_is_int(Value v)
+inline bool sch_value_is_int(Value v)
 {
     return v & FLAG_MASK_INT;
 }
 
-inline bool value_is_symbol(Value v)
+inline bool sch_value_is_symbol(Value v)
 {
     return (v & FLAG_MASK_SYM) == FLAG_SYM;
 }
@@ -149,7 +160,7 @@ static inline bool value_tag_is(Value v, ValueTag expected)
     return !is_immediate(v) && VALUE_TAG(v) == expected;
 }
 
-inline bool value_is_string(Value v)
+inline bool sch_value_is_string(Value v)
 {
     return value_tag_is(v, TAG_STR);
 }
@@ -169,7 +180,7 @@ static inline bool value_is_procedure(Value v)
     }
 }
 
-inline bool value_is_pair(Value v)
+inline bool sch_value_is_pair(Value v)
 {
     return value_tag_is(v, TAG_PAIR);
 }
@@ -179,20 +190,20 @@ inline bool value_is_nil(Value v)
     return v == Qnil;
 }
 
-static Type immediate_type_of(Value v)
+static SchType immediate_type_of(Value v)
 {
-    if (value_is_int(v))
-        return TYPE_INT;
-    if (value_is_symbol(v))
-        return TYPE_SYMBOL;
+    if (sch_value_is_int(v))
+        return SCH_TYPE_INT;
+    if (sch_value_is_symbol(v))
+        return SCH_TYPE_SYMBOL;
     if (v == Qtrue || v == Qfalse)
-        return TYPE_BOOL;
+        return SCH_TYPE_BOOL;
     if (v == Qundef)
-        return TYPE_UNDEF;
+        return SCH_TYPE_UNDEF;
     UNREACHABLE();
 }
 
-Type value_type_of(Value v)
+SchType sch_value_type_of(Value v)
 {
     if (is_immediate(v))
         return immediate_type_of(v);
@@ -200,24 +211,24 @@ Type value_type_of(Value v)
     switch (t) {
     case TAG_STR:
     case TAG_PAIR:
-        return (Type) t;
+        return (SchType) t;
     case TAG_CFUNC:
     case TAG_SYNTAX:
     case TAG_CLOSURE:
     case TAG_CONTINUATION:
-        return TYPE_PROC;
+        return SCH_TYPE_PROC;
     }
     UNREACHABLE();
 }
 
-static inline const char *value_type_to_string(Type t)
+static inline const char *value_type_to_string(SchType t)
 {
     return TYPE_NAMES[t];
 }
 
 // value_to_*: Convert internal data to external plain C
 
-inline int64_t value_to_int(Value x)
+inline int64_t sch_value_to_int(Value x)
 {
 #if __x86_64__
     return (int64_t) x >> FLAG_NBIT_INT;
@@ -227,7 +238,7 @@ inline int64_t value_to_int(Value x)
 #endif
 }
 
-inline Symbol value_to_symbol(Value v)
+inline Symbol sch_value_to_symbol(Value v)
 {
     return (Symbol) v >> FLAG_NBIT_SYM;
 }
@@ -251,16 +262,16 @@ static const char *unintern(Symbol sym)
     return name;
 }
 
-inline const char *value_to_string(Value v)
+inline const char *sch_value_to_string(Value v)
 {
-    if (value_is_symbol(v))
-        return unintern(value_to_symbol(v));
+    if (sch_value_is_symbol(v))
+        return unintern(sch_value_to_symbol(v));
     return STRING(v)->body;
 }
 
-// value_of_*: Convert external plain C data to internal
+// sch_value_of_*: Convert external plain C data to internal
 
-inline Value value_of_int(int64_t i)
+inline Value sch_value_of_int(int64_t i)
 {
     Value v = i;
     return v << FLAG_NBIT_INT | FLAG_INT;
@@ -283,7 +294,7 @@ static Symbol intern(const char *name)
         i++;
     }
     // or put at `i`
-    Value s = value_of_string(name);
+    Value s = sch_value_of_string(name);
     Value next = list1(s);
     if (last == Qnil)
         symbol_names = next;
@@ -292,7 +303,7 @@ static Symbol intern(const char *name)
     return i;
 }
 
-inline Value value_of_symbol(const char *s)
+inline Value sch_value_of_symbol(const char *s)
 {
     Symbol sym = intern(s);
     return (Value) (sym << FLAG_NBIT_SYM | FLAG_SYM);
@@ -305,7 +316,7 @@ static void *obj_new(size_t size, ValueTag t)
     return p;
 }
 
-Value value_of_string(const char *s)
+Value sch_value_of_string(const char *s)
 {
     size_t len = strlen(s) + 1;
     String *str = obj_new(sizeof(String) + len, TAG_STR);
@@ -321,7 +332,7 @@ static void expect_cfunc_arity(int64_t actual)
           CFUNCARG_MAX, actual);
 }
 
-static Value value_of_cfunc(cfunc_t cfunc, int64_t arity)
+static Value sch_value_of_cfunc(cfunc_t cfunc, int64_t arity)
 {
     expect_cfunc_arity(arity);
     CFunc *f = obj_new(sizeof(CFunc), TAG_CFUNC);
@@ -330,24 +341,24 @@ static Value value_of_cfunc(cfunc_t cfunc, int64_t arity)
     return (Value) f;
 }
 
-static Value value_of_syntax(cfunc_t cfunc, int64_t arity)
+static Value sch_value_of_syntax(cfunc_t cfunc, int64_t arity)
 {
-    Value sp = value_of_cfunc(cfunc, arity);
+    Value sp = sch_value_of_cfunc(cfunc, arity);
     VALUE_TAG(sp) = TAG_SYNTAX;
     return sp;
 }
 
-static Value value_of_closure(Value env, Value params, Value body)
+static Value sch_value_of_closure(Value env, Value params, Value body)
 {
     Closure *f = obj_new(sizeof(Closure), TAG_CLOSURE);
-    f->proc.arity = value_is_pair(params) ? length(params) : -1;
+    f->proc.arity = sch_value_is_pair(params) ? sch_length(params) : -1;
     f->env = env;
     f->params = params;
     f->body = body;
     return (Value) f;
 }
 
-// and `cons` is well-known name than "value_of_pair"
+// and `cons` is well-known name than "sch_value_of_pair"
 
 //
 // Errors
@@ -369,14 +380,14 @@ static void runtime_error(const char *fmt, ...)
     longjmp(jmp_runtime_error, 1);
 }
 
-const char *error_message(void)
+const char *sch_error_message(void)
 {
     return errmsg;
 }
 
-static void expect_type(const char *header, Type expected, Value v)
+static void expect_type(const char *header, SchType expected, Value v)
 {
-    Type t = value_type_of(v);
+    SchType t = sch_value_type_of(v);
     if (t == expected)
         return;
     runtime_error("type error in %s: expected %s but got %s",
@@ -384,9 +395,9 @@ static void expect_type(const char *header, Type expected, Value v)
 }
 #define expect_type_twin(h, t, x, y) expect_type(h, t, x), expect_type(h, t, y)
 
-static void expect_type_or(const char *header, Type e1, Type e2, Value v)
+static void expect_type_or(const char *header, SchType e1, SchType e2, Value v)
 {
-    Type t = value_type_of(v);
+    SchType t = sch_value_type_of(v);
     if (t == e1 || t == e2)
         return;
     runtime_error("type error in %s: expected %s or %s but got %s",
@@ -431,9 +442,9 @@ static const Token
     TOK_EOF = TOK(EOF);
 // and ctor
 #define TOK_V(t, v) ((Token) { .type = TOK_TYPE_ ## t, .value = v })
-#define TOK_INT(i) TOK_V(INT, value_of_int(i))
-#define TOK_STR(s) TOK_V(STR, value_of_string(s))
-#define TOK_IDENT(s) TOK_V(IDENT, value_of_symbol(s))
+#define TOK_INT(i) TOK_V(INT, sch_value_of_int(i))
+#define TOK_STR(s) TOK_V(STR, sch_value_of_string(s))
+#define TOK_IDENT(s) TOK_V(IDENT, sch_value_of_symbol(s))
 #define TOK_CONST(c) TOK_V(CONST, c)
 
 typedef struct {
@@ -448,7 +459,7 @@ static void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64
 {
     int64_t nline = 0, last = 0;
     for (Value p = newline_pos; p != Qnil; p = cdr(p), nline++) {
-        int n = value_to_int(car(p));
+        int n = sch_value_to_int(car(p));
         if (n > pos)
             break;
         last = n;
@@ -478,7 +489,7 @@ static void parse_error(Parser *p, const char *expected, const char *actual, ...
 
 static inline void put_newline_pos(Parser *p)
 {
-    p->newline_pos = cons(value_of_int(ftell(p->in)), p->newline_pos);
+    p->newline_pos = cons(sch_value_of_int(ftell(p->in)), p->newline_pos);
 }
 
 static void skip_token_atmosphere(Parser *p)
@@ -694,10 +705,10 @@ static const char *token_stringify(Token t)
     case TOK_TYPE_DOT:
         return ".";
     case TOK_TYPE_INT:
-        snprintf(buf, sizeof(buf), "%"PRId64, value_to_int(t.value));
+        snprintf(buf, sizeof(buf), "%"PRId64, sch_value_to_int(t.value));
         break;
     case TOK_TYPE_IDENT:
-        return value_to_string(t.value);
+        return sch_value_to_string(t.value);
     case TOK_TYPE_STR:
         snprintf(buf, sizeof(buf), "\"%s\"", STRING(t.value)->body);
         break;
@@ -733,13 +744,13 @@ static Value append_at(Value last, Value elem)
 
 static inline Value pair_to_id(Value p)
 {
-    return value_of_int(p >> 3U); // we assume 64 bit machines
+    return sch_value_of_int(p >> 3U); // we assume 64 bit machines
 }
 
 static void record_location(Parser *p, Value pair, int64_t pos, Value sym)
 {
     int64_t id = pair_to_id(pair);
-    Value loc = cons(id, cons(value_of_int(pos), sym));
+    Value loc = cons(id, cons(sch_value_of_int(pos), sym));
     p->function_locations = cons(loc, p->function_locations);
 }
 
@@ -760,7 +771,7 @@ static Value parse_list(Parser *p)
         last = append_at(last, e);
         if (l == Qnil) {
             l = last;
-            if (value_is_symbol(e))
+            if (sch_value_is_symbol(e))
                 record_location(p, l, pos, e);
         }
     }
@@ -822,7 +833,7 @@ static Parser *parser_new(FILE *in, const char *filename)
 
 static void expect_arity_range(const char *func, int64_t min, int64_t max, Value args)
 {
-    int64_t actual = length(args);
+    int64_t actual = sch_length(args);
     if (min <= actual && (max == -1 || actual <= max))
         return;
     runtime_error("%s: wrong number of arguments: expected %"PRId64"..%"PRId64" but got %"PRId64,
@@ -836,7 +847,7 @@ static void expect_arity_min(const char *func, int64_t min, Value args)
 
 static void expect_arity(int64_t expected, Value args)
 {
-    int64_t actual = length(args);
+    int64_t actual = sch_length(args);
     if (expected < 0 || expected == actual)
         return;
     runtime_error("wrong number of arguments: expected %"PRId64" but got %"PRId64,
@@ -927,7 +938,7 @@ static Value apply_closure(Value *env, Value proc, Value args)
 
 static inline void expect_nonnull(const char *msg, Value l)
 {
-    expect_type(msg, TYPE_PAIR, l);
+    expect_type(msg, SCH_TYPE_PAIR, l);
     if (l == Qnil)
         runtime_error("%s: expected non-null?", msg);
 }
@@ -987,12 +998,12 @@ static Value apply(Value *env, Value proc, Value args)
 // Note: Do not mistake this for "(define-syntax ...)" which related to macros
 static void define_syntax(Value *env, const char *name, cfunc_t cfunc, int64_t arity)
 {
-    env_put(env, value_of_symbol(name), value_of_syntax(cfunc, arity));
+    env_put(env, sch_value_of_symbol(name), sch_value_of_syntax(cfunc, arity));
 }
 
 static void define_procedure(Value *env, const char *name, cfunc_t cfunc, int64_t arity)
 {
-    env_put(env, value_of_symbol(name), value_of_cfunc(cfunc, arity));
+    env_put(env, sch_value_of_symbol(name), sch_value_of_cfunc(cfunc, arity));
 }
 
 static Value assq(Value key, Value l);
@@ -1001,7 +1012,7 @@ static Value lookup(Value env, Value name)
 {
     Value found = assq(name, env);
     if (found == Qfalse)
-        runtime_error("unbound variable: %s", value_to_string(name));
+        runtime_error("unbound variable: %s", sch_value_to_string(name));
     return cdr(found);
 }
 
@@ -1013,7 +1024,7 @@ static inline Value list4(Value w, Value x, Value y, Value z)
 // AST: (syntax_list filename function_locations newline_positions)
 static Value ast_new(Parser *p, Value syntax_list)
 {
-    Value filename = value_of_symbol(p->filename);
+    Value filename = sch_value_of_symbol(p->filename);
     return list4(syntax_list, filename, p->function_locations, reverse(p->newline_pos));
 }
 
@@ -1040,7 +1051,7 @@ static Value iparse(FILE *in, const char *filename)
     return ast;
 }
 
-Value parse(const char *path)
+Value sch_parse(const char *path)
 {
     FILE *in = fopen(path, "r");
     if (in == NULL)
@@ -1050,7 +1061,7 @@ Value parse(const char *path)
     return car(ast);
 }
 
-Value parse_string(const char *in)
+Value sch_parse_string(const char *in)
 {
     FILE *f = fmemopen((char *) in, strlen(in), "r");
     Value ast = iparse(f, "<inline>");
@@ -1087,7 +1098,7 @@ static Value map_eval(Value *env, Value l)
 static Value eval_apply(Value *env, Value symproc, Value args)
 {
     Value proc = eval(env, symproc);
-    expect_type("eval", TYPE_PROC, proc);
+    expect_type("eval", SCH_TYPE_PROC, proc);
     if (!value_tag_is(proc, TAG_SYNTAX))
         args = map_eval(env, args);
     Value ret = apply(env, proc, args);
@@ -1097,9 +1108,9 @@ static Value eval_apply(Value *env, Value symproc, Value args)
 
 static Value eval(Value *env, Value v)
 {
-    if (value_is_symbol(v))
+    if (sch_value_is_symbol(v))
         return lookup(*env, v);
-    if (v == Qnil || !value_is_pair(v))
+    if (v == Qnil || !sch_value_is_pair(v))
         return v;
     call_stack_push(v);
     return eval_apply(env, car(v), cdr(v));
@@ -1118,7 +1129,7 @@ static int append_error_message(const char *fmt, ...)
 
 static void dump_line_column(Value vfilename, Value vpos)
 {
-    int64_t pos = value_to_int(vpos), line, col;
+    int64_t pos = sch_value_to_int(vpos), line, col;
     Value data = assq(vfilename, source_data);
     if (data == Qnil) {
         append_error_message("\n\t<unknown>");
@@ -1126,7 +1137,7 @@ static void dump_line_column(Value vfilename, Value vpos)
     }
     Value newline_pos = caddr(data);
     pos_to_line_col(pos, newline_pos, &line, &col);
-    const char *filename = value_to_string(vfilename);
+    const char *filename = sch_value_to_string(vfilename);
     append_error_message("\n\t%s:%"PRId64":%"PRId64" in ", filename, line, col);
 }
 
@@ -1155,7 +1166,7 @@ static void dump_callee_name(Value callers)
     if (found == Qfalse)
         append_error_message("<unknown>");
     else {
-        const char *name = value_to_string(cddr(found));
+        const char *name = sch_value_to_string(cddr(found));
         append_error_message("'%s'", name);
     }
 }
@@ -1216,7 +1227,7 @@ static Value iload_inner(FILE *in, const char *path)
     return eval_body(&toplevel_environment, l);
 }
 
-Value eval_string(const char *in)
+Value sch_eval_string(const char *in)
 {
     FILE *f = fmemopen((char *) in, strlen(in), "r");
     Value v = iload(f, "<inline>");
@@ -1238,7 +1249,7 @@ static FILE *open_loadable(const char *path)
     return in;
 }
 
-Value load(const char *path)
+Value sch_load(const char *path)
 {
     FILE *in = open_loadable(path);
     Value retval = iload(in, path);
@@ -1273,11 +1284,11 @@ static Value syn_quote(UNUSED Value *env, Value datum)
 static Value syn_lambda(Value *env, Value args)
 {
     Value params = car(args), body = cdr(args);
-    expect_type_or("lambda", TYPE_PAIR, TYPE_SYMBOL, params);
-    expect_type("lambda", TYPE_PAIR, body);
+    expect_type_or("lambda", SCH_TYPE_PAIR, SCH_TYPE_SYMBOL, params);
+    expect_type("lambda", SCH_TYPE_PAIR, body);
     if (body == Qnil)
         runtime_error("lambda: one or more expressions needed in body");
-    return value_of_closure(*env, params, body);
+    return sch_value_of_closure(*env, params, body);
 }
 
 // 4.1.5. Conditionals
@@ -1300,14 +1311,14 @@ static Value iset(Value *env, Value ident, Value val)
 {
     Value found = assq(ident, *env);
     if (found == Qfalse)
-        runtime_error("set!: unbound variable: %s", value_to_string(ident));
+        runtime_error("set!: unbound variable: %s", sch_value_to_string(ident));
     PAIR(found)->cdr = val;
     return Qnil;
 }
 
 static Value syn_set(Value *env, Value ident, Value expr)
 {
-    expect_type("set!", TYPE_SYMBOL, ident);
+    expect_type("set!", SCH_TYPE_SYMBOL, ident);
     return iset(env, ident, eval(env, expr));
 }
 
@@ -1323,7 +1334,7 @@ static Value cond_eval_recipient(Value *env, Value test, Value recipients)
 {
     expect_nonnull("recipient in cond", recipients);
     Value recipient = eval(env, car(recipients)), rest = cdr(recipients);
-    expect_type("end of => in cond", TYPE_PROC, recipient);
+    expect_type("end of => in cond", SCH_TYPE_PROC, recipient);
     expect_null("end of => in cond", rest);
     return apply(env, recipient, list1(test));
 }
@@ -1419,15 +1430,15 @@ static Value define_variable(Value *env, Value ident, Value expr);
 
 static Value let(Value *env, const char *func, Value bindings, Value body)
 {
-    expect_type(func, TYPE_PAIR, bindings);
+    expect_type(func, SCH_TYPE_PAIR, bindings);
     Value letenv = *env;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
-        expect_type(func, TYPE_PAIR, b);
-        if (length(b) != 2)
-            runtime_error("%s: malformed binding in let: %s", func, stringify(b));
+        expect_type(func, SCH_TYPE_PAIR, b);
+        if (sch_length(b) != 2)
+            runtime_error("%s: malformed binding in let: %s", func, sch_stringify(b));
         Value ident = car(b), expr = cadr(b);
-        expect_type(func, TYPE_SYMBOL, ident);
+        expect_type(func, SCH_TYPE_SYMBOL, ident);
         env_put(&letenv, ident, eval(env, expr));
     }
     return eval_body(&letenv, body);
@@ -1435,10 +1446,10 @@ static Value let(Value *env, const char *func, Value bindings, Value body)
 
 static Value named_let(Value *env, Value var, Value bindings, Value body)
 {
-    expect_type("let", TYPE_PAIR, bindings);
+    expect_type("let", SCH_TYPE_PAIR, bindings);
     Value tr = transpose_2xn(bindings);
     Value params = car(tr), symargs = cadr(tr);
-    Value proc = value_of_closure(*env, params, body);
+    Value proc = sch_value_of_closure(*env, params, body);
     Value args = map_eval(env, symargs);
     Value letenv = *env;
     define_variable(&letenv, var, proc);
@@ -1450,7 +1461,7 @@ static Value syn_let(Value *env, Value args)
 {
     expect_arity_min("let", 2, args);
     Value bind_or_var = car(args), body = cdr(args);
-    if (value_is_symbol(bind_or_var))
+    if (sch_value_is_symbol(bind_or_var))
         return named_let(env, bind_or_var, car(body), cdr(body));
     return let(env, "let", bind_or_var, body);
 }
@@ -1468,16 +1479,16 @@ static Value syn_letrec(Value *env, Value args)
     expect_arity_min("letrec", 2, args);
     Value bindings = car(args);
     Value body = cdr(args);
-    expect_type_twin("letrec", TYPE_PAIR, bindings, body);
+    expect_type_twin("letrec", SCH_TYPE_PAIR, bindings, body);
     if (body == Qnil)
         runtime_error("letrec: one or more expressions needed in body");
 
     Value letenv = *env;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
-        expect_type("letrec", TYPE_PAIR, b);
+        expect_type("letrec", SCH_TYPE_PAIR, b);
         Value ident = car(b);
-        expect_type("letrec", TYPE_SYMBOL, ident);
+        expect_type("letrec", SCH_TYPE_SYMBOL, ident);
         define_variable(&letenv, ident, cadr(b));
     }
     return eval_body(&letenv, body);
@@ -1497,7 +1508,7 @@ static Value syn_do(Value *env, Value args)
     expect_arity_min("do", 2, args);
 
     Value bindings = car(args), tests = cadr(args), body = cddr(args);
-    expect_type_twin("do", TYPE_PAIR, bindings, tests);
+    expect_type_twin("do", SCH_TYPE_PAIR, bindings, tests);
     Value doenv = *env, steps = Qnil;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
@@ -1505,7 +1516,7 @@ static Value syn_do(Value *env, Value args)
         Value var = car(b), init = cadr(b), step = cddr(b);
         if (step != Qnil)
             steps = cons(cons(var, car(step)), steps);
-        expect_type("do", TYPE_SYMBOL, var);
+        expect_type("do", SCH_TYPE_SYMBOL, var);
         env_put(&doenv, var, eval(env, init)); // in the original env
     }
     Value test = car(tests), exprs = cdr(tests);
@@ -1529,7 +1540,7 @@ static Value qq(Value *env, Value datum, int64_t depth)
 {
     if (depth == 0)
         return eval(env, datum);
-    if (datum == Qnil || !value_is_pair(datum))
+    if (datum == Qnil || !sch_value_is_pair(datum))
         return datum;
     Value a = car(datum), d = cdr(datum);
     if (a == SYM_QUASIQUOTE) {
@@ -1564,7 +1575,7 @@ static Value splice_at(Value last, Value to_splice)
 {
     if (to_splice == Qnil)
         return last; // as is
-    expect_type("unquote-splicing", TYPE_PAIR, to_splice);
+    expect_type("unquote-splicing", SCH_TYPE_PAIR, to_splice);
     if (last == Qnil)
         return to_splice;
     PAIR(last)->cdr = to_splice;
@@ -1575,14 +1586,14 @@ static Value qq_list(Value *env, Value datum, int64_t depth)
 {
     Value ret = Qnil, last = Qnil;
     for (Value p = datum; p != Qnil; p = cdr(p)) {
-        bool is_simple = !value_is_pair(p);
+        bool is_simple = !sch_value_is_pair(p);
         if (is_simple || is_quoted_terminal(p)) {
             expect_nonnull("quasiquote", ret);
             PAIR(last)->cdr = is_simple ? p : qq(env, p, depth);
             break;
         }
         Value elem = car(p);
-        bool spliced = (value_is_pair(elem) && car(elem) == SYM_UNQUOTE_SPLICING);
+        bool spliced = (sch_value_is_pair(elem) && car(elem) == SYM_UNQUOTE_SPLICING);
         Value v = qq(env, elem, depth);
         last = spliced ? splice_at(last, v) : append_at(last, v);
         if (ret == Qnil)
@@ -1609,7 +1620,7 @@ static Value syn_unquote_splicing(UNUSED Value *env, UNUSED Value args)
 // 5.2. Definitions
 static Value define_variable(Value *env, Value ident, Value expr)
 {
-    expect_type("define", TYPE_SYMBOL, ident);
+    expect_type("define", SCH_TYPE_SYMBOL, ident);
 
     Value val = eval(env, expr), found;
     if (env == &toplevel_environment &&
@@ -1623,7 +1634,7 @@ static Value define_variable(Value *env, Value ident, Value expr)
 static Value define_proc_internal(Value *env, Value heads, Value body)
 {
     Value ident = car(heads), params = cdr(heads);
-    Value val = value_of_closure(*env, params, body);
+    Value val = sch_value_of_closure(*env, params, body);
     return define_variable(env, ident, val);
 }
 
@@ -1632,12 +1643,12 @@ static Value syn_define(Value *env, Value args)
     if (args == Qnil)
         runtime_error("define: wrong number of arguments: expected 1+");
     Value head = car(args);
-    Type t = value_type_of(head);
+    SchType t = sch_value_type_of(head);
     switch (t) {
-    case TYPE_SYMBOL:
+    case SCH_TYPE_SYMBOL:
         expect_arity(2, args);
         return define_variable(env, head, cadr(args));
-    case TYPE_PAIR:
+    case SCH_TYPE_PAIR:
         return define_proc_internal(env, head, cdr(args));
     default:
         runtime_error("define: expected first argument symbol or pair but got %s",
@@ -1660,16 +1671,16 @@ static bool equal(Value x, Value y)
 {
     if (x == y)
         return true;
-    Type tx = value_type_of(x), ty = value_type_of(y);
+    SchType tx = sch_value_type_of(x), ty = sch_value_type_of(y);
     if (tx != ty)
         return false;
     switch (tx) {
-    case TYPE_PAIR:
+    case SCH_TYPE_PAIR:
         if (x == Qnil || y == Qnil)
             return false;
         return equal(car(x), car(y)) &&
                equal(cdr(x), cdr(y));
-    case TYPE_STR:
+    case SCH_TYPE_STR:
         return (strcmp(STRING(x)->body, STRING(y)->body) == 0);
     default:
         return false;
@@ -1684,13 +1695,13 @@ static Value proc_equal(UNUSED Value *env, Value x, Value y)
 // 6.2.5. Numerical operations
 static int64_t value_get_int(const char *header, Value v)
 {
-    expect_type(header, TYPE_INT, v);
-    return value_to_int(v);
+    expect_type(header, SCH_TYPE_INT, v);
+    return sch_value_to_int(v);
 }
 
 static Value proc_integer_p(UNUSED Value *env, Value obj)
 {
-    return OF_BOOL(value_is_int(obj));
+    return OF_BOOL(sch_value_is_int(obj));
 }
 
 static Value proc_numeq(UNUSED Value *env, Value args)
@@ -1763,27 +1774,27 @@ static Value proc_ge(UNUSED Value *env, Value args)
 
 static Value proc_zero_p(UNUSED Value *env, Value obj)
 {
-    return OF_BOOL(value_is_int(obj) && value_to_int(obj) == 0);
+    return OF_BOOL(sch_value_is_int(obj) && sch_value_to_int(obj) == 0);
 }
 
 static Value proc_positive_p(UNUSED Value *env, Value obj)
 {
-    return OF_BOOL(value_is_int(obj) && value_to_int(obj) > 0);
+    return OF_BOOL(sch_value_is_int(obj) && sch_value_to_int(obj) > 0);
 }
 
 static Value proc_negative_p(UNUSED Value *env, Value obj)
 {
-    return OF_BOOL(value_is_int(obj) && value_to_int(obj) < 0);
+    return OF_BOOL(sch_value_is_int(obj) && sch_value_to_int(obj) < 0);
 }
 
 static Value proc_odd_p(UNUSED Value *env, Value obj)
 {
-    return OF_BOOL(value_is_int(obj) && (value_to_int(obj) % 2) != 0);
+    return OF_BOOL(sch_value_is_int(obj) && (sch_value_to_int(obj) % 2) != 0);
 }
 
 static Value proc_even_p(UNUSED Value *env, Value obj)
 {
-    return OF_BOOL(value_is_int(obj) && (value_to_int(obj) % 2) == 0);
+    return OF_BOOL(sch_value_is_int(obj) && (sch_value_to_int(obj) % 2) == 0);
 }
 
 static Value proc_max(UNUSED Value *env, Value args)
@@ -1795,7 +1806,7 @@ static Value proc_max(UNUSED Value *env, Value args)
         if (max < x)
             max = x;
     }
-    return value_of_int(max);
+    return sch_value_of_int(max);
 }
 
 static Value proc_min(UNUSED Value *env, Value args)
@@ -1807,7 +1818,7 @@ static Value proc_min(UNUSED Value *env, Value args)
         if (min > x)
             min = x;
     }
-    return value_of_int(min);
+    return sch_value_of_int(min);
 }
 
 static Value proc_add(UNUSED Value *env, Value args)
@@ -1815,7 +1826,7 @@ static Value proc_add(UNUSED Value *env, Value args)
     int64_t y = 0;
     for (Value p = args; p != Qnil; p = cdr(p))
         y += value_get_int("+", car(p));
-    return value_of_int(y);
+    return sch_value_of_int(y);
 }
 
 static Value proc_sub(UNUSED Value *env, Value args)
@@ -1824,10 +1835,10 @@ static Value proc_sub(UNUSED Value *env, Value args)
 
     int64_t y = value_get_int("-", car(args));
     if ((args = cdr(args)) == Qnil)
-        return value_of_int(-y);
+        return sch_value_of_int(-y);
     for (Value p = args; p != Qnil; p = cdr(p))
         y -= value_get_int("-", car(p));
-    return value_of_int(y);
+    return sch_value_of_int(y);
 }
 
 static Value proc_mul(UNUSED Value *env, Value args)
@@ -1835,7 +1846,7 @@ static Value proc_mul(UNUSED Value *env, Value args)
     int64_t y = 1;
     for (Value p = args; p != Qnil; p = cdr(p))
         y *= value_get_int("*", car(p));
-    return value_of_int(y);
+    return sch_value_of_int(y);
 }
 
 static Value proc_div(UNUSED Value *env, Value args)
@@ -1844,20 +1855,20 @@ static Value proc_div(UNUSED Value *env, Value args)
 
     int64_t y = value_get_int("/", car(args));
     if ((args = cdr(args)) == Qnil)
-       return value_of_int(1 / y);
+       return sch_value_of_int(1 / y);
     for (Value p = args; p != Qnil; p = cdr(p)) {
         int64_t x = value_get_int("/", car(p));
         if (x == 0)
             runtime_error("/: divided by zero");
         y /= x;
     }
-    return value_of_int(y);
+    return sch_value_of_int(y);
 }
 
 static Value proc_abs(UNUSED Value *env, Value x)
 {
     int64_t n = value_get_int("abs", x);
-    return value_of_int(n < 0 ? -n : n);
+    return sch_value_of_int(n < 0 ? -n : n);
 }
 
 static Value proc_quotient(UNUSED Value *env, Value x, Value y)
@@ -1867,7 +1878,7 @@ static Value proc_quotient(UNUSED Value *env, Value x, Value y)
         runtime_error("quotient: divided by zero");
     int64_t a = value_get_int("quotient", x);
     int64_t c = a / b;
-    return value_of_int(c);
+    return sch_value_of_int(c);
 }
 
 
@@ -1878,7 +1889,7 @@ static Value proc_remainder(UNUSED Value *env, Value x, Value y)
         runtime_error("remainder: divided by zero");
     int64_t a = value_get_int("remainder", x);
     int64_t c = a % b;
-    return value_of_int(c);
+    return sch_value_of_int(c);
 }
 
 static Value proc_modulo(UNUSED Value *env, Value x, Value y)
@@ -1890,7 +1901,7 @@ static Value proc_modulo(UNUSED Value *env, Value x, Value y)
     int64_t c = a % b;
     if ((a < 0 && b > 0) || (a > 0 && b < 0))
         c += b;
-    return value_of_int(c);
+    return sch_value_of_int(c);
 }
 
 static int64_t expt(int64_t x, int64_t y)
@@ -1921,7 +1932,7 @@ static Value proc_expt(UNUSED Value *env, Value x, Value y)
         c = 0;
     else
         c = expt(a, b);
-    return value_of_int(c);
+    return sch_value_of_int(c);
 }
 
 // 6.3.1. Booleans
@@ -1938,10 +1949,10 @@ static Value proc_boolean_p(UNUSED Value *env, Value x)
 // 6.3.2. Pairs and lists
 static Value proc_pair_p(UNUSED Value *env, Value o)
 {
-    return OF_BOOL(o != Qnil && value_is_pair(o));
+    return OF_BOOL(o != Qnil && sch_value_is_pair(o));
 }
 
-Value cons(Value car, Value cdr)
+Value sch_cons(Value car, Value cdr)
 {
     Pair *p = obj_new(sizeof(Pair), TAG_PAIR);
     p->car = car;
@@ -1984,7 +1995,7 @@ static Value proc_null_p(UNUSED Value *env, Value list)
 static Value proc_list_p(UNUSED Value *env, Value list)
 {
     for (Value p = list; p != Qnil; p = cdr(p)) {
-        if (!value_is_pair(p))
+        if (!sch_value_is_pair(p))
             return Qfalse;
     }
     return Qtrue;
@@ -1995,7 +2006,7 @@ static Value proc_list(UNUSED Value *env, Value args)
     return args;
 }
 
-int64_t length(Value list)
+int64_t sch_length(Value list)
 {
     int64_t len = 0;
     for (Value p = list; p != Qnil; p = cdr(p))
@@ -2005,15 +2016,15 @@ int64_t length(Value list)
 
 static Value proc_length(UNUSED Value *env, Value list)
 {
-    expect_type("length", TYPE_PAIR, list);
-    return value_of_int(length(list));
+    expect_type("length", SCH_TYPE_PAIR, list);
+    return sch_value_of_int(sch_length(list));
 }
 
 static Value dup_list(Value l, Value *plast)
 {
     Value dup = Qnil, last = Qnil;
     for (Value p = l; p != Qnil; p = cdr(p)) {
-        expect_type("append", TYPE_PAIR, p);
+        expect_type("append", SCH_TYPE_PAIR, p);
         last = append_at(last, car(p));
         if (dup == Qnil)
             dup = last;
@@ -2051,15 +2062,15 @@ static Value reverse(Value l)
 
 static Value proc_reverse(UNUSED Value *env, Value list)
 {
-    expect_type("reverse", TYPE_PAIR, list);
+    expect_type("reverse", SCH_TYPE_PAIR, list);
     return reverse(list);
 }
 
 static Value list_tail(const char *func, Value list, Value k)
 {
-    expect_type(func, TYPE_PAIR, list);
-    expect_type(func, TYPE_INT, k);
-    int64_t n = value_to_int(k);
+    expect_type(func, SCH_TYPE_PAIR, list);
+    expect_type(func, SCH_TYPE_INT, k);
+    int64_t n = sch_value_to_int(k);
     if (n < 0)
         runtime_error("%s: 2nd element needs to be non-negative: "PRId64, n);
     Value p = list;
@@ -2094,7 +2105,7 @@ static Value memq(Value key, Value l)
 
 static Value proc_memq(UNUSED Value *env, Value obj, Value list)
 {
-    expect_type("memq", TYPE_PAIR, list);
+    expect_type("memq", SCH_TYPE_PAIR, list);
     return memq(obj, list);
 }
 
@@ -2110,7 +2121,7 @@ static Value member(Value key, Value l)
 
 static Value proc_member(UNUSED Value *env, Value obj, Value list)
 {
-    expect_type("member", TYPE_PAIR, list);
+    expect_type("member", SCH_TYPE_PAIR, list);
     return member(obj, list);
 }
 
@@ -2118,7 +2129,7 @@ static Value assq(Value key, Value l)
 {
     for (Value p = l; p != Qnil; p = cdr(p)) {
         Value entry = car(p);
-        if (value_is_pair(entry) && car(entry) == key)
+        if (sch_value_is_pair(entry) && car(entry) == key)
             return entry;
     }
     return Qfalse;
@@ -2126,7 +2137,7 @@ static Value assq(Value key, Value l)
 
 static Value proc_assq(UNUSED Value *env, Value obj, Value alist)
 {
-    expect_type("assq", TYPE_PAIR, alist);
+    expect_type("assq", SCH_TYPE_PAIR, alist);
     return assq(obj, alist);
 }
 
@@ -2134,7 +2145,7 @@ static Value assoc(Value key, Value l)
 {
     for (Value p = l; p != Qnil; p = cdr(p)) {
         Value entry = car(p);
-        if (value_is_pair(entry) && equal(car(entry), key))
+        if (sch_value_is_pair(entry) && equal(car(entry), key))
             return entry;
     }
     return Qfalse;
@@ -2142,31 +2153,31 @@ static Value assoc(Value key, Value l)
 
 static Value proc_assoc(UNUSED Value *env, Value obj, Value alist)
 {
-    expect_type("assoc", TYPE_PAIR, alist);
+    expect_type("assoc", SCH_TYPE_PAIR, alist);
     return assoc(obj, alist);
 }
 
 // 6.3.3. Symbols
 static Value proc_symbol_p(UNUSED Value *env, Value obj)
 {
-    return OF_BOOL(value_is_symbol(obj));
+    return OF_BOOL(sch_value_is_symbol(obj));
 }
 
 // 6.3.5. Strings
 static Value proc_string_p(UNUSED Value *env, Value obj)
 {
-    return OF_BOOL(value_is_string(obj));
+    return OF_BOOL(sch_value_is_string(obj));
 }
 
 static Value proc_string_length(UNUSED Value *env, Value s)
 {
-    expect_type("string-length", TYPE_STR, s);
-    return value_of_int(strlen(STRING(s)->body));
+    expect_type("string-length", SCH_TYPE_STR, s);
+    return sch_value_of_int(strlen(STRING(s)->body));
 }
 
 static Value proc_string_eq(UNUSED Value *env, Value s1, Value s2)
 {
-    expect_type_twin("string=?", TYPE_STR, s1, s2);
+    expect_type_twin("string=?", SCH_TYPE_STR, s1, s2);
     return OF_BOOL(strcmp(STRING(s1)->body, STRING(s2)->body) == 0);
 }
 
@@ -2185,7 +2196,7 @@ static Value build_apply_args(Value args)
             heads = last;
     }
     Value rest = car(p);
-    expect_type("args on apply", TYPE_PAIR, rest);
+    expect_type("args on apply", SCH_TYPE_PAIR, rest);
     return append2(heads, rest);
 }
 
@@ -2194,7 +2205,7 @@ static Value proc_apply(Value *env, Value args)
     expect_arity_min("apply", 2, args);
 
     Value proc = car(args);
-    expect_type("apply", TYPE_PROC, proc);
+    expect_type("apply", SCH_TYPE_PROC, proc);
     Value appargs = build_apply_args(cdr(args));
     return apply(env, proc, appargs);
 }
@@ -2205,7 +2216,7 @@ static bool cars_cdrs(Value ls, Value *pcars, Value *pcdrs)
     Value cars = Qnil , cdrs = Qnil;
     for (Value p = ls; p != Qnil; p = cdr(p)) {
         Value l = car(p);
-        expect_type("map", TYPE_PAIR, l);
+        expect_type("map", SCH_TYPE_PAIR, l);
         if (l == Qnil)
             return false;
         lcars = append_at(lcars, car(l));
@@ -2225,7 +2236,7 @@ static Value proc_map(Value *env, Value args)
     expect_arity_min("map", 2, args);
 
     Value proc = car(args);
-    expect_type("map", TYPE_PROC, proc);
+    expect_type("map", SCH_TYPE_PROC, proc);
     Value lists = cdr(args);
     Value last = Qnil, ret = Qnil;
     Value cars, cdrs;
@@ -2244,7 +2255,7 @@ static Value proc_for_each(Value *env, Value args)
     expect_arity_min("for-each", 2, args);
 
     Value proc = car(args);
-    expect_type("for-each", TYPE_PROC, proc);
+    expect_type("for-each", SCH_TYPE_PROC, proc);
     Value lists = cdr(args);
     Value cars, cdrs;
     while (cars_cdrs(lists, &cars, &cdrs)) {
@@ -2254,7 +2265,7 @@ static Value proc_for_each(Value *env, Value args)
     return Qnil;
 }
 
-static Value value_of_continuation(void)
+static Value sch_value_of_continuation(void)
 {
     Continuation *c = obj_new(sizeof(Continuation), TAG_CONTINUATION);
     c->proc.arity = 1; // by spec
@@ -2276,8 +2287,8 @@ static bool continuation_set(Value c)
 
 static Value proc_callcc(Value *env, Value proc)
 {
-    expect_type("call/cc", TYPE_PROC, proc);
-    Value c = value_of_continuation();
+    expect_type("call/cc", SCH_TYPE_PROC, proc);
+    Value c = sch_value_of_continuation();
     if (continuation_set(c))
         return CONTINUATION(c)->retval;
     return apply(env, proc, list1(c));
@@ -2292,7 +2303,7 @@ static void display_list(FILE *f, Value l)
         if ((next = cdr(p)) == Qnil)
             break;
         fprintf(f, " ");
-        if (!value_is_pair(next)) {
+        if (!sch_value_is_pair(next)) {
             fprintf(f, ". ");
             fdisplay(f, next);
             break;
@@ -2303,30 +2314,30 @@ static void display_list(FILE *f, Value l)
 
 static void fdisplay(FILE* f, Value v)
 {
-    switch (value_type_of(v)) {
-    case TYPE_BOOL:
+    switch (sch_value_type_of(v)) {
+    case SCH_TYPE_BOOL:
         fprintf(f, "%s", v == Qtrue ? "#t" : "#f");
         break;
-    case TYPE_INT:
-        fprintf(f, "%"PRId64, value_to_int(v));
+    case SCH_TYPE_INT:
+        fprintf(f, "%"PRId64, sch_value_to_int(v));
         break;
-    case TYPE_SYMBOL:
-    case TYPE_STR:
-        fprintf(f, "%s", value_to_string(v));
+    case SCH_TYPE_SYMBOL:
+    case SCH_TYPE_STR:
+        fprintf(f, "%s", sch_value_to_string(v));
         break;
-    case TYPE_PAIR:
+    case SCH_TYPE_PAIR:
         display_list(f, v);
         break;
-    case TYPE_PROC:
+    case SCH_TYPE_PROC:
         fprintf(f, "<procedure>");
         break;
-    case TYPE_UNDEF:
+    case SCH_TYPE_UNDEF:
         fprintf(f, "<undef>");
         break;
     }
 }
 
-char *stringify(Value v)
+char *sch_stringify(Value v)
 {
     char *s;
     size_t size;
@@ -2338,14 +2349,14 @@ char *stringify(Value v)
     return s;
 }
 
-void display(Value v)
+void sch_display(Value v)
 {
     fdisplay(stdout, v);
 }
 
 static Value proc_display(UNUSED Value *env, Value obj)
 {
-    display(obj);
+    sch_display(obj);
     return obj;
 }
 
@@ -2359,7 +2370,7 @@ static Value proc_newline(void)
 static Value proc_load(UNUSED Value *env, Value path)
 {
     // Current spec: path is always relative
-    return load_inner(value_to_string(path));
+    return load_inner(sch_value_to_string(path));
 }
 
 // Extensions from R7RS (scheme process-context)
@@ -2372,8 +2383,8 @@ static Value proc_exit(UNUSED Value *env, Value args)
         Value obj = car(args);
         if (obj == Qtrue)
             ; // use 0 for code as is
-        else if (value_is_int(obj))
-            code = value_to_int(obj);
+        else if (sch_value_is_int(obj))
+            code = sch_value_to_int(obj);
         else // or #f too
             code = 2; // something failed
     }
@@ -2386,7 +2397,7 @@ static Value proc_print(UNUSED Value *env, Value l)
     Value obj = Qnil;
     while (l != Qnil)  {
         obj = car(l);
-        display(obj);
+        sch_display(obj);
         l = cdr(l);
         if (l != Qnil)
             printf(" ");
@@ -2401,12 +2412,12 @@ static Value proc_cputime(void) // in micro sec
     struct timespec t;
     clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t);
     int64_t n = t.tv_sec * MICRO + lround(t.tv_nsec / 1000.0);
-    return value_of_int(n);
+    return sch_value_of_int(n);
 }
 
 static Value syn_defined_p(Value *env, Value name)
 {
-    if (!value_is_symbol(name))
+    if (!sch_value_is_symbol(name))
         return Qfalse;
     return OF_BOOL(assq(name, *env) != Qfalse);
 }
@@ -2414,7 +2425,7 @@ static Value syn_defined_p(Value *env, Value name)
 #define DEF_CXR_BUILTIN(x, y) \
     static Value proc_c##x##y##r(UNUSED Value *env, Value v) \
     { \
-        expect_type("c" #x #y "r", TYPE_PAIR, v); \
+        expect_type("c" #x #y "r", SCH_TYPE_PAIR, v); \
         return c##x##y##r(v); \
     }
 CXRS(DEF_CXR_BUILTIN)
@@ -2424,12 +2435,12 @@ static void initialize(void)
 {
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
-    SYM_ELSE = value_of_symbol("else");
-    SYM_QUOTE = value_of_symbol("quote");
-    SYM_QUASIQUOTE = value_of_symbol("quasiquote");
-    SYM_UNQUOTE = value_of_symbol("unquote");
-    SYM_UNQUOTE_SPLICING = value_of_symbol("unquote-splicing");
-    SYM_RARROW = value_of_symbol("=>");
+    SYM_ELSE = sch_value_of_symbol("else");
+    SYM_QUOTE = sch_value_of_symbol("quote");
+    SYM_QUASIQUOTE = sch_value_of_symbol("quasiquote");
+    SYM_UNQUOTE = sch_value_of_symbol("unquote");
+    SYM_UNQUOTE_SPLICING = sch_value_of_symbol("unquote-splicing");
+    SYM_RARROW = sch_value_of_symbol("=>");
 
     Value *e = &toplevel_environment;
 

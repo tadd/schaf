@@ -8,48 +8,48 @@
 
 typedef enum {
 // immediate
-    TYPE_BOOL,
-    TYPE_INT,
-    TYPE_SYMBOL,
-    TYPE_UNDEF,
+    SCH_TYPE_BOOL,
+    SCH_TYPE_INT,
+    SCH_TYPE_SYMBOL,
+    SCH_TYPE_UNDEF,
 // boxed (tagged)
-    TYPE_PAIR,
-    TYPE_STR,
-    TYPE_PROC,
-} Type;
+    SCH_TYPE_PAIR,
+    SCH_TYPE_STR,
+    SCH_TYPE_PROC,
+} SchType;
 
-typedef uintptr_t Value;
-typedef uintptr_t Symbol;
+typedef uintptr_t SchValue;
+typedef uintptr_t SchSymbol;
 
-extern const Value Qnil, Qundef, Qfalse, Qtrue;
+extern const SchValue SCH_Qnil, SCH_Qundef, SCH_Qfalse, SCH_Qtrue;
 
-bool value_is_int(Value v);
-bool value_is_symbol(Value v);
-bool value_is_string(Value v);
-bool value_is_pair(Value v);
-Type value_type_of(Value v);
+bool sch_value_is_int(SchValue v);
+bool sch_value_is_symbol(SchValue v);
+bool sch_value_is_string(SchValue v);
+bool sch_value_is_pair(SchValue v);
+SchType sch_value_type_of(SchValue v);
 
-int64_t value_to_int(Value v);
-Symbol value_to_symbol(Value v);
-const char *value_to_string(Value v);
+int64_t sch_value_to_int(SchValue v);
+SchSymbol sch_value_to_symbol(SchValue v);
+const char *sch_value_to_string(SchValue v);
 
-Value value_of_int(int64_t i);
-Value value_of_symbol(const char *s);
-Value value_of_string(const char *s);
+SchValue sch_value_of_int(int64_t i);
+SchValue sch_value_of_symbol(const char *s);
+SchValue sch_value_of_string(const char *s);
 
-Value cons(Value car, Value cdr);
-int64_t length(Value list);
+SchValue sch_cons(SchValue car, SchValue cdr);
+int64_t sch_length(SchValue list);
 
-Value car(Value v);
-Value cdr(Value v);
+SchValue sch_car(SchValue v);
+SchValue sch_cdr(SchValue v);
 
-ATTR_MALLOC char *stringify(Value v);
-void display(Value v);
-Value parse(const char *path);
-Value parse_string(const char *in);
-Value load(const char *path);
-Value eval_string(const char *s);
+ATTR_MALLOC char *sch_stringify(SchValue v);
+void sch_display(SchValue v);
+SchValue sch_parse(const char *path);
+SchValue sch_parse_string(const char *in);
+SchValue sch_load(const char *path);
+SchValue sch_eval_string(const char *s);
 
-const char *error_message(void);
+const char *sch_error_message(void);
 
 #endif

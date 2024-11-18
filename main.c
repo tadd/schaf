@@ -115,15 +115,15 @@ static void print_vmhwm(void)
 int main(int argc, char **argv)
 {
     Option o = parse_opt(argc, argv);
-    Value v;
+    SchValue v;
     if (o.parse_only)
-        v = o.script ? parse_string(o.script) : parse(o.path);
+        v = o.script ? sch_parse_string(o.script) : sch_parse(o.path);
     else
-        v = o.script ? eval_string(o.script) : load(o.path);
-    if (v == Qundef)
-        error("%s", error_message());
+        v = o.script ? sch_eval_string(o.script) : sch_load(o.path);
+    if (v == SCH_Qundef)
+        error("%s", sch_error_message());
     if (o.print) {
-        display(v);
+        sch_display(v);
         printf("\n");
     }
     if (o.cputime)
