@@ -140,15 +140,15 @@ int main(int argc, char **argv)
         sch_set_gc_init_size(o.init_heap_size_mib);
 
     SCH_INIT();
-    Value v;
+    SchValue v;
     if (o.parse_only)
-        v = o.script ? parse_string(o.script) : parse(o.path);
+        v = o.script ? sch_parse_string(o.script) : sch_parse(o.path);
     else
-        v = o.script ? eval_string(o.script) : load(o.path);
-    if (v == Qundef)
-        error("%s", error_message()); // runtime error occurred
+        v = o.script ? sch_eval_string(o.script) : sch_load(o.path);
+    if (v == SCH_UNDEF)
+        error("%s", sch_error_message()); // runtime error occurred
     if (o.print) {
-        display(v);
+        sch_display(v);
         printf("\n");
     }
     if (o.cputime)

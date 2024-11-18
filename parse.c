@@ -450,7 +450,7 @@ Value iparse(FILE *in, const char *filename)
     return ast;
 }
 
-Value parse(const char *path)
+Value sch_parse(const char *path)
 {
     FILE *in = fopen(path, "r");
     if (in == NULL)
@@ -460,7 +460,7 @@ Value parse(const char *path)
     return ast == Qundef ? Qundef : car(cdr(ast));
 }
 
-Value parse_string(const char *in)
+Value sch_parse_string(const char *in)
 {
     FILE *f = fmemopen((char *) in, strlen(in), "r");
     Value ast = iparse(f, "<inline>");
