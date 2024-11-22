@@ -69,8 +69,6 @@ static Table *toplevel_environment;
 static Value symbol_names = Qnil; // ("name0" "name1" ...)
 static Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
     SYM_RARROW;
-static const volatile void *stack_base = NULL;
-#define INIT_STACK() void *basis; stack_base = &basis
 static const char *load_basedir = NULL;
 static Value call_stack = Qnil;
 static Value source_data = Qnil;
@@ -1157,7 +1155,6 @@ static Value iload(FILE *in, const char *filename)
         dump_stack_trace();
         return Qundef;
     }
-    INIT_STACK();
     call_stack = Qnil;
     Value ret = eval_body(toplevel_environment, l);
     call_stack_check_consistency();
@@ -2235,7 +2232,7 @@ static bool continuation_set(Value c)
     GET_SP(sp); // must be the first!
     Continuation *cont = CONTINUATION(c);
     cont->sp = sp;
-    cont->shelter_len = stack_base - sp;
+    cont->shelter_len = gc_stack_get_size(sp);
     cont->shelter = malloc(cont->shelter_len);
     if (cont->shelter == NULL)
         error("malloc(%zu) failed", cont->shelter_len);
