@@ -90,6 +90,11 @@ void gc_stack_init(const volatile void *b)
     stack_base = b;
 }
 
+size_t gc_stack_get_size(const volatile void *sp)
+{
+    return stack_base - sp;
+}
+
 void gc_add_root(const Value *r)
 {
     if (nroot == ROOT_SIZE)

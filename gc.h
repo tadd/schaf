@@ -63,9 +63,12 @@ typedef struct {
     Value retval;
 } Continuation;
 
+#define SCH_STACK_INIT(p) void *p; gc_stack_init(&p)
+
 void gc_init(void);
 void gc_add_root(const Value *r);
 void gc_stack_init(const volatile void *b);
+size_t gc_stack_get_size(const volatile void *sp);
 void gc_set_print_stat(bool b);
 void gc_set_init_size(size_t mib);
 

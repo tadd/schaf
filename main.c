@@ -133,7 +133,6 @@ static void print_vmhwm(void)
         error("memory usage not printed");
 }
 
-#define GET_SP(p) volatile void *p = &p
 int main(int argc, char **argv)
 {
     sch_init();
@@ -142,8 +141,7 @@ int main(int argc, char **argv)
     if (o.init_heap_size > 0)
         gc_set_init_size(o.init_heap_size);
 
-    GET_SP(sp);
-    gc_stack_init(sp);
+    SCH_STACK_INIT(sp);
     Value v;
     if (o.parse_only)
         v = o.script ? parse_string(o.script) : parse(o.path);
