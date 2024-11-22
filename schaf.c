@@ -253,8 +253,9 @@ static void *obj_new(size_t size, ValueTag t)
 
 Value value_of_string(const char *s)
 {
-    String *str = obj_new(sizeof(String), TAG_STR);
-    str->body = xstrdup(s);
+    size_t len = strlen(s) + 1;
+    String *str = obj_new(sizeof(String) + len, TAG_STR);
+    strcpy(str->body, s);
     return (Value) str;
 }
 

@@ -262,25 +262,6 @@ static void add_to_free_list(void *p)
     free_list = ch;
 }
 
-static void free_val(Value v)
-{
-    if (value_is_immediate(v) || v == Qnil)
-        return;
-    switch (VALUE_TAG(v)) {
-    case TAG_STR: {
-        String *p = STRING(v);
-        free((char *) p->body);
-        return;
-    }
-    case TAG_PAIR:
-    case TAG_CLOSURE:
-    case TAG_CONTINUATION:
-    case TAG_CFUNC:
-    case TAG_SYNTAX:
-        return;
-    }
-}
-
 static void sweep(void)
 {
     static Header dummy = { .size = 0, .allocated = true, .living = false };
@@ -293,7 +274,6 @@ static void sweep(void)
             h->living = false;
             prev = h;
         } else if (h->allocated) {
-            free_val((Value)(h+1));
             if (!prev->allocated)
                 prev->size += offset;
             else {

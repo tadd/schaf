@@ -32,7 +32,7 @@ typedef struct Pair {
 
 typedef struct {
     ValueTag tag;
-    const char *body;
+    char body[];
 } String;
 
 typedef struct {
