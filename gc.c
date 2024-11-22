@@ -249,6 +249,13 @@ static void heap_stat(const char *header)
     heap_stat_table(tab_free);
 }
 
+static void add_to_free_list(void *p)
+{
+    Chunk *ch = p;
+    ch->next = free_list; // prepend
+    free_list = ch;
+}
+
 static void sweep(void)
 {
     uint8_t *p = heap, *endp = p + init_size;
@@ -258,8 +265,10 @@ static void sweep(void)
         offset = h->size + sizeof(Header);
         if (h->living)
             h->living = false;
-        else if (h->allocated)
-            xfree(h);
+        else if (h->allocated) {
+            add_to_free_list(h);
+            h->allocated = false;
+        }
     }
 }
 
@@ -297,12 +306,4 @@ void *xmalloc(size_t size)
     if (p == NULL)
         error("out of memory; %s(%zu) failed", __func__, size);
     return p;
-}
-
-void xfree(void *p)
-{
-    Chunk *ch = p;
-    ch->h.allocated = false;
-    ch->next = free_list; // prepend
-    free_list = ch;
 }
