@@ -95,7 +95,7 @@ static Value list(Value arg, ...)
     return l;
 }
 
-TestSuite(schaf, .init = initialize);
+TestSuite(schaf, .init = sch_initialize);
 
 Test(schaf, printing) {
     expect_stringify("#t", Qtrue);
