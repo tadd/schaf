@@ -26,7 +26,7 @@ enum {
     ROOT_SIZE = 0x10,
     MiB = 1024 * 1024,
 };
-static size_t init_size = 25 * MiB;
+static size_t init_size = 12 * MiB;
 static void *heap;
 static Chunk *free_list;
 static const Value *root[ROOT_SIZE];
