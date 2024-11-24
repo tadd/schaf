@@ -150,9 +150,8 @@ static void mark(Value v)
 
 static void mark_roots(void)
 {
-    for (size_t i = 0; i < nroot; i++) {
+    for (size_t i = 0; i < nroot; i++)
         mark(*root[i]);
-    }
 }
 
 static bool in_heap_range(uintptr_t v)
