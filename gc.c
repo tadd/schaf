@@ -75,8 +75,14 @@ static void *allocate_from_list(Chunk *prev, Chunk *curr, size_t size)
     return o + 1; // user of allocation use curr->next space and so-on
 }
 
+static inline size_t align(size_t size)
+{
+    return (size + 7U) / 8U * 8U;
+}
+
 static void *allocate(size_t size)
 {
+    size = align(size);
     size_t hsize = size + sizeof(Header);
     for (Chunk *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = curr->next) {
         if (curr->h.size >= hsize) // First-fit
