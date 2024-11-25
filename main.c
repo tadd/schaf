@@ -133,7 +133,6 @@ static void print_vmhwm(void)
         error("memory usage not printed");
 }
 
-#define GET_SP(p) volatile void *p = &p
 int main(int argc, char **argv)
 {
     sch_init();
