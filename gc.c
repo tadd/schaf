@@ -58,12 +58,8 @@ static void *allocate_from_list(Chunk *prev, Chunk *curr, size_t size)
     size_t hsize = size + sizeof(Header);
     Chunk *next = curr->next;
     if (curr->h.size > hsize) {
-        Header h = curr->h;
-        h.size -= hsize;
-        Chunk *ch = (Chunk *)(p + hsize);
-        ch->h = h;
-        ch->next = next;
-        next = ch;
+        curr->h.size -= hsize;
+        p += curr->h.size + sizeof(Header);
     }
     if (prev == NULL)
         free_list = next;
@@ -72,6 +68,7 @@ static void *allocate_from_list(Chunk *prev, Chunk *curr, size_t size)
     Header *o = HEADER(p);
     o->size = size;
     o->allocated = true;
+    o->living = false;
     return o + 1; // user of allocation use curr->next space and so-on
 }
 
