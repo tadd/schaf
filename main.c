@@ -18,7 +18,7 @@ static void usage(FILE *out)
     fprintf(out, "  -T\t\tprint consumed CPU time at exit\n");
     fprintf(out, "  -M\t\tprint memory usage (VmHWM) at exit\n");
     fprintf(out, "  -s\t\tprint heap statistics before/after GC\n");
-    fprintf(out, "  -H <MiB>\t\tspecify initial heap size\n");
+    fprintf(out, "  -H <MiB>\tspecify initial heap size\n");
     fprintf(out, "  -h\t\tprint this help\n");
     exit(out == stdout ? 0 : 2);
 }
