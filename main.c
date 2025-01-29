@@ -34,8 +34,8 @@ static void opt_error(const char *fmt, ...)
 }
 
 typedef struct {
-    const char *path;
-    const char *script;
+    const char *src;
+    bool script;
     bool print;
     bool parse_only;
     bool cputime;
@@ -45,18 +45,18 @@ typedef struct {
 static Option parse_opt(int argc, char *const *argv)
 {
     Option o = {
-        .path = NULL,
-        .script = NULL,
+        .src = NULL,
+        .script = false,
         .print = false,
         .parse_only = false,
         .cputime = false,
         .memory = false,
     };
     int opt;
-    while ((opt = getopt(argc, argv, "e:hPpTM")) != -1) {
+    while ((opt = getopt(argc, argv, "ehPpTM")) != -1) {
         switch (opt) {
         case 'e':
-            o.script = optarg;
+            o.script = true;
             break;
         case 'h':
             usage(stdout);
@@ -76,11 +76,9 @@ static Option parse_opt(int argc, char *const *argv)
             usage(stderr);
         }
     }
-    o.path = argv[optind];
-    if (o.path == NULL && o.script == NULL)
+    o.src = argv[optind];
+    if (o.src == NULL)
         opt_error("no program provided");
-    if (o.path != NULL && o.script != NULL)
-        opt_error("filename %s given while option '-e' passed", o.path);
     return o;
 }
 
@@ -117,9 +115,9 @@ int main(int argc, char **argv)
     Option o = parse_opt(argc, argv);
     Value v;
     if (o.parse_only)
-        v = o.script ? parse_string(o.script) : parse(o.path);
+        v = o.script ? parse_string(o.src) : parse(o.src);
     else
-        v = o.script ? eval_string(o.script) : load(o.path);
+        v = o.script ? eval_string(o.src) : load(o.src);
     if (v == Qundef)
         error("%s", error_message());
     if (o.print) {
