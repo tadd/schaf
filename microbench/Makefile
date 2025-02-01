@@ -9,7 +9,7 @@ all: benchmark
 target: $(TARGET)
 
 benchmark: $(TARGET)
-	@for t in $^; do \
+	@for t in *.scm; do \
 	    echo $$t:; \
 	    for i in `seq ${NLOOP}`; do \
 	        $(BIN) $(BENCHFLAGS) $(TARGET); \
