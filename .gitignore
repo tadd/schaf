@@ -2,4 +2,4 @@
 schaf
 basic-test
 *-san
-/microbench/*.scm
+/microbench/symbols.scm
