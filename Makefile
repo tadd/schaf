@@ -56,7 +56,7 @@ basic-test-san: $(OBJ_TEST:.o=.san.o)
 %.san.o: %.c
 	$(CC) $(CFLAGS) $(SANITIZER) -c $< -o $@
 
-microbench:
+microbench: schaf
 	@$(MAKE) -C $@
 
 utils.o: utils.h
