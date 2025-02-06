@@ -6,7 +6,7 @@ ANALYZER=-fanalyzer
 SANITIZER=-fsanitize=undefined #,address
 TIMEOUT=timeout 2
 
-OBJ_COMMON=schaf.o utils.o
+OBJ_COMMON=schaf.o utils.o table.o
 OBJ=$(OBJ_COMMON) main.o
 OBJ_TEST=$(OBJ_COMMON) basic-test.o
 
@@ -59,10 +59,11 @@ basic-test-san: $(OBJ_TEST:.o=.san.o)
 microbench: schaf
 	@$(MAKE) -C $@
 
-basic-test.o: schaf.h
+basic-test.o: schaf.h table.h
 main.o: schaf.h utils.h
-schaf.o: schaf.h utils.h
+schaf.o: schaf.h utils.h table.h
 utils.o: utils.h
+table.o: table.h utils.h
 
 .PHONY: all clean test test-c test-scheme analyze sanitize \
 	test-san test-c-san test-scheme-san \

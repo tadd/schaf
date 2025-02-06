@@ -5,6 +5,7 @@
 #include <criterion/new/assert.h>
 
 #include "schaf.h"
+#include "table.h"
 
 #define expect_stringify(exp, v) do { \
         char *s = stringify(v); \
@@ -217,4 +218,72 @@ Test(schaf, applicable) {
 Test(schaf, map) {
     expect_runtime_error("expected pair but got integer", "(map + 1)");
     expect_runtime_error("expected pair but got integer", "(for-each + 1)");
+}
+
+Test(table, get_put) {
+    Table *t = table_new();
+    table_put(t, 1, 100);
+    cr_assert(eq(int, 100, table_get(t, 1)));
+    table_put(t, 2, 200);
+    table_put(t, 3, 300);
+    table_put(t, 4, 400);
+    cr_assert(eq(int, 100, table_get(t, 1)));
+    cr_assert(eq(int, 200, table_get(t, 2)));
+    cr_assert(eq(int, 300, table_get(t, 3)));
+    cr_assert(eq(int, 400, table_get(t, 4)));
+    table_put(t, 1, 42);
+    cr_assert(eq(int, 42, table_get(t, 1)));
+    cr_assert(eq(int, 200, table_get(t, 2)));
+    cr_assert(eq(int, 300, table_get(t, 3)));
+    cr_assert(eq(int, 400, table_get(t, 4)));
+
+    for (int i = 1; i <= 17; i++)
+        table_put(t, i, i*10000000);
+    for (int i = 1; i <= 17; i++)
+        cr_assert(eq(int, i*10000000, table_get(t, i)));
+
+    table_free(t);
+}
+
+Test(table, inherit) {
+    Table *t = table_new();
+    table_put(t, 1, 12);
+    Table *u = table_inherit(t);
+    table_put(u, 2, 34);
+
+    cr_assert(eq(int, 12, table_get(t, 1)));
+    cr_assert(eq(int,  0, table_get(t, 2)));
+
+    cr_assert(eq(int, 12, table_get(u, 1)));
+    cr_assert(eq(int, 34, table_get(u, 2)));
+
+    table_free(u);
+    table_free(t);
+}
+
+Test(table, inherit2) {
+    Table *t = table_new();
+    table_put(t, 1, 12);
+    Table *t2 = table_new();
+    table_put(t2, 2, 34);
+
+    Table *u = table_inherit2(t, t2);
+    table_put(u, 2, 20);
+    table_put(u, 3, 30);
+
+    cr_assert(eq(int, 12, table_get(t, 1)));
+    cr_assert(eq(int,  0, table_get(t, 2)));
+    cr_assert(eq(int,  0, table_get(t, 3)));
+
+    cr_assert(eq(int,  0, table_get(t2, 1)));
+    cr_assert(eq(int, 34, table_get(t2, 2)));
+    cr_assert(eq(int,  0, table_get(t2, 3)));
+
+    cr_assert(eq(int, 12, table_get(u, 1)));
+    cr_assert(eq(int, 20, table_get(u, 2)));
+    cr_assert(eq(int, 30, table_get(u, 3)));
+
+    table_free(u);
+    table_free(t2);
+    table_free(t);
 }
