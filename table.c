@@ -21,14 +21,10 @@ static List *list_new(uint64_t key, uint64_t value)
 
 static List *list_dup(const List *l, List **last)
 {
-    List *dup = NULL, *n = NULL;
-    List *prev = NULL;
-    for (const List *p = l; p != NULL; prev = n, p = p->next) {
-        n = list_new(p->key, p->value);
-        if (dup == NULL)
-            dup = n;
-        else
-            prev->next = n;
+    List *dup = list_new(l->key, l->value);
+    List *prev = dup;
+    for (const List *p = l->next; p != NULL; prev = prev->next, p = p->next) {
+        prev->next = list_new(p->key, p->value);
     }
     *last = prev;
     return dup;
