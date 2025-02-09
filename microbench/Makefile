@@ -12,7 +12,7 @@ benchmark: $(TARGET)
 	@for t in *.scm; do \
 	    echo $$t:; \
 	    for i in `seq ${NLOOP}`; do \
-	        $(BIN) $(BENCHFLAGS) $(TARGET); \
+	        $(BIN) $(BENCHFLAGS) $$t; \
 	    done \
 	done
 
