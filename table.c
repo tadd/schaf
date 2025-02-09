@@ -19,6 +19,16 @@ static List *list_new(uint64_t key, uint64_t value)
     return l;
 }
 
+static void list_free_until(List *l, const List *const endp)
+{
+    if (l == NULL)
+        return;
+    for (List *curr = l, *next = NULL; curr != endp; curr = next) {
+        next = curr->next;
+        free(curr);
+    }
+}
+
 static List *list_dup(const List *l, List **last)
 {
     List *dup = list_new(l->key, l->value);
@@ -41,12 +51,14 @@ static List *list_concat(const List *l, List *m)
 
 struct Table {
     List *body;
+    const List *inherited;
 };
 
 Table *table_new(void)
 {
     Table *t = xmalloc(sizeof(Table));
     t->body = NULL;
+    t->inherited = NULL;
     return t;
 }
 
@@ -54,6 +66,7 @@ Table *table_inherit(Table *p)
 {
     Table *t = table_new();
     t->body = p->body;
+    t->inherited = p->body;
     return t;
 }
 
@@ -61,6 +74,7 @@ Table *table_inherit2(Table *p1, Table *p2)
 {
     Table *t = table_new();
     t->body = list_concat(p1->body, p2->body);
+    t->inherited = p2->body;
     return t;
 }
 
@@ -68,6 +82,7 @@ void table_free(Table *t)
 {
     if (t == NULL)
         return;
+    list_free_until(t->body, t->inherited);
     free(t);
 }
 
