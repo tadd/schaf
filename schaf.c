@@ -898,7 +898,7 @@ static Value append2(Value l1, Value l2)
         Value curr = list1(car(p));
         if (ret == Qnil)
             ret = curr;
-        if (prev != Qnil)
+        else
             PAIR(prev)->cdr = curr;
         prev = curr;
     }
