@@ -9,6 +9,7 @@ typedef struct Table Table;
 Table *table_new(void);
 Table *table_inherit(Table *t);
 Table *table_inherit2(Table *t, Table *u);
+Table *table_dup(const Table *t);
 void table_free(Table *t);
 Table *table_put(Table *t, uint64_t key, uint64_t val); // `val` can't be 0
 bool table_set(Table *t, uint64_t key, uint64_t val); // set (only) if found

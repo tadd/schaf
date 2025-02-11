@@ -342,7 +342,7 @@ static Value value_of_closure(Table *env, Value params, Value body)
 {
     Closure *f = obj_new(sizeof(Closure), TAG_CLOSURE);
     f->proc.arity = value_is_pair(params) ? length(params) : -1;
-    f->env = env;
+    f->env = table_dup(env);
     f->params = params;
     f->body = body;
     return (Value) f;

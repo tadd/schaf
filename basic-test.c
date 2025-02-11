@@ -287,3 +287,16 @@ Test(table, inherit2) {
     table_free(t2);
     table_free(t);
 }
+
+Test(table, dup) {
+    Table *t = table_new();
+    table_put(t, 1, 12);
+    Table *u = table_dup(t);
+    table_put(u, 1, 34);
+
+    cr_assert(eq(int, 12, table_get(t, 1)));
+    cr_assert(eq(int, 34, table_get(u, 1)));
+
+    table_free(u);
+    table_free(t);
+}
