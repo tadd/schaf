@@ -1387,7 +1387,7 @@ static Value syn_and(Value *env, Value args)
 }
 
 //PTR
-static Value syn_or(UNUSED Value *env, Value args)
+static Value syn_or(Value *env, Value args)
 {
     if (args == Qnil)
         return Qfalse;
