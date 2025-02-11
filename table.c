@@ -36,7 +36,8 @@ static List *list_dup(const List *l, List **last)
     for (const List *p = l->next; p != NULL; prev = prev->next, p = p->next) {
         prev->next = list_new(p->key, p->value);
     }
-    *last = prev;
+    if (last != NULL)
+        *last = prev;
     return dup;
 }
 
@@ -73,8 +74,18 @@ Table *table_inherit(Table *p)
 Table *table_inherit2(Table *p1, Table *p2)
 {
     Table *t = table_new();
-    t->body = list_concat(p1->body, p2->body);
+    if (p1 == p2)
+        t->body = p2->body;
+    else
+        t->body = list_concat(p1->body, p2->body);
     t->inherited = p2->body;
+    return t;
+}
+
+Table *table_dup(const Table *src)
+{
+    Table *t = table_new();
+    t->body = list_dup(src->body, NULL);
     return t;
 }
 
