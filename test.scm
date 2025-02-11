@@ -40,43 +40,34 @@
   (expect eqv? ((lambda () 42)) 42)
   (expect eqv? ((lambda (x) (* 2 x)) 21) 42)
   (expect eqv? ((lambda (x y) (* x y)) 3 14) 42)
-  (expect eqv? (begin
-                 (define mul (lambda (x y) (* x y)))
+  (expect eqv? (let ((mul (lambda (x y) (* x y))))
                  (mul 3 14)) 42)
-  (expect eqv? (begin
-                 (define a 42)
+  (expect eqv? (let ((a 42))
                  ((lambda () a))) 42)
-  (expect eqv? (begin
-                 (define a 42)
+  (expect eqv? (let ((a 42))
                  ((lambda ()
                     ((lambda () a))))) 42)
-  (expect eqv? (begin
-                 (define a 42)
+  (expect eqv? (let ((a 42))
                  ((lambda (a) a) 10)
-                   a) 42)))
+                 a) 42)))
 
 (describe "lambda2" (lambda ()
-  (expect eqv? (begin
-                 (define a 42)
+  (expect eqv? (let ((a 42))
                  (define f (lambda () a))
                  (define g (lambda () f))
                  ((g))) 42)
-  (expect eqv? (begin
-                 (define a 42)
+  (expect eqv? (let ((a 42))
                  (define f (lambda () a))
                  (((lambda () f)))) 42)
-  (expect eqv? (begin
-                 (define a 42)
+  (expect eqv? (let ((a 42))
                  (define f (lambda ()
                              (lambda () a)))
                  (define g (f))
                  (g)) 42)
-  (expect eqv? (begin
-                 (define a 42)
+  (expect eqv? (let ((a 42))
                  (((lambda ()
                      (lambda () a))))) 42)
-  (expect eqv? (begin
-                 (define a 42)
+  (expect eqv? (let ((a 42))
                  (define f (lambda () a))
                  ((((lambda ()
                       (lambda () f)))))) 42)
@@ -111,12 +102,11 @@
                      10)) 42) '(42 10))))
 
 (describe "lambda recursion" (lambda ()
-  (expect eqv? (begin
-                (define f (lambda (x)
-                            (if (> x 0)
-                                x
-                                (f (+ x 1)))))
-                (f 0)) 1)))
+  (expect eqv? (letrec ((f (lambda (x)
+                             (if (> x 0)
+                                 x
+                                 (f (+ x 1))))))
+                 (f 0)) 1)))
 
 (describe "lambda variadic" (lambda ()
   (expect procedure? (lambda x 1))
@@ -124,17 +114,13 @@
   (expect eqv? ((lambda x (* 2 (car x))) 21) 42)
   (expect eqv? ((lambda x (* (car x) (car (cdr x))))
                 3 14) 42)
-  (expect eqv? (begin
-                 (define mul (lambda x (* (car x) (car (cdr x)))))
+  (expect eqv? (let ((mul (lambda x (* (car x) (car (cdr x))))))
                  (mul 3 14)) 42)
-  (expect eqv? (begin
-                 (define a 42)
+  (expect eqv? (let ((a 42))
                  ((lambda x a))) 42)
-  (expect eqv? (begin
-                 (define a 42)
+  (expect eqv? (let ((a 42))
                  ((lambda x ((lambda x a))))) 42)
-  (expect eqv? (begin
-                 (define a 42)
+  (expect eqv? (let ((a 42))
                  ((lambda a (car a)) 10)
                  a) 42)))
 
@@ -162,8 +148,7 @@
 
 ;; 4.1.6. Assignments
 (describe "set!" (lambda ()
-  (expect eqv? (begin
-                 (define x 1)
+  (expect eqv? (let ((x 1))
                  (set! x 42)
                  x) 42)))
 
@@ -217,32 +202,30 @@
                  'consonant)))
 
 (describe "and" (lambda ()
-  (expect and)
-  (expect and #t)
-  (expect eq? (and and) and)
+  (define b #f)
+  (define (f) (set! b #t) #f)
+  (expect-t (and))
+  (expect eq? (and eq?) eq?)
   (expect eqv? (and 1) 1)
   (expect eq? (and 1 "2" 'three) 'three)
   (expect-f (and #f))
   (expect-f (and 1 #f))
   (expect-f (and 1 'two #f))
-  (define b #f)
-  (define (f) (set! b #t) #f)
   (let* ((x (and #f (f))))
     (expect-f x)
     (expect-f b))))
 
 (describe "or" (lambda ()
+  (define b #t)
+  (define (f) (set! b #f) #t)
   (expect-f (or))
-  (expect or #t)
-  (expect eq? (or or) or)
+  (expect eq? (or eq?) eq?)
   (expect eqv? 1 (or 1))
   (expect eqv? (or 1 "2" 'three) 1)
   (expect-f (or #f))
   (expect-f (or #f #f))
   (expect eqv? (or #f 1) 1)
   (expect eq? (or 'one 2 #f) 'one)
-  (define b #t)
-  (define (f) (set! b #f) #t)
   (let* ((x (or #t (f))))
     (expect-t x)
     (expect-t b))))
@@ -274,13 +257,11 @@
   (expect eqv? (let ((x 42))
                  (define x 2)
                  x) 2)
-  (expect eqv? (begin
-                 (define x 1)
+  (expect eqv? (let ((x 1))
                  (let ((x 42))
                    (define x 2)
                    x)) 2)
-  (expect eqv? (begin
-                 (define x 1)
+  (expect eqv? (let ((x 1))
                  (let ()
                    (define x 2)
                    x)
@@ -407,20 +388,20 @@
                  '(a `(b ,x ,'y d) e))))
 
 (describe "quasiquote unquote-splicing" (lambda ()
+  (define (abs x)
+    (if (< x 0) (- x) x))
+  (define (sq x)
+    (* x x))
   (expect equal? (let ((x '())) `(,@x)) '())
   (expect equal? (let ((x '(42))) `(,@x)) '(42))
   (expect equal? (let ((x '(1 2 3))) `(,@x)) '(1 2 3))
   (expect equal? `((foo ,(- 10 3)) ,@(cdr '(c)))
                  '((foo 7)))
   (expect equal? `(1 ,@(cdr '(2)) 3) '(1 3))
-  (define (abs x)
-    (if (< x 0) (- x) x))
   (expect equal? `(,@(map abs '(4 -5 6)))
                  '(4 5 6))
   (expect equal? `(a ,(+ 1 2) ,@(map abs '(4 -5 6)) b)
                  '(a 3 4 5 6 b))
-  (define (sq x)
-    (* x x))
   (expect equal? `(10 5 ,(sq 2) ,@(map sq '(4 3)) 8)
                  '(10 5 4 16 9 8))))
 
@@ -435,31 +416,31 @@
 ;; 5. Program structure
 ;; 5.2. Definitions
 (describe "define variable" (lambda ()
-  (expect eqv? (begin
+  (expect eqv? (let ()
                  (define x 42)
                  x) 42)
-  (expect eqv? (begin
+  (expect eqv? (let ()
                  (define x (* -1 42))
                  x) -42)))
 
 (describe "define function" (lambda ()
-  (expect eqv? (begin
+  (expect eqv? (let ()
                  (define (f) 42)
                  (f)) 42)
-  (expect eqv? (begin
+  (expect eqv? (let ()
                  (define (f x) (* -1 x))
                  (f 42)) -42)))
 
 (describe "define function variadic" (lambda ()
-  (expect eqv? (begin
+  (expect eqv? (let ()
                  (define (f . a) 42)
                  (f)) 42)
-  (expect eqv? (begin
+  (expect eqv? (let ()
                  (define (f . a) (* -1 (car a)))
                  (f 42)) -42)))
 
 (describe "define and lambda" (lambda ()
-  (expect eqv? (begin
+  (expect eqv? (let ()
                  (define f (lambda () (g)))
                  (define g (lambda () 42))
                  (f)) 42)))
@@ -492,20 +473,22 @@
   (noexpect eqv? #f 'nil)))
 
 (describe "eqv? complicated" (lambda ()
-  (define gen-counter
-    (lambda ()
-      (let ((n 0))
-        (lambda () (set! n (+ n 1)) n))))
-  (let ((g (gen-counter)))
-    (expect eqv? g g))
-  (noexpect eqv? (gen-counter) (gen-counter))
+  (let ()
+    (define gen-counter
+      (lambda ()
+        (let ((n 0))
+          (lambda () (set! n (+ n 1)) n))))
+    (let ((g (gen-counter)))
+      (expect eqv? g g))
+    (noexpect eqv? (gen-counter) (gen-counter)))
 
-  (define gen-loser
-    (lambda ()
-      (let ((n 0))
-        (lambda () (set! n (+ n 1)) 27))))
-  (let ((g (gen-loser)))
-    (expect eqv? g g))
+  (let ()
+    (define gen-loser
+      (lambda ()
+        (let ((n 0))
+          (lambda () (set! n (+ n 1)) 27))))
+    (let ((g (gen-loser)))
+      (expect eqv? g g)))
 
   (letrec ((f (lambda () (if (eqv? f g) 'f 'both)))
            (g (lambda () (if (eqv? f g) 'g 'both))))
