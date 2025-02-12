@@ -893,13 +893,10 @@ static Value append2(Value l1, Value l2)
     if (l1 == Qnil)
         return l2;
 
-    Value ret = Qnil, prev = Qnil;
-    for (Value p = l1; p != Qnil; p = cdr(p)) {
+    Value ret = list1(car(l1)), prev = ret;
+    for (Value p = cdr(l1); p != Qnil; p = cdr(p)) {
         Value curr = list1(car(p));
-        if (ret == Qnil)
-            ret = curr;
-        else
-            PAIR(prev)->cdr = curr;
+        PAIR(prev)->cdr = curr;
         prev = curr;
     }
     PAIR(prev)->cdr = l2;
@@ -1701,12 +1698,11 @@ static Value proc_numeq(UNUSED Value *env, Value args)
     expect_arity_range("=", 2, -1, args);
 
     int64_t x = value_get_int("=", car(args));
-    while ((args = cdr(args)) != Qnil) {
-        int64_t y = value_get_int("=", car(args));
-        if (x != y)
-            return Qfalse;
+    for (args = cdr(args); x == value_get_int("=", car(args)); ) {
+        if ((args = cdr(args)) == Qnil)
+            return Qtrue;
     }
-    return Qtrue;
+    return Qfalse;
 }
 
 static Value proc_lt(UNUSED Value *env, Value args)
@@ -1826,13 +1822,10 @@ static Value proc_sub(UNUSED Value *env, Value args)
 {
     expect_arity_range("-", 1, -1, args);
 
-    Value rest = cdr(args);
-    int64_t y = 0;
-    if (rest == Qnil)
-        rest = args;
-    else
-        y = value_get_int("-", car(args));
-    for (Value p = rest; p != Qnil; p = cdr(p))
+    int64_t y = value_get_int("-", car(args));
+    if ((args = cdr(args)) == Qnil)
+        return value_of_int(-y);
+    for (Value p = args; p != Qnil; p = cdr(p))
         y -= value_get_int("-", car(p));
     return value_of_int(y);
 }
@@ -1849,13 +1842,10 @@ static Value proc_div(UNUSED Value *env, Value args)
 {
     expect_arity_range("/", 1, -1, args);
 
-    Value rest = cdr(args);
-    int64_t y = 1;
-    if (rest == Qnil)
-        rest = args;
-    else
-        y = value_get_int("/", car(args));
-    for (Value p = rest; p != Qnil; p = cdr(p)) {
+    int64_t y = value_get_int("/", car(args));
+    if ((args = cdr(args)) == Qnil)
+       return value_of_int(1 / y);
+    for (Value p = args; p != Qnil; p = cdr(p)) {
         int64_t x = value_get_int("/", car(p));
         if (x == 0)
             runtime_error("/: divided by zero");
@@ -2186,7 +2176,7 @@ static Value proc_procedure_p(UNUSED Value *env, Value o)
     return OF_BOOL(value_is_procedure(o));
 }
 
-static Value apply_args(Value args)
+static Value build_apply_args(Value args)
 {
     Value heads = Qnil, last = Qnil, p, next;
     for (p = args; (next = cdr(p)) != Qnil; p = next) {
@@ -2205,7 +2195,7 @@ static Value proc_apply(Value *env, Value args)
 
     Value proc = car(args);
     expect_type("apply", TYPE_PROC, proc);
-    Value appargs = apply_args(cdr(args));
+    Value appargs = build_apply_args(cdr(args));
     return apply(env, proc, appargs);
 }
 
