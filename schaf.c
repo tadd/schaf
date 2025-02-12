@@ -2379,6 +2379,13 @@ static Value proc_cputime(void) // in micro sec
     return value_of_int(n);
 }
 
+static Value syn_defined_p(Value *env, Value name)
+{
+    if (!value_is_symbol(name))
+        return Qfalse;
+    return OF_BOOL(assq(name, *env) != Qfalse);
+}
+
 #define DEF_CXR_BUILTIN(x, y) \
     static Value proc_c##x##y##r(UNUSED Value *env, Value v) \
     { \
@@ -2531,4 +2538,5 @@ static void initialize(void)
     // Local Extensions
     define_procedure(e, "print", proc_print, 1); // like Gauche
     define_procedure(e, "_cputime", proc_cputime, 0);
+    define_syntax(e, "_defined?", syn_defined_p, 1);
 }

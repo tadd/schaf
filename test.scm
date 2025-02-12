@@ -1196,10 +1196,23 @@
 ;; End of tests from Kawa
 
 ;; Local Extensions
-(describe "cputime" (lambda ()
+(describe "_cputime" (lambda ()
   (let ((t (_cputime)))
     (expect number? t)
     (expect > t 0))))
+
+(describe "_defined?" (lambda ()
+  (define a 10)
+  (define (f) (_defined? a))
+  (define (f2) (_defined? b))
+  (let ((g (lambda () (_defined? a)))
+        (g2 (lambda () (_defined? b))))
+    (expect-t (_defined? a))
+    (expect-f (_defined? b))
+    (expect-t (f))
+    (expect-f (f2))
+    (expect-t (g))
+    (expect-f (g2)))))
 
 ;; (load "./test-callcc.scm")
 
