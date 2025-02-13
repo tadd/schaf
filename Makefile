@@ -59,9 +59,10 @@ basic-test-san: $(OBJ_TEST:.o=.san.o)
 microbench: schaf
 	@$(MAKE) -C $@
 
-utils.o: utils.h
-schaf.o main.o: schaf.h utils.h
 basic-test.o: schaf.h
+main.o: schaf.h utils.h
+schaf.o: schaf.h utils.h
+utils.o: utils.h
 
 .PHONY: all clean test test-c test-scheme analyze sanitize \
 	test-san test-c-san test-scheme-san \
