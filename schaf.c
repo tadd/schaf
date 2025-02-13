@@ -1476,13 +1476,19 @@ static Value syn_letrec(Value *env, Value args)
     if (body == Qnil)
         runtime_error("letrec: one or more expressions needed in body");
 
-    Value letenv = *env;
+    Value letenv = *env; //append2(freshenv, *env);
+    /* Value freshenv = Qnil; */
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
         expect_type("letrec", TYPE_PAIR, b);
         Value ident = car(b);
         expect_type("letrec", TYPE_SYMBOL, ident);
-        define_variable(&letenv, ident, cadr(b));
+        define_variable(&letenv, ident, Qfalse);
+    }
+    for (Value p = bindings; p != Qnil; p = cdr(p)) {
+        Value b = car(p);
+        Value ident = car(b), init = cadr(b);
+        define_variable(&letenv, ident, init);
     }
     return eval_body(&letenv, body);
 }
