@@ -1468,6 +1468,8 @@ static Value syn_letrec(Value *env, Value args)
     Value bindings = car(args);
     Value body = cdr(args);
     expect_type_twin("letrec", TYPE_PAIR, bindings, body);
+    if (body == Qnil)
+        runtime_error("letrec: one or more expressions needed in body");
 
     Value letenv = *env;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
@@ -1478,8 +1480,6 @@ static Value syn_letrec(Value *env, Value args)
         Value val = eval(&letenv, cadr(b));
         env_put(&letenv, ident, val);
     }
-    if (body == Qnil)
-        runtime_error("letrec: one or more expressions needed in body");
     return eval_body(&letenv, body);
 }
 
