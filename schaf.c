@@ -1477,8 +1477,7 @@ static Value syn_letrec(Value *env, Value args)
         expect_type("letrec", TYPE_PAIR, b);
         Value ident = car(b);
         expect_type("letrec", TYPE_SYMBOL, ident);
-        Value val = eval(&letenv, cadr(b));
-        env_put(&letenv, ident, val);
+        define_variable(&letenv, ident, cadr(b));
     }
     return eval_body(&letenv, body);
 }
