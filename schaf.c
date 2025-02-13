@@ -829,6 +829,11 @@ static void expect_arity_range(const char *func, int64_t min, int64_t max, Value
                   func, min, max, actual);
 }
 
+static void expect_arity_min(const char *func, int64_t min, Value args)
+{
+    expect_arity_range(func, min, -1, args);
+}
+
 static void expect_arity(int64_t expected, Value args)
 {
     int64_t actual = length(args);
@@ -1330,7 +1335,7 @@ static Value cond_eval_recipient(Value *env, Value test, Value recipients)
 //PTR
 static Value syn_cond(Value *env, Value clauses)
 {
-    expect_arity_range("cond", 1, -1, clauses);
+    expect_arity_min("cond", 1, clauses);
 
     for (Value p = clauses; p != Qnil; p = cdr(p)) {
         Value clause = car(p);
@@ -1356,7 +1361,7 @@ static Value memq(Value key, Value l);
 //PTR
 static Value syn_case(Value *env, Value args)
 {
-    expect_arity_range("case", 2, -1, args);
+    expect_arity_min("case", 2, args);
     Value key = eval(env, car(args)), clauses = cdr(args);
 
     for (Value p = clauses; p != Qnil; p = cdr(p)) {
@@ -1447,7 +1452,7 @@ static Value named_let(Value *env, Value var, Value bindings, Value body)
 //PTR
 static Value syn_let(Value *env, Value args)
 {
-    expect_arity_range("let", 2, -1, args);
+    expect_arity_min("let", 2, args);
     Value bind_or_var = car(args), body = cdr(args);
     if (value_is_symbol(bind_or_var))
         return named_let(env, bind_or_var, car(body), cdr(body));
@@ -1457,14 +1462,14 @@ static Value syn_let(Value *env, Value args)
 //PTR
 static Value syn_let_star(Value *env, Value args)
 {
-    expect_arity_range("let*", 2, -1, args);
+    expect_arity_min("let*", 2, args);
     return let(env, "let*", car(args), cdr(args));
 }
 
 //PTR
 static Value syn_letrec(Value *env, Value args)
 {
-    expect_arity_range("letrec", 2, -1, args);
+    expect_arity_min("letrec", 2, args);
     Value bindings = car(args);
     Value body = cdr(args);
     expect_type_twin("letrec", TYPE_PAIR, bindings, body);
@@ -1493,7 +1498,7 @@ static Value syn_begin(Value *env, Value body)
 //PTR
 static Value syn_do(Value *env, Value args)
 {
-    expect_arity_range("do", 2, -1, args);
+    expect_arity_min("do", 2, args);
 
     Value bindings = car(args), tests = cadr(args), body = cddr(args);
     expect_type_twin("do", TYPE_PAIR, bindings, tests);
@@ -1694,7 +1699,7 @@ static Value proc_integer_p(UNUSED Value *env, Value obj)
 
 static Value proc_numeq(UNUSED Value *env, Value args)
 {
-    expect_arity_range("=", 2, -1, args);
+    expect_arity_min("=", 2, args);
 
     int64_t x = value_get_int("=", car(args));
     for (args = cdr(args); x == value_get_int("=", car(args)); ) {
@@ -1706,7 +1711,7 @@ static Value proc_numeq(UNUSED Value *env, Value args)
 
 static Value proc_lt(UNUSED Value *env, Value args)
 {
-    expect_arity_range("<", 2, -1, args);
+    expect_arity_min("<", 2, args);
 
     int64_t x = value_get_int("<", car(args));
     while ((args = cdr(args)) != Qnil) {
@@ -1720,7 +1725,7 @@ static Value proc_lt(UNUSED Value *env, Value args)
 
 static Value proc_gt(UNUSED Value *env, Value args)
 {
-    expect_arity_range(">", 2, -1, args);
+    expect_arity_min(">", 2, args);
 
     int64_t x = value_get_int(">", car(args));
     while ((args = cdr(args)) != Qnil) {
@@ -1734,7 +1739,7 @@ static Value proc_gt(UNUSED Value *env, Value args)
 
 static Value proc_le(UNUSED Value *env, Value args)
 {
-    expect_arity_range("<=", 2, -1, args);
+    expect_arity_min("<=", 2, args);
 
     int64_t x = value_get_int("<=", car(args));
     while ((args = cdr(args)) != Qnil) {
@@ -1748,7 +1753,7 @@ static Value proc_le(UNUSED Value *env, Value args)
 
 static Value proc_ge(UNUSED Value *env, Value args)
 {
-    expect_arity_range(">=", 2, -1, args);
+    expect_arity_min(">=", 2, args);
 
     int64_t x = value_get_int(">=", car(args));
     while ((args = cdr(args)) != Qnil) {
@@ -1787,7 +1792,7 @@ static Value proc_even_p(UNUSED Value *env, Value obj)
 
 static Value proc_max(UNUSED Value *env, Value args)
 {
-    expect_arity_range("max", 1, -1, args);
+    expect_arity_min("max", 1, args);
     int64_t max = value_get_int("max", car(args));
     for (Value p = cdr(args); p != Qnil; p = cdr(p)) {
         int64_t x = value_get_int("max", car(p));
@@ -1799,7 +1804,7 @@ static Value proc_max(UNUSED Value *env, Value args)
 
 static Value proc_min(UNUSED Value *env, Value args)
 {
-    expect_arity_range("min", 1, -1, args);
+    expect_arity_min("min", 1, args);
     int64_t min = value_get_int("min", car(args));
     for (Value p = cdr(args); p != Qnil; p = cdr(p)) {
         int64_t x = value_get_int("min", car(p));
@@ -1819,7 +1824,7 @@ static Value proc_add(UNUSED Value *env, Value args)
 
 static Value proc_sub(UNUSED Value *env, Value args)
 {
-    expect_arity_range("-", 1, -1, args);
+    expect_arity_min("-", 1, args);
 
     int64_t y = value_get_int("-", car(args));
     if ((args = cdr(args)) == Qnil)
@@ -1839,7 +1844,7 @@ static Value proc_mul(UNUSED Value *env, Value args)
 
 static Value proc_div(UNUSED Value *env, Value args)
 {
-    expect_arity_range("/", 1, -1, args);
+    expect_arity_min("/", 1, args);
 
     int64_t y = value_get_int("/", car(args));
     if ((args = cdr(args)) == Qnil)
@@ -2190,7 +2195,7 @@ static Value build_apply_args(Value args)
 
 static Value proc_apply(Value *env, Value args)
 {
-    expect_arity_range("apply", 2, -1, args);
+    expect_arity_min("apply", 2, args);
 
     Value proc = car(args);
     expect_type("apply", TYPE_PROC, proc);
@@ -2221,7 +2226,7 @@ static bool cars_cdrs(Value ls, Value *pcars, Value *pcdrs)
 
 static Value proc_map(Value *env, Value args)
 {
-    expect_arity_range("map", 2, -1, args);
+    expect_arity_min("map", 2, args);
 
     Value proc = car(args);
     expect_type("map", TYPE_PROC, proc);
@@ -2240,7 +2245,7 @@ static Value proc_map(Value *env, Value args)
 
 static Value proc_for_each(Value *env, Value args)
 {
-    expect_arity_range("for-each", 2, -1, args);
+    expect_arity_min("for-each", 2, args);
 
     Value proc = car(args);
     expect_type("for-each", TYPE_PROC, proc);
