@@ -63,7 +63,7 @@ typedef struct {
 
 typedef struct {
     Procedure proc;
-    Value env;
+    Value *env;
     Value params;
     Value body;
 } Closure;
@@ -337,7 +337,7 @@ static Value value_of_syntax(cfunc_t cfunc, int64_t arity)
     return sp;
 }
 
-static Value value_of_closure(Value env, Value params, Value body)
+static Value value_of_closure(Value *env, Value params, Value body)
 {
     Closure *f = obj_new(sizeof(Closure), TAG_CLOSURE);
     f->proc.arity = value_is_pair(params) ? length(params) : -1;
@@ -910,12 +910,13 @@ static Value append2(Value l1, Value l2)
 
 static Value eval_body(Value *env, Value body);
 
+#define UNUSED ATTR(unused)
 //PTR
-static Value apply_closure(Value *env, Value proc, Value args)
+static Value apply_closure(UNUSED Value *env, Value proc, Value args)
 {
     Closure *cl = CLOSURE(proc);
     int64_t arity = cl->proc.arity;
-    Value clenv = append2(cl->env, *env), params = cl->params;
+    Value clenv = *cl->env, params = cl->params;
     if (arity == -1)
         env_put(&clenv, params, args);
     else {
@@ -1259,7 +1260,6 @@ static Value load_inner(const char *path)
 //
 // Built-in Procedures / Syntax
 //
-#define UNUSED ATTR(unused)
 
 // 4.1. Primitive expression types
 // 4.1.2. Literal expressions
@@ -1275,7 +1275,7 @@ static Value lambda(Value *env, Value params, Value body)
     expect_type("lambda", TYPE_PAIR, body);
     if (body == Qnil)
         runtime_error("lambda: one or more expressions needed in body");
-    return value_of_closure(*env, params, body);
+    return value_of_closure(env, params, body);
 }
 
 //PTR -- proper tail recursion needed
