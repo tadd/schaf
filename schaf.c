@@ -63,7 +63,7 @@ typedef struct {
 
 typedef struct {
     Procedure proc;
-    Value env;
+    Value *env;
     Value params;
     Value body;
 } Closure;
@@ -337,7 +337,7 @@ static Value value_of_syntax(cfunc_t cfunc, int64_t arity)
     return sp;
 }
 
-static Value value_of_closure(Value env, Value params, Value body)
+static Value value_of_closure(Value *env, Value params, Value body)
 {
     Closure *f = obj_new(sizeof(Closure), TAG_CLOSURE);
     f->proc.arity = value_is_pair(params) ? length(params) : -1;
@@ -911,19 +911,25 @@ static Value append2(Value l1, Value l2)
 
 static Value eval_body(Value *env, Value body);
 
+#define UNUSED ATTR(unused)
 //PTR
-static Value apply_closure(Value *env, Value proc, Value args)
+static Value apply_closure(UNUSED Value *env, Value proc, Value args)
 {
     Closure *cl = CLOSURE(proc);
     int64_t arity = cl->proc.arity;
-    Value clenv = append2(cl->env, *env), params = cl->params;
+    static Value dummy = Qnil;
+    if (dummy == Qnil)
+        dummy = cons(Qnil, Qnil);
+    Value *pe = xmalloc(sizeof(Value *));
+    Value clenv = cons(dummy, *cl->env), params = cl->params;
+    pe = &clenv;
     if (arity == -1)
-        env_put(&clenv, params, args);
+        env_put(pe, params, args);
     else {
         for (Value p = args; p != Qnil; p = cdr(p), params = cdr(params))
-            env_put(&clenv, car(params), car(p));
+            env_put(pe, car(params), car(p));
     }
-    return eval_body(&clenv, cl->body);
+    return eval_body(pe, cl->body);
 }
 
 static inline void expect_nonnull(const char *msg, Value l)
@@ -1260,7 +1266,6 @@ static Value load_inner(const char *path)
 //
 // Built-in Procedures / Syntax
 //
-#define UNUSED ATTR(unused)
 
 // 4.1. Primitive expression types
 // 4.1.2. Literal expressions
@@ -1278,7 +1283,7 @@ static Value syn_lambda(Value *env, Value args)
     expect_type("lambda", TYPE_PAIR, body);
     if (body == Qnil)
         runtime_error("lambda: one or more expressions needed in body");
-    return value_of_closure(*env, params, body);
+    return value_of_closure(env, params, body);
 }
 
 // 4.1.5. Conditionals
@@ -1421,7 +1426,7 @@ static Value define_variable(Value *env, Value ident, Value expr);
 static Value let(Value *env, const char *func, Value bindings, Value body)
 {
     expect_type(func, TYPE_PAIR, bindings);
-    Value letenv = *env;
+    Value *letenv = env;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
         expect_type(func, TYPE_PAIR, b);
@@ -1429,9 +1434,9 @@ static Value let(Value *env, const char *func, Value bindings, Value body)
             runtime_error("%s: malformed binding in let: %s", func, stringify(b));
         Value ident = car(b), expr = cadr(b);
         expect_type(func, TYPE_SYMBOL, ident);
-        env_put(&letenv, ident, eval(env, expr));
+        env_put(letenv, ident, eval(env, expr));
     }
-    return eval_body(&letenv, body);
+    return eval_body(letenv, body);
 }
 
 static Value named_let(Value *env, Value var, Value bindings, Value body)
@@ -1439,7 +1444,7 @@ static Value named_let(Value *env, Value var, Value bindings, Value body)
     expect_type("let", TYPE_PAIR, bindings);
     Value tr = transpose_2xn(bindings);
     Value params = car(tr), symargs = cadr(tr);
-    Value proc = value_of_closure(*env, params, body);
+    Value proc = value_of_closure(env, params, body);
     Value args = map_eval(env, symargs);
     Value letenv = *env;
     define_variable(&letenv, var, proc);
@@ -1499,7 +1504,7 @@ static Value syn_do(Value *env, Value args)
 
     Value bindings = car(args), tests = cadr(args), body = cddr(args);
     expect_type_twin("do", TYPE_PAIR, bindings, tests);
-    Value doenv = *env, steps = Qnil;
+    Value *doenv = env, steps = Qnil;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
         expect_nonnull("do", b);
@@ -1507,20 +1512,20 @@ static Value syn_do(Value *env, Value args)
         if (step != Qnil)
             steps = cons(cons(var, car(step)), steps);
         expect_type("do", TYPE_SYMBOL, var);
-        env_put(&doenv, var, eval(env, init)); // in the original env
+        env_put(doenv, var, eval(env, init)); // in the original env
     }
     Value test = car(tests), exprs = cdr(tests);
-    while (eval(&doenv, test) == Qfalse) {
+    while (eval(doenv, test) == Qfalse) {
         if (body != Qnil)
-            eval_body(&doenv, body);
+            eval_body(doenv, body);
         for (Value p = steps; p != Qnil; p = cdr(p)) {
             Value pstep = car(p);
             Value var = car(pstep), step = cdr(pstep);
-            Value val = eval(&doenv, step);
-            iset(&doenv, var, val);
+            Value val = eval(doenv, step);
+            iset(doenv, var, val);
         }
     }
-    return exprs == Qnil ? Qnil : eval_body(&doenv, exprs);
+    return exprs == Qnil ? Qnil : eval_body(doenv, exprs);
 }
 
 // 4.2.6. Quasiquotation
@@ -1624,7 +1629,7 @@ static Value define_variable(Value *env, Value ident, Value expr)
 static Value define_proc_internal(Value *env, Value heads, Value body)
 {
     Value ident = car(heads), params = cdr(heads);
-    Value val = value_of_closure(*env, params, body);
+    Value val = value_of_closure(env, params, body);
     return define_variable(env, ident, val);
 }
 
