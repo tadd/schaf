@@ -1441,7 +1441,7 @@ static Value named_let(Value *env, Value var, Value bindings, Value body)
     Value args = map_eval(env, symargs);
     Value letenv = *env;
     define_variable(&letenv, var, proc);
-    return apply(&letenv, proc, args);
+    return apply_closure(&letenv, proc, args);
 }
 
 //PTR
