@@ -1214,6 +1214,9 @@
     (expect-t (g))
     (expect-f (g2)))))
 
+(describe "_proc-arity" (lambda ()
+  (expect eqv? (_proc-arity eqv?) 2)))
+
 ;; (load "./test-callcc.scm")
 
 (test-run)

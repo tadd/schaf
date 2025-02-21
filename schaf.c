@@ -820,6 +820,15 @@ static Parser *parser_new(FILE *in, const char *filename)
     return p;
 }
 
+#define UNUSED ATTR(unused)
+static Value proc_proc_arity(UNUSED Value *env, Value proc)
+{
+    if (!OF_BOOL(value_is_procedure(proc)))
+        return Qfalse;
+    Procedure *p = PROCEDURE(proc);
+    return value_of_int(p->arity);
+}
+
 static void expect_arity_range(const char *func, int64_t min, int64_t max, Value args)
 {
     int64_t actual = length(args);
@@ -2567,4 +2576,5 @@ static void initialize(void)
     define_procedure(e, "print", proc_print, -1); // like Gauche
     define_procedure(e, "_cputime", proc_cputime, 0);
     define_syntax(e, "_defined?", syn_defined_p, 1);
+    define_procedure(e, "_proc-arity", proc_proc_arity, 1);
 }
