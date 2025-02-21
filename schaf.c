@@ -1269,19 +1269,15 @@ static Value syn_quote(UNUSED Value *env, Value datum)
 }
 
 // 4.1.4. Procedures
-static Value lambda(Value *env, Value params, Value body)
+//PTR -- proper tail recursion needed
+static Value syn_lambda(Value *env, Value args)
 {
+    Value params = car(args), body = cdr(args);
     expect_type_or("lambda", TYPE_PAIR, TYPE_SYMBOL, params);
     expect_type("lambda", TYPE_PAIR, body);
     if (body == Qnil)
         runtime_error("lambda: one or more expressions needed in body");
     return value_of_closure(*env, params, body);
-}
-
-//PTR -- proper tail recursion needed
-static Value syn_lambda(Value *env, Value args)
-{
-    return lambda(env, car(args), cdr(args));
 }
 
 // 4.1.5. Conditionals
@@ -1441,8 +1437,7 @@ static Value named_let(Value *env, Value var, Value bindings, Value body)
 {
     Value tr = transpose_2xn(bindings);
     Value params = car(tr), symargs = cadr(tr);
-    Value proc = lambda(env, params, body);
-    expect_type("named let", TYPE_PROC, proc);
+    Value proc = value_of_closure(*env, params, body);
     Value args = map_eval(env, symargs);
     Value letenv = *env;
     define_variable(&letenv, var, proc);
@@ -1627,7 +1622,7 @@ static Value define_variable(Value *env, Value ident, Value expr)
 static Value define_proc_internal(Value *env, Value heads, Value body)
 {
     Value ident = car(heads), params = cdr(heads);
-    Value val = lambda(env, params, body);
+    Value val = value_of_closure(*env, params, body);
     return define_variable(env, ident, val);
 }
 
