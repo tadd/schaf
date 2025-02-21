@@ -2367,9 +2367,16 @@ static Value proc_load(UNUSED Value *env, Value path)
 }
 
 // Local Extensions
-static Value proc_print(UNUSED Value *env, Value obj)
+static Value proc_print(UNUSED Value *env, Value l)
 {
-    display(obj);
+    Value obj = Qnil;
+    while (l != Qnil)  {
+        obj = car(l);
+        display(obj);
+        l = cdr(l);
+        if (l != Qnil)
+            printf(" ");
+    }
     puts("");
     return obj;
 }
@@ -2540,7 +2547,7 @@ static void initialize(void)
     define_procedure(e, "load", proc_load, 1);
 
     // Local Extensions
-    define_procedure(e, "print", proc_print, 1); // like Gauche
+    define_procedure(e, "print", proc_print, -1); // like Gauche
     define_procedure(e, "_cputime", proc_cputime, 0);
     define_syntax(e, "_defined?", syn_defined_p, 1);
 }
