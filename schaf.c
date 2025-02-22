@@ -1435,6 +1435,7 @@ static Value let(Value *env, const char *func, Value bindings, Value body)
 
 static Value named_let(Value *env, Value var, Value bindings, Value body)
 {
+    expect_type("let", TYPE_PAIR, bindings);
     Value tr = transpose_2xn(bindings);
     Value params = car(tr), symargs = cadr(tr);
     Value proc = value_of_closure(*env, params, body);
