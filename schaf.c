@@ -1417,9 +1417,36 @@ static Value transpose_2xn(Value ls) // 2 * n
 
 static Value define_variable(Value *env, Value ident, Value expr);
 
-static Value let(Value *env, const char *func, Value bindings, Value body)
+#define pp(v) do { \
+        printf(#v": "); display(v); puts(""); fflush(stdout); \
+    } while (0);
+
+static Value let(Value *env, UNUSED const char *func, Value bindings, Value body)
 {
     expect_type(func, TYPE_PAIR, bindings);
+    Value tr = transpose_2xn(bindings);
+    Value params = car(tr), symargs = cadr(tr);
+#if 0
+    Value proc = value_of_closure(*env, params, body);
+    Value args = map_eval(env, symargs);
+    return apply_closure(env, proc, args);
+#elif 1
+    Value args = Qnil;
+    Value letenv = *env;
+    for (Value p = params, a = symargs; p != Qnil; p = cdr(p), a = cdr(a)) {
+        Value ident = car(p), expr = car(a);
+        expect_type(func, TYPE_SYMBOL, ident);
+        Value arg = eval(env, expr);
+        args = cons(arg, args);
+        env_put(&letenv, ident, arg);
+    }
+    // return eval_body(&letenv, body);
+    Value proc = value_of_closure(*env, params, body);
+    args = reverse(args);
+    pp(args);
+    return apply_closure(env, proc, args);
+#else
+    Value args = Qnil;
     Value letenv = *env;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
@@ -1428,9 +1455,14 @@ static Value let(Value *env, const char *func, Value bindings, Value body)
             runtime_error("%s: malformed binding in let: %s", func, stringify(b));
         Value ident = car(b), expr = cadr(b);
         expect_type(func, TYPE_SYMBOL, ident);
-        env_put(&letenv, ident, eval(env, expr));
+        symargs = cons(expr, symargs);
+        Value arg = eval(env, expr);
+        args = cons(arg, args);
+        env_put(&letenv, ident, arg);
+        //env_put(&letenv, ident, eval(env, expr));
     }
     return eval_body(&letenv, body);
+#endif
 }
 
 static Value named_let(Value *env, Value var, Value bindings, Value body)
