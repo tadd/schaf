@@ -343,7 +343,7 @@
   (expect eqv? `10 10)
   (expect equal? `"abc" "abc")
   (expect equal? `#t #t)
-  (expect eq? `() ())
+  (expect eq? `() '())
   (expect equal? `(1 2 3) (list 1 2 3))
   (expect equal? `foooo (quasiquote foooo))
   (let ((l `(+ 1 2)))
@@ -360,7 +360,7 @@
   (expect equal? `(``1) '((quasiquote (quasiquote 1))))))
 
 (describe "quasiquote unquote" (lambda ()
-  (expect eq? `,() ())
+  (expect eq? `,() '())
   (expect eqv? `,10 10)
   (expect eq? let `,let)
   (expect equal? `(,1 ,2 ,3) (list 1 2 3))
@@ -509,7 +509,7 @@
   (expect eq? #t #t)
   (expect eq? #f #f)
   (noexpect eq? #t #f)
-  (noexpect eq? () '(1))
+  (noexpect eq? '() '(1))
   (noexpect eq? '(1) '(1))
   (noexpect eq? '(1 '(2)) '(1 '(2)))))
 
@@ -524,8 +524,8 @@
   (expect equal? #f #f)
   (noexpect equal? #t #f)
   (noexpect equal? 1 -1)
-  (expect equal? () ())
-  (noexpect equal? () '(1))
+  (expect equal? '() '())
+  (noexpect equal? '() '(1))
   (expect-t (let ((x '(1)))
               (equal? x x)))
   (expect-t (let ((p (lambda (x) x)))
@@ -811,7 +811,7 @@
   (expect equal? (cadddr l) 4)))
 
 (describe "null?" (lambda ()
-  (expect null? ())
+  (expect null? '())
   (expect null? (list))
   (noexpect null? '(1))
   (noexpect null? 1)))
@@ -855,7 +855,7 @@
           '(1 2 3))))
 
 (describe "reverse" (lambda ()
-  (expect equal? () (reverse ()))
+  (expect equal? '() (reverse '()))
   (expect equal? '(1) (reverse '(1)))
   (expect equal? '(2 1) (reverse '(1 2)))
   (expect equal? '(3 2 1) (reverse '(1 2 3)))))
@@ -1032,7 +1032,7 @@
 
 (describe "call/cc in-yo" (lambda ()
   (define r
-    (let ((x ())
+    (let ((x '())
           (y 0)
           (id (lambda (x) x)))
       (call/cc
