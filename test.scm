@@ -855,7 +855,7 @@
           '(1 2 3))))
 
 (describe "reverse" (lambda ()
-  (expect equal? () ())
+  (expect equal? () (reverse ()))
   (expect equal? '(1) (reverse '(1)))
   (expect equal? '(2 1) (reverse '(1 2)))
   (expect equal? '(3 2 1) (reverse '(1 2 3)))))
