@@ -60,7 +60,8 @@
 
 (define (test-run)
   (for-each test-run-single (reverse tests))
-  (test-summarize))
+  (test-summarize)
+  (exit (zero? n-failure)))
 
 (define (test-run-single pair)
   (let ((name (car pair))

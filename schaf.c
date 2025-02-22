@@ -2361,6 +2361,24 @@ static Value proc_load(UNUSED Value *env, Value path)
     return load_inner(value_to_string(path));
 }
 
+// Extensions from R7RS (scheme process-context)
+ATTR(noreturn)
+static Value proc_exit(UNUSED Value *env, Value args)
+{
+    expect_arity_range("exit", 0, 1, args);
+    int code = 0;
+    if (args != Qnil) {
+        Value obj = car(args);
+        if (obj == Qtrue)
+            ; // use 0 for code as is
+        else if (value_is_int(obj))
+            code = value_to_int(obj);
+        else // or #f too
+            code = 2; // something failed
+    }
+    exit(code);
+}
+
 // Local Extensions
 static Value proc_print(UNUSED Value *env, Value l)
 {
@@ -2540,6 +2558,9 @@ static void initialize(void)
     define_procedure(e, "newline", proc_newline, 0);
     // 6.6.4. System interface
     define_procedure(e, "load", proc_load, 1);
+
+    // Extensions from R7RS (scheme process-context)
+    define_procedure(e, "exit", proc_exit, -1);
 
     // Local Extensions
     define_procedure(e, "print", proc_print, -1); // like Gauche
