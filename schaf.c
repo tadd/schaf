@@ -1423,9 +1423,9 @@ static Value let(Value *env, const char *func, Value bindings, Value body)
     Value letenv = *env;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
-        if (b == Qnil)
-            continue;
         expect_type(func, TYPE_PAIR, b);
+        if (length(b) != 2)
+            runtime_error("%s: malformed binding in let: %s", func, stringify(b));
         Value ident = car(b), expr = cadr(b);
         expect_type(func, TYPE_SYMBOL, ident);
         env_put(&letenv, ident, eval(env, expr));
