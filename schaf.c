@@ -109,7 +109,7 @@ const Value Qfalse = 0b00100U;
 const Value Qtrue  = 0b01100U;
 const Value Qundef = 0b10100U; // may be an error or something
 
-static const int64_t CFUNCARG_MAX = 7;
+static const int64_t CFUNCARG_MAX = 3;
 
 //
 // Runtime-locals (aka global variables)
@@ -870,14 +870,6 @@ static Value apply_cfunc(Value *env, Value proc, Value args)
         return (*f)(env, a[0], a[1]);
     case 3:
         return (*f)(env, a[0], a[1], a[2]);
-    case 4:
-        return (*f)(env, a[0], a[1], a[2], a[3]);
-    case 5:
-        return (*f)(env, a[0], a[1], a[2], a[3], a[4]);
-    case 6:
-        return (*f)(env, a[0], a[1], a[2], a[3], a[4], a[5]);
-    case 7:
-        return (*f)(env, a[0], a[1], a[2], a[3], a[4], a[5], a[6]);
     default:
         error("arity too large: %"PRId64, n);
     }
