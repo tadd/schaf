@@ -911,25 +911,30 @@ static Value append2(Value l1, Value l2)
 
 static Value eval_body(Value *env, Value body);
 
+static Value *newenv(Value parent)
+{
+    static Value dummypair = Qnil;
+    if (dummypair == Qnil)
+        dummypair = cons(Qnil, Qnil);
+    Value *p = xmalloc(sizeof(Value));
+    *p = cons(dummypair, parent);
+    return p;
+}
+
 #define UNUSED ATTR(unused)
 //PTR
 static Value apply_closure(UNUSED Value *env, Value proc, Value args)
 {
     Closure *cl = CLOSURE(proc);
     int64_t arity = cl->proc.arity;
-    static Value dummy = Qnil;
-    if (dummy == Qnil)
-        dummy = cons(Qnil, Qnil);
-    Value *pe = xmalloc(sizeof(Value *));
-    Value clenv = cons(dummy, *cl->env), params = cl->params;
-    pe = &clenv;
+    Value *e = newenv(*cl->env), params = cl->params;
     if (arity == -1)
-        env_put(pe, params, args);
+        env_put(e, params, args);
     else {
         for (Value p = args; p != Qnil; p = cdr(p), params = cdr(params))
-            env_put(pe, car(params), car(p));
+            env_put(e, car(params), car(p));
     }
-    return eval_body(pe, cl->body);
+    return eval_body(e, cl->body);
 }
 
 static inline void expect_nonnull(const char *msg, Value l)
@@ -1426,7 +1431,7 @@ static Value define_variable(Value *env, Value ident, Value expr);
 static Value let(Value *env, const char *func, Value bindings, Value body)
 {
     expect_type(func, TYPE_PAIR, bindings);
-    Value *letenv = env;
+    Value *letenv = newenv(*env);
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
         expect_type(func, TYPE_PAIR, b);
@@ -1504,7 +1509,7 @@ static Value syn_do(Value *env, Value args)
 
     Value bindings = car(args), tests = cadr(args), body = cddr(args);
     expect_type_twin("do", TYPE_PAIR, bindings, tests);
-    Value *doenv = env, steps = Qnil;
+    Value *doenv = newenv(*env), steps = Qnil;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
         expect_nonnull("do", b);
