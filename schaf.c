@@ -1009,11 +1009,72 @@ static Value ast_new(Parser *p, Value syntax_list)
     return list4(syntax_list, filename, p->function_locations, reverse(p->newline_pos));
 }
 
+#define parse_command parse_expression
+
+static Value parse_define_variable(Parser *p)
+{
+    return Qundef; // (define <variable> <expression>)
+}
+
+static Value parse_def_formals(Parser *p)
+{
+    Value l = Qnil, last = Qnil;
+    for (Value v; (v = get_token_variable(p)) != Qundef; ) {
+        last = append_at(last, v);
+        if (l == Qnil)
+            l = last;
+    }
+    if (false) {// peek(p) == '.'
+        Value v = get_token_variable(p);
+        if (v == Qundef)
+            return Qundef;
+        return cons(l, v);
+    }
+    return l; // (define (<variable> <def_formals>) <body>)
+}
+
+static Value parse_begin(Parser *p)
+{
+    return Qundef; // (begin <definition>*)
+}
+
+static Value parse_define_function(Parser *p)
+{
+    return Qundef; // (define (<variable> <def_formals>) <body>)
+}
+
+static Value parse_definition(Parser *p)
+{
+    Value v;
+    if ((v = parse_define_variable(p)) != Qundef)
+        return v;
+    if ((v = parse_define_function(p)) != Qundef)
+        return v;
+    return parse_begin(p);
+}
+
+static Value parse_begin_command_or_definition(Parser *p)
+{
+    return Qundef; // (begin <command_or_definition>+)
+}
+
+static Value parse_command_or_definition(Parser *p)
+{
+    Value v;
+    if ((v = parse_command(p)) != Qundef)
+        return v;
+    if ((v = parse_definition(p)) != Qundef)
+        return v;
+    // if ((v = parse_syntax_definition(p)) != Qundef)
+    //     return v;
+    return parse_begin_command_or_definition(p);
+}
+
 static Value parse_program(Parser *p)
 {
     Value v = Qnil, last = Qnil;
-    for (Value expr; (expr = parse_expr(p)) != Qundef; ) {
-        last = append_at(last, expr);
+    for (Value cd; (cd = parse_command_or_definition(p)) != Qundef; ) {
+        last = append_at(last, cd);
         if (v == Qnil)
             v = last;
     }
