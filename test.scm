@@ -132,6 +132,12 @@
   (let ((x 0))
       (expect eqv? (f) 42))))
 
+(describe "lambda and envs 2" (lambda ()
+  (define f #f)
+  (let* ((f (lambda () (_defined? x)))
+         (x 0))
+    (expect eqv? (f) #f))))
+
 ;; 4.1.5. Conditionals
 (describe "if" (lambda ()
   (expect eqv? (if #t 1) 1)
