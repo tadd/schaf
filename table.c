@@ -31,7 +31,7 @@ static void list_free(List *l)
 // Table
 
 enum {
-    TABLE_INIT_SIZE = 1,
+    TABLE_INIT_SIZE = 2,
     TABLE_TOO_MANY_FACTOR = 3,
 };
 
