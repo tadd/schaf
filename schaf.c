@@ -1405,28 +1405,26 @@ static Value syn_or(Value env, Value args)
 }
 
 // 4.2.2. Binding constructs
-static Value transpose_2xn(Value ls) // 2 * n
+static void transpose_2xn(Value ls, Value *firsts, Value *seconds) // 2 * n
 {
-    Value firsts = Qnil, seconds = Qnil;
     Value lfirsts = Qnil, lseconds = Qnil;
     for (Value p = ls; p != Qnil; p = cdr(p)) {
         Value l = car(p);
         expect_arity(2, l);
         lfirsts = append_at(lfirsts, car(l));
         lseconds = append_at(lseconds, cadr(l));
-        if (firsts == Qnil) {
-            firsts = lfirsts;
-            seconds = lseconds;
+        if (*firsts == Qnil) {
+            *firsts = lfirsts;
+            *seconds = lseconds;
         }
     }
-    return list2(firsts, seconds);
 }
 
 static Value let(Value env, Value var, Value bindings, Value body)
 {
     expect_type("let", TYPE_PAIR, bindings);
-    Value tr = transpose_2xn(bindings);
-    Value params = car(tr), symargs = cadr(tr);
+    Value params = Qnil, symargs = Qnil;
+    transpose_2xn(bindings, &params, &symargs);
     Value args = map_eval(env, symargs);
     Value letenv = newenv(env);
     Value proc = value_of_closure(letenv, params, body);
