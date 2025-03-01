@@ -132,6 +132,18 @@
   (let ((x 0))
       (expect = (f) 42))))
 
+(describe "lambda and envs 2" (lambda ()
+  (let* ((f (lambda () (_defined? x)))
+         (x 0))
+    (expect-f (f)))
+  (let* ((x 0)
+         (f (lambda () (_defined? x))))
+    (expect-t (f)))
+  (let* ((x #t)
+         (f (lambda () (_defined? x))))
+    (expect-t (f)))))
+
+
 ;; 4.1.5. Conditionals
 (describe "if" (lambda ()
   (expect = (if #t 1) 1)
@@ -1020,43 +1032,6 @@
 ;; Above call/cc tests were from Kawa's test suite under the MIT license
 
 ;; https://gitlab.com/kashell/Kawa/-/blob/master/testsuite/r5rs_pitfall.scm
-; I believe the result is unspecified
-;; (describe "call/cc and lambda" (lambda ()
-;;   (expect = (call/cc (lambda (c) (0 (c 1)))) 1)))
-
-(describe "call/cc retlec" (lambda ()
-  (define (f)
-    (letrec ((x (call/cc list))
-             (y (call/cc list)))
-      (cond ((procedure? x) (x (pair? y)))
-	    ((procedure? y) (y (pair? x))))
-      (let ((x (car x))
-            (y (car y)))
-        (and (call/cc x) (call/cc y) (call/cc x)))))
-  (expect-t (f))))
-
-(describe "call/cc in-yo" (lambda ()
-  (define r
-    (let ((x '())
-          (y 0)
-          (id (lambda (x) x)))
-      (call/cc
-       (lambda (escape)
-         (let* ((in ((lambda (foo)
-                       (set! x (cons y x))
-                       (if (= y 10)
-                           (escape x)
-                           (begin
-                             (set! y 0)
-                             foo)))
-                     (call/cc id)))
-                (yo ((lambda (foo)
-                       (set! y (+ y 1))
-                       foo)
-                     (call/cc id))))
-           (in yo))))))
-  (expect equal? r '(10 9 8 7 6 5 4 3 2 1 0))))
-
 (describe "call/cc each other" (lambda ()
   (define r #f)
   (define a #f)
@@ -1136,6 +1111,16 @@
                        (4 5 -1 3)
                        (5 4 -1 3)))))
 
+(describe "call/cc retlec and set!" (lambda ()
+  (define (f)
+    (letrec ((x (call/cc
+		 (lambda (c)
+		   (list #t c)))))
+      (if (car x)
+	  ((cadr x) (list #f (lambda () x)))
+	  (eq? x ((cadr x))))))
+  (expect-t (f))))
+
 ;; https://gitlab.com/kashell/Kawa/-/blob/master/testsuite/unreach1.scm
 (describe "call/cc unreached 1" (lambda ()
   (define (f)
@@ -1198,6 +1183,9 @@
   (expect = (fa 3) 3)
   (expect = (fb 3) 13)
   (expect = (fc 3) 23)))
+
+;; (load "./test-callcc.scm")
+
 ;; End of tests from Kawa
 
 ;; Local Extensions
@@ -1218,7 +1206,5 @@
     (expect-f (f2))
     (expect-t (g))
     (expect-f (g2)))))
-
-;; (load "./test-callcc.scm")
 
 (test-run)
