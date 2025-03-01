@@ -1422,25 +1422,7 @@ static Value transpose_2xn(Value ls) // 2 * n
     return list2(firsts, seconds);
 }
 
-static Value define_variable(Value env, Value ident, Value expr);
-
-static Value let(Value env, Value bindings, Value body)
-{
-    expect_type("let", TYPE_PAIR, bindings);
-    Value letenv = newenv(env);
-    for (Value p = bindings; p != Qnil; p = cdr(p)) {
-        Value b = car(p);
-        expect_type("let", TYPE_PAIR, b);
-        if (length(b) != 2)
-            runtime_error("let: malformed binding in let: %s", stringify(b));
-        Value ident = car(b), expr = cadr(b);
-        expect_type("let", TYPE_SYMBOL, ident);
-        env_put(letenv, ident, eval(env, expr));
-    }
-    return eval_body(letenv, body);
-}
-
-static Value named_let(Value env, Value var, Value bindings, Value body)
+static Value let(Value env, Value var, Value bindings, Value body)
 {
     expect_type("let", TYPE_PAIR, bindings);
     Value tr = transpose_2xn(bindings);
@@ -1448,7 +1430,8 @@ static Value named_let(Value env, Value var, Value bindings, Value body)
     Value args = map_eval(env, symargs);
     Value letenv = newenv(env);
     Value proc = value_of_closure(letenv, params, body);
-    env_put(letenv, var, proc);
+    if (var != Qfalse)
+        env_put(letenv, var, proc);
     return apply_closure(letenv, proc, args);
 }
 
@@ -1457,9 +1440,13 @@ static Value syn_let(Value env, Value args)
 {
     expect_arity_min("let", 2, args);
     Value bind_or_var = car(args), body = cdr(args);
-    if (value_is_symbol(bind_or_var))
-        return named_let(env, bind_or_var, car(body), cdr(body));
-    return let(env, bind_or_var, body);
+    Value var = Qfalse, bindings = bind_or_var;
+    if (value_is_symbol(bind_or_var)) {
+        var = bind_or_var;
+        bindings = car(body);
+        body = cdr(body);
+    }
+    return let(env, var, bindings, body);
 }
 
 static Value let_star(Value env, Value bindings, Value body)
