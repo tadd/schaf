@@ -246,13 +246,14 @@ Test(table, get_put) {
 }
 
 Test(table, inherit) {
+    uint64_t N = TABLE_NOT_FOUND;
     Table *t = table_new();
     table_put(t, 1, 12);
     Table *u = table_inherit(t);
     table_put(u, 2, 34);
 
     cr_assert(eq(int, 12, table_get(t, 1)));
-    cr_assert(eq(int,  0, table_get(t, 2)));
+    cr_assert(eq(int,  N, table_get(t, 2)));
 
     cr_assert(eq(int, 12, table_get(u, 1)));
     cr_assert(eq(int, 34, table_get(u, 2)));
@@ -262,6 +263,7 @@ Test(table, inherit) {
 }
 
 Test(table, inherit_nested) {
+    uint64_t N = TABLE_NOT_FOUND;
     Table *t = table_new();
     table_put(t, 1, 2);
     Table *u = table_inherit(t);
@@ -270,12 +272,12 @@ Test(table, inherit_nested) {
     table_put(v, 3, 6);
 
     cr_assert(eq(int, 2, table_get(t, 1)));
-    cr_assert(eq(int, 0, table_get(t, 2)));
-    cr_assert(eq(int, 0, table_get(t, 3)));
+    cr_assert(eq(int, N, table_get(t, 2)));
+    cr_assert(eq(int, N, table_get(t, 3)));
 
     cr_assert(eq(int, 2, table_get(u, 1)));
     cr_assert(eq(int, 4, table_get(u, 2)));
-    cr_assert(eq(int, 0, table_get(u, 3)));
+    cr_assert(eq(int, N, table_get(u, 3)));
 
     cr_assert(eq(int, 2, table_get(v, 1)));
     cr_assert(eq(int, 4, table_get(v, 2)));

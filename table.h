@@ -6,6 +6,7 @@
 
 typedef struct Table Table;
 
+extern const uint64_t TABLE_NOT_FOUND;
 Table *table_new(void);
 Table *table_inherit(const Table *t);
 void table_free(Table *t);

@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <string.h>
 
 #include "utils.h"
@@ -34,6 +35,8 @@ struct Table {
     const Table *parent;
 };
 
+const uint64_t TABLE_NOT_FOUND = UINT64_MAX-1;
+
 Table *table_inherit(const Table *p)
 {
     Table *t = xmalloc(sizeof(Table));
@@ -65,11 +68,11 @@ static size_t list_length(List *l)
 }
 #endif
 
-// `value` can't be 0
+// `value` can't be TABLE_NOT_FOUND
 Table *table_put(Table *t, uint64_t key, uint64_t value)
 {
-    if (value == 0)
-        error("%s: got invalid value == 0", __func__);
+    if (value == TABLE_NOT_FOUND)
+        error("%s: got invalid value == TABLE_NOT_FOUND", __func__);
     t->body = list_new(key, value, t->body);
     return t;
 }
@@ -97,13 +100,13 @@ static List *find(const Table *t, uint64_t key)
 uint64_t table_get(const Table *t, uint64_t key)
 {
     const List *l = find(t, key);
-    return l == NULL ? 0 : l->value;
+    return l == NULL ? TABLE_NOT_FOUND : l->value;
 }
 
 bool table_set(Table *t, uint64_t key, uint64_t value)
 {
-    if (value == 0)
-        error("%s: got invalid value == 0", __func__);
+    if (value == TABLE_NOT_FOUND)
+        error("%s: got invalid value == TABLE_NOT_FOUND", __func__);
     List *l = find(t, key);
     if (l == NULL)
         return false; // not found; do nothing

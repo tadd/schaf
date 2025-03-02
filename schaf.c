@@ -1001,7 +1001,7 @@ static Value assq(Value key, Value l);
 static Value lookup(const Table *env, Value name)
 {
     Value found = (Value) table_get(env, name);
-    if (found == 0)
+    if (found == TABLE_NOT_FOUND)
         return Qundef;
     return found;
 }
