@@ -81,7 +81,7 @@ void table_dump(const Table *t)
 {
     fprintf(stderr, "size, body_size: %zu, %zu\n", t->size, t->body_size);
     for (size_t i = 0; i < t->body_size; i++) {
-        fprintf(stderr, "body[%zu]: %zu\n", i, list_length(t->body[i]));
+        fprintf(stderr, "[%2zu]: %zu\n", i, list_length(t->body[i]));
     }
 }
 #endif
@@ -104,16 +104,20 @@ static inline bool table_too_many_elements(const Table *t)
     return t->size > t->body_size * TABLE_TOO_MANY_FACTOR;
 }
 
-static void list_append(List **p, List *l)
+static void list_prepend(List **p, List *l)
 {
-    if (*p == NULL) {
-        *p = l;
-        return;
+    l->next = *p;
+    *p = l;
+}
+
+static List *list_reverse(List *l)
+{
+    List *prev = NULL;
+    for (List *p = l, *next; p != NULL; prev = p, p = next) {
+        next = p->next;
+        p->next = prev;
     }
-    List *q;
-    for (q = *p; q->next != NULL; q = q->next)
-        ;
-    q->next = l;
+    return prev;
 }
 
 // "next" is twice or more larger than `curr`
@@ -143,14 +147,17 @@ static void table_resize(Table *t)
     t->body_size = next_size(t->body_size);
     t->body = xcalloc(t->body_size, sizeof(List *)); // set NULL
     for (size_t i = 0; i < old_body_size; i++) {
-        for (List *l = old_body[i], *next; l != NULL; l = next) {
+        List *l = old_body[i];
+        for (List *next; l != NULL; l = next) {
             next = l->next;
             l->next = NULL;
             List **p = table_body(t, l->key);
-            list_append(p, l);
+            list_prepend(p, l);
         }
     }
     free(old_body);
+    for (size_t i = 0; i < t->body_size; i++)
+        t->body[i] = list_reverse(t->body[i]);
 }
 
 // `value` can't be TABLE_NOT_FOUND
