@@ -48,8 +48,8 @@ Table *table_inherit(const Table *p)
 {
     Table *t = xmalloc(sizeof(Table));
     t->size = 0;
-    t->body_size = TABLE_INIT_SIZE;
-    t->body = xcalloc(TABLE_INIT_SIZE, sizeof(List *)); // set NULL
+    // t->body_size = 0;
+    t->body = NULL;
     t->parent = p;
     return t;
 }
@@ -141,7 +141,10 @@ Table *table_put(Table *t, uint64_t key, uint64_t value)
 {
     if (value == TABLE_NOT_FOUND)
         error("%s: got invalid value == TABLE_NOT_FOUND", __func__);
-    if (table_too_many_elements(t))
+    if (t->body == NULL) {
+        t->body_size = TABLE_INIT_SIZE;
+        t->body = xcalloc(TABLE_INIT_SIZE, sizeof(List *)); // set NULL
+    } else if (table_too_many_elements(t))
         table_resize(t);
     uint64_t i = body_index(t, key);
     t->body[i] = list_new(key, value, t->body[i]); // prepend even if the same key exists
@@ -162,6 +165,8 @@ static List *find1(const List *p, uint64_t key)
 static List *find(const Table *t, uint64_t key)
 {
     for (; t != NULL; t = t->parent) {
+        if (t->body == NULL)
+            continue;
         uint64_t i = body_index(t, key);
         List *found = find1(t->body[i], key);
         if (found != NULL)
