@@ -70,6 +70,8 @@
 #define expect_parse_error(exp, act) expect_error(exp, parse_expr_string(act))
 #define expect_runtime_error(exp, act) expect_error(exp, eval_string(act))
 
+TestSuite(schaf, .init = sch_init);
+
 static Value parse_expr_string(const char *in)
 {
     Value v = parse_string(in);

@@ -2428,8 +2428,7 @@ static Value syn_defined_p(Table *env, Value name)
     }
 CXRS(DEF_CXR_BUILTIN)
 
-ATTR(constructor)
-static void initialize(void)
+void sch_init(void)
 {
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));

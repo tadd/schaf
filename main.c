@@ -114,6 +114,7 @@ static void print_vmhwm(void)
 
 int main(int argc, char **argv)
 {
+    sch_init();
     Option o = parse_opt(argc, argv);
     Value v;
     if (o.parse_only)
