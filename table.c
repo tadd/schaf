@@ -113,3 +113,12 @@ bool table_set(Table *t, uint64_t key, uint64_t value)
     l->value = value; // overwrite!
     return true;
 }
+
+void table_foreach(const Table *t, TableForeachFunc f, void *data)
+{
+    for (; t != NULL; t = t->parent) {
+        for (const List *l = t->body; l != NULL; l = l->next) {
+            (*f)(l->key, l->value, data);
+        }
+    }
+}

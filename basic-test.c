@@ -289,3 +289,22 @@ Test(table, inherit_nested) {
     table_free(u);
     table_free(t);
 }
+
+void tabforeach(uint64_t k, uint64_t v, void *data)
+{
+    uint64_t *x = data;
+    *x *= k * v;
+}
+
+Test(table, foreach) {
+    Table *t = table_new();
+    table_put(t, 2, 3);
+    table_put(t, 5, 7);
+    table_put(t, 11, 13);
+    uint64_t l = 1;
+    table_foreach(t, tabforeach, &l);
+
+    cr_assert(eq(u64, 30030, l));
+
+    table_free(t);
+}
