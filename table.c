@@ -86,10 +86,8 @@ void table_dump(const Table *t)
 }
 #endif
 
-static uint64_t table_hash(uint64_t x) // simplified xorshift
+static uint64_t table_hash(uint64_t x) // do nothing
 {
-    x ^= x << 7U;
-    x ^= x >> 9U;
     return x;
 }
 
