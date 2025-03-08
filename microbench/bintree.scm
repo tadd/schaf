@@ -1,45 +1,70 @@
-;;; The Computer Language Benchmarks Game
-;;; http://shootout.alioth.debian.org/
-;;; contributed by Sven Hartrumpf
+(define list2 (lambda (x y)
+  (cons x (cons y ()))))
 
-(define (make item d)
+(define list4 (lambda (w x y z)
+  (cons w (cons x (list2 y z)))))
+
+(define make (lambda (item d)
   (if (= d 0)
-      (list 'empty item)
-      (let ((item2 (* item 2))
-            (d2 (- d 1)))
-        (list 'node (make (- item2 1) d2)
-              item (make item2 d2)))))
+      (list2 0 item)
+      ((lambda (item2 d2)
+         (list4 1 (make (- item2 1) d2)
+                item (make item2 d2)))
+       (* item 2) (- d 1)))))
 
-(define (check t)
-  (if (eq? (car t) 'empty)
+(define cadr (lambda (c)
+  (car (cdr c))))
+
+(define caddr (lambda (c)
+  (cadr (cdr c))))
+
+(define cadddr (lambda (c)
+  (caddr (cdr c))))
+
+(define check (lambda (t)
+  (if (= (car t) 0)
       (cadr t)
       (+ (caddr t)
          (- (check (cadr t))
-            (check (cadddr t))))))
+            (check (cadddr t)))))))
 
-(define (<< x n)
-  (* x (expt 2 n)))
+(define lshift (lambda (x n)
+  (if (<= n 1)
+      x
+      (* 2 (lshift x (- n 1))))))
 
-(define (prints . args) args)
+(define max (lambda (x y)
+  (if (> x y) x y)))
 
-(define (mainf n)
-  (let* ((min-depth 4)
-         (max-depth (max (+ min-depth 2) n)))
-    (let ((stretch-depth (+ max-depth 1)))
-      (prints "stretch  tree of depth " stretch-depth
-              "	 check: " (check (make 0 stretch-depth))))
-    (let ((long-lived-tree (make 0 max-depth)))
-      (do ((d 4 (+ d 2))
-           (c 0 0))
-          ((> d max-depth))
-        (let ((iterations (<< 1 (+ (- max-depth d) min-depth))))
-          (do ((i 0 (+ i 1)))
-              ((>= i iterations))
-            (set! c (+ c (check (make i d)) (check (make (- i) d)))))
-          (prints (* 2 iterations)
-                  "	 trees of depth " d
-                  "	 check: " c)))
-      (prints "long lived tree of depth " max-depth
-              "	 check: " (check long-lived-tree)))))
+(define c 0)
 
-(mainf 11)
+(define inner (lambda (i iterations d)
+  (if (>= i iterations)
+      #f
+      (begin
+        (set! c (+ c (check (make i d)) (check (make (- i) d))))
+        (inner (+ i 1) iterations d)))))
+
+(define inner2 (lambda (d min-depth max-depth)
+  (if (> d max-depth)
+      #f
+      (begin
+        (set! c 0)
+        (define iterations (lshift 1 (+ (- max-depth d) min-depth)))
+        (inner 0 iterations d)
+        (* 2 iterations)
+        "	 trees of depth " d
+        "	 check: " c
+        (inner2 (+ d 2) min-depth max-depth)))))
+
+(define mainf (lambda (n)
+  (begin
+    (define min-depth 4)
+    (define max-depth (max (+ min-depth 2) n))
+    (define stretch-depth (+ max-depth 1))
+     "stretch  tree of depth " stretch-depth
+     "	 check: " (check (make 0 stretch-depth))
+    (define long-lived-tree (make 0 max-depth))
+    (inner2 4 min-depth max-depth))))
+
+(mainf 9)

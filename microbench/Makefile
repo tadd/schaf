@@ -1,6 +1,7 @@
 BIN = schaf
 SRC != ls src/*.erb
-TARGET = $(SRC:src/%.erb=%)
+# TARGET = $(SRC:src/%.erb=%)
+TARGET = relops.scm
 
 all: benchmark
 
