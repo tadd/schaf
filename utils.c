@@ -36,6 +36,14 @@ void *xcalloc(size_t nmem, size_t memsize)
     return p;
 }
 
+void *xrealloc(void *p, size_t size)
+{
+    void *q = realloc(p, size);
+    if (p == NULL)
+        error("realloc(%zu) failed", size);
+    return q;
+}
+
 char *xstrdup(const char *s)
 {
     char *dup = xmalloc(strlen(s) + 1);
@@ -165,9 +173,11 @@ static inline uint64_t body_index(const Table *t, uint64_t key)
 static void table_resize(Table *t)
 {
     const size_t old_body_size = t->body_size;
-    List **old_body = t->body;
+    List **old_body = xmalloc(t->body_size * sizeof(List *));
+    memcpy(old_body, t->body, t->body_size * sizeof(List *));
     t->body_size *= TABLE_RESIZE_FACTOR;
-    t->body = xmalloc(t->body_size * sizeof(List *));
+    t->body = xrealloc(t->body, t->body_size * sizeof(List *));
+    memset(t->body, 0, t->body_size * sizeof(List *));
     List dummies[t->body_size], *lasts[t->body_size];
     for (size_t i = 0; i < t->body_size; i++) {
         dummies[i].next = NULL;
