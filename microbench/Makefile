@@ -9,11 +9,11 @@ all: benchmark
 target: $(TARGET)
 
 benchmark: $(TARGET)
-	@for t in *.scm; do \
+	@echo; for t in *.scm; do \
 	    echo $$t:; \
 	    for i in `seq ${NLOOP}`; do \
 	        ../$(BIN) $(BENCHFLAGS) $$t; \
-	    done \
+	    done; echo; \
 	done
 
 %.scm: src/%.scm.erb
