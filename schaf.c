@@ -1022,13 +1022,10 @@ static Value ast_new(Parser *p, Value syntax_list)
 
 static Value parse_program(Parser *p)
 {
-    Value v = Qnil, last = Qnil;
-    for (Value expr; (expr = parse_expr(p)) != Qundef; ) {
-        last = append_at(last, expr);
-        if (v == Qnil)
-            v = last;
-    }
-    return ast_new(p, v);
+    Value v = list1(Qundef);
+    for (Value last = v, expr; (expr = parse_expr(p)) != Qundef; last = cdr(last))
+        PAIR(last)->cdr = list1(expr);
+    return ast_new(p, cdr(v));
 }
 
 static Value iparse(FILE *in, const char *filename)
@@ -2022,15 +2019,13 @@ static Value proc_length(UNUSED Table *env, Value list)
 
 static Value dup_list(Value l, Value *plast)
 {
-    Value dup = Qnil, last = Qnil;
-    for (Value p = l; p != Qnil; p = cdr(p)) {
+    Value dup = list1(Qundef), last = dup;
+    for (Value p = l; p != Qnil; p = cdr(p), last = cdr(last)) {
         expect_type("append", TYPE_PAIR, p);
-        last = append_at(last, car(p));
-        if (dup == Qnil)
-            dup = last;
+        PAIR(last)->cdr = list1(car(p));
     }
     *plast = last;
-    return dup;
+    return cdr(dup);
 }
 
 static Value proc_append(UNUSED Table *env, Value args)
@@ -2189,15 +2184,12 @@ static Value proc_procedure_p(UNUSED Table *env, Value o)
 
 static Value build_apply_args(Value args)
 {
-    Value heads = Qnil, last = Qnil, p, next;
-    for (p = args; (next = cdr(p)) != Qnil; p = next) {
-        last = append_at(last, car(p));
-        if (heads == Qnil)
-            heads = last;
-    }
-    Value rest = car(p);
+    Value heads = list1(Qundef), last = heads, next;
+    for (; (next = cdr(args)) != Qnil; args = next, last = cdr(last))
+        PAIR(last)->cdr = list1(car(args));
+    Value rest = car(args);
     expect_type("args on apply", TYPE_PAIR, rest);
-    return append2(heads, rest);
+    return append2(cdr(heads), rest);
 }
 
 static Value proc_apply(Table *env, Value args)
@@ -2238,16 +2230,15 @@ static Value proc_map(Table *env, Value args)
     Value proc = car(args);
     expect_type("map", TYPE_PROC, proc);
     Value lists = cdr(args);
-    Value last = Qnil, ret = Qnil;
+    Value ret = list1(Qundef), last = ret;
     Value cars, cdrs;
     while (cars_cdrs(lists, &cars, &cdrs)) {
         Value v = apply(env, proc, cars);
-        last = append_at(last, v);
-        if (ret == Qnil)
-            ret = last;
+        PAIR(last)->cdr = list1(v);
         lists = cdrs;
+        last = cdr(last);
     }
-    return ret;
+    return cdr(ret);
 }
 
 static Value proc_for_each(Table *env, Value args)
