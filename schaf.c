@@ -774,7 +774,7 @@ static Value parse_list(Parser *p)
 
 static inline Value list2(Value x, Value y)
 {
-    return cons(x, cons(y, Qnil));
+    return cons(x, list1(y));
 }
 
 static Value parse_quoted(Parser *p, Value sym)
