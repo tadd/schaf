@@ -1,4 +1,4 @@
-BIN=../schaf
+BIN=schaf
 SRC!=ls src/*.erb
 TARGET=$(SRC:src/%.erb=%)
 NLOOP=5
@@ -12,7 +12,7 @@ benchmark: $(TARGET)
 	@for t in *.scm; do \
 	    echo $$t:; \
 	    for i in `seq ${NLOOP}`; do \
-	        $(BIN) $(BENCHFLAGS) $$t; \
+	        ../$(BIN) $(BENCHFLAGS) $$t; \
 	    done \
 	done
 
