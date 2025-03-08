@@ -31,3 +31,11 @@ void *xcalloc(size_t nmem, size_t memsize)
         error("calloc(%zu, %zu) failed", nmem, memsize);
     return p;
 }
+
+char *xstrdup(const char *s)
+{
+    char *dup = strdup(s);
+    if (dup == NULL)
+        error("strdup(\"%s\") failed", s);
+    return dup;
+}

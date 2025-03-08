@@ -9,6 +9,7 @@ typedef void (*TableForeachFunc)(uint64_t key, uint64_t val, void *data);
 
 extern const uint64_t TABLE_NOT_FOUND;
 Table *table_new(void);
+Table *table_new_str(void);
 Table *table_inherit(const Table *t);
 void table_free(Table *t);
 Table *table_put(Table *t, uint64_t key, uint64_t val); // `val` can't be 0
