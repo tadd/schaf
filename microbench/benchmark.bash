@@ -1,15 +1,15 @@
 #!/bin/bash -eu
 set -o pipefail
 
-nloop=10
-benchflags=-TM
+nloop=4
 
 run() {
     local -r bin="$1"
+    echo "# $bin"
     for t in *.scm; do
-        printf '%12s	' $t
-	benchmark-run -n $nloop ../$bin $benchflags $t 2>&1 | ruby stat.rb
-    done
+        echo $t
+	benchmark-run -n $nloop bash -c "time $bin $t" 2>&1
+    done | ruby stat.rb
 }
 
 main() {

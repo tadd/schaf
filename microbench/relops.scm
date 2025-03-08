@@ -1,4 +1,4 @@
-(define (rel)
+(define rel (lambda () (begin
     (= 7 8)
     (= 4 1)
     (= 7 10)
@@ -1282,10 +1282,19 @@
     (>= 4 7)
     (>= 9 7)
     (>= 8 0)
-    (>= 8 7)
+    (>= 8 7))))
 
-)
+(define call1 (lambda (f) (f)))
+(define call10x (lambda (f0 f)
+  (begin
+    (f0 f) (f0 f) (f0 f) (f0 f) (f0 f)
+    (f0 f) (f0 f) (f0 f) (f0 f) (f0 f))))
+(define call10 (lambda (f) (call10x call1 f)))
+(define call100 (lambda (f) (call10x call10 f)))
+(define call1000 (lambda (f) (call10x call100 f)))
 
-(do ((i 0 (+ i 1)))
-    ((= i 7500) #t)
-  (rel))
+(call1000 rel)
+(call1000 rel)
+(call1000 rel)
+(call1000 rel)
+(call1000 rel)
