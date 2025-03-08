@@ -125,8 +125,10 @@ static Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLIC
 static const volatile void *stack_base = NULL;
 #define INIT_STACK() void *basis; stack_base = &basis
 static const char *load_basedir = NULL;
-static Value call_stack = Qnil;
-static Value source_data = Qnil;
+static Value call_stack = Qnil; // list of pair id
+static Value source_data = Qnil; // alist of (filename function_locations newline_positions)
+// function_locations: alist of '(id . (pos . sym)) | id = (pointer >> 3)
+// newline_positions: list of pos | int
 
 //
 // value_is_*: Type Checks
