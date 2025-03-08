@@ -63,7 +63,6 @@ typedef struct {
 
 extern Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
 
-ATTR_HIDDEN Value append_at(Value last, Value elem);
 ATTR_HIDDEN Value iparse(FILE *in, const char *filename);
 ATTR_HIDDEN Value pair_to_id(Value p);
 ATTR_HIDDEN void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col);
@@ -79,5 +78,7 @@ static inline Value list2(Value x, Value y)
 {
     return cons(x, list1(y));
 }
+
+#define DUMMY_PAIR() ((Value) &(Pair) { .tag = TAG_PAIR, .car = Qundef, .cdr = Qnil })
 
 #endif // INTERN_H

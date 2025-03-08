@@ -334,7 +334,7 @@ static void record_location(Parser *p, Value pair, int64_t pos, Value sym)
 
 static Value parse_list(Parser *p)
 {
-    Value l = Qnil, last = Qnil;
+    Value l = DUMMY_PAIR(), last = l;
     int64_t pos = ftell(p->in);
     for (;;) {
         Token t = lex(p);
@@ -343,17 +343,15 @@ static Value parse_list(Parser *p)
         if (t.type == TOK_TYPE_EOF)
             parse_error(p, "')'", "'%s'", token_stringify(t));
         if (t.type == TOK_TYPE_DOT)
-            return parse_dotted_pair(p, l, last);
+            return parse_dotted_pair(p, cdr(l), last);
         unlex(p, t);
         Value e = parse_expr(p);
-        last = append_at(last, e);
-        if (l == Qnil) {
-            l = last;
-            if (value_is_symbol(e))
-                record_location(p, l, pos, e);
-        }
+        bool first = (l == last);
+        last = PAIR(last)->cdr = list1(e);
+        if (first && value_is_symbol(e))
+            record_location(p, last, pos, e);
     }
-    return l;
+    return cdr(l);
 }
 
 static Value parse_quoted(Parser *p, Value sym)
@@ -418,13 +416,10 @@ static Value ast_new(Parser *p, Value syntax_list)
 
 static Value parse_program(Parser *p)
 {
-    Value v = Qnil, last = Qnil;
-    for (Value expr; (expr = parse_expr(p)) != Qundef; ) {
-        last = append_at(last, expr);
-        if (v == Qnil)
-            v = last;
-    }
-    return ast_new(p, v);
+    Value v = DUMMY_PAIR(), last = v;
+    for (Value expr; (expr = parse_expr(p)) != Qundef; )
+        last = PAIR(last)->cdr = list1(expr);
+    return ast_new(p, cdr(v));
 }
 
 Value iparse(FILE *in, const char *filename)
