@@ -31,3 +31,11 @@ void *xcalloc(size_t nmem, size_t memsize)
         error("calloc(%zu, %zu) failed", nmem, memsize);
     return p;
 }
+
+void *xrealloc(void *p, size_t size)
+{
+    void *q = realloc(p, size);
+    if (p == NULL)
+        error("realloc(%zu) failed", size);
+    return q;
+}
