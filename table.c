@@ -11,6 +11,9 @@ typedef struct List {
     struct List *next;
 } List;
 
+typedef void (*TableFreeFunc)(uint64_t p);
+#define FREE(f, x) ((f) != NULL ? f(x) : (void) 0)
+
 static List *list_new(uint64_t key, uint64_t value, List *next)
 {
     List *l = xmalloc(sizeof(List));
@@ -20,41 +23,66 @@ static List *list_new(uint64_t key, uint64_t value, List *next)
     return l;
 }
 
-static void list_free(List *l)
+static void list_free(List *l, TableFreeFunc free_key)
 {
     for (List *curr = l, *next = NULL; curr != NULL; curr = next) {
         next = curr->next;
+        FREE(free_key, curr->key);
         free(curr);
     }
 }
 
 // Table
 
+typedef bool (*TableEqualFunc)(uint64_t x, uint64_t y);
+#define EQ(f, x, y) ((f) != NULL ? f(x, y) : ((x) == (y)))
+
 struct Table {
     List *body;
+    TableEqualFunc eq;
+    TableFreeFunc free_key;
     const Table *parent;
 };
 
 const uint64_t TABLE_NOT_FOUND = UINT64_MAX-1;
 
-Table *table_inherit(const Table *p)
+static Table *table_new_full(TableEqualFunc eq, TableFreeFunc free_key, const Table *p)
 {
     Table *t = xmalloc(sizeof(Table));
     t->body = NULL;
+    t->eq = eq;
+    t->free_key = free_key;
     t->parent = p;
     return t;
 }
 
 Table *table_new(void)
 {
-    return table_inherit(NULL);
+    return table_new_full(NULL, NULL, NULL);
+}
+
+static inline bool str_equal(uint64_t s, uint64_t t)
+{
+    return strcmp((const char *) s, (const char *) t) == 0;
+}
+
+Table *table_new_str(void)
+{
+    return table_new_full(str_equal,
+                          (TableFreeFunc)(void*) free,
+                          NULL);
+}
+
+Table *table_inherit(const Table *p)
+{
+    return table_new_full(p->eq, p->free_key, p);
 }
 
 void table_free(Table *t)
 {
     if (t == NULL)
         return;
-    list_free(t->body);
+    list_free(t->body, t->free_key);
     free(t);
 }
 
@@ -77,10 +105,10 @@ Table *table_put(Table *t, uint64_t key, uint64_t value)
     return t;
 }
 
-static List *find1(const List *p, uint64_t key)
+static List *find1(const List *p, uint64_t key, TableEqualFunc eq)
 {
     for (const List *l = p; l != NULL; l = l->next) {
-        if (l->key == key) // direct
+        if (EQ(eq, l->key, key))
             return (List *) l;
     }
     return NULL;
@@ -90,7 +118,7 @@ static List *find1(const List *p, uint64_t key)
 static List *find(const Table *t, uint64_t key)
 {
     for (; t != NULL; t = t->parent) {
-        List *found = find1(t->body, key);
+        List *found = find1(t->body, key, t->eq);
         if (found != NULL)
             return found;
     }
