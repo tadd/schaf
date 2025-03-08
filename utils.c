@@ -207,10 +207,12 @@ static inline uint64_t body_index(const Table *t, uint64_t key)
 static void table_resize(Table *t)
 {
     const size_t old_body_size = t->body_size;
-    List **old_body = t->body;
+    List **old_body = xmalloc(t->body_size * sizeof(List *));
+    memcpy(old_body, t->body, t->body_size * sizeof(List *));
     t->body_size *= TABLE_RESIZE_FACTOR;
     size_t newsize = t->body_size * sizeof(List *);
-    t->body = xmalloc(newsize);
+    t->body = xrealloc(t->body, newsize);
+    memset(t->body, 0, newsize);
     List **lasts = xmalloc(newsize);
     List *dummies = xmalloc(t->body_size * sizeof(List));
     for (size_t i = 0; i < t->body_size; i++) {
