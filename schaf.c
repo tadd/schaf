@@ -117,7 +117,7 @@ static const int64_t CFUNCARG_MAX = 3;
 //
 
 // Environment: list of Frames
-// Frame: alist of ('symbol . <value>)
+// Frame: Table of 'symbol => <value>
 static Table *toplevel_environment;
 static Value symbol_names = Qnil; // ("name0" "name1" ...)
 static Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
