@@ -129,7 +129,9 @@ static const char *load_basedir = NULL;
 // FIXME: array<Value> with push/pop operation
 static Value call_stack = Qnil; // list of pair id
 // FIXME: hash map: Value filename => metadata
-//        | struct metadata { function_locations; newline_positions; };
+//        | struct metadata { function_locations; newline_positions; };,
+//          function_locations: pointer => struct location (pos . sym)
+
 static Value source_data = Qnil; // alist of (filename function_locations newline_positions)
 // function_locations: alist of '(id . (pos . sym)) | id = (pointer >> 3)
 // newline_positions: list of pos | int
