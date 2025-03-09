@@ -28,6 +28,12 @@ schaf-san: $(OBJ:.o=.san.o)
 microbench: schaf
 	@$(MAKE) -C $@
 
+sample: schaf
+	for i in sample/*.scm; do \
+		echo `basename $$i`:; \
+		./$< $$i; \
+	done
+
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -47,7 +53,7 @@ parse.o parse.san.o: intern.h schaf.h utils.h
 schaf.o schaf.san.o: intern.h libscary.h schaf.h utils.h
 utils.o utils.san.o: utils.h
 
-.PHONY: all clean analyze sanitize microbench
+.PHONY: all clean analyze sanitize microbench sample
 
 #
 # Test
