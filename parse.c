@@ -430,11 +430,109 @@ static Value ast_new(Parser *p, Value syntax_list)
     return list3_const(filename, syntax_list, reverse(p->newline_pos));
 }
 
+static Value parse_expression(Parser *p)
+{
+//   variable
+// | literal
+// | procedure call
+// | lambda expression
+// | conditional
+// | assignment
+// | derived expression
+//// | macro use
+//// | macro block
+    return Qundef;
+}
+
+// (<literal> ...)
+static Value parse_literal_list(Parser *p, Value literal)
+{
+    Value l = parse_any_list(p);
+    if (l == Qundef || l == Qnil || car(l) != literal)
+        return Qundef;
+    return l;
+}
+
+ // (define <variable> <expression>)
+static Value parse_define_variable(Parser *p)
+{
+    Value l = parse_literal_list(p, SYM_DEFINE);
+    if (l == Qundef || length(l) != 3)
+        return Qundef;
+    return Qundef;
+}
+
+// any <identifier> that isn't also a <syntactic keyword>
+static Token lex_variable(Parser *p)
+{
+    return TOK_EOF;
+}
+
+// (define (<variable> <def_formals>) <body>)
+static Value parse_def_formals(Parser *p)
+{
+    Value l = DUMMY_PAIR();
+    Token var;
+    for (Value last = l; (var = lex_variable(p)).type == TOK_TYPE_IDENT; )
+        last = PAIR(last)->cdr = list1(var.value);
+    l = cdr(l);
+    if (false) {// peek(p) == '.'
+        Token v = lex_variable(p);
+        if (v.type == TOK_TYPE_EOF)
+            return Qundef;
+        return cons(l, v.value);
+    }
+    return l;
+}
+
+// (begin <definition>*)
+static Value parse_begin(Parser *p)
+{
+    return Qundef;
+}
+
+// (define (<variable> <def_formals>) <body>)
+static Value parse_define_function(Parser *p)
+{
+    parse_def_formals(p);
+    return Qundef;
+}
+
+static Value parse_definition(Parser *p)
+{
+    Value v;
+    if ((v = parse_define_variable(p)) != Qundef)
+        return v;
+    if ((v = parse_define_function(p)) != Qundef)
+        return v;
+    return parse_begin(p);
+}
+
+// (begin <command_or_definition>+)
+static Value parse_begin_command_or_definition(Parser *p)
+{
+    return Qundef;
+}
+
+#define parse_command parse_expression
+
+static Value parse_command_or_definition(Parser *p)
+{
+    Value v;
+    if ((v = parse_command(p)) != Qundef)
+        return v;
+    if ((v = parse_definition(p)) != Qundef)
+        return v;
+    // if ((v = parse_syntax_definition(p)) != Qundef)
+    //     return v;
+    return parse_begin_command_or_definition(p);
+}
+
 static Value parse_program(Parser *p)
 {
     Value v = DUMMY_PAIR();
-    for (Value last = v, expr; (expr = parse_expr(p)) != Qundef; )
-        last = PAIR(last)->cdr = list1(expr);
+    for (Value last = v, cd; (cd = parse_command_or_definition(p)) != Qundef; )
+        last = PAIR(last)->cdr = list1(cd);
     return ast_new(p, cdr(v));
 }
 
