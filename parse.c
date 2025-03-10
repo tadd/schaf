@@ -404,16 +404,14 @@ static Parser *parser_new(FILE *in, const char *filename)
     return p;
 }
 
-static inline Value list4(Value w, Value x, Value y, Value z)
+static AST *ast_new(Parser *p, Value syntax_list)
 {
-    return cons(w, cons(x, list2(y, z)));
-}
-
-// AST: (syntax_list filename function_locations newline_positions)
-static Value ast_new(Parser *p, Value syntax_list)
-{
-    Value filename = value_of_symbol(p->filename);
-    return list4(syntax_list, filename, p->function_locations, reverse(p->newline_pos));
+    AST *ast = xmalloc(sizeof(AST));
+    ast->syntax_list = syntax_list;
+    ast->filename = value_of_symbol(p->filename);
+    ast->function_locations = p->function_locations;
+    ast->newline_positions = reverse(p->newline_pos);
+    return ast;
 }
 
 #if 0
@@ -479,7 +477,7 @@ static Value parse_command_or_definition(Parser *p)
 }
 #endif
 
-static Value parse_program(Parser *p)
+static AST *parse_program(Parser *p)
 {
     Value v = Qnil, last = Qnil;
 #if 1
@@ -495,10 +493,10 @@ static Value parse_program(Parser *p)
     return ast_new(p, v);
 }
 
-Value iparse(FILE *in, const char *filename)
+AST *iparse(FILE *in, const char *filename)
 {
     Parser *p = parser_new(in, filename);
-    Value ast;
+    AST *ast;
     if (setjmp(jmp_parse_error) == 0)
         ast = parse_program(p); // success
     else
@@ -512,15 +510,15 @@ Value parse(const char *path)
     FILE *in = fopen(path, "r");
     if (in == NULL)
         error("parse: can't open file: %s", path);
-    Value ast = iparse(in, path);
+    AST *ast = iparse(in, path);
     fclose(in);
-    return car(ast);
+    return ast->syntax_list;
 }
 
 Value parse_string(const char *in)
 {
     FILE *f = fmemopen((char *) in, strlen(in), "r");
-    Value ast = iparse(f, "<inline>");
+    AST *ast = iparse(f, "<inline>");
     fclose(f);
-    return car(ast);
+    return ast->syntax_list;
 }

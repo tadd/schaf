@@ -682,7 +682,8 @@ static void call_stack_check_consistency(void)
 
 static Value iload(FILE *in, const char *filename)
 {
-    Value ast = iparse(in, filename), l = car(ast);
+    AST *ast = iparse(in, filename);
+    Value l = ast->syntax_list;
     source_data = cons(cdr(ast), source_data);
     if (l == Qundef)
         return Qundef;
@@ -699,7 +700,7 @@ static Value iload(FILE *in, const char *filename)
 
 static Value iload_inner(FILE *in, const char *path)
 {
-    Value ast = iparse(in, path), l = car(ast);
+    AST *ast = iparse(in, path), l = ast->syntax_list;
     source_data = cons(cdr(ast), source_data);
     if (l == Qundef)
         return Qundef;
