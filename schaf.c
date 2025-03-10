@@ -1,4 +1,3 @@
-#include <ctype.h>
 #include <inttypes.h>
 #include <math.h>
 #include <setjmp.h>
@@ -15,6 +14,7 @@
 #include <unistd.h>
 
 #include "schaf.h"
+#include "intern.h"
 #include "table.h"
 #include "utils.h"
 
@@ -32,60 +32,7 @@ static const char *TYPE_NAMES[] = {
     [TYPE_PROC] = "procedure",
 };
 
-typedef enum { // has the same values as Type
-    TAG_PAIR    = TYPE_PAIR,
-    TAG_STR     = TYPE_STR,
-    TAG_CFUNC   = TYPE_PROC + 1,
-    TAG_SYNTAX, // almost a C Function
-    TAG_CLOSURE,
-    TAG_CONTINUATION,
-} ValueTag;
-
-typedef struct Pair {
-    ValueTag tag; // common
-    Value car, cdr;
-} Pair;
-
-typedef struct {
-    ValueTag tag;
-    char body[];
-} String;
-
-typedef struct {
-    ValueTag tag;
-    int64_t arity;
-} Procedure;
-
-typedef Value (*cfunc_t)(/*ANYARGS*/);
-typedef struct {
-    Procedure proc;
-    cfunc_t cfunc;
-} CFunc;
-
-typedef struct {
-    Procedure proc;
-    Table *env;
-    Value params;
-    Value body;
-} Closure;
-
-typedef struct {
-    Procedure proc;
-    volatile void *sp;
-    void *shelter;
-    size_t shelter_len;
-    Value call_stack;
-    jmp_buf state;
-    Value retval;
-} Continuation;
-
 #define VALUE_TAG(v) (*(ValueTag*)(v))
-#define PAIR(v) ((Pair *) v)
-#define STRING(v) ((String *) v)
-#define PROCEDURE(v) ((Procedure *) v)
-#define CFUNC(v) ((CFunc *) v)
-#define CLOSURE(v) ((Closure *) v)
-#define CONTINUATION(v) ((Continuation *) v)
 #define OF_BOOL(v) ((v) ? Qtrue : Qfalse)
 
 // singletons
@@ -120,7 +67,7 @@ static const int64_t CFUNCARG_MAX = 3;
 // Frame: Table of 'symbol => <value>
 static Table *toplevel_environment;
 static Value symbol_names = Qnil; // ("name0" "name1" ...)
-static Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
+Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
     SYM_RARROW;
 static const volatile void *stack_base = NULL;
 #define INIT_STACK() void *basis; stack_base = &basis
@@ -271,11 +218,6 @@ inline Value value_of_int(int64_t i)
     return v << FLAG_NBIT_INT | FLAG_INT;
 }
 
-static inline Value list1(Value x)
-{
-    return cons(x, Qnil);
-}
-
 static Symbol intern(const char *name)
 {
     Value last = Qnil;
@@ -361,17 +303,19 @@ static Value value_of_closure(Table *env, Value params, Value body)
 #define error(fmt, ...) \
     error("%s:%d of %s: " fmt, __FILE__, __LINE__, __func__ __VA_OPT__(,) __VA_ARGS__)
 
-static jmp_buf jmp_runtime_error, jmp_parse_error;
+static jmp_buf jmp_runtime_error;
 static char errmsg[BUFSIZ];
 
+#define runtime_error(...) raise_error(jmp_runtime_error, __VA_ARGS__)
+
 ATTR(noreturn)
-static void runtime_error(const char *fmt, ...)
+void raise_error(jmp_buf buf, const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(errmsg, sizeof(errmsg), fmt, ap);
     va_end(ap);
-    longjmp(jmp_runtime_error, 1);
+    longjmp(buf, 1);
 }
 
 const char *error_message(void)
@@ -397,432 +341,6 @@ static void expect_type_or(const char *header, Type e1, Type e2, Value v)
     runtime_error("type error in %s: expected %s or %s but got %s",
                   header, value_type_to_string(e1), value_type_to_string(e2),
                   value_type_to_string(t));
-}
-
-//
-// Parse
-//
-
-typedef enum {
-    TOK_TYPE_LPAREN,
-    TOK_TYPE_RPAREN,
-    TOK_TYPE_QUOTE,
-    TOK_TYPE_GRAVE,
-    TOK_TYPE_COMMA,
-    TOK_TYPE_SPLICE,
-    TOK_TYPE_INT,
-    TOK_TYPE_DOT,
-    TOK_TYPE_STR,
-    TOK_TYPE_IDENT,
-    TOK_TYPE_CONST,
-    TOK_TYPE_EOF
-} TokenType;
-
-typedef struct {
-    TokenType type;
-    Value value;
-} Token;
-
-#define TOK(t) { .type = TOK_TYPE_ ## t }
-// singletons
-static const Token
-    TOK_LPAREN = TOK(LPAREN),
-    TOK_RPAREN = TOK(RPAREN),
-    TOK_QUOTE = TOK(QUOTE),
-    TOK_GRAVE = TOK(GRAVE),
-    TOK_COMMA = TOK(COMMA),
-    TOK_SPLICE = TOK(SPLICE),
-    TOK_DOT = TOK(DOT),
-    TOK_EOF = TOK(EOF);
-// and ctor
-#define TOK_V(t, v) ((Token) { .type = TOK_TYPE_ ## t, .value = v })
-#define TOK_INT(i) TOK_V(INT, value_of_int(i))
-#define TOK_STR(s) TOK_V(STR, value_of_string(s))
-#define TOK_IDENT(s) TOK_V(IDENT, value_of_symbol(s))
-#define TOK_CONST(c) TOK_V(CONST, c)
-
-typedef struct {
-    FILE *in;
-    const char *filename;
-    Token prev_token;
-    Value function_locations; //  alist of '(id . (pos . sym)) | id = (pointer >> 3)
-    Value newline_pos; // list of pos | int
-} Parser;
-
-static void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col)
-{
-    int64_t nline = 0, last = 0;
-    for (Value p = newline_pos; p != Qnil; p = cdr(p), nline++) {
-        int n = value_to_int(car(p));
-        if (n > pos)
-            break;
-        last = n;
-    }
-    *line = nline + 1;
-    *col = pos - last + 1;
-}
-
-static Value reverse(Value l);
-
-ATTR(noreturn)
-static void parse_error(Parser *p, const char *expected, const char *actual, ...)
-{
-    Value newline_pos = reverse(p->newline_pos);
-    int64_t pos = ftell(p->in);
-    int64_t line, col;
-    pos_to_line_col(pos, newline_pos, &line, &col);
-    int n = snprintf(errmsg, sizeof(errmsg),
-                     "%s:%"PRId64":%"PRId64": expected %s but got ",
-                     p->filename, line, col, expected);
-    va_list ap;
-    va_start(ap, actual);
-    vsnprintf(errmsg + n, sizeof(errmsg) - n, actual, ap);
-    va_end(ap);
-    longjmp(jmp_parse_error, 1);
-}
-
-static inline void put_newline_pos(Parser *p)
-{
-    p->newline_pos = cons(value_of_int(ftell(p->in)), p->newline_pos);
-}
-
-static void skip_token_atmosphere(Parser *p)
-{
-    int c;
-    for (;;) {
-        c = fgetc(p->in);
-        if (isspace(c)) {
-            if (c == '\n')
-                put_newline_pos(p);
-            continue; // skip
-        }
-        if (c == ';') {
-            do {
-                c = fgetc(p->in);
-            } while (c != '\n' && c != EOF);
-            if (c == '\n')
-                put_newline_pos(p);
-            continue;
-        }
-        break;
-    }
-    ungetc(c, p->in);
-}
-
-static Token get_token_comma_or_splice(Parser *p)
-{
-    int c = fgetc(p->in);
-    if (c == '@')
-        return TOK_SPLICE;
-    ungetc(c, p->in);
-    return TOK_COMMA;
-}
-
-static Token get_token_dots(Parser *p)
-{
-    int c = fgetc(p->in);
-    if (c != '.') {
-        ungetc(c, p->in);
-        return TOK_DOT;
-    }
-    c = fgetc(p->in);
-    if (c != '.') {
-        ungetc(c, p->in);
-        return TOK_IDENT("..");
-    }
-    return TOK_IDENT("...");
-}
-
-static Token get_token_string(Parser *p)
-{
-    char buf[BUFSIZ], *pbuf = buf, *end = pbuf + sizeof(buf) - 2;
-    for (int c; (c = fgetc(p->in)) != '"'; *pbuf++ = c) {
-        if (c == '\\') {
-            c = fgetc(p->in);
-            if (c != '\\' && c != '"')
-                parse_error(p, "'\\' or '\"' in string literal", "'%c'", c);
-        }
-        if (pbuf == end)
-            parse_error(p, "string literal", "too long: \"%s...\"", pbuf);
-    }
-    *pbuf = '\0';
-    return TOK_STR(buf);
-}
-
-static Token get_token_constant(Parser *p)
-{
-    int c = fgetc(p->in);
-    switch (c) {
-    case 't':
-        return TOK_CONST(Qtrue);
-    case 'f':
-        return TOK_CONST(Qfalse);
-    default:
-        parse_error(p, "constants", "#%c", c);
-    }
-}
-
-static Token get_token_int(Parser *p, int c, int sign)
-{
-    ungetc(c, p->in);
-    int64_t i;
-    int n = fscanf(p->in, "%"SCNd64, &i);
-    if (n != 1)
-        parse_error(p, "integer", "invalid string");
-    return TOK_INT(sign * i);
-}
-
-static Token get_token_after_sign(Parser *p, int csign)
-{
-    int c = fgetc(p->in);
-    int dig = isdigit(c);
-    if (dig) {
-        int sign = csign == '-' ? -1 : 1;
-        return get_token_int(p, c, sign);
-    }
-    ungetc(c, p->in);
-    return TOK_IDENT(((char []) { csign, '\0' }));
-}
-
-static inline bool is_special_initial(int c)
-{
-    switch (c) {
-    case '!': case '$': case '%': case '&': case '*': case '/': case ':':
-    case '<': case '=': case '>': case '?': case '^': case '_': case '~':
-        return true;
-    default:
-        return false;
-    }
-}
-
-static inline bool is_initial(int c)
-{
-    return isalpha(c) || is_special_initial(c);
-}
-
-static inline bool is_special_subsequent(int c)
-{
-    return c == '+' || c == '-' || c == '.' || c == '@';
-}
-
-static inline bool is_subsequent(int c)
-{
-    return is_initial(c) || isdigit(c) || is_special_subsequent(c);
-}
-
-static Token get_token_ident(Parser *p, int init)
-{
-    char buf[BUFSIZ], *s = buf, *end = s + sizeof(buf);
-    int c;
-    for (*s++ = init; is_subsequent(c = fgetc(p->in)); *s++ = c) {
-        if (s == end)
-            parse_error(p, "identifier", "too long");
-    }
-    ungetc(c, p->in);
-    *s = '\0';
-    return TOK_IDENT(buf);
-}
-
-static Token get_token(Parser *p)
-{
-    if (p->prev_token.type != TOK_TYPE_EOF)  {
-        Token t = p->prev_token;
-        p->prev_token = TOK_EOF;
-        return t;
-    }
-    skip_token_atmosphere(p);
-    int c = fgetc(p->in);
-    switch (c) {
-    case '(':
-        return TOK_LPAREN;
-    case ')':
-        return TOK_RPAREN;
-    case '\'':
-        return TOK_QUOTE;
-    case '`':
-        return TOK_GRAVE;
-    case ',':
-        return get_token_comma_or_splice(p);
-    case '.':
-        return get_token_dots(p);
-    case '"':
-        return get_token_string(p);
-    case '#':
-        return get_token_constant(p);
-    case '+':
-    case '-':
-        return get_token_after_sign(p, c);
-    case EOF:
-        return TOK_EOF;
-    default:
-        break;
-    }
-    if (isdigit(c))
-        return get_token_int(p, c, 1);
-    if (is_initial(c))
-        return get_token_ident(p, c);
-    parse_error(p, "valid char", "'%c'", c);
-}
-
-static void unget_token(Parser *p, Token t)
-{
-    p->prev_token = t;
-}
-
-#define CXR1(f, x) f(a, x); f(d, x);
-#define CXR2(f, x) CXR1(f, a ## x) CXR1(f, d ## x)
-#define CXR3(f, x) CXR2(f, a ## x) CXR2(f, d ## x)
-#define CXR4(f, x) CXR3(f, a) CXR3(f, d)
-#define CXRS(f) CXR2(f,) CXR3(f,) CXR4(f,)
-
-#define DEF_CXR(x, y) \
-    static Value c##x##y##r(Value v) { return c##x##r(c##y##r(v)); }
-CXRS(DEF_CXR)
-
-static const char *token_stringify(Token t)
-{
-    static char buf[BUFSIZ];
-
-    switch (t.type) {
-    case TOK_TYPE_LPAREN:
-        return "(";
-    case TOK_TYPE_RPAREN:
-        return ")";
-    case TOK_TYPE_QUOTE:
-        return "'";
-    case TOK_TYPE_GRAVE:
-        return "`";
-    case TOK_TYPE_COMMA:
-        return ",";
-    case TOK_TYPE_SPLICE:
-        return ",@";
-    case TOK_TYPE_DOT:
-        return ".";
-    case TOK_TYPE_INT:
-        snprintf(buf, sizeof(buf), "%"PRId64, value_to_int(t.value));
-        break;
-    case TOK_TYPE_IDENT:
-        return value_to_string(t.value);
-    case TOK_TYPE_STR:
-        snprintf(buf, sizeof(buf), "\"%s\"", STRING(t.value)->body);
-        break;
-    case TOK_TYPE_CONST:
-        return t.value == Qtrue ? "#t" : "#f";
-    case TOK_TYPE_EOF:
-        return "EOF";
-    }
-    return buf;
-}
-
-static Value parse_expr(Parser *p);
-
-static Value parse_dotted_pair(Parser *p, Value l, Value last)
-{
-    if (l == Qnil)
-        parse_error(p, "expression", "'.'");
-    Value e = parse_expr(p);
-    Token t = get_token(p);
-    if (t.type != TOK_TYPE_RPAREN)
-        parse_error(p, "')'", "'%s'", token_stringify(t));
-    PAIR(last)->cdr = e;
-    return l;
-}
-
-static Value append_at(Value last, Value elem)
-{
-    Value p = list1(elem);
-    if (last != Qnil)
-        PAIR(last)->cdr = p;
-    return p;
-}
-
-static inline Value pair_to_id(Value p)
-{
-    return value_of_int(p >> 3U); // we assume 64 bit machines
-}
-
-static void record_location(Parser *p, Value pair, int64_t pos, Value sym)
-{
-    int64_t id = pair_to_id(pair);
-    Value loc = cons(id, cons(value_of_int(pos), sym));
-    p->function_locations = cons(loc, p->function_locations);
-}
-
-static Value parse_list(Parser *p)
-{
-    Value l = Qnil, last = Qnil;
-    int64_t pos = ftell(p->in);
-    for (;;) {
-        Token t = get_token(p);
-        if (t.type == TOK_TYPE_RPAREN)
-            break;
-        if (t.type == TOK_TYPE_EOF)
-            parse_error(p, "')'", "'%s'", token_stringify(t));
-        if (t.type == TOK_TYPE_DOT)
-            return parse_dotted_pair(p, l, last);
-        unget_token(p, t);
-        Value e = parse_expr(p);
-        last = append_at(last, e);
-        if (l == Qnil) {
-            l = last;
-            if (value_is_symbol(e))
-                record_location(p, l, pos, e);
-        }
-    }
-    return l;
-}
-
-static inline Value list2(Value x, Value y)
-{
-    return cons(x, list1(y));
-}
-
-static Value parse_quoted(Parser *p, Value sym)
-{
-    Value e = parse_expr(p);
-    if (e == Qundef)
-        parse_error(p, "expression", "'EOF'");
-    return list2(sym, e);
-}
-
-static Value parse_expr(Parser *p)
-{
-    Token t = get_token(p);
-    switch (t.type) {
-    case TOK_TYPE_LPAREN:
-        return parse_list(p); // parse til ')'
-    case TOK_TYPE_RPAREN:
-        parse_error(p, "expression", "')'");
-    case TOK_TYPE_QUOTE:
-        return parse_quoted(p, SYM_QUOTE);
-    case TOK_TYPE_GRAVE:
-        return parse_quoted(p, SYM_QUASIQUOTE);
-    case TOK_TYPE_COMMA:
-        return parse_quoted(p, SYM_UNQUOTE);
-    case TOK_TYPE_SPLICE:
-        return parse_quoted(p, SYM_UNQUOTE_SPLICING);
-    case TOK_TYPE_DOT:
-        parse_error(p, "expression", "'.'");
-    case TOK_TYPE_STR:
-    case TOK_TYPE_INT:
-    case TOK_TYPE_CONST:
-    case TOK_TYPE_IDENT:
-        return t.value;
-    case TOK_TYPE_EOF:
-        break;
-    }
-    return Qundef;
-}
-
-static Parser *parser_new(FILE *in, const char *filename)
-{
-    Parser *p = xmalloc(sizeof(Parser));
-    p->in = in;
-    p->filename = filename;
-    p->prev_token = TOK_EOF; // we use this since we never postpone EOF things
-    p->function_locations = Qnil;
-    p->newline_pos = Qnil;
-    return p;
 }
 
 static void expect_arity_range(const char *func, int64_t min, int64_t max, Value args)
@@ -1008,58 +526,15 @@ static Value lookup(const Table *env, Value name)
     return found;
 }
 
-static inline Value list4(Value w, Value x, Value y, Value z)
-{
-    return cons(w, cons(x, list2(y, z)));
-}
+#define CXR1(f, x) f(a, x); f(d, x);
+#define CXR2(f, x) CXR1(f, a ## x) CXR1(f, d ## x)
+#define CXR3(f, x) CXR2(f, a ## x) CXR2(f, d ## x)
+#define CXR4(f, x) CXR3(f, a) CXR3(f, d)
+#define CXRS(f) CXR2(f,) CXR3(f,) CXR4(f,)
 
-// AST: (syntax_list filename function_locations newline_positions)
-static Value ast_new(Parser *p, Value syntax_list)
-{
-    Value filename = value_of_symbol(p->filename);
-    return list4(syntax_list, filename, p->function_locations, reverse(p->newline_pos));
-}
-
-static Value parse_program(Parser *p)
-{
-    Value v = Qnil, last = Qnil;
-    for (Value expr; (expr = parse_expr(p)) != Qundef; ) {
-        last = append_at(last, expr);
-        if (v == Qnil)
-            v = last;
-    }
-    return ast_new(p, v);
-}
-
-static Value iparse(FILE *in, const char *filename)
-{
-    Parser *p = parser_new(in, filename);
-    Value ast;
-    if (setjmp(jmp_parse_error) == 0)
-        ast = parse_program(p); // success
-    else
-        ast = ast_new(p, Qundef); // got an error
-    free(p);
-    return ast;
-}
-
-Value parse(const char *path)
-{
-    FILE *in = fopen(path, "r");
-    if (in == NULL)
-        error("parse: can't open file: %s", path);
-    Value ast = iparse(in, path);
-    fclose(in);
-    return car(ast);
-}
-
-Value parse_string(const char *in)
-{
-    FILE *f = fmemopen((char *) in, strlen(in), "r");
-    Value ast = iparse(f, "<inline>");
-    fclose(f);
-    return car(ast);
-}
+#define DEF_CXR(x, y) \
+    static Value c##x##y##r(Value v) { return c##x##r(c##y##r(v)); }
+CXRS(DEF_CXR)
 
 //
 // Evaluation
@@ -1074,6 +549,14 @@ static Value eval_body(Table *env, Value body)
     for (Value next; (next = cdr(p)) != Qnil; p = next)
         eval(env, car(p));
     return eval(env, car(p));
+}
+
+Value append_at(Value last, Value elem)
+{
+    Value p = list1(elem);
+    if (last != Qnil)
+        PAIR(last)->cdr = p;
+    return p;
 }
 
 static Value map_eval(Table *env, Value l)
@@ -2052,11 +1535,11 @@ static Value proc_append(UNUSED Table *env, Value args)
     return l;
 }
 
-static Value reverse(Value l)
+Value reverse(Value l)
 {
     Value ret = Qnil;
-    for (Value p = l; p != Qnil; p = cdr(p))
-        ret = cons(car(p), ret);
+    for (; l != Qnil; l = cdr(l))
+        ret = cons(car(l), ret);
     return ret;
 }
 
