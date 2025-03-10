@@ -67,7 +67,7 @@ static const int64_t CFUNCARG_MAX = 3;
 static Table *toplevel_environment;
 static Value symbol_names = Qnil; // ("name0" "name1" ...)
 Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
-    SYM_RARROW;
+    SYM_RARROW, SYM_DEFINE;
 static const volatile void *stack_base = NULL;
 #define INIT_STACK() void *basis; stack_base = &basis
 static const char *load_basedir = NULL;
@@ -1913,6 +1913,7 @@ void sch_init(void)
     DEF_SYMBOL(UNQUOTE, "unquote");
     DEF_SYMBOL(UNQUOTE_SPLICING, "unquote-splicing");
     DEF_SYMBOL(RARROW, "=>");
+    DEF_SYMBOL(DEFINE, "define");
 
     toplevel_environment = table_new();
     Table *e = toplevel_environment;
