@@ -16,7 +16,7 @@ schaf: $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
 clean:
-	rm -f schaf basic-test *-san *.o test/*.o
+	rm -f schaf test/basic-test *-san *.o test/*.o
 
 analyze: $(OBJ:.o=.analyzer)
 
@@ -52,21 +52,21 @@ utils.o: utils.h
 test: test-c test-scheme
 test-san: test-c-san test-scheme-san
 
-test-c: basic-test
+test-c: test/basic-test
 	$(TIMEOUT) ./$<
-test-c-san: basic-test-san
+test-c-san: test/basic-test-san
 	$(TIMEOUT) ./$<
-
-basic-test: $(OBJ_TEST)
-	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) -lcriterion
-basic-test-san: $(OBJ_TEST:.o=.san.o)
-	$(CC) $(CFLAGS) $(SANITIZER) -o $@ $^ $(LIBS) -lcriterion
 
 test-scheme: schaf
 	$(TIMEOUT) ./$< test/test.scm
 test-scheme-san: schaf-san
 	$(TIMEOUT) ./$< test/test.scm
 
-basic-test.o: schaf.h table.h utils.h
+test/basic-test: $(OBJ_TEST)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) -lcriterion
+test/basic-test-san: $(OBJ_TEST:.o=.san.o)
+	$(CC) $(CFLAGS) $(SANITIZER) -o $@ $^ $(LIBS) -lcriterion
+
+test/basic-test.o: schaf.h table.h utils.h
 
 .PHONY: test test-san test-c test-c-san test-scheme test-scheme-san 

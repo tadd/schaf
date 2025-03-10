@@ -29,7 +29,7 @@ jobs:
         echo CPATH="/opt/homebrew/include:$CPATH" >> "$GITHUB_ENV"
         echo LIBRARY_PATH="/opt/homebrew/lib:$LIBRARY_PATH" >> "$GITHUB_ENV"
     - name: Make binaries
-      run: make -j2 schaf basic-test
+      run: make -j2 schaf test/basic-test
     - name: Test
       run: make test
     - name: Test with Santizer
@@ -39,7 +39,7 @@ jobs:
     - name: Test optimized with Sanitizer
       run: make -j2 sanitize OPTFLAGS='-O3 -flto=auto'
     - name: Clang - Make binaries
-      run: make clean && make -j2 schaf basic-test CC=clang
+      run: make clean && make -j2 schaf test/basic-test CC=clang
     - name: Clang - Test
       run: make test CC=clang
     - name: Clang - Test with Santizer
