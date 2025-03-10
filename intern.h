@@ -178,7 +178,10 @@ typedef struct {
 
 #pragma GCC visibility push(hidden) // also affects Clang
 
-extern Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
+extern Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE,
+    SYM_UNQUOTE_SPLICING, SYM_RARROW, SYM_BEGIN, SYM_DEFINE;
+extern Value SYM_LAMBDA, SYM_IF, SYM_SET, SYM_COND, SYM_AND, SYM_OR,
+    SYM_CASE, SYM_LET, SYM_LET_STAR, SYM_LETREC, SYM_DO, SYM_DELAY;
 
 Source *iparse(FILE *in, const char *filename);
 Value parse_datum(FILE *in, const char *filename);
