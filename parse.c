@@ -111,7 +111,7 @@ static void skip_token_atmosphere(Parser *p)
     ungetc(c, p->in);
 }
 
-static Token get_token_comma_or_splice(Parser *p)
+static Token lex_comma_or_splice(Parser *p)
 {
     int c = fgetc(p->in);
     if (c == '@')
@@ -120,7 +120,7 @@ static Token get_token_comma_or_splice(Parser *p)
     return TOK_COMMA;
 }
 
-static Token get_token_dots(Parser *p)
+static Token lex_dots(Parser *p)
 {
     int c = fgetc(p->in);
     if (c != '.') {
@@ -135,7 +135,7 @@ static Token get_token_dots(Parser *p)
     return TOK_IDENT("...");
 }
 
-static Token get_token_string(Parser *p)
+static Token lex_string(Parser *p)
 {
     char buf[BUFSIZ], *pbuf = buf, *end = pbuf + sizeof(buf) - 2;
     for (int c; (c = fgetc(p->in)) != '"'; *pbuf++ = c) {
@@ -151,7 +151,7 @@ static Token get_token_string(Parser *p)
     return TOK_STR(buf);
 }
 
-static Token get_token_constant(Parser *p)
+static Token lex_constant(Parser *p)
 {
     int c = fgetc(p->in);
     switch (c) {
@@ -164,7 +164,7 @@ static Token get_token_constant(Parser *p)
     }
 }
 
-static Token get_token_int(Parser *p, int c, int sign)
+static Token lex_int(Parser *p, int c, int sign)
 {
     ungetc(c, p->in);
     int64_t i;
@@ -174,13 +174,13 @@ static Token get_token_int(Parser *p, int c, int sign)
     return TOK_INT(sign * i);
 }
 
-static Token get_token_after_sign(Parser *p, int csign)
+static Token lex_after_sign(Parser *p, int csign)
 {
     int c = fgetc(p->in);
     int dig = isdigit(c);
     if (dig) {
         int sign = csign == '-' ? -1 : 1;
-        return get_token_int(p, c, sign);
+        return lex_int(p, c, sign);
     }
     ungetc(c, p->in);
     return TOK_IDENT(((char []) { csign, '\0' }));
@@ -212,7 +212,7 @@ static inline bool is_subsequent(int c)
     return is_initial(c) || isdigit(c) || is_special_subsequent(c);
 }
 
-static Token get_token_ident(Parser *p, int init)
+static Token lex_ident(Parser *p, int init)
 {
     char buf[BUFSIZ], *s = buf, *end = s + sizeof(buf);
     int c;
@@ -225,7 +225,7 @@ static Token get_token_ident(Parser *p, int init)
     return TOK_IDENT(buf);
 }
 
-static Token get_token(Parser *p)
+static Token lex(Parser *p)
 {
     if (p->prev_token.type != TOK_TYPE_EOF)  {
         Token t = p->prev_token;
@@ -244,29 +244,29 @@ static Token get_token(Parser *p)
     case '`':
         return TOK_GRAVE;
     case ',':
-        return get_token_comma_or_splice(p);
+        return lex_comma_or_splice(p);
     case '.':
-        return get_token_dots(p);
+        return lex_dots(p);
     case '"':
-        return get_token_string(p);
+        return lex_string(p);
     case '#':
-        return get_token_constant(p);
+        return lex_constant(p);
     case '+':
     case '-':
-        return get_token_after_sign(p, c);
+        return lex_after_sign(p, c);
     case EOF:
         return TOK_EOF;
     default:
         break;
     }
     if (isdigit(c))
-        return get_token_int(p, c, 1);
+        return lex_int(p, c, 1);
     if (is_initial(c))
-        return get_token_ident(p, c);
+        return lex_ident(p, c);
     parse_error(p, "valid char", "'%c'", c);
 }
 
-static void unget_token(Parser *p, Token t)
+static void unlex(Parser *p, Token t)
 {
     p->prev_token = t;
 }
@@ -313,7 +313,7 @@ static Value parse_dotted_pair(Parser *p, Value l, Value last)
     if (l == Qnil)
         parse_error(p, "expression", "'.'");
     Value e = parse_expr(p);
-    Token t = get_token(p);
+    Token t = lex(p);
     if (t.type != TOK_TYPE_RPAREN)
         parse_error(p, "')'", "'%s'", token_stringify(t));
     PAIR(last)->cdr = e;
@@ -337,14 +337,14 @@ static Value parse_list(Parser *p)
     Value l = Qnil, last = Qnil;
     int64_t pos = ftell(p->in);
     for (;;) {
-        Token t = get_token(p);
+        Token t = lex(p);
         if (t.type == TOK_TYPE_RPAREN)
             break;
         if (t.type == TOK_TYPE_EOF)
             parse_error(p, "')'", "'%s'", token_stringify(t));
         if (t.type == TOK_TYPE_DOT)
             return parse_dotted_pair(p, l, last);
-        unget_token(p, t);
+        unlex(p, t);
         Value e = parse_expr(p);
         last = append_at(last, e);
         if (l == Qnil) {
@@ -366,7 +366,7 @@ static Value parse_quoted(Parser *p, Value sym)
 
 static Value parse_expr(Parser *p)
 {
-    Token t = get_token(p);
+    Token t = lex(p);
     switch (t.type) {
     case TOK_TYPE_LPAREN:
         return parse_list(p); // parse til ')'
