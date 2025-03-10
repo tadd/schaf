@@ -1,8 +1,8 @@
-BIN=schaf
-SRC!=ls src/*.erb
-TARGET=$(SRC:src/%.erb=%)
-NLOOP=5
-BENCHFLAGS=-TM
+BIN = schaf
+SRC != ls src/*.erb
+TARGET = $(SRC:src/%.erb=%)
+NLOOP = 5
+BENCHFLAGS = -TM
 
 all: benchmark
 

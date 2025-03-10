@@ -1,14 +1,14 @@
-CC=gcc
-OPTFLAGS=-O0 -ggdb3
-CFLAGS=-std=gnu17 -Wall -Wextra -I. $(OPTFLAGS) $(XCFLAGS)
-LIBS=-lm
-ANALYZER=-fanalyzer
-SANITIZER=-fsanitize=undefined #,address
-TIMEOUT=timeout 2
+CC = gcc
+OPTFLAGS = -O0 -ggdb3
+CFLAGS = -std=gnu17 -Wall -Wextra -I. $(OPTFLAGS) $(XCFLAGS)
+LIBS = -lm
+ANALYZER = -fanalyzer
+SANITIZER = -fsanitize=undefined #,address
+TIMEOUT = timeout 2
 
-OBJ_COMMON=schaf.o table.o utils.o
-OBJ=$(OBJ_COMMON) main.o
-OBJ_TEST=$(OBJ_COMMON) test/basic-test.o
+OBJ_COMMON = schaf.o table.o utils.o
+OBJ = $(OBJ_COMMON) main.o
+OBJ_TEST = $(OBJ_COMMON) test/basic-test.o
 
 all: schaf test
 
