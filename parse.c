@@ -11,6 +11,7 @@
 #include "utils.h"
 
 typedef enum {
+    TOK_TYPE_NONE,
     TOK_TYPE_LPAREN,
     TOK_TYPE_RPAREN,
     TOK_TYPE_QUOTE,
@@ -35,6 +36,7 @@ typedef struct {
 // singletons
 #define TOKEN_VAL(t, v) ((Token) { .type = TOK_TYPE_ ## t, .value = v })
 #define TOKEN_C(t) TOKEN_VAL(t, 0)
+static const Token TOK_NONE = TOKEN_C(NONE);
 static const Token TOK_LPAREN = TOKEN_C(LPAREN);
 static const Token TOK_RPAREN = TOKEN_C(RPAREN);
 static const Token TOK_QUOTE = TOKEN_C(QUOTE);
@@ -78,6 +80,7 @@ static inline Token token_ident(const char *s)
 
 typedef struct {
     FILE *in;
+    Token prev;
     int64_t *newline_pos;
     jmp_buf jmp_error;
     char filename[];
@@ -367,8 +370,21 @@ static Token lex_ident(Parser *p, int init)
     return token_ident(buf);
 }
 
+#define TOK_IS_NONE(t) ((t).type == TOK_TYPE_NONE)
+static void unlex(Parser *p, Token t)
+{
+    if (!TOK_IS_NONE(p->prev))
+        bug("too much unlex()");
+    p->prev = t;
+}
+
 static Token lex(Parser *p)
 {
+    if (!TOK_IS_NONE(p->prev)) {
+        Token t = p->prev;
+        p->prev = TOK_NONE;
+        return t;
+    }
     skip_token_atmosphere(p);
     int c = fgetc(p->in);
     switch (c) {
@@ -410,6 +426,8 @@ static const char *token_stringify(Token t)
     static char buf[BUFSIZ];
 
     switch (t.type) {
+    case TOK_TYPE_NONE:
+        return "<none>";
     case TOK_TYPE_LPAREN:
         return "(";
     case TOK_TYPE_RPAREN:
@@ -522,6 +540,8 @@ static Value parse_expr(Parser *p)
 {
     Token t = lex(p);
     switch (t.type) {
+    case TOK_TYPE_NONE:
+        bug("got a none token");
     case TOK_TYPE_LPAREN:
         return parse_list(p); // parse til ')'
     case TOK_TYPE_RPAREN:
@@ -557,6 +577,7 @@ static Parser *parser_new(FILE *in, const char *filename)
     size_t len = strlen(filename);
     Parser *p = xmalloc(sizeof(Parser) + len + 1);
     p->in = in;
+    p->prev = TOK_NONE;
     p->newline_pos = scary_new(sizeof(int64_t));
     strcpy(p->filename, filename);
     return p;
@@ -590,13 +611,450 @@ void source_free(Source *s)
     free(s);
 }
 
+
+Token expect_token(Parser *p, TokenType expected)
+{
+    Token t = lex(p);
+    if (t.type == expected)
+        return t;
+    unlex(p, t);
+    return TOK_NONE;
+}
+
+static bool getkeyword(const char *id, uint64_t val[2])
+{
+#define RANGE(x, y) ((x)+1)...((y)-1) // open interval
+    uint8_t table[256] = {
+        [RANGE(-1, '!')] = 255,
+        ['!'] = 0,
+        [RANGE('!', '*')] = 255,
+        ['*'] = 1,
+        [RANGE('*', '-')] = 255,
+        ['-'] = 2,
+        [RANGE('-', '=')] = 255,
+        ['='] = 3,
+        ['>'] = 4,
+        [RANGE('>', 'a')] = 255,
+        ['a'] = 5,
+        ['b'] = 6,
+        ['c'] = 7,
+        ['d'] = 8,
+        ['e'] = 9,
+        ['f'] = 10,
+        ['g'] = 11,
+        ['h'] = 255,
+        ['i'] = 12,
+        ['j'] = 255,
+        ['k'] = 255,
+        ['l'] = 13,
+        ['m'] = 14,
+        ['n'] = 15,
+        ['o'] = 16,
+        ['p'] = 17,
+        ['q'] = 18,
+        ['r'] = 19,
+        ['s'] = 20,
+        ['t'] = 21,
+        ['u'] = 22,
+        ['v'] = 255,
+        ['w'] = 255,
+        ['x'] = 255,
+        ['y'] = 23,
+        ['z'] = 255,
+        [RANGE('z', 256)] = 255,
+    };
+    uint64_t v = 0;
+    for (size_t i = 0; i < 13; i++) {
+        uint8_t ch = (uint8_t) id[i];
+        if (ch == '\0') {
+            val[0] = v;
+            val[1] = UINT64_MAX;
+            return true;
+        }
+        uint64_t n = table[ch];
+        if (n == 255)
+            return false;
+        v = v * 24U + n;
+    }
+    uint64_t v2 = 0;
+    for (size_t i = 13; i <= 16; i++) {
+        uint8_t ch = (uint8_t) id[i];
+        if (ch == '\0') {
+            val[0] = v;
+            val[1] = v2;
+            return true;
+        }
+        uint64_t n = table[ch];
+        if (n == 255)
+            return false;
+        v2 = v2 * 24U + n;
+    }
+    return false;
+}
+
+static void init_keywords(uint64_t keywords[20][2])
+{
+    const char *words[] = {
+        "=>",
+        "and",
+        "begin",
+        "case",
+        "cond",
+        "define",
+        "delay",
+        "do",
+        "else",
+        "if",
+        "lambda",
+        "let",
+        "let*",
+        "letrec",
+        "or",
+        "quasiquote",
+        "quote",
+        "set!",
+        "unquote",
+        "unquote-splicing"
+    };
+    for (size_t i = 0; i < sizeof(words) / sizeof(words[0]); i++) {
+        if (!getkeyword(words[i], keywords[i]))
+            bug("keyword caching failed");
+    }
+}
+
+static bool is_keyword(const char *id)
+{
+    uint64_t keywords[20][2] = { 0 };
+    if (keywords[0][0] == 0)
+        init_keywords(keywords);
+    uint64_t val[2];
+    if (!getkeyword(id, val))
+        return false;
+    for (size_t i = 0; i < 20; i++) {
+        uint64_t *key = keywords[i];
+        if (key[0] == val[0] && key[1] == val[1])
+            return true;
+    }
+    return false;
+}
+
+#if 0
+// =>
+// and
+// begin
+// c
+//  ase
+//  ond
+// d
+//  efine
+//   lay
+//  o
+// else
+// if
+// l
+//  ambda
+//  e
+//   t
+//    *
+//    rec
+// or
+// qu
+//   asiquote
+//   ote
+// set!
+// unquote
+//        -splicing
+static int getkeyword(const char *id)
+{
+    switch (id[0]) {
+        id++;
+    case '=':
+        if (*id == '>')
+            return 1;
+        break;
+    case 'a':
+        if (strcmp(id, "nd") == 0)
+            return 2;
+        break;
+    case 'b':
+        if (strcmp(id, "egin") == 0)
+            return 3;
+        break;
+    case 'c':
+        if (strcmp(id, "ase") == 0)
+            return 4;
+        if (strcmp(id, "ond") == 0)
+            return 5;
+        break;
+    case 'd':
+        switch (*id) {
+            id++;
+        case 'e':
+            if (strcmp(id, "fine") == 0)
+                return 6;
+            if (strcmp(id, "lay") == 0)
+                return 7;
+            break;
+        case 'o':
+            if (*id == '\0')
+                return 8;
+            break;
+        default:
+            break;
+        }
+        break;
+    case 'e':
+        if (strcmp(id, "lse") == 0)
+            return 9;
+        break;
+    case 'i':
+        if (strcmp(id, "f") == 0)
+            return 10;
+        break;
+    case 'l':
+        switch (*id) {
+            id++;
+        case 'a':
+            if (strcmp(id, "mbda") == 0)
+                return 11;
+            break;
+        case 'e':
+            switch (id[2]) {
+                id++;
+            case 't':
+                switch (*id) {
+                    id++;
+                case '\0':
+                    return 12;
+                case '*':
+                    if (id[1] == '\0')
+                        return 13;
+                    break;
+                case 'r':
+                    if (strcmp(id, "ec") == 0)
+                        return 14;
+                    break;
+                default:
+                    break;
+                }
+            default:
+                break;
+            }
+        default:
+            break;
+        }
+        break;
+    case 'o':
+        if (strcmp(id, "r") == 0)
+            return 15;
+        break;
+    case 'q':
+        if (id[1] != 'u')
+            break;
+        id++;
+        if (strcmp(id, "asiquote") == 0)
+            return 16;
+        if (strcmp(id, "ote") == 0)
+            return 17;
+        break;
+    case 's':
+        if (strcmp(id, "et!") == 0)
+            return 18;
+        break;
+    case 'u':
+        if (strncmp(id, "nquote", 6) != 0)
+            break;
+        id += 7;
+        if (*id == '\0')
+            return 19;
+        if (strcmp(id, "-splicing") == 0)
+            return 20;
+        break;
+    default:
+        break;
+    }
+    return 0;
+}
+#endif
+
+static bool is_expression_keyword(Value ident)
+{
+    return ident == SYM_QUOTE || ident == SYM_LAMBDA || ident == SYM_IF ||
+        ident == SYM_SET_BANG || ident == SYM_BEGIN || ident == SYM_COND ||
+        ident == SYM_AND || ident == SYM_OR || ident == SYM_CASE ||
+        ident == SYM_LET || ident == SYM_LET_STAR || ident == SYM_LETREC ||
+        ident == SYM_DO || ident == SYM_DELAY || ident == SYM_QUASIQUOTE;
+}
+
+static bool is_syntactic_keyword(Value ident)
+{
+    return is_expression_keyword(ident) ||
+        ident == SYM_ELSE || ident == SYM_RARROW || ident == SYM_DEFINE ||
+        ident == SYM_UNQUOTE || ident == SYM_UNQUOTE_SPLICING;
+}
+
+// any <identifier> that isn't also a <syntactic keyword>
+static Value parse_variable(Parser *p)
+{
+    Token t = expect_token(p, TOK_TYPE_IDENT);
+    if (TOK_IS_NONE(t))
+        return Qundef;
+    if (is_syntactic_keyword(t.value)) {
+        unlex(p, t);
+        return Qundef;
+    }
+    return t.value;
+}
+
+static Value parse_literal(Parser *p)
+{
+    (void) p;
+    return Qundef;
+}
+
+static Value parse_procedure_call(Parser *p)
+{
+    (void) p;
+    return Qundef;
+}
+
+static Value parse_lambda_expression(Parser *p)
+{
+    (void) p;
+    return Qundef;
+}
+
+static Value parse_conditional(Parser *p)
+{
+    (void) p;
+    return Qundef;
+}
+
+static Value parse_assignment(Parser *p)
+{
+    (void) p;
+    return Qundef;
+}
+
+static Value parse_derived_expression(Parser *p)
+{
+    (void) p;
+    return Qundef;
+}
+
+static Value parse_expression(Parser *p)
+{
+    Value v;
+    if ((v = parse_variable(p)) != Qundef ||
+        (v = parse_literal(p)) != Qundef ||
+        (v = parse_procedure_call(p)) != Qundef ||
+        (v = parse_lambda_expression(p)) != Qundef ||
+        (v = parse_conditional(p)) != Qundef ||
+        (v = parse_assignment(p)) != Qundef)
+        return v;
+// | macro use
+// | macro block
+    return parse_derived_expression(p);
+}
+
+bool expect_ident(Parser *p, Value expected)
+{
+    Token t = expect_token(p, TOK_TYPE_IDENT);
+    if (t.value == expected)
+        return true;
+    unlex(p, t);
+    return false;
+}
+
+// (<head> ...)
+static bool expect_list_head(Parser *p, Value head)
+{
+    return !TOK_IS_NONE(expect_token(p, TOK_TYPE_LPAREN)) &&
+        expect_ident(p, head);
+}
+
+static inline Value list2(Value x, Value y)
+{
+    return cons(x, list1(y));
+}
+
+ // (define <variable> <expression>)
+static Value parse_define_variable(Parser *p)
+{
+    if (!expect_list_head(p, SYM_DEFINE))
+        return Qundef;
+    Value l = list1(SYM_DEFINE), var, expr;
+    if ((var = parse_variable(p)) == Qundef ||
+        (expr = parse_expression(p)) == Qundef)
+        return Qundef;
+    PAIR(l)->cdr = list2(var, expr);
+    return l;
+}
+
+// <variable>* | <variable>* . <variable>
+static Value parse_def_formals(Parser *p)
+{
+    Value l = DUMMY_PAIR(), var;
+    for (Value last = l; (var = parse_variable(p)) != Qundef; )
+        last = PAIR(last)->cdr = list1(var);
+    l = cdr(l);
+    if (false) {// peek(p) == '.'
+        Value v = parse_variable(p);
+        return cons(l, v);
+    }
+    return l;
+}
+
+// (begin <definition>*)
+static Value parse_begin_definition(Parser *p)
+{
+    (void) p;
+    return Qundef;
+}
+
+// (define (<variable> <def_formals>) <body>)
+static Value parse_define_procedure(Parser *p)
+{
+    parse_def_formals(p);
+    return Qundef;
+}
+
+static Value parse_definition(Parser *p)
+{
+    Value v;
+    if ((v = parse_define_variable(p)) != Qundef ||
+        (v = parse_define_procedure(p)) != Qundef)
+        return v;
+    return parse_begin_definition(p);
+}
+
+// (begin <command_or_definition>+)
+static Value parse_begin_command_or_definition(Parser *p)
+{
+    parse_error(p, "(begin <command/def> ..)", "not implemented");
+}
+
+#define parse_syntax_definition(p) Qundef // macros not implemented yet
+#define parse_command parse_expression
+
+static Value parse_command_or_definition(Parser *p)
+{
+    Value v;
+    if ((v = parse_command(p)) != Qundef ||
+        (v = parse_definition(p)) != Qundef ||
+        (v = parse_syntax_definition(p)) != Qundef)
+        return v;
+    return parse_begin_command_or_definition(p);
+}
+
 static Source *parse_program(Parser *p)
 {
     Value v = DUMMY_PAIR();
-    for (Value last = v, expr; (expr = parse_expr(p)) != Qundef; )
-        last = PAIR(last)->cdr = list1(expr);
+    for (Value last = v, cd; (cd = parse_command_or_definition(p)) != Qundef; )
+        last = PAIR(last)->cdr = list1(cd);
     return source_new(p, cdr(v));
 }
+
 
 Source *iparse(FILE *in, const char *filename)
 {
