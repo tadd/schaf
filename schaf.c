@@ -2116,6 +2116,7 @@ void sch_init(uintptr_t *sp)
     DEF_SYMBOL(UNQUOTE, "unquote");
     DEF_SYMBOL(UNQUOTE_SPLICING, "unquote-splicing");
     DEF_SYMBOL(RARROW, "=>");
+    DEF_SYMBOL(DEFINE, "define");
 
     toplevel_environment = table_new();
     Table *e = toplevel_environment;
