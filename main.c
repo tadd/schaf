@@ -91,6 +91,11 @@ static double cputime_ms(void)
     return ts.tv_sec * 1000.0 + ts.tv_nsec / (1000.0*1000.0);
 }
 
+static void print_cputime(void)
+{
+    fprintf(stderr, "CPU: %.3lf ms\n", cputime_ms());
+}
+
 static void print_vmhwm(void)
 {
     static const char *const path = "/proc/self/status",
@@ -116,6 +121,10 @@ int main(int argc, char **argv)
 {
     sch_init();
     Option o = parse_opt(argc, argv);
+    if (o.memory)
+        atexit(print_vmhwm);
+    if (o.cputime)
+        atexit(print_cputime);
     Value v;
     if (o.parse_only)
         v = o.script ? parse_string(o.script) : parse(o.path);
@@ -127,9 +136,5 @@ int main(int argc, char **argv)
         display(v);
         printf("\n");
     }
-    if (o.cputime)
-        fprintf(stderr, "CPU: %.3lf ms\n", cputime_ms());
-    if (o.memory)
-        print_vmhwm();
     return 0;
 }
