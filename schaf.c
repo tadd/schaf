@@ -436,8 +436,9 @@ static inline Table *newenv(Table *env)
 
 static Value eval_body(Table *env, Value body);
 
+#define UNUSED ATTR(unused)
 //PTR
-static Value apply_closure(ATTR(unused) Table *env, Value proc, Value args)
+static Value apply_closure(UNUSED Table *env, Value proc, Value args)
 {
     Closure *cl = CLOSURE(proc);
     int64_t arity = cl->proc.arity;
@@ -744,7 +745,6 @@ static Value load_inner(const char *path)
 //
 // Built-in Procedures / Syntax
 //
-#define UNUSED ATTR(unused)
 
 // 4.1. Primitive expression types
 // 4.1.2. Literal expressions
