@@ -119,12 +119,13 @@ static void print_vmhwm(void)
 
 int main(int argc, char **argv)
 {
-    sch_init();
     Option o = parse_opt(argc, argv);
     if (o.memory)
         atexit(print_vmhwm);
     if (o.cputime)
         atexit(print_cputime);
+
+    sch_init();
     Value v;
     if (o.parse_only)
         v = o.script ? parse_string(o.script) : parse(o.path);
