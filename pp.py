@@ -8,7 +8,7 @@ class ValuePrinter:
     def __init__(self, val):
         self.val = val
 
-    def to_string(self):
+    def __str__(self):
         ty = cfuncall('value_to_type_name', self.val).string()
         val = cfuncall('stringify', self.val).string()
         return '{:#x} {}: {}'.format(int(self.val), ty, val)
@@ -16,13 +16,13 @@ class ValuePrinter:
 class PP (gdb.Command):
     def __init__(self):
         super(type(self), self).__init__('pp', gdb.COMMAND_DATA)
+
     def invoke(self, arg, from_tty):
         val = gdb.parse_and_eval(arg)
         pp = schaf_pp(val)
         if pp:
-            print(pp.to_string())
-        else:
-            print(str(val))
+            val = pp
+        print(str(val))
 PP()
 
 def schaf_pp(val):
