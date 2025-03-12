@@ -9,7 +9,9 @@ class ValuePrinter:
         self.val = val
 
     def to_string(self):
-        return cfuncall('stringify', self.val)
+        ty = cfuncall('value_to_type_name', self.val).string()
+        val = cfuncall('stringify', self.val).string()
+        return '{:#x} {}: {}'.format(int(self.val), ty, val)
 
 class PP (gdb.Command):
     def __init__(self):
