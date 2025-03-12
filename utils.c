@@ -31,19 +31,3 @@ void *xcalloc(size_t nmem, size_t memsize)
         error("calloc(%zu, %zu) failed", nmem, memsize);
     return p;
 }
-
-void *xrealloc(void *q, size_t size)
-{
-    void *p = realloc(q, size);
-    if (p == NULL)
-        error("realloc(ptr, %zu) failed", size);
-    return p;
-}
-
-char *xstrdup(const char *s)
-{
-    char *dup = strdup(s);
-    if (dup == NULL)
-        error("strdup(\"%s\") failed", s);
-    return dup;
-}
