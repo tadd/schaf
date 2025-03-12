@@ -323,6 +323,7 @@ static void gc(void)
 
 void *gc_malloc(size_t size)
 {
+    gc();
     void *p = allocate(size);
     if (p == NULL) {
         gc();
