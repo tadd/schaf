@@ -22,9 +22,9 @@ static List *list_new(uint64_t key, uint64_t value, List *next)
 
 static void list_free(List *l)
 {
-    for (List *curr = l, *next = NULL; curr != NULL; curr = next) {
-        next = curr->next;
-        free(curr);
+    for (List *next; l != NULL; l = next) {
+        next = l->next;
+        free(l);
     }
 }
 
@@ -113,9 +113,9 @@ static void list_prepend(List **p, List *l)
 static List *list_reverse(List *l)
 {
     List *prev = NULL;
-    for (List *p = l, *next; p != NULL; prev = p, p = next) {
-        next = p->next;
-        p->next = prev;
+    for (List *next; l != NULL; prev = l, l = next) {
+        next = l->next;
+        l->next = prev;
     }
     return prev;
 }
@@ -175,9 +175,9 @@ Table *table_put(Table *t, uint64_t key, uint64_t value)
 
 static List *find1(const List *p, uint64_t key)
 {
-    for (const List *l = p; l != NULL; l = l->next) {
-        if (l->key == key) // direct
-            return (List *) l;
+    for (; p != NULL; p = p->next) {
+        if (p->key == key) // direct
+            return (List *) p;
     }
     return NULL;
 }
