@@ -1179,7 +1179,8 @@ static Value proc_numeq(UNUSED Table *env, Value args)
     expect_arity_min("=", 2, args);
 
     int64_t x = value_get_int("=", car(args));
-    for (args = cdr(args); x == value_get_int("=", car(args)); ) {
+    args = cdr(args);
+    while (value_get_int("=", car(args)) == x) {
         if ((args = cdr(args)) == Qnil)
             return Qtrue;
     }
@@ -1191,11 +1192,10 @@ static Value proc_lt(UNUSED Table *env, Value args)
     expect_arity_min("<", 2, args);
 
     int64_t x = value_get_int("<", car(args));
-    while ((args = cdr(args)) != Qnil) {
-        int64_t y = value_get_int("<", car(args));
+    for (int64_t y; (args = cdr(args)) != Qnil; x = y) {
+        y = value_get_int("<", car(args));
         if (x >= y)
             return Qfalse;
-        x = y;
     }
     return Qtrue;
 }
@@ -1205,11 +1205,10 @@ static Value proc_gt(UNUSED Table *env, Value args)
     expect_arity_min(">", 2, args);
 
     int64_t x = value_get_int(">", car(args));
-    while ((args = cdr(args)) != Qnil) {
-        int64_t y = value_get_int(">", car(args));
+    for (int64_t y; (args = cdr(args)) != Qnil; x = y) {
+        y = value_get_int(">", car(args));
         if (x <= y)
             return Qfalse;
-        x = y;
     }
     return Qtrue;
 }
@@ -1219,11 +1218,10 @@ static Value proc_le(UNUSED Table *env, Value args)
     expect_arity_min("<=", 2, args);
 
     int64_t x = value_get_int("<=", car(args));
-    while ((args = cdr(args)) != Qnil) {
-        int64_t y = value_get_int("<=", car(args));
+    for (int64_t y; (args = cdr(args)) != Qnil; x = y) {
+        y = value_get_int("<=", car(args));
         if (x > y)
             return Qfalse;
-        x = y;
     }
     return Qtrue;
 }
@@ -1233,11 +1231,10 @@ static Value proc_ge(UNUSED Table *env, Value args)
     expect_arity_min(">=", 2, args);
 
     int64_t x = value_get_int(">=", car(args));
-    while ((args = cdr(args)) != Qnil) {
-        int64_t y = value_get_int(">=", car(args));
+    for (int64_t y; (args = cdr(args)) != Qnil; x = y) {
+        y = value_get_int(">=", car(args));
         if (x < y)
             return Qfalse;
-        x = y;
     }
     return Qtrue;
 }
