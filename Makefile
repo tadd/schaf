@@ -41,7 +41,7 @@ microbench: schaf
 	$(CC) $(CFLAGS) $(SANITIZER) -c $< -o $@
 
 main.o: schaf.h utils.h
-parse.o: intern.h schaf.h
+parse.o: intern.h schaf.h utils.h
 schaf.o: intern.h schaf.h table.h utils.h
 table.o: table.h utils.h
 utils.o: utils.h

@@ -4,8 +4,9 @@
 #include <stdarg.h>
 #include <string.h>
 
-#include "schaf.h"
 #include "intern.h"
+#include "schaf.h"
+#include "utils.h"
 
 static jmp_buf jmp_parse_error;
 
