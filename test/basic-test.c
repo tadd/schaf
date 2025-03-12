@@ -223,6 +223,16 @@ Test(schaf, map) {
     expect_runtime_error("expected pair but got integer", "(for-each + 1)");
 }
 
+Test(schaf, type_name) {
+    cr_assert(eq(str, "boolean", (char *) value_to_type_name(Qfalse)));
+    cr_assert(eq(str, "integer", (char *) value_to_type_name(value_of_int(42))));
+    cr_assert(eq(str, "symbol", (char *) value_to_type_name(value_of_symbol("foo"))));
+    cr_assert(eq(str, "undef", (char *) value_to_type_name(Qundef)));
+    cr_assert(eq(str, "pair", (char *) value_to_type_name(Qnil)));
+    cr_assert(eq(str, "string", (char *) value_to_type_name(value_of_string("bar"))));
+    // "procedure",
+}
+
 Test(table, get_put) {
     Table *t = table_new();
     table_put(t, 1, 100);

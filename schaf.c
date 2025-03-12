@@ -167,6 +167,12 @@ static inline const char *value_type_to_string(Type t)
     return TYPE_NAMES[t];
 }
 
+const char *value_to_type_name(Value v)
+{
+    Type t = value_type_of(v);
+    return value_type_to_string(t);
+}
+
 // value_to_*: Convert internal data to external plain C
 
 inline int64_t value_to_int(Value x)

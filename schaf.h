@@ -35,6 +35,7 @@ Type value_type_of(Value v);
 int64_t value_to_int(Value v);
 Symbol value_to_symbol(Value v);
 const char *value_to_string(Value v);
+const char *value_to_type_name(Value v);
 
 Value value_of_int(int64_t i);
 Value value_of_symbol(const char *s);
