@@ -551,23 +551,12 @@ static Value eval_body(Table *env, Value body)
     return eval(env, car(p));
 }
 
-Value append_at(Value last, Value elem)
-{
-    Value p = list1(elem);
-    if (last != Qnil)
-        PAIR(last)->cdr = p;
-    return p;
-}
-
 static Value map_eval(Table *env, Value l)
 {
-    Value mapped = Qnil, last = Qnil;
-    for (Value p = l; p != Qnil; p = cdr(p)) {
-        last = append_at(last, eval(env, car(p)));
-        if (mapped == Qnil)
-            mapped = last;
-    }
-    return mapped;
+    Value mapped = DUMMY_PAIR(), last = mapped;
+    for (; l != Qnil; l = cdr(l))
+        last = PAIR(last)->cdr = list1(eval(env, car(l)));
+    return cdr(mapped);
 }
 
 static Value eval_apply(Table *env, Value symproc, Value args)
@@ -887,19 +876,18 @@ static Value syn_or(Table *env, Value args)
 }
 
 // 4.2.2. Binding constructs
-static void transpose_2xn(Value ls, Value *firsts, Value *seconds) // 2 * n
+static void transpose_2xn(Value ls, Value *pfirsts, Value *pseconds) // 2 * n
 {
-    Value lfirsts = Qnil, lseconds = Qnil;
-    for (Value p = ls; p != Qnil; p = cdr(p)) {
-        Value l = car(p);
+    Value firsts = DUMMY_PAIR(), seconds = DUMMY_PAIR();
+    Value lfirsts = firsts, lseconds = seconds;
+    for (; ls != Qnil; ls = cdr(ls)) {
+        Value l = car(ls);
         expect_arity(2, l);
-        lfirsts = append_at(lfirsts, car(l));
-        lseconds = append_at(lseconds, cadr(l));
-        if (*firsts == Qnil) {
-            *firsts = lfirsts;
-            *seconds = lseconds;
-        }
+        lfirsts = PAIR(lfirsts)->cdr = list1(car(l));
+        lseconds = PAIR(lseconds)->cdr = list1(cadr(l));
     }
+    *pfirsts = cdr(firsts);
+    *pseconds = cdr(seconds);
 }
 
 static Value let(Table *env, Value var, Value bindings, Value body)
@@ -1054,10 +1042,8 @@ static bool is_quoted_terminal(Value list)
         d != Qnil && cdr(d) == Qnil;
 }
 
-static Value splice_at(Value last, Value to_splice)
+static Value splicer(Value last, Value to_splice)
 {
-    if (to_splice == Qnil)
-        return last; // as is
     expect_type("unquote-splicing", TYPE_PAIR, to_splice);
     if (last == Qnil)
         return to_splice;
@@ -1067,22 +1053,23 @@ static Value splice_at(Value last, Value to_splice)
 
 static Value qq_list(Table *env, Value datum, int64_t depth)
 {
-    Value ret = Qnil, last = Qnil;
-    for (Value p = datum; p != Qnil; p = cdr(p)) {
-        bool is_simple = !value_is_pair(p);
-        if (is_simple || is_quoted_terminal(p)) {
-            expect_nonnull("quasiquote", ret);
-            PAIR(last)->cdr = is_simple ? p : qq(env, p, depth);
+    Value ret = DUMMY_PAIR(), last = ret;
+    for (; datum != Qnil; datum = cdr(datum)) {
+        bool is_simple = !value_is_pair(datum);
+        if (is_simple || is_quoted_terminal(datum)) {
+            expect_nonnull("quasiquote", cdr(ret));
+            PAIR(last)->cdr = is_simple ? datum : qq(env, datum, depth);
             break;
         }
-        Value elem = car(p);
+        Value elem = car(datum);
         bool spliced = (value_is_pair(elem) && car(elem) == SYM_UNQUOTE_SPLICING);
         Value v = qq(env, elem, depth);
-        last = spliced ? splice_at(last, v) : append_at(last, v);
-        if (ret == Qnil)
-            ret = last;
+        if (!spliced)
+            last = PAIR(last)->cdr = list1(v);
+        else if (v != Qnil)
+            last = splicer(last, v);
     }
-    return ret;
+    return cdr(ret);
 }
 
 static Value syn_quasiquote(Table *env, Value datum)
@@ -1505,15 +1492,13 @@ static Value proc_length(UNUSED Table *env, Value list)
 
 static Value dup_list(Value l, Value *plast)
 {
-    Value dup = Qnil, last = Qnil;
-    for (Value p = l; p != Qnil; p = cdr(p)) {
-        expect_type("append", TYPE_PAIR, p);
-        last = append_at(last, car(p));
-        if (dup == Qnil)
-            dup = last;
+    Value dup = DUMMY_PAIR(), last = dup;
+    for (; l != Qnil; l = cdr(l)) {
+        expect_type("append", TYPE_PAIR, l);
+        last = PAIR(last)->cdr = list1(car(l));
     }
     *plast = last;
-    return dup;
+    return cdr(dup);
 }
 
 static Value proc_append(UNUSED Table *env, Value args)
@@ -1672,15 +1657,12 @@ static Value proc_procedure_p(UNUSED Table *env, Value o)
 
 static Value build_apply_args(Value args)
 {
-    Value heads = Qnil, last = Qnil, p, next;
-    for (p = args; (next = cdr(p)) != Qnil; p = next) {
-        last = append_at(last, car(p));
-        if (heads == Qnil)
-            heads = last;
-    }
-    Value rest = car(p);
+    Value heads = DUMMY_PAIR(), last = heads;
+    for (Value next; (next = cdr(args)) != Qnil; args = next)
+        last = PAIR(last)->cdr = list1(car(args));
+    Value rest = car(args);
     expect_type("args on apply", TYPE_PAIR, rest);
-    return append2(heads, rest);
+    return append2(cdr(heads), rest);
 }
 
 static Value proc_apply(Table *env, Value args)
@@ -1695,22 +1677,18 @@ static Value proc_apply(Table *env, Value args)
 
 static bool cars_cdrs(Value ls, Value *pcars, Value *pcdrs)
 {
-    Value lcars = Qnil, lcdrs = Qnil;
-    Value cars = Qnil , cdrs = Qnil;
-    for (Value p = ls; p != Qnil; p = cdr(p)) {
-        Value l = car(p);
+    Value cars = DUMMY_PAIR(), cdrs = DUMMY_PAIR();
+    Value lcars = cars, lcdrs = cdrs;
+    for (; ls != Qnil; ls = cdr(ls)) {
+        Value l = car(ls);
         expect_type("map", TYPE_PAIR, l);
         if (l == Qnil)
             return false;
-        lcars = append_at(lcars, car(l));
-        if (cars == Qnil)
-            cars = lcars;
-        lcdrs = append_at(lcdrs, cdr(l));
-        if (cdrs == Qnil)
-            cdrs = lcdrs;
+        lcars = PAIR(lcars)->cdr = list1(car(l));
+        lcdrs = PAIR(lcdrs)->cdr = list1(cdr(l));
     }
-    *pcars = cars;
-    *pcdrs = cdrs;
+    *pcars = cdr(cars);
+    *pcdrs = cdr(cdrs);
     return true;
 }
 
@@ -1720,17 +1698,13 @@ static Value proc_map(Table *env, Value args)
 
     Value proc = car(args);
     expect_type("map", TYPE_PROC, proc);
-    Value lists = cdr(args);
-    Value last = Qnil, ret = Qnil;
-    Value cars, cdrs;
-    while (cars_cdrs(lists, &cars, &cdrs)) {
+    Value ls = cdr(args);
+    Value ret = DUMMY_PAIR(), last = ret;
+    for (Value cars, cdrs; cars_cdrs(ls, &cars, &cdrs); ls = cdrs) {
         Value v = apply(env, proc, cars);
-        last = append_at(last, v);
-        if (ret == Qnil)
-            ret = last;
-        lists = cdrs;
+        last = PAIR(last)->cdr = list1(v);
     }
-    return ret;
+    return cdr(ret);
 }
 
 static Value proc_for_each(Table *env, Value args)
