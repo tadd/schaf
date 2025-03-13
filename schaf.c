@@ -126,11 +126,6 @@ inline bool value_is_pair(Value v)
     return value_tag_is(v, TAG_PAIR);
 }
 
-inline bool value_is_nil(Value v)
-{
-    return v == Qnil;
-}
-
 static Type immediate_type_of(Value v)
 {
     if (value_is_int(v))
