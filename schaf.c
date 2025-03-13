@@ -73,7 +73,7 @@ static const volatile void *stack_base = NULL;
 #define INIT_STACK() void *basis; stack_base = &basis
 static const char *load_basedir = NULL;
 static Value call_stack = Qnil; // list of pairs
-static Value source_data = Qnil; // alist of (filename newline_positions)
+static Value source_data = Qnil; // (a)list of AST: (filename syntax_list newline_positions)
 // newline_positions: list of pos | int
 
 //
@@ -625,10 +625,9 @@ static bool find_pair(Value tree, Value pair)
 static Value find_filename(Value pair)
 {
     for (Value p = source_data; p != Qnil; p = cdr(p)) {
-        Value datum = car(p);
-        Value filename = car(datum), tree = cadr(datum);
+        Value tree = cadar(p);
         if (find_pair(tree, pair))
-            return filename;
+            return caar(p); // filename
     }
     return Qfalse;
 }
