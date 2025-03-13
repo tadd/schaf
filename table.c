@@ -68,7 +68,6 @@ void table_free(Table *t)
     free(t);
 }
 
-#if 0
 static size_t list_length(List *l)
 {
     size_t len = 0;
@@ -77,14 +76,19 @@ static size_t list_length(List *l)
     return len;
 }
 
+ATTR(unused)
 void table_dump(const Table *t)
 {
-    fprintf(stderr, "size, body_size: %zu, %zu\n", t->size, t->body_size);
+    fprintf(stderr, "size: %zu, body_size: %zu, ratio: %f\n",
+            t->size, t->body_size, (double) t->size / t->body_size);
     for (size_t i = 0; i < t->body_size; i++) {
-        fprintf(stderr, "[%2zu]: %zu\n", i, list_length(t->body[i]));
+        size_t len = list_length(t->body[i]);
+        fprintf(stderr, "%2zu ", len);
+        for (size_t j = 0; j < len; j++)
+            fprintf(stderr, "*");
+        fprintf(stderr, "\n");
     }
 }
-#endif
 
 static uint64_t table_hash(uint64_t x)
 {
