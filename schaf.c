@@ -1398,20 +1398,22 @@ static int64_t expt(int64_t x, int64_t y)
     return z;
 }
 
-static Value proc_expt(UNUSED Table *env, Value x, Value y)
+static int64_t vexpt(Value x, Value y)
 {
-    int64_t a = value_get_int("expt", x);
     int64_t b = value_get_int("expt", y);
     if (b < 0)
         runtime_error("expt", "cannot power %d which negative", b);
-    int64_t c;
     if (b == 0)
-        c = 1;
-    else if (a == 0)
-        c = 0;
-    else
-        c = expt(a, b);
-    return value_of_int(c);
+        return 1;
+    int64_t a = value_get_int("expt", x);
+    if (a == 0)
+        return 0;
+    return expt(a, b);
+}
+
+static Value proc_expt(UNUSED Table *env, Value x, Value y)
+{
+    return value_of_int(vexpt(x, y));
 }
 
 // 6.3.1. Booleans
