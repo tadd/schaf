@@ -14,6 +14,7 @@
 #include <unistd.h>
 
 #include "schaf.h"
+#include "scary.h"
 #include "intern.h"
 #include "table.h"
 #include "utils.h"
@@ -66,7 +67,7 @@ static const int64_t CFUNCARG_MAX = 3;
 // Environment: list of Frames
 // Frame: Table of 'symbol => <value>
 static Table *toplevel_environment;
-static Value symbol_names = Qnil; // ("name0" "name1" ...)
+static Value *symbol_names; // { "name0",  "name1", ... }
 Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
     SYM_RARROW;
 static const volatile void *stack_base = NULL;
@@ -184,14 +185,12 @@ inline Symbol value_to_symbol(Value v)
     return (Symbol) v >> FLAG_NBIT_SYM;
 }
 
-static const char *name_nth(Value list, int64_t n)
+static const char *name_nth(Value *list, int64_t n)
 {
-    for (int64_t i = 0; i < n; i++) {
-        list = cdr(list);
-        if (list == Qnil)
-            return NULL;
-    }
-    Value name = car(list);
+    int64_t len = (int64_t) scary_length(list);
+    if (n >= len)
+        return NULL;
+    Value name = list[n];
     return STRING(name)->body;
 }
 
@@ -220,22 +219,17 @@ inline Value value_of_int(int64_t i)
 
 static Symbol intern(const char *name)
 {
-    Value last = Qnil;
-    int64_t i = 0;
+    int64_t i;
     // find
-    for (Value p = symbol_names; p != Qnil; last = p, p = cdr(p)) {
-        Value v = car(p);
+    int64_t len = (int64_t) scary_length(symbol_names);
+    for (i = 0; i < len; i++) {
+        Value v = symbol_names[i];
         if (strcmp(STRING(v)->body, name) == 0)
             return i;
-        i++;
     }
     // or put at `i`
     Value s = value_of_string(name);
-    Value next = list1(s);
-    if (last == Qnil)
-        symbol_names = next;
-    else
-        PAIR(last)->cdr = next;
+    scary_push(&symbol_names, s);
     return i;
 }
 
@@ -1899,6 +1893,8 @@ void sch_init(void)
 {
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
+
+    symbol_names = scary_new(sizeof(Value));
     SYM_ELSE = value_of_symbol("else");
     SYM_QUOTE = value_of_symbol("quote");
     SYM_QUASIQUOTE = value_of_symbol("quasiquote");

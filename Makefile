@@ -6,7 +6,7 @@ ANALYZER = -fanalyzer
 SANITIZER = -fsanitize=undefined #,address
 TIMEOUT = timeout 2
 
-OBJ_COMMON = parse.o schaf.o table.o utils.o
+OBJ_COMMON = parse.o scary.o schaf.o table.o utils.o
 OBJ = $(OBJ_COMMON) main.o
 OBJ_TEST = $(OBJ_COMMON) test/basic-test.o
 
@@ -42,7 +42,8 @@ microbench: schaf
 
 main.o: schaf.h utils.h
 parse.o: intern.h schaf.h utils.h
-schaf.o: intern.h schaf.h table.h utils.h
+schaf.o: intern.h scary.h schaf.h table.h utils.h
+scary.o: scary.h
 table.o: table.h utils.h
 utils.o: utils.h
 
