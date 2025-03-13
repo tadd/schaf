@@ -21,6 +21,11 @@ typedef struct Pair {
     Value car, cdr;
 } Pair;
 
+typedef struct LocatedPair {
+    Pair pair;   // inherit
+    int64_t pos; // value from ftell(3)
+} LocatedPair;
+
 typedef struct {
     ValueTag tag;
     char body[];
@@ -55,6 +60,7 @@ typedef struct {
 } Continuation;
 
 #define PAIR(v) ((Pair *) v)
+#define LOCATED_PAIR(v) ((LocatedPair *) v)
 #define STRING(v) ((String *) v)
 #define PROCEDURE(v) ((Procedure *) v)
 #define CFUNC(v) ((CFunc *) v)
@@ -64,10 +70,10 @@ typedef struct {
 extern Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
 
 ATTR_HIDDEN Value iparse(FILE *in, const char *filename);
-ATTR_HIDDEN Value pair_to_id(Value p);
 ATTR_HIDDEN void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col);
 ATTR_HIDDEN ATTR(noreturn) void raise_error(jmp_buf buf, const char *fmt, ...);
 ATTR_HIDDEN Value reverse(Value l);
+ATTR_HIDDEN void *obj_new(size_t size, ValueTag t);
 
 static inline Value list1(Value x)
 {

@@ -52,7 +52,6 @@ typedef struct {
     FILE *in;
     const char *filename;
     Token prev_token;
-    Value function_locations; //  alist of '(id . (pos . sym)) | id = (pointer >> 3)
     Value newline_pos; // list of pos | int
 } Parser;
 
@@ -321,16 +320,13 @@ static Value parse_dotted_pair(Parser *p, Value l, Value last)
     return l;
 }
 
-Value pair_to_id(Value p)
+static Value located_list1(Value sym, int64_t pos)
 {
-    return value_of_int(p >> 3U); // we assume 64 bit machines
-}
-
-static void record_location(Parser *p, Value pair, int64_t pos, Value sym)
-{
-    int64_t id = pair_to_id(pair);
-    Value loc = cons(id, cons(value_of_int(pos), sym));
-    p->function_locations = cons(loc, p->function_locations);
+    LocatedPair *p = obj_new(sizeof(LocatedPair), TAG_PAIR); // imitate ordinal pairs
+    PAIR(p)->car = sym;
+    PAIR(p)->cdr = Qnil;
+    p->pos = pos;
+    return (Value) p;
 }
 
 static Value parse_list(Parser *p)
@@ -348,9 +344,12 @@ static Value parse_list(Parser *p)
         unlex(p, t);
         Value e = parse_expr(p);
         bool first = (l == last);
-        last = PAIR(last)->cdr = list1(e);
+        Value l;
         if (first && value_is_symbol(e))
-            record_location(p, last, pos, e);
+            l = located_list1(e, pos);
+        else
+            l = list1(e);
+        last = PAIR(last)->cdr = l;
     }
     return cdr(l);
 }
@@ -398,21 +397,20 @@ static Parser *parser_new(FILE *in, const char *filename)
     p->in = in;
     p->filename = filename;
     p->prev_token = TOK_EOF; // we use this since we never postpone EOF things
-    p->function_locations = Qnil;
     p->newline_pos = Qnil;
     return p;
 }
 
-static inline Value list4(Value w, Value x, Value y, Value z)
+static inline Value list3(Value x, Value y, Value z)
 {
-    return cons(w, cons(x, list2(y, z)));
+    return cons(x, list2(y, z));
 }
 
-// AST: (syntax_list filename function_locations newline_positions)
+// AST: (filename syntax_list newline_positions)
 static Value ast_new(Parser *p, Value syntax_list)
 {
     Value filename = value_of_symbol(p->filename);
-    return list4(syntax_list, filename, p->function_locations, reverse(p->newline_pos));
+    return list3(filename, syntax_list, reverse(p->newline_pos));
 }
 
 static Value parse_program(Parser *p)
@@ -442,7 +440,7 @@ Value parse(const char *path)
         error("parse: can't open file: %s", path);
     Value ast = iparse(in, path);
     fclose(in);
-    return car(ast);
+    return car(cdr(ast));
 }
 
 Value parse_string(const char *in)
@@ -450,5 +448,5 @@ Value parse_string(const char *in)
     FILE *f = fmemopen((char *) in, strlen(in), "r");
     Value ast = iparse(f, "<inline>");
     fclose(f);
-    return car(ast);
+    return car(cdr(ast));
 }

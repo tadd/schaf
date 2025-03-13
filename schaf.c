@@ -72,9 +72,8 @@ Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
 static const volatile void *stack_base = NULL;
 #define INIT_STACK() void *basis; stack_base = &basis
 static const char *load_basedir = NULL;
-static Value call_stack = Qnil; // list of pair id
-static Value source_data = Qnil; // alist of (filename function_locations newline_positions)
-// function_locations: alist of '(id . (pos . sym)) | id = (pointer >> 3)
+static Value call_stack = Qnil; // list of pairs
+static Value source_data = Qnil; // alist of (filename newline_positions)
 // newline_positions: list of pos | int
 
 //
@@ -246,7 +245,7 @@ inline Value value_of_symbol(const char *s)
     return (Value) (sym << FLAG_NBIT_SYM | FLAG_SYM);
 }
 
-static void *obj_new(size_t size, ValueTag t)
+void *obj_new(size_t size, ValueTag t)
 {
     void *p = xmalloc(size);
     VALUE_TAG(p) = t;
@@ -457,7 +456,7 @@ static inline void expect_nonnull(const char *msg, Value l)
 
 static void call_stack_push(Value l)
 {
-    call_stack = cons(pair_to_id(l), call_stack);
+    call_stack = cons(l, call_stack);
 }
 
 static void call_stack_pop(void)
@@ -597,9 +596,9 @@ static int append_error_message(const char *fmt, ...)
     return n;
 }
 
-static void dump_line_column(Value vfilename, Value vpos)
+static void dump_line_column(Value vfilename, int64_t pos)
 {
-    int64_t pos = value_to_int(vpos), line, col;
+    int64_t line, col;
     Value data = assq(vfilename, source_data);
     if (data == Qnil) {
         append_error_message("\n\t<unknown>");
@@ -611,16 +610,25 @@ static void dump_line_column(Value vfilename, Value vpos)
     append_error_message("\n\t%s:%"PRId64":%"PRId64" in ", filename, line, col);
 }
 
-static Value find_location_by_pair_id(Value id, Value *pfilename)
+static bool find_pair(Value tree, Value pair)
+{
+    for (; tree != Qnil; tree = cdr(tree)) {
+        if (tree == pair)
+            return true;
+        Value v = car(tree);
+        if (value_is_pair(v) && find_pair(v, pair))
+            return true;
+    }
+    return false;
+}
+
+static Value find_filename(Value pair)
 {
     for (Value p = source_data; p != Qnil; p = cdr(p)) {
-        Value filename = caar(p), locations = cadar(p);
-        Value found = assq(id, locations);
-        if (found != Qfalse) {
-            if (pfilename)
-                *pfilename = filename;
-            return found;
-        }
+        Value datum = car(p);
+        Value filename = car(datum), tree = cadr(datum);
+        if (find_pair(tree, pair))
+            return filename;
     }
     return Qfalse;
 }
@@ -631,24 +639,23 @@ static void dump_callee_name(Value callers)
         append_error_message("<toplevel>");
         return;
     }
-    Value id = car(callers);
-    Value found = find_location_by_pair_id(id, NULL);
-    if (found == Qfalse)
+    Value sym = caar(callers);
+    if (!value_is_symbol(sym)) {
         append_error_message("<unknown>");
-    else {
-        const char *name = value_to_string(cddr(found));
-        append_error_message("'%s'", name);
+        return;
     }
+    const char *name = value_to_string(sym);
+    append_error_message("'%s'", name);
 }
 
-static void dump_frame(Value id, Value callers)
+static void dump_frame(Value pair, Value callers)
 {
-    Value filename, found = find_location_by_pair_id(id, &filename);
-    if (found == Qfalse) {
+    Value filename = find_filename(pair);
+    if (filename == Qfalse) {
         append_error_message("\n\t<unknown>");
         return;
     }
-    dump_line_column(filename, cadr(found));
+    dump_line_column(filename, LOCATED_PAIR(pair)->pos);
     dump_callee_name(callers);
 }
 
@@ -673,8 +680,8 @@ static void call_stack_check_consistency(void)
 
 static Value iload(FILE *in, const char *filename)
 {
-    Value ast = iparse(in, filename), l = car(ast);
-    source_data = cons(cdr(ast), source_data);
+    Value ast = iparse(in, filename), l = cadr(ast);
+    source_data = cons(ast, source_data);
     if (l == Qundef)
         return Qundef;
     if (setjmp(jmp_runtime_error) != 0) {
@@ -690,8 +697,8 @@ static Value iload(FILE *in, const char *filename)
 
 static Value iload_inner(FILE *in, const char *path)
 {
-    Value ast = iparse(in, path), l = car(ast);
-    source_data = cons(cdr(ast), source_data);
+    Value ast = iparse(in, path), l = cadr(ast);
+    source_data = cons(ast, source_data);
     if (l == Qundef)
         return Qundef;
     return eval_body(toplevel_environment, l);
