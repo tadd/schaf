@@ -31,7 +31,8 @@ static void list_free(List *l)
 // Table
 
 enum {
-    TABLE_INIT_SIZE = 2,
+    TABLE_INIT_SIZE = 4,      // must be power of two
+    TABLE_RESIZE_FACTOR = 2,  // ditto
     TABLE_TOO_MANY_FACTOR = 3,
 };
 
@@ -97,7 +98,7 @@ static uint64_t table_hash(uint64_t x)
 
 static inline List **table_body(const Table *t, uint64_t key)
 {
-    uint64_t i = table_hash(key) % t->body_size;
+    uint64_t i = table_hash(key) & (t->body_size - 1U);
     return &t->body[i];
 }
 
@@ -122,31 +123,11 @@ static List *list_reverse(List *l)
     return prev;
 }
 
-// "next" is twice or more larger than `curr`
-static size_t next_size(size_t curr)
-{
-    static const size_t prime_max = 823117;
-    static const size_t primes[] = {
-        1, 2, 5, 11, 23, 47, 97, 197, 397, 797, 1597, 3203, 6421,
-        12853, 25717, 51437, 102877, 205759, 411527, prime_max,
-    };
-    static const size_t size = sizeof(primes) / sizeof(primes[0]);
-
-    if (prime_max <= curr)
-        goto last;
-    for (size_t i = 0; i < size; i++) {
-        if (primes[i] > curr)
-            return primes[i];
-    }
- last:
-    return curr*2+1;
-}
-
 static void table_resize(Table *t)
 {
     const size_t old_body_size = t->body_size;
     List **old_body = t->body;
-    t->body_size = next_size(t->body_size);
+    t->body_size *= TABLE_RESIZE_FACTOR;
     t->body = xcalloc(t->body_size, sizeof(List *)); // set NULL
     for (size_t i = 0; i < old_body_size; i++) {
         List *l = old_body[i];
