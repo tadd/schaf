@@ -489,7 +489,7 @@ static void apply_continuation(Value f, Value args)
     jump(cont);
 }
 
-// expects proc and args are evaluated if necessary
+// expects proc and args have been evaluated if necessary
 static Value apply(Table *env, Value proc, Value args)
 {
     expect_arity(PROCEDURE(proc)->arity, args);
