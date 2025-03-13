@@ -18,6 +18,6 @@ Our milestones will be available at the
 
 ## Why that name?
 
-* Both "Scheme" and "Schaf" begin with `Sch`. So we can use the prefix `sch_` for our
-  exported symbols in both senses.
+* Both "**Sch**eme" and "**Sch**af" begin with `Sch`. So we can use the prefix `sch_` for
+  our exported symbols in both senses.
 * [It](https://de.wiktionary.org/wiki/Schaf)'s like me who got lost.
