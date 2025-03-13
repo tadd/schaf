@@ -24,7 +24,7 @@ static void list_free(List *l)
 {
     for (List *next; l != NULL; l = next) {
         next = l->next;
-        free(l);
+        // free(l);
     }
 }
 
@@ -65,8 +65,8 @@ void table_free(Table *t)
         return;
     for (size_t i = 0; i < t->body_size; i++)
         list_free(t->body[i]);
-    free(t->body);
-    free(t);
+    // free(t->body);
+    // free(t);
 }
 
 static size_t list_length(List *l)
@@ -138,7 +138,7 @@ static void table_resize(Table *t)
             list_prepend(p, l);
         }
     }
-    free(old_body);
+    // free(old_body);
     for (size_t i = 0; i < t->body_size; i++)
         t->body[i] = list_reverse(t->body[i]);
 }

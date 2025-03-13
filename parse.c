@@ -429,7 +429,7 @@ Value iparse(FILE *in, const char *filename)
         ast = parse_program(p); // success
     else
         ast = ast_new(p, Qundef); // got an error
-    free(p);
+    // free(p);
     return ast;
 }
 

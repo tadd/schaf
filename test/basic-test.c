@@ -11,7 +11,6 @@
 #define expect_stringify(exp, v) do { \
         char *s = stringify(v); \
         cr_expect_str_eq(s, exp); \
-        free(s); \
     } while (0)
 
 #define value_idfunc list

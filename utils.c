@@ -1,9 +1,16 @@
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "utils.h"
+
+enum {
+    SPACE_SIZE = 240*1024*1024,
+};
+uint8_t space[SPACE_SIZE];
+ssize_t used;
 
 void error(const char *fmt, ...)
 {
@@ -18,16 +25,15 @@ void error(const char *fmt, ...)
 
 void *xmalloc(size_t size)
 {
-    void *p = malloc(size);
-    if (p == NULL)
+    size = (size + 7) / 8 * 8;
+    if (used + size > SPACE_SIZE)
         error("malloc(%zu) failed", size);
+    void *p = space + used;
+    used += size;
     return p;
 }
 
 void *xcalloc(size_t nmem, size_t memsize)
 {
-    void *p = calloc(nmem, memsize);
-    if (p == NULL)
-        error("calloc(%zu, %zu) failed", nmem, memsize);
-    return p;
+    return xmalloc(nmem * memsize);
 }
