@@ -86,11 +86,9 @@ void table_dump(const Table *t)
 }
 #endif
 
-static uint64_t table_hash(uint64_t x) // simplified xorshift
+static uint64_t table_hash(uint64_t x)
 {
-    x ^= x << 7U;
-    x ^= x >> 9U;
-    return x;
+    return x >> 2U;
 }
 
 static inline List **table_body(const Table *t, uint64_t key)
