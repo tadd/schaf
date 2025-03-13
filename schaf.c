@@ -560,8 +560,10 @@ static Value map_eval(Table *env, Value l)
     return cdr(mapped);
 }
 
-static Value eval_apply(Table *env, Value symproc, Value args)
+static Value eval_apply(Table *env, Value l)
 {
+    call_stack_push(l);
+    Value symproc = car(l), args = cdr(l);
     Value proc = eval(env, symproc);
     expect_type("eval", TYPE_PROC, proc);
     if (!value_tag_is(proc, TAG_SYNTAX))
@@ -571,18 +573,21 @@ static Value eval_apply(Table *env, Value symproc, Value args)
     return ret;
 }
 
+static Value lookup_or_error(Table *env, Value v)
+{
+    Value p = lookup(env, v);
+    if (p == Qundef)
+        runtime_error("unbound variable: %s", value_to_string(v));
+    return p;
+}
+
 static Value eval(Table *env, Value v)
 {
-    if (value_is_symbol(v)) {
-        Value p = lookup(env, v);
-        if (p == Qundef)
-            runtime_error("unbound variable: %s", value_to_string(v));
-        return p;
-    }
+    if (value_is_symbol(v))
+        return lookup_or_error(env, v);
     if (v == Qnil || !value_is_pair(v))
         return v;
-    call_stack_push(v);
-    return eval_apply(env, car(v), cdr(v));
+    return eval_apply(env, v);
 }
 
 ATTR(format(printf, 1, 2))
