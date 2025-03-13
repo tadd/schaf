@@ -447,24 +447,6 @@ static Value apply_closure(UNUSED Table *env, Value proc, Value args)
     return eval_body(clenv, cl->body);
 }
 
-static inline void expect_nonnull(const char *msg, Value l)
-{
-    expect_type(msg, TYPE_PAIR, l);
-    if (l == Qnil)
-        runtime_error("%s: expected non-null?", msg);
-}
-
-static void call_stack_push(Value l)
-{
-    call_stack = cons(l, call_stack);
-}
-
-static void call_stack_pop(void)
-{
-    expect_nonnull("apply", call_stack);
-    call_stack = cdr(call_stack);
-}
-
 ATTR(noreturn) ATTR(noinline)
 static void jump(Continuation *cont)
 {
@@ -558,6 +540,24 @@ static Value map_eval(Table *env, Value l)
     for (; l != Qnil; l = cdr(l))
         last = PAIR(last)->cdr = list1(eval(env, car(l)));
     return cdr(mapped);
+}
+
+static void call_stack_push(Value l)
+{
+    call_stack = cons(l, call_stack);
+}
+
+static inline void expect_nonnull(const char *msg, Value l)
+{
+    expect_type(msg, TYPE_PAIR, l);
+    if (l == Qnil)
+        runtime_error("%s: expected non-null?", msg);
+}
+
+static void call_stack_pop(void)
+{
+    expect_nonnull("apply", call_stack);
+    call_stack = cdr(call_stack);
 }
 
 static Value eval_apply(Table *env, Value l)
