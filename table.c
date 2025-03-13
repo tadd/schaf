@@ -55,11 +55,9 @@ struct Table {
 
 const uint64_t TABLE_NOT_FOUND = UINT64_MAX-1;
 
-static uint64_t direct_hash(uint64_t x) // simplified xorshift
+static uint64_t direct_hash(uint64_t x)
 {
-    x ^= x << 7U;
-    x ^= x >> 9U;
-    return x;
+    return x >> 2U;
 }
 
 static Table *table_new_full(TableEqualFunc eq, TableHashFunc hash, TableFreeFunc free_key,
@@ -138,14 +136,9 @@ void table_dump(const Table *t)
     }
 }
 
-static uint64_t table_hash(uint64_t x)
-{
-    return x >> 2U;
-}
-
 static inline List **table_body(const Table *t, uint64_t key)
 {
-    uint64_t i = table_hash(key) & (t->body_size - 1U);
+    uint64_t i = t->hash(key) & (t->body_size - 1U);
     return &t->body[i];
 }
 
