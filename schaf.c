@@ -75,14 +75,14 @@ static const volatile void *stack_base = NULL;
 static const char *load_basedir = NULL;
 // FIXME: array<Value> with push/pop operation
 static Value call_stack = Qnil; // list of pairs
-// FIXME: hash map: Value filename => struct { syntax_list; newline_positions; }
+// FIXME??: hash map: Value filename => struct { syntax_list; newline_positions; }
 static Value source_data = Qnil; // (a)list of AST: (filename syntax_list newline_positions)
 // newline_positions: list of pos | int
 
 // FIXME:
 // AST: (filename syntax_list newline_positions)
 // =>
-// struct AST { filename; syntax_list; newline_positions; };
+// ?? struct AST { filename; syntax_list; newline_positions; };
 
 //
 // value_is_*: Type Checks
