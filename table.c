@@ -96,21 +96,14 @@ static inline uint64_t table_hash(uint64_t x)
     return x >> 2U;
 }
 
-static inline List **table_body(const Table *t, uint64_t key)
+static inline uint64_t body_index(const Table *t, uint64_t key)
 {
-    uint64_t i = table_hash(key) & (t->body_size - 1U);
-    return &t->body[i];
+    return table_hash(key) & (t->body_size - 1U);
 }
 
 static inline bool table_too_many_elements(const Table *t)
 {
     return t->size > t->body_size * TABLE_TOO_MANY_FACTOR;
-}
-
-static void list_prepend(List **p, List *l)
-{
-    l->next = *p;
-    *p = l;
 }
 
 static List *list_reverse(List *l)
@@ -133,9 +126,9 @@ static void table_resize(Table *t)
         List *l = old_body[i];
         for (List *next; l != NULL; l = next) {
             next = l->next;
-            l->next = NULL;
-            List **p = table_body(t, l->key);
-            list_prepend(p, l);
+            uint64_t j = body_index(t, l->key);
+            l->next = t->body[j];
+            t->body[j] = l;
         }
     }
     free(old_body);
@@ -150,8 +143,8 @@ Table *table_put(Table *t, uint64_t key, uint64_t value)
         error("%s: got invalid value == TABLE_NOT_FOUND", __func__);
     if (table_too_many_elements(t))
         table_resize(t);
-    List **p = table_body(t, key);
-    *p = list_new(key, value, *p); // prepend even if the same key exists
+    uint64_t i = body_index(t, key);
+    t->body[i] = list_new(key, value, t->body[i]); // prepend even if the same key exists
     t->size++;
     return t;
 }
@@ -169,8 +162,8 @@ static List *find1(const List *p, uint64_t key)
 static List *find(const Table *t, uint64_t key)
 {
     for (; t != NULL; t = t->parent) {
-        const List *b = *table_body(t, key);
-        List *found = find1(b, key);
+        uint64_t i = body_index(t, key);
+        List *found = find1(t->body[i], key);
         if (found != NULL)
             return found;
     }
