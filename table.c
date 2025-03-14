@@ -91,7 +91,7 @@ void table_dump(const Table *t)
     }
 }
 
-static uint64_t table_hash(uint64_t x)
+static inline uint64_t table_hash(uint64_t x)
 {
     return x >> 2U;
 }
