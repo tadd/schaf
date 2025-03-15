@@ -1514,9 +1514,7 @@ static Value dup_list(Value l, Value *plast)
 static Value proc_append(UNUSED Table *env, Value ls)
 {
     Value l = Qnil, last = Qnil;
-    for (Value next; ls != Qnil; ls = next) {
-        if ((next = cdr(ls)) == Qnil)
-            break;
+    for (Value next; ls != Qnil && (next = cdr(ls)) != Qnil; ls = next) {
         Value dup = dup_list(car(ls), &last);
         l = append2(l, dup);
     }
