@@ -415,8 +415,8 @@ static Value ast_new(Parser *p, Value syntax_list)
 
 static Value parse_program(Parser *p)
 {
-    Value v = DUMMY_PAIR(), last = v;
-    for (Value expr; (expr = parse_expr(p)) != Qundef; )
+    Value v = DUMMY_PAIR();
+    for (Value last = v, expr; (expr = parse_expr(p)) != Qundef; )
         last = PAIR(last)->cdr = list1(expr);
     return ast_new(p, cdr(v));
 }
