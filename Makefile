@@ -32,7 +32,7 @@ microbench: schaf
 	$(CC) $(CFLAGS) -c $< -o $@
 
 %.s: %.c
-	$(CC) $(CFLAGS) -S -fverbose-asm -c $<
+	$(CC) -S -fverbose-asm $(CFLAGS) -c $<
 
 %.analyzer: %.c
 	$(CC) $(CFLAGS) $(ANALYZER) -c $< -o /dev/null
