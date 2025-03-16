@@ -306,10 +306,12 @@
           '((6 1 3) (-5 -2)))))
 
 (describe "let*" (lambda ()
+  (expect = 42 (let* () 42)) ;; accepts () for bindings
   (let* ((x 42) (y 10))
     (expect equal? `(,x ,y) '(42 10)))))
 
 (describe "letrec" (lambda ()
+  (expect = 42 (letrec () 42)) ;; accepts () for bindings
   (define retval
     (letrec ((myeven?
               (lambda (n)
@@ -330,6 +332,7 @@
 
 ;; 4.2.4. Iteration
 (describe "do" (lambda ()
+  (expect = 42 (do () (#t 42))) ;; accepts () for bindings
   (expect equal?
           (do ((l '())
                (i 0 (+ i 1)))
@@ -878,6 +881,7 @@
   (expect equal? '(3 2 1) (reverse '(1 2 3)))))
 
 (describe "list-tail" (lambda ()
+  (expect equal? (list-tail '() 0) '())
   (expect equal? (list-tail '(a b c d) 0) '(a b c d))
   (expect equal? (list-tail '(a b c d) 2) '(c d))
   (expect equal? (list-tail '(a b c d) 3) '(d))))
@@ -888,17 +892,20 @@
   (expect equal? (list-ref '(a b c d) 3) 'd)))
 
 (describe "memq" (lambda ()
+  (expect equal? (memq 'a '()) #f)
   (expect equal? (memq 'a '(a b c)) '(a b c))
   (expect equal? (memq 'b '(a b c)) '(b c))
   (expect equal? (memq 'a '(b c d)) #f)))
 
 (describe "memv" (lambda ()
+  (expect equal? (memv 'a '()) #f)
   (expect equal? (memv 'a '(a b c)) '(a b c))
   (expect equal? (memv 'b '(a b c)) '(b c))
   (expect equal? (memv 'a '(b c d)) #f)
   (expect equal? (memv 101 '(100 101 102)) '(101 102))))
 
 (describe "member" (lambda ()
+  (expect equal? (member 'a '()) #f)
   (expect equal? (member 'a '(a b c)) '(a b c))
   (expect equal? (member 'b '(a b c)) '(b c))
   (expect equal? (member 'a '(b c d)) #f)
@@ -906,6 +913,7 @@
   (expect equal? (member (list 'a) '(b (a) c)) '((a) c))))
 
 (describe "assq" (lambda ()
+  (expect equal? (assq 'a ()) #f)
   (define e '((a 1) (b 2) (c 3)))
   (expect equal? (assq 'a e)
                  '(a 1))
@@ -930,6 +938,7 @@
                  '(5 7))))
 
 (describe "assoc" (lambda ()
+  (expect equal? (assoc 'a ()) #f)
   (define e '((a 1) (b 2) (c 3)))
   (expect equal? (assoc 'a e)
                  '(a 1))
@@ -992,6 +1001,7 @@
   (expect-t (call/cc (lambda (c) (procedure? c))))))
 
 (describe "apply" (lambda ()
+  (expect equal? (apply + '()) 0)
   (expect equal? (apply + '(42)) 42)
   (expect equal? (apply + 1 '(42)) 43)
   (expect equal? (apply + 1 2 '(42)) 45)

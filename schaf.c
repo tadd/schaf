@@ -23,6 +23,7 @@
 //
 
 static const char *TYPE_NAMES[] = {
+    [TYPE_NULL] = "null",
     [TYPE_BOOL] = "boolean",
     [TYPE_INT] = "integer",
     [TYPE_SYMBOL] = "symbol",
@@ -35,8 +36,6 @@ static const char *TYPE_NAMES[] = {
 #define VALUE_TAG(v) (*(ValueTag*)(v))
 #define OF_BOOL(v) ((v) ? Qtrue : Qfalse)
 
-// singletons
-static const Pair PAIR_NIL = { .tag = TAG_PAIR, .car = 0, .cdr = 0 };
 // Value (uintptr_t):
 //   0b.....000 Pointer (Unchangeable pattern!)
 //   0b.......1 Integer
@@ -52,7 +51,7 @@ static Flag FLAG_MASK_SYM =  0b11;
 static Flag FLAG_MASK_INT =   0b1;
 static Flag FLAG_SYM      =  0b10;
 static Flag FLAG_INT      =   0b1;
-const Value Qnil = (Value) &PAIR_NIL;
+const Value Qnil   = 0b11100U;
 const Value Qfalse = 0b00100U;
 const Value Qtrue  = 0b01100U;
 const Value Qundef = 0b10100U; // may be an error or something
@@ -127,6 +126,8 @@ inline bool value_is_pair(Value v)
 
 static Type immediate_type_of(Value v)
 {
+    if (v == Qnil)
+        return TYPE_NULL;
     if (value_is_int(v))
         return TYPE_INT;
     if (value_is_symbol(v))
@@ -343,6 +344,11 @@ static void expect_type_or(const char *header, Type e1, Type e2, Value v)
                   value_type_to_string(t));
 }
 
+static void expect_list_head(const char *header, Value v)
+{
+    expect_type_or(header, TYPE_NULL, TYPE_PAIR, v);
+}
+
 static void expect_arity_range(const char *func, int64_t min, int64_t max, Value args)
 {
     int64_t actual = length(args);
@@ -547,16 +553,9 @@ static void call_stack_push(Value l)
     call_stack = cons(l, call_stack);
 }
 
-static inline void expect_nonnull(const char *msg, Value l)
-{
-    expect_type(msg, TYPE_PAIR, l);
-    if (l == Qnil)
-        runtime_error("%s: expected non-null?", msg);
-}
-
 static void call_stack_pop(void)
 {
-    expect_nonnull("apply", call_stack);
+    expect_type("apply", TYPE_PAIR, call_stack);
     call_stack = cdr(call_stack);
 }
 
@@ -764,10 +763,9 @@ static Value syn_quote(UNUSED Table *env, Value datum)
 static Value syn_lambda(Table *env, Value args)
 {
     Value params = car(args), body = cdr(args);
-    expect_type_or("lambda", TYPE_PAIR, TYPE_SYMBOL, params);
+    if (params != Qnil)
+        expect_type_or("lambda", TYPE_PAIR, TYPE_SYMBOL, params);
     expect_type("lambda", TYPE_PAIR, body);
-    if (body == Qnil)
-        runtime_error("lambda: one or more expressions needed in body");
     return value_of_closure(env, params, body);
 }
 
@@ -811,7 +809,7 @@ static inline void expect_null(const char *msg, Value l)
 
 static Value cond_eval_recipient(Table *env, Value test, Value recipients)
 {
-    expect_nonnull("recipient in cond", recipients);
+    expect_type("recipient in cond", TYPE_PAIR, recipients);
     Value recipient = eval(env, car(recipients)), rest = cdr(recipients);
     expect_type("end of => in cond", TYPE_PROC, recipient);
     expect_null("end of => in cond", rest);
@@ -825,7 +823,7 @@ static Value syn_cond(Table *env, Value clauses)
 
     for (; clauses != Qnil; clauses = cdr(clauses)) {
         Value clause = car(clauses);
-        expect_nonnull("clause in cond", clause);
+        expect_type("clause in cond", TYPE_PAIR, clause);
         Value test = car(clause);
         Value exprs = cdr(clause);
         if (test == SYM_ELSE)
@@ -849,12 +847,13 @@ static Value syn_case(Table *env, Value args)
 {
     expect_arity_min("case", 2, args);
     Value key = eval(env, car(args)), clauses = cdr(args);
+    expect_list_head("case", clauses);
 
     for (; clauses != Qnil; clauses = cdr(clauses)) {
         Value clause = car(clauses);
-        expect_nonnull("case", clause);
+        expect_type("case", TYPE_PAIR, clause);
         Value data = car(clause), exprs = cdr(clause);
-        expect_nonnull("case", exprs);
+        expect_type("case", TYPE_PAIR, exprs);
         if (data == SYM_ELSE || memq(key, data) != Qfalse)
             return eval_body(env, exprs);
     }
@@ -903,7 +902,7 @@ static void transpose_2xn(Value ls, Value *pfirsts, Value *pseconds) // 2 * n
 
 static Value let(Table *env, Value var, Value bindings, Value body)
 {
-    expect_type("let", TYPE_PAIR, bindings);
+    expect_list_head("let", bindings);
     Value params = Qnil, symargs = Qnil;
     transpose_2xn(bindings, &params, &symargs);
     Value args = map_eval(env, symargs);
@@ -930,7 +929,7 @@ static Value syn_let(Table *env, Value args)
 
 static Value let_star(Table *env, Value bindings, Value body)
 {
-    expect_type("let*", TYPE_PAIR, bindings);
+    expect_list_head("let*", bindings);
     Table *letenv = env;
     for (; bindings != Qnil; bindings = cdr(bindings)) {
         Value b = car(bindings);
@@ -959,9 +958,8 @@ static Value syn_letrec(Table *env, Value args)
     expect_arity_min("letrec", 2, args);
     Value bindings = car(args);
     Value body = cdr(args);
-    expect_type_twin("letrec", TYPE_PAIR, bindings, body);
-    if (body == Qnil)
-        runtime_error("letrec: one or more expressions needed in body");
+    expect_list_head("letrec", bindings);
+    expect_type("letrec", TYPE_PAIR, body);
 
     Table *letenv = newenv(env);
     for (; bindings != Qnil; bindings = cdr(bindings)) {
@@ -989,16 +987,17 @@ static Value syn_do(Table *env, Value args)
     expect_arity_min("do", 2, args);
 
     Value bindings = car(args), tests = cadr(args), body = cddr(args);
-    expect_type_twin("do", TYPE_PAIR, bindings, tests);
+    expect_list_head("do", bindings);
+    expect_list_head("do", tests);
     Table *doenv = newenv(env);
     Value steps = Qnil;
     for (; bindings != Qnil; bindings = cdr(bindings)) {
         Value b = car(bindings);
-        expect_nonnull("do", b);
+        expect_type("do", TYPE_PAIR, b);
         Value var = car(b), init = cadr(b), step = cddr(b);
+        expect_type("do", TYPE_SYMBOL, var);
         if (step != Qnil)
             steps = cons(cons(var, car(step)), steps);
-        expect_type("do", TYPE_SYMBOL, var);
         env_put(doenv, var, eval(env, init)); // in the original env
     }
     Value test = car(tests), exprs = cdr(tests);
@@ -1026,12 +1025,12 @@ static Value qq(Table *env, Value datum, int64_t depth)
         return datum;
     Value a = car(datum), d = cdr(datum);
     if (a == SYM_QUASIQUOTE) {
-        expect_nonnull("nested quasiquote", d);
+        expect_type("nested quasiquote", TYPE_PAIR, d);
         Value v = qq(env, car(d), depth + 1);
         return list2(a, v);
     }
     if (a == SYM_UNQUOTE || a == SYM_UNQUOTE_SPLICING) {
-        expect_nonnull("unquotes in quasiquote", d);
+        expect_type("unquotes in quasiquote", TYPE_PAIR, d);
         Value v = qq(env, car(d), depth - 1);
         return depth == 1 ? v : list2(a, v);
     }
@@ -1068,7 +1067,7 @@ static Value qq_list(Table *env, Value datum, int64_t depth)
     for (Value last = ret; datum != Qnil; datum = cdr(datum)) {
         bool is_simple = !value_is_pair(datum);
         if (is_simple || is_quoted_terminal(datum)) {
-            expect_nonnull("quasiquote", cdr(ret));
+            expect_type("quasiquote", TYPE_PAIR, cdr(ret));
             PAIR(last)->cdr = is_simple ? datum : qq(env, datum, depth);
             break;
         }
@@ -1132,7 +1131,7 @@ static Value syn_define(Table *env, Value args)
     case TYPE_PAIR:
         return define_proc_internal(env, head, cdr(args));
     default:
-        runtime_error("define: expected first argument symbol or pair but got %s",
+        runtime_error("define: the first argument expected symbol or pair but got %s",
                       value_type_to_string(t));
     }
 }
@@ -1157,8 +1156,6 @@ static bool equal(Value x, Value y)
         return false;
     switch (tx) {
     case TYPE_PAIR:
-        if (x == Qnil || y == Qnil)
-            return false;
         return equal(car(x), car(y)) &&
                equal(cdr(x), cdr(y));
     case TYPE_STR:
@@ -1457,14 +1454,19 @@ static Value proc_cons(UNUSED Table *env, Value car, Value cdr)
 
 static Value proc_car(UNUSED Table *env, Value pair)
 {
-    expect_nonnull("car", pair);
+    expect_type("car", TYPE_PAIR, pair);
     return car(pair);
 }
 
 static Value proc_cdr(UNUSED Table *env, Value pair)
 {
-    expect_nonnull("cdr", pair);
+    expect_type("cdr", TYPE_PAIR, pair);
     return cdr(pair);
+}
+
+bool value_is_null(Value v)
+{
+    return v == Qnil;
 }
 
 static Value proc_null_p(UNUSED Table *env, Value list)
@@ -1496,12 +1498,16 @@ int64_t length(Value l)
 
 static Value proc_length(UNUSED Table *env, Value list)
 {
-    expect_type("length", TYPE_PAIR, list);
+    expect_list_head("length", list);
     return value_of_int(length(list));
 }
 
 static Value dup_list(Value l, Value *plast)
 {
+    if (l == Qnil) {
+        *plast = Qnil;
+        return Qnil;
+    }
     Value dup = DUMMY_PAIR(), last = dup;
     for (; l != Qnil; l = cdr(l)) {
         expect_type("append", TYPE_PAIR, l);
@@ -1537,24 +1543,24 @@ Value reverse(Value l)
 
 static Value proc_reverse(UNUSED Table *env, Value list)
 {
-    expect_type("reverse", TYPE_PAIR, list);
+    expect_list_head("reverse", list);
     return reverse(list);
 }
 
 static Value list_tail(const char *func, Value list, Value k)
 {
-    expect_type(func, TYPE_PAIR, list);
-    expect_type(func, TYPE_INT, k);
-    int64_t n = value_to_int(k);
+    expect_list_head(func, list);
+    int64_t n = value_get_int(func, k);
     if (n < 0)
         runtime_error("%s: 2nd element needs to be non-negative: "PRId64, n);
     Value p = list;
-    for (int64_t i = 0; p != Qnil; p = cdr(p), i++) {
+    int64_t i;
+    for (i = 0; p != Qnil; p = cdr(p), i++) {
         if (i == n)
             break;
     }
-    if (p == Qnil)
-        runtime_error("%s: list has fewer than "PRId64" element", func, n);
+    if (i != n)
+        runtime_error("%s: list is shorter than %"PRId64" element", func, n);
     return p;
 }
 
@@ -1580,7 +1586,7 @@ static Value memq(Value key, Value l)
 
 static Value proc_memq(UNUSED Table *env, Value obj, Value list)
 {
-    expect_type("memq", TYPE_PAIR, list);
+    expect_list_head("memq", list);
     return memq(obj, list);
 }
 
@@ -1596,7 +1602,7 @@ static Value member(Value key, Value l)
 
 static Value proc_member(UNUSED Table *env, Value obj, Value list)
 {
-    expect_type("member", TYPE_PAIR, list);
+    expect_list_head("member", list);
     return member(obj, list);
 }
 
@@ -1612,7 +1618,7 @@ static Value assq(Value key, Value l)
 
 static Value proc_assq(UNUSED Table *env, Value obj, Value alist)
 {
-    expect_type("assq", TYPE_PAIR, alist);
+    expect_list_head("assq", alist);
     return assq(obj, alist);
 }
 
@@ -1628,7 +1634,7 @@ static Value assoc(Value key, Value l)
 
 static Value proc_assoc(UNUSED Table *env, Value obj, Value alist)
 {
-    expect_type("assoc", TYPE_PAIR, alist);
+    expect_list_head("assoc", alist);
     return assoc(obj, alist);
 }
 
@@ -1668,7 +1674,7 @@ static Value build_apply_args(Value args)
     for (Value last = heads, next; (next = cdr(args)) != Qnil; args = next)
         last = PAIR(last)->cdr = list1(car(args));
     Value rest = car(args);
-    expect_type("args on apply", TYPE_PAIR, rest);
+    expect_list_head("args on apply", rest);
     return append2(cdr(heads), rest);
 }
 
@@ -1687,9 +1693,9 @@ static bool cars_cdrs(Value ls, Value *pcars, Value *pcdrs)
     Value cars = DUMMY_PAIR(), cdrs = DUMMY_PAIR();
     for (Value lcars = cars, lcdrs = cdrs; ls != Qnil; ls = cdr(ls)) {
         Value l = car(ls);
-        expect_type("map", TYPE_PAIR, l);
         if (l == Qnil)
             return false;
+        expect_type("map", TYPE_PAIR, l);
         lcars = PAIR(lcars)->cdr = list1(car(l));
         lcdrs = PAIR(lcdrs)->cdr = list1(cdr(l));
     }
@@ -1778,6 +1784,9 @@ static void display_list(FILE *f, Value l)
 static void fdisplay(FILE* f, Value v)
 {
     switch (value_type_of(v)) {
+    case TYPE_NULL:
+        fprintf(f, "()");
+        break;
     case TYPE_BOOL:
         fprintf(f, "%s", v == Qtrue ? "#t" : "#f");
         break;
