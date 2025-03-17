@@ -8,13 +8,8 @@ all: benchmark
 
 target: $(TARGET)
 
-benchmark: $(TARGET)
-	@echo >&2; for t in *.scm; do \
-	    echo $$t: >&2; \
-	    for i in `seq ${NLOOP}`; do \
-	        ../$(BIN) $(BENCHFLAGS) $$t; \
-	    done; echo >&2; \
-	done
+benchmark: benchmark.bash $(TARGET)
+	./$< $(BIN)
 
 %.scm: src/%.scm.erb
 	erb -T - $< > $@
