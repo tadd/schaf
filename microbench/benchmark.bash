@@ -4,6 +4,7 @@ nloop=10
 benchflags=-TM
 
 run() {
+    set -o pipefail
     local -r bin=$1
     for t in *.scm; do
         printf '%12s	' $t
