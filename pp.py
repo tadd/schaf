@@ -1,9 +1,8 @@
-from gdb import (lookup_type, lookup_global_symbol, parse_and_eval,
-                 Type, Command, COMMAND_DATA)
+from gdb import *
 
-def cfuncall(name, *args):
+def cfuncalls(name, *args):
     func = lookup_global_symbol(name).value()
-    return func(*args)
+    return func(*args).string()
 
 class ValuePrinter:
     TYPE = lookup_type('Value')
@@ -12,8 +11,8 @@ class ValuePrinter:
         self.val = val
 
     def __str__(self):
-        ty = cfuncall('value_to_type_name', self.val).string()
-        val = cfuncall('stringify', self.val).string()
+        ty = cfuncalls('value_to_type_name', self.val)
+        val = cfuncalls('stringify', self.val)
         return '{:#x} {}: {}'.format(int(self.val), ty, val)
 
 class PP (Command):
