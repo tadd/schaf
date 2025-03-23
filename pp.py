@@ -1,9 +1,12 @@
+from gdb import (lookup_type, lookup_global_symbol, parse_and_eval,
+                 Type, Command, COMMAND_DATA)
+
 def cfuncall(name, *args):
-    func = gdb.lookup_global_symbol(name).value()
+    func = lookup_global_symbol(name).value()
     return func(*args)
 
 class ValuePrinter:
-    TYPE = gdb.lookup_type('Value')
+    TYPE = lookup_type('Value')
 
     def __init__(self, val):
         self.val = val
@@ -13,12 +16,12 @@ class ValuePrinter:
         val = cfuncall('stringify', self.val).string()
         return '{:#x} {}: {}'.format(int(self.val), ty, val)
 
-class PP (gdb.Command):
+class PP (Command):
     def __init__(self):
-        super(type(self), self).__init__('pp', gdb.COMMAND_DATA)
+        super(type(self), self).__init__('pp', COMMAND_DATA)
 
     def invoke(self, arg, from_tty):
-        val = gdb.parse_and_eval(arg)
+        val = parse_and_eval(arg)
         pp = schaf_pp(val)
         if pp:
             val = pp
@@ -26,7 +29,7 @@ class PP (gdb.Command):
 PP()
 
 def schaf_pp(val):
-    if val.type == ValuePrinter.TYPE:
+    if Type.unqualified(val.type) == ValuePrinter.TYPE:
         return ValuePrinter(val)
     return None
 
