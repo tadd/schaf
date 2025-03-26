@@ -1,7 +1,8 @@
 #!/bin/bash -eu
+set +e
 
 nloop=10
-benchflags='-TM -H 192'
+benchflags=-TM
 
 run() {
     set -o pipefail
@@ -15,6 +16,7 @@ l = ARGF.readlines
 cpu = mean(l, "CPU", 3)
 mem = mean(l, "Vm")
 puts "%.3f ms\t%d kb" % [cpu, mem]'
+        echo $?
     done
 }
 
