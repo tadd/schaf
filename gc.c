@@ -15,9 +15,16 @@ static size_t heap_size, heap_used;
 static uint8_t *heap;
 static const volatile uint8_t *stack_base;
 
+static bool stress;
+
 void sch_set_gc_init_size(size_t init_mib)
 {
     init_size = init_mib * MiB;
+}
+
+void sch_set_gc_stress(bool b)
+{
+    stress = b;
 }
 
 static inline size_t align(size_t size)
@@ -62,6 +69,8 @@ static void gc(void)
 
 void *gc_malloc(size_t size)
 {
+    if (stress)
+        gc();
     void *p = allocate(size);
     if (p == NULL) {
         gc();
