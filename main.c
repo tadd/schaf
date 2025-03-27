@@ -19,6 +19,7 @@ static void usage(FILE *out)
     fprintf(out, "  -T\t\tprint consumed CPU time at exit\n");
     fprintf(out, "  -M\t\tprint memory usage (VmHWM) at exit\n");
     fprintf(out, "  -H <MiB>\tspecify initial heap size\n");
+    fprintf(out, "  -S\t\tput stress on GC\n");
     fprintf(out, "  -h\t\tprint this help\n");
     exit(out == stdout ? 0 : 2);
 }
@@ -43,6 +44,7 @@ typedef struct {
     bool cputime;
     bool memory;
     size_t init_heap_size;
+    bool stress_gc;
 } Option;
 
 static long parse_posint(const char *s)
@@ -64,9 +66,10 @@ static Option parse_opt(int argc, char *const *argv)
         .cputime = false,
         .memory = false,
         .init_heap_size = 0,
+        .stress_gc = false,
     };
     int opt;
-    while ((opt = getopt(argc, argv, "e:hPpH:TM")) != -1) {
+    while ((opt = getopt(argc, argv, "e:hPpH:TMsS")) != -1) {
         switch (opt) {
         case 'e':
             o.script = optarg;
@@ -87,6 +90,9 @@ static Option parse_opt(int argc, char *const *argv)
             break;
         case 'H':
             o.init_heap_size = parse_posint(optarg);
+            break;
+        case 'S':
+            o.stress_gc = true;
             break;
         case '?':
             usage(stderr);
@@ -140,6 +146,7 @@ int main(int argc, char **argv)
         atexit(print_vmhwm);
     if (o.cputime)
         atexit(print_cputime);
+    sch_set_gc_stress(o.stress_gc);
     if (o.init_heap_size > 0)
         sch_set_gc_init_size(o.init_heap_size);
 
