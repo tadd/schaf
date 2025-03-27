@@ -1121,7 +1121,7 @@
                        (4 5 -1 3)
                        (5 4 -1 3)))))
 
-(describe "call/cc retlec and set!" (lambda ()
+(describe "call/cc + letrec = set!" (lambda ()
   (define (f)
     (letrec ((x (call/cc
 		 (lambda (c)

@@ -3,7 +3,7 @@
 
 ;; https://gitlab.com/kashell/Kawa/-/blob/master/testsuite/r5rs_pitfall.scm
 
-(describe "call/cc retlec" (lambda ()
+(describe "call/cc letrec" (lambda ()
   (define (f)
     (letrec ((x (call/cc list))
              (y (call/cc list)))
@@ -37,7 +37,7 @@
            (in yo))))))
   (expect equal? r '(10 9 8 7 6 5 4 3 2 1 0))))
 
-(describe "call/cc defines in retlec body" (lambda ()
+(describe "call/cc defines in letrec body" (lambda ()
   (define (f)
     (let ((cont #f))
       (letrec ((x (call/cc (lambda (c) (set! cont c) 0)))
