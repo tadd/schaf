@@ -60,7 +60,7 @@ Value eval_string(const char *s);
 
 const char *error_message(void);
 
-void sch_set_gc_print_stat(bool b);
 void sch_set_gc_init_size(size_t mib);
+void sch_set_gc_stress(bool b);
 
 #endif
