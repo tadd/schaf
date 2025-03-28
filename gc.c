@@ -69,25 +69,25 @@ void gc_init(void)
 
 static void *allocate_from_free_list(Chunk *prev, Chunk *curr, size_t size)
 {
-    uint8_t *p = (uint8_t *) curr;
     size_t hsize = size + sizeof(Header);
     Chunk *next = curr->next;
     if (curr->h.size > hsize) {
-        Header h = curr->h;
-        h.size -= hsize;
-        Chunk *ch = (Chunk *)(p + hsize);
-        ch->h = h;
-        ch->next = next;
-        next = ch;
+        size_t restsize = curr->h.size - hsize;
+        uint8_t *p = (uint8_t *) curr;
+        Chunk *rest = (Chunk *)(p + hsize);
+        rest->h.size = restsize;
+        rest->h.living = false;
+        rest->h.allocated = false;
+        rest->next = next;
+        next = rest;
     }
     if (prev == NULL)
         free_list = next;
     else
         prev->next = next;
-    Header *o = HEADER(p);
-    o->size = size;
-    o->allocated = true;
-    return o + 1; // user of allocation use curr->next space and so-on
+    curr->h.size = size;
+    curr->h.allocated = true;
+    return &curr->next; // use curr->next space and so-on as allocated
 }
 
 static void *allocate(size_t size)
