@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <math.h>
 #include <stdalign.h>
 #include <stdbool.h>
@@ -53,6 +54,8 @@ static inline size_t align(size_t size)
     return (size + 7U) / 8U * 8U;
 }
 
+#define assert_ptr(p) assert((uintptr_t) p > 0x10)
+
 void gc_init(void)
 {
     init_size = align(init_size);
@@ -60,17 +63,22 @@ void gc_init(void)
     memset(heap, 0, init_size);
 
     Chunk *ch = (void *) heap;
+    assert_ptr(ch);
     ch->h.size = init_size - sizeof(Header);
     ch->h.allocated = false;
     ch->h.living = false;
     ch->next = NULL;
     free_list = ch;
+    assert_ptr(free_list);
 }
 
 static void *allocate_from_free_list(Chunk *prev, Chunk *curr, size_t size)
 {
+    assert_ptr(curr);
+    assert_ptr(curr->next);
     size_t hsize = size + sizeof(Header);
     Chunk *next = curr->next;
+    assert_ptr(next);
     if (curr->h.size > hsize) {
         size_t restsize = curr->h.size - hsize;
         uint8_t *p = (uint8_t *) curr;
@@ -81,6 +89,7 @@ static void *allocate_from_free_list(Chunk *prev, Chunk *curr, size_t size)
         rest->next = next;
         next = rest;
     }
+    assert_ptr(next);
     if (prev == NULL)
         free_list = next;
     else
@@ -94,6 +103,7 @@ static void *allocate(size_t size)
 {
     size_t hsize = size + sizeof(Header);
     for (Chunk *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = curr->next) {
+        assert_ptr(curr);
         if (curr->h.size >= hsize) // First-fit
             return allocate_from_free_list(prev, curr, size);
     }
@@ -285,6 +295,9 @@ static void heap_stat(const char *header)
 static void add_to_free_list(void *p)
 {
     Chunk *ch = p;
+    assert_ptr(free_list);
+    assert_ptr(ch->next);
+    assert_ptr(ch);
     ch->next = free_list; // prepend
     free_list = ch;
 }
@@ -294,6 +307,8 @@ static void sweep(void)
     uint8_t *p = heap, *endp = p + init_size;
     size_t offset;
     for (Header *h, *prev = NULL; p < endp; p += offset) {
+        assert_ptr(p);
+        assert_ptr(prev);
         h = HEADER(p);
         offset = h->size + sizeof(Header);
         if (!h->allocated)
@@ -351,5 +366,7 @@ void *gc_malloc(size_t size)
     }
     if (p == NULL)
         error("out of memory; heap (%zu MiB) exhausted", init_size / MiB);
+    assert_ptr(p);
+    memset(p, 0, size);
     return p;
 }
