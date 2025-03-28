@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <math.h>
 #include <stdalign.h>
 #include <stdbool.h>
@@ -82,11 +83,8 @@ void gc_fin(void)
     }
 }
 
-#if 0
-#define assert_header(p) //nothing
-#else
-#include <assert.h>
 #define assert_ptr(p) assert((uintptr_t) (p) > 0x1000)
+#define assert_ptr_if_nonnull(p) if (p) assert_ptr(p)
 #define assert_bool(b) assert(b == false || b == true)
 #define assert_header(p) do { \
         Header *hd = HEADER(p); \
@@ -97,7 +95,32 @@ void gc_fin(void)
         assert(hd->size); \
         assert(hd->size < 1000*1000*1000); \
     } while (0)
-#endif
+#define assert_chunk(p) do { \
+        Chunk *c = (void *) p; \
+        assert_ptr(c); \
+        assert_ptr_if_nonnull(c->next); \
+        assert_header(c); \
+    } while (0)
+#define assert_freelist() do { \
+        assert_ptr(free_list); \
+        for (Chunk *p = free_list; p != NULL; p = p->next) { \
+            assert_chunk(p); \
+            assert(!p->h.allocated); \
+        } \
+    } while(0)
+#define assert_heaps() do { \
+        for (size_t i = 0; i < heaps_length; i++) { \
+            Heap *heap = heaps[i]; \
+            size_t offset; \
+            uint8_t *p = heap->body, *endp = p + heap->size; \
+            for (Header *h; p < endp; p += offset) { \
+                assert_header(p); \
+                h = HEADER(p); \
+                offset = h->size + sizeof(Header); \
+            } \
+        } \
+    } while (0)
+#define assert_whole() do { assert_freelist(); assert_heaps(); } while (0)
 
 void gc_init(void)
 {
@@ -106,32 +129,43 @@ void gc_init(void)
     heaps_length = 1;
 
     Chunk *ch = (void *) heaps[0]->body;
+    assert_ptr(ch);
     ch->h.size = init_size - CHUNK_OFFSET;
     ch->h.allocated = false;
     ch->h.living = false;
     ch->next = NULL;
     free_list = ch;
+    assert_whole();
 }
 
 static void *allocate_from_chunk(Chunk *prev, Chunk *curr, size_t size)
 {
+    assert_freelist();
+    assert_chunk(curr);
+    if (prev)
+        assert_chunk(prev);
     size_t hsize = size + CHUNK_OFFSET;
     Chunk *next = curr->next;
-    if (curr->h.size > hsize) {
-        assert_header(curr);
+    if (next)
+        assert_chunk(next);
+    if (curr->h.size > hsize) { 
+        assert_chunk(curr);
         Header h = curr->h;
         h.size -= hsize;
+        assert_header(&h);
         uint8_t *p = (uint8_t *) curr;
         Chunk *rest = (Chunk *)(p + hsize);
         rest->h = h;
         rest->next = next;
+        assert_chunk(rest);
         next = rest;
     }
+    assert_chunk(next);
     if (prev == NULL)
         free_list = next;
     else
         prev->next = next;
-    assert_header(curr);
+    assert_chunk(curr);
     Header *o = HEADER(curr);
     o->size = size;
     o->allocated = true;
@@ -140,12 +174,15 @@ static void *allocate_from_chunk(Chunk *prev, Chunk *curr, size_t size)
 
 static void *allocate(size_t size)
 {
+    assert_freelist();
     size = align(size);
     size_t hsize = size + CHUNK_OFFSET;
     for (Chunk *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = curr->next) {
+        assert_ptr(curr);
         if (curr->h.size >= hsize) // First-fit
             return allocate_from_chunk(prev, curr, size);
     }
+    assert_freelist();
     return NULL;
 }
 
@@ -294,7 +331,6 @@ static void heap_dump_single(const Heap *heap)
     size_t offset;
     bool ellipsis = false;
     for (Header *h, *prev = NULL; p < endp; p += offset, prev = h) {
-        assert_header(p);
         h = HEADER(p);
         offset = h->size + CHUNK_OFFSET;
         if (prev != NULL && header_equal(*h, *prev)) {
@@ -363,9 +399,13 @@ static void heap_stat(const char *header)
 
 static void add_to_free_list(Header *h)
 {
+    assert_freelist();
+    assert_header(h);
     Chunk *ch = (Chunk *) h;
     ch->next = free_list; // prepend
+    assert_chunk(ch);
     free_list = ch;
+    assert_freelist();
 }
 
 static void sweep(void)
@@ -376,6 +416,7 @@ static void sweep(void)
         size_t offset;
         for (Header *h, *prev = NULL; p < endp; p += offset) {
             assert_header(p);
+            assert_ptr_if_nonnull(prev);
             h = HEADER(p);
             offset = h->size + CHUNK_OFFSET;
             if (!h->allocated)
@@ -437,6 +478,7 @@ static void gc(void)
 {
     if (stack_base == NULL)
         return; // before INIT_STACK(), too early
+    assert_whole();
     if (print_stat)
         heap_stat("GC begin");
     mark();
@@ -447,6 +489,7 @@ static void gc(void)
 #endif
     if (print_stat)
         heap_stat("GC end");
+    assert_whole();
 }
 
 static double heaps_size(void)
@@ -469,6 +512,7 @@ void *gc_malloc(size_t size)
     if (p == NULL)
         error("out of memory; heap (~%lld MiB) exhausted",
               llround(heaps_size() / MiB));
+    assert_ptr(p);
     memset(p, 0, size); // for debug
     return p;
 }
