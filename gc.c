@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <math.h>
 #include <stdalign.h>
 #include <stdbool.h>
@@ -65,11 +66,20 @@ static inline size_t align(size_t size)
     return (size + 7U) / 8U * 8U;
 }
 
-#if 0  //nothing
-#define assert_header(p)
+#define assert_ptr(p) do { \
+        assert(p != NULL); \
+        assert((uintptr_t) p % 8U == 0); \
+        assert((uintptr_t) p > 0x1000); \
+    } while (false)
+#if 0
+#define assert_stack_ptr(p) do { \
+        assert_ptr(p); \
+        assert((uintptr_t) p % 16U == 0); \
+    } while (false)
 #else
-#include <assert.h>
-#define assert_ptr(p) assert((uintptr_t) (p) > 0x1000)
+#define assert_stack_ptr(p) assert_ptr(p)
+#endif
+#define assert_ptr_if_nonnull(p) if (p) assert_ptr(p)
 #define assert_bool(b) assert(b == false || b == true)
 #define assert_header(p) do { \
         Header *hd = HEADER(p); \
@@ -79,14 +89,43 @@ static inline size_t align(size_t size)
         assert(hd->size > 0); \
         assert(hd->size < 1000*1000*1000); \
     } while (0)
-#endif
+#define assert_chunk(p) do { \
+        Chunk *c = (void *) p; \
+        assert_ptr(c); \
+        assert_ptr_if_nonnull(c->next); \
+        assert_header(c); \
+    } while (0)
+#define assert_freelist() do { \
+        assert_ptr_if_nonnull(free_list); \
+        for (Chunk *p = free_list; p != NULL; p = p->next) { \
+            assert_chunk(p); \
+            assert(!p->h.allocated); \
+        } \
+    } while (0)
+#define assert_heaps() do { \
+        for (size_t i = 0; i < heaps_length; i++) { \
+            Heap *heap = heaps[i]; \
+            size_t offset; \
+            uint8_t *p = heap->body, *endp = p + heap->size; \
+            for (Header *h; p < endp; p += offset) { \
+                assert_header(p); \
+                h = HEADER(p); \
+                offset = h->size + sizeof(Header); \
+                assert(offset % 8U == 0); \
+            } \
+            assert(p == endp); \
+        } \
+    } while (0)
+#define assert_whole() do { assert_freelist(); assert_heaps(); } while (0)
 
 static Heap *heap_new(size_t size)
 {
     Heap *h = xmalloc(sizeof(Heap));
+    assert_ptr(h);
     h->size = size;
     h->used = 0;
     h->body = xmalloc(size);
+    assert_ptr(h->body);
     memset(h->body, 0, size);
     return h;
 }
@@ -106,23 +145,33 @@ void gc_init(void)
     heaps_length = 1;
 
     Chunk *ch = (void *) heaps[0]->body;
+    assert_ptr(ch);
     ch->h.size = init_size - CHUNK_OFFSET;
     ch->h.allocated = false;
     ch->h.living = false;
     ch->next = NULL;
     free_list = ch;
+    assert_whole();
 }
 
 static void *allocate_from_chunk(Chunk *prev, Chunk *curr, size_t size)
 {
+    assert_freelist();
+    assert_chunk(curr);
+    if (prev)
+        assert_chunk(prev);
     size_t hsize = size + CHUNK_OFFSET;
     Chunk *next = curr->next;
+    if (next)
+        assert_chunk(next);
     if (curr->h.size > hsize) {
-        assert_header(curr);
+        assert_chunk(curr);
         Chunk *rest = (Chunk *)((uint8_t *) curr + hsize);
         rest->h.size = curr->h.size - hsize;
         rest->h.allocated = rest->h.living = false;
+        assert_header(&rest->h);
         rest->next = next;
+        assert_chunk(rest);
         next = rest;
         curr->h.size = size;
     }
@@ -138,12 +187,15 @@ static void *allocate_from_chunk(Chunk *prev, Chunk *curr, size_t size)
 
 static void *allocate(size_t size)
 {
+    assert_freelist();
     size = align(size);
     size_t hsize = size + CHUNK_OFFSET;
     for (Chunk *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = curr->next) {
+        assert_ptr(curr);
         if (curr->h.size >= hsize) // First-fit
             return allocate_from_chunk(prev, curr, size);
     }
+    assert_freelist();
     return NULL;
 }
 
@@ -262,6 +314,7 @@ static void mark_val_maybe(Value v)
 
 static void mark_array(void *beg, size_t n)
 {
+    assert_stack_ptr(beg);
     Value *p = beg;
     for (size_t i = 0; i < n; i++)
         mark_val_maybe(*p++);
@@ -378,9 +431,13 @@ static void heap_stat(const char *header, HeapStat *pstat)
 
 static void add_to_free_list(Header *h)
 {
+    assert_freelist();
+    assert_header(h);
     Chunk *ch = (Chunk *) h;
     ch->next = free_list; // prepend
+    assert_chunk(ch);
     free_list = ch;
+    assert_freelist();
 }
 
 static void free_env(Table *env)
@@ -417,9 +474,12 @@ static void sweep(void)
         uint8_t *p = heap->body, *endp = p + heap->size;
         size_t offset;
         for (Header *h, *prev = NULL; p < endp; p += offset) {
+            assert_ptr_if_nonnull(prev);
             h = HEADER(p);
             assert_header(h);
             offset = h->size + CHUNK_OFFSET;
+            if (h->size == 0)
+                continue;
             if (!h->allocated)
                 continue;
             if (h->living) {
@@ -482,14 +542,20 @@ static void gc(void)
 {
     if (stack_base == NULL)
         return; // before INIT_STACK(), too early
+    assert_freelist();
+    assert_heaps();
+    HeapStat stat;
     if (print_stat)
-        heap_stat("GC begin", NULL);
+        heap_stat("GC begin", &stat);
+    size_t before_used = stat.used;
     mark();
     sweep();
     if (!enough_free_chunks())
         increase_heaps();
     if (print_stat)
-        heap_stat("GC end", NULL);
+        heap_stat("GC end", &stat);
+    assert(stat.used <= before_used);
+    assert_whole();
 }
 
 static double heaps_size(void)
@@ -512,6 +578,7 @@ void *gc_malloc(size_t size)
     if (p == NULL)
         error("out of memory; heap (~%lld MiB) exhausted",
               llround(heaps_size() / MiB));
+    assert_ptr(p);
     memset(p, 0, size); // for debug
     return p;
 }
