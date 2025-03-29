@@ -11,14 +11,14 @@
 #include "utils.h"
 
 typedef enum {
-    TOK_TYPE_LPAREN,
-    TOK_TYPE_RPAREN,
-    TOK_TYPE_QUOTE,
-    TOK_TYPE_GRAVE,
-    TOK_TYPE_COMMA,
+    TOK_TYPE_QUOTE  = '\'',
+    TOK_TYPE_LPAREN = '(',
+    TOK_TYPE_RPAREN = ')',
+    TOK_TYPE_COMMA  = ',',
+    TOK_TYPE_DOT    = '.',
+    TOK_TYPE_GRAVE  = '`',
     TOK_TYPE_SPLICE,
     TOK_TYPE_INT,
-    TOK_TYPE_DOT,
     TOK_TYPE_STRING,
     TOK_TYPE_IDENT,
     TOK_TYPE_CONST_TRUE,
@@ -34,11 +34,8 @@ typedef struct {
 
 // singletons
 #define TOKEN_VAL(t, v) ((Token) { .type = TOK_TYPE_ ## t, .value = v })
+#define TOKEN_LIT(c) ((Token) { .type = c, .value = 0 })
 #define TOKEN_C(t) TOKEN_VAL(t, 0)
-static const Token TOK_LPAREN = TOKEN_C(LPAREN);
-static const Token TOK_RPAREN = TOKEN_C(RPAREN);
-static const Token TOK_QUOTE = TOKEN_C(QUOTE);
-static const Token TOK_GRAVE = TOKEN_C(GRAVE);
 static const Token TOK_COMMA = TOKEN_C(COMMA);
 static const Token TOK_SPLICE = TOKEN_C(SPLICE);
 static const Token TOK_DOT = TOKEN_C(DOT);
@@ -365,13 +362,10 @@ static Token lex(Parser *p)
     int c = fgetc(p->in);
     switch (c) {
     case '(':
-        return TOK_LPAREN;
     case ')':
-        return TOK_RPAREN;
     case '\'':
-        return TOK_QUOTE;
     case '`':
-        return TOK_GRAVE;
+        return TOKEN_LIT(c);
     case ',':
         return lex_comma_or_splice(p);
     case '.':
@@ -400,20 +394,16 @@ static const char *token_stringify(Token t)
     static char buf[BUFSIZ];
 
     switch (t.type) {
-    case TOK_TYPE_LPAREN:
-        return "(";
-    case TOK_TYPE_RPAREN:
-        return ")";
-    case TOK_TYPE_QUOTE:
-        return "'";
-    case TOK_TYPE_GRAVE:
-        return "`";
-    case TOK_TYPE_COMMA:
-        return ",";
+    case '(':
+    case ')':
+    case '\'':
+    case '`':
+    case ',':
+    case '.':
+        snprintf(buf, sizeof(buf), "%c", t.type);
+        break;
     case TOK_TYPE_SPLICE:
         return ",@";
-    case TOK_TYPE_DOT:
-        return ".";
     case TOK_TYPE_VECTOR_LPAREN:
         return "#(";
     case TOK_TYPE_INT:
@@ -442,7 +432,7 @@ static Value parse_dotted_pair(Parser *p, Value l, Value last)
         parse_error(p, "expression", "'.'");
     Value e = parse_expr(p);
     Token t = lex(p);
-    if (t.type != TOK_TYPE_RPAREN)
+    if (t.type != ')')
         parse_error(p, "')'", "'%s'", token_stringify(t));
     PAIR(last)->cdr = e;
     return l;
@@ -512,20 +502,19 @@ static Value parse_expr(Parser *p)
 {
     Token t = lex(p);
     switch (t.type) {
-    case TOK_TYPE_LPAREN:
+    case '(':
         return parse_list(p); // parse til ')'
-    case TOK_TYPE_RPAREN:
-        parse_error(p, "expression", "')'");
-    case TOK_TYPE_QUOTE:
+    case '\'':
         return parse_quoted(p, SYM_QUOTE);
-    case TOK_TYPE_GRAVE:
+    case '`':
         return parse_quoted(p, SYM_QUASIQUOTE);
-    case TOK_TYPE_COMMA:
+    case ',':
         return parse_quoted(p, SYM_UNQUOTE);
+    case ')':
+    case '.':
+        parse_error(p, "expression", "'%c'", t.type);
     case TOK_TYPE_SPLICE:
         return parse_quoted(p, SYM_UNQUOTE_SPLICING);
-    case TOK_TYPE_DOT:
-        parse_error(p, "expression", "'.'");
     case TOK_TYPE_VECTOR_LPAREN:
         return parse_vector(p); // parse til ')'
     case TOK_TYPE_CONST_TRUE:
