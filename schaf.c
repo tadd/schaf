@@ -1906,12 +1906,13 @@ void sch_init(void)
 {
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
-    SYM_ELSE = value_of_symbol("else");
-    SYM_QUOTE = value_of_symbol("quote");
-    SYM_QUASIQUOTE = value_of_symbol("quasiquote");
-    SYM_UNQUOTE = value_of_symbol("unquote");
-    SYM_UNQUOTE_SPLICING = value_of_symbol("unquote-splicing");
-    SYM_RARROW = value_of_symbol("=>");
+#define DEF_SYMBOL(var, name) SYM_##var = value_of_symbol(name)
+    DEF_SYMBOL(ELSE, "else");
+    DEF_SYMBOL(QUOTE, "quote");
+    DEF_SYMBOL(QUASIQUOTE, "quasiquote");
+    DEF_SYMBOL(UNQUOTE, "unquote");
+    DEF_SYMBOL(UNQUOTE_SPLICING, "unquote-splicing");
+    DEF_SYMBOL(RARROW, "=>");
 
     toplevel_environment = table_new();
     Table *e = toplevel_environment;
