@@ -30,23 +30,35 @@ typedef struct {
     Value value;
 } Token;
 
-#define TOK(t) { .type = TOK_TYPE_ ## t }
 // singletons
-static const Token
-    TOK_LPAREN = TOK(LPAREN),
-    TOK_RPAREN = TOK(RPAREN),
-    TOK_QUOTE = TOK(QUOTE),
-    TOK_GRAVE = TOK(GRAVE),
-    TOK_COMMA = TOK(COMMA),
-    TOK_SPLICE = TOK(SPLICE),
-    TOK_DOT = TOK(DOT),
-    TOK_EOF = TOK(EOF);
-// and ctor
+#define DEF_TOKEN(name) static const Token TOK_##name = { .type = TOK_TYPE_##name }
+DEF_TOKEN(LPAREN);
+DEF_TOKEN(RPAREN);
+DEF_TOKEN(QUOTE);
+DEF_TOKEN(GRAVE);
+DEF_TOKEN(COMMA);
+DEF_TOKEN(SPLICE);
+DEF_TOKEN(DOT);
+static const Token TOK_EOF = { .type = TOK_TYPE_EOF }; // avoid conflict with stdio.h
+
+// and ctors
 #define TOK_V(t, v) ((Token) { .type = TOK_TYPE_ ## t, .value = v })
-#define TOK_INT(i) TOK_V(INT, value_of_int(i))
-#define TOK_STR(s) TOK_V(STR, value_of_string(s))
-#define TOK_IDENT(s) TOK_V(IDENT, value_of_symbol(s))
-#define TOK_CONST(c) TOK_V(CONST, c)
+static inline Token TOK_INT(int64_t i)
+{
+    return TOK_V(INT, value_of_int(i));
+}
+static inline Token TOK_STR(const char *s)
+{
+    return TOK_V(STR, value_of_string(s));
+}
+static inline Token TOK_IDENT(const char *s)
+{
+    return TOK_V(IDENT, value_of_symbol(s));
+}
+static inline Token TOK_CONST(Value c)
+{
+    return TOK_V(CONST, c);
+}
 
 typedef struct {
     FILE *in;
