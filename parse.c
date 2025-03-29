@@ -11,14 +11,14 @@
 static jmp_buf jmp_parse_error;
 
 typedef enum {
-    TOK_TYPE_LPAREN,
-    TOK_TYPE_RPAREN,
-    TOK_TYPE_QUOTE,
-    TOK_TYPE_GRAVE,
-    TOK_TYPE_COMMA,
+    TOK_TYPE_QUOTE  = '\'',
+    TOK_TYPE_LPAREN = '(',
+    TOK_TYPE_RPAREN = ')',
+    TOK_TYPE_COMMA  = ',',
+    TOK_TYPE_DOT    = '.',
+    TOK_TYPE_GRAVE  = '`',
     TOK_TYPE_SPLICE,
     TOK_TYPE_INT,
-    TOK_TYPE_DOT,
     TOK_TYPE_STR,
     TOK_TYPE_IDENT,
     TOK_TYPE_CONST,
@@ -30,17 +30,9 @@ typedef struct {
     Value value;
 } Token;
 
-#define TOK(t) { .type = TOK_TYPE_ ## t }
+#define TOK(c) ((Token) { .type = (c) })
 // singletons
-static const Token
-    TOK_LPAREN = TOK(LPAREN),
-    TOK_RPAREN = TOK(RPAREN),
-    TOK_QUOTE = TOK(QUOTE),
-    TOK_GRAVE = TOK(GRAVE),
-    TOK_COMMA = TOK(COMMA),
-    TOK_SPLICE = TOK(SPLICE),
-    TOK_DOT = TOK(DOT),
-    TOK_EOF = TOK(EOF);
+static const Token TOK_SPLICE = TOK(TOK_TYPE_SPLICE), TOK_EOF = TOK(TOK_TYPE_EOF);
 // and ctor
 #define TOK_V(t, v) ((Token) { .type = TOK_TYPE_ ## t, .value = v })
 #define TOK_INT(i) TOK_V(INT, value_of_int(i))
@@ -117,7 +109,7 @@ static Token lex_comma_or_splice(Parser *p)
     if (c == '@')
         return TOK_SPLICE;
     ungetc(c, p->in);
-    return TOK_COMMA;
+    return TOK(',');
 }
 
 static Token lex_dots(Parser *p)
@@ -125,7 +117,7 @@ static Token lex_dots(Parser *p)
     int c = fgetc(p->in);
     if (c != '.') {
         ungetc(c, p->in);
-        return TOK_DOT;
+        return TOK('.');
     }
     c = fgetc(p->in);
     if (c != '.') {
@@ -236,13 +228,10 @@ static Token lex(Parser *p)
     int c = fgetc(p->in);
     switch (c) {
     case '(':
-        return TOK_LPAREN;
     case ')':
-        return TOK_RPAREN;
     case '\'':
-        return TOK_QUOTE;
     case '`':
-        return TOK_GRAVE;
+        return TOK(c);
     case ',':
         return lex_comma_or_splice(p);
     case '.':
@@ -276,20 +265,16 @@ static const char *token_stringify(Token t)
     static char buf[BUFSIZ];
 
     switch (t.type) {
-    case TOK_TYPE_LPAREN:
-        return "(";
-    case TOK_TYPE_RPAREN:
-        return ")";
-    case TOK_TYPE_QUOTE:
-        return "'";
-    case TOK_TYPE_GRAVE:
-        return "`";
-    case TOK_TYPE_COMMA:
-        return ",";
+    case '(':
+    case ')':
+    case '\'':
+    case '`':
+    case ',':
+    case '.':
+        snprintf(buf, sizeof(buf), "%c", t.type);
+        break;
     case TOK_TYPE_SPLICE:
         return ",@";
-    case TOK_TYPE_DOT:
-        return ".";
     case TOK_TYPE_INT:
         snprintf(buf, sizeof(buf), "%"PRId64, value_to_int(t.value));
         break;
@@ -314,7 +299,7 @@ static Value parse_dotted_pair(Parser *p, Value l, Value last)
         parse_error(p, "expression", "'.'");
     Value e = parse_expr(p);
     Token t = lex(p);
-    if (t.type != TOK_TYPE_RPAREN)
+    if (t.type != ')')
         parse_error(p, "')'", "'%s'", token_stringify(t));
     PAIR(last)->cdr = e;
     return l;
@@ -335,11 +320,11 @@ static Value parse_list(Parser *p)
     int64_t pos = ftell(p->in);
     for (;;) {
         Token t = lex(p);
-        if (t.type == TOK_TYPE_RPAREN)
+        if (t.type == ')')
             break;
         if (t.type == TOK_TYPE_EOF)
             parse_error(p, "')'", "'%s'", token_stringify(t));
-        if (t.type == TOK_TYPE_DOT)
+        if (t.type == '.')
             return parse_dotted_pair(p, cdr(l), last);
         unlex(p, t);
         Value e = parse_expr(p);
@@ -366,20 +351,20 @@ static Value parse_expr(Parser *p)
 {
     Token t = lex(p);
     switch (t.type) {
-    case TOK_TYPE_LPAREN:
+    case '(':
         return parse_list(p); // parse til ')'
-    case TOK_TYPE_RPAREN:
+    case ')':
         parse_error(p, "expression", "')'");
-    case TOK_TYPE_QUOTE:
+    case '\'':
         return parse_quoted(p, SYM_QUOTE);
-    case TOK_TYPE_GRAVE:
+    case '`':
         return parse_quoted(p, SYM_QUASIQUOTE);
-    case TOK_TYPE_COMMA:
+    case ',':
         return parse_quoted(p, SYM_UNQUOTE);
+    case '.':
+        parse_error(p, "expression", "'.'");
     case TOK_TYPE_SPLICE:
         return parse_quoted(p, SYM_UNQUOTE_SPLICING);
-    case TOK_TYPE_DOT:
-        parse_error(p, "expression", "'.'");
     case TOK_TYPE_STR:
     case TOK_TYPE_INT:
     case TOK_TYPE_CONST:
