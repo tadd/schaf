@@ -2,7 +2,7 @@
 set -o pipefail
 
 nloop=10
-benchflags='-TM -H 192'
+benchflags=-TM
 
 run() {
     local -r bin=$1
