@@ -304,7 +304,8 @@ static Value value_of_closure(Table *env, Value params, Value body)
 #define error(fmt, ...) \
     error("%s:%d of %s: " fmt, __FILE__, __LINE__, __func__ __VA_OPT__(,) __VA_ARGS__)
 
-static jmp_buf jmp_runtime_error;
+static jmp_buf jmp_runtime_error, jmp_exit;
+static uint8_t exit_status; // to be portable
 static char errmsg[BUFSIZ];
 
 #define runtime_error(...) raise_error(jmp_runtime_error, __VA_ARGS__)
@@ -689,6 +690,8 @@ static Value iload(FILE *in, const char *filename)
         dump_stack_trace();
         return Qundef;
     }
+    if (setjmp(jmp_exit) != 0)
+        return value_of_int(exit_status);
     INIT_STACK();
     call_stack = Qnil;
     Value ret = eval_body(toplevel_environment, l);
@@ -1857,17 +1860,17 @@ ATTR(noreturn)
 static Value proc_exit(UNUSED Table *env, Value args)
 {
     expect_arity_range("exit", 0, 1, args);
-    int code = 0;
+    exit_status = 0;
     if (args != Qnil) {
         Value obj = car(args);
         if (obj == Qtrue)
             ; // use 0 for code as is
         else if (value_is_int(obj))
-            code = value_to_int(obj);
+            exit_status = value_to_int(obj);
         else // or #f too
-            code = 2; // something failed
+            exit_status = 2; // something failed
     }
-    exit(code);
+    longjmp(jmp_exit, 1);
 }
 
 // Local Extensions
@@ -1899,6 +1902,11 @@ static Value syn_defined_p(Table *env, Value name)
     if (!value_is_symbol(name))
         return Qfalse;
     return OF_BOOL(lookup(env, name) != Qundef);
+}
+
+int sch_exit_status(void)
+{
+    return exit_status;
 }
 
 #define DEF_CXR_BUILTIN(x, y) \

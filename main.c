@@ -120,10 +120,6 @@ static void print_vmhwm(void)
 int main(int argc, char **argv)
 {
     Option o = parse_opt(argc, argv);
-    if (o.memory)
-        atexit(print_vmhwm);
-    if (o.cputime)
-        atexit(print_cputime);
 
     sch_init();
     Value v;
@@ -137,5 +133,9 @@ int main(int argc, char **argv)
         display(v);
         printf("\n");
     }
-    return 0;
+    if (o.cputime)
+        print_cputime();
+    if (o.memory)
+        print_vmhwm();
+    return sch_exit_status();
 }
