@@ -407,11 +407,6 @@ static Value apply_cfunc(Table *env, Value proc, Value args)
 #endif
 }
 
-static inline void env_put(Table *env, Value name, Value val)
-{
-    table_put(env, name, val);
-}
-
 static Value append2(Value l1, Value l2)
 {
     if (l2 == Qnil)
@@ -429,11 +424,6 @@ static Value append2(Value l1, Value l2)
     return ret;
 }
 
-static inline Table *newenv(Table *env)
-{
-    return table_inherit(env);
-}
-
 static Value eval_body(Table *env, Value body);
 
 //PTR
@@ -441,13 +431,13 @@ static Value apply_closure(Value proc, Value args)
 {
     Closure *cl = CLOSURE(proc);
     int64_t arity = cl->proc.arity;
-    Table *clenv = newenv(cl->env);
+    Table *clenv = table_inherit(cl->env);
     Value params = cl->params;
     if (arity == -1)
-        env_put(clenv, params, args);
+        table_put(clenv, params, args);
     else {
         for (; args != Qnil; args = cdr(args), params = cdr(params))
-            env_put(clenv, car(params), car(args));
+            table_put(clenv, car(params), car(args));
     }
     return eval_body(clenv, cl->body); // XXX: table_free(clenv)?
 }
@@ -496,12 +486,12 @@ static Value apply(Table *env, Value proc, Value args)
 // Note: Do not mistake this for "(define-syntax ...)" which related to macros
 static void define_syntax(Table *env, const char *name, cfunc_t cfunc, int64_t arity)
 {
-    env_put(env, value_of_symbol(name), value_of_syntax(cfunc, arity));
+    table_put(env, value_of_symbol(name), value_of_syntax(cfunc, arity));
 }
 
 static void define_procedure(Table *env, const char *name, cfunc_t cfunc, int64_t arity)
 {
-    env_put(env, value_of_symbol(name), value_of_cfunc(cfunc, arity));
+    table_put(env, value_of_symbol(name), value_of_cfunc(cfunc, arity));
 }
 
 static Value assq(Value key, Value l);
@@ -917,9 +907,9 @@ static Value let(Table *env, Value var, Value bindings, Value body)
         Value proc = value_of_closure(env, params, body);
         return apply_closure(proc, args);
     }
-    Table *letenv = newenv(env);
+    Table *letenv = table_inherit(env);
     Value proc = value_of_closure(letenv, params, body);
-    env_put(letenv, var, proc); // affects as proc->env
+    table_put(letenv, var, proc); // affects as proc->env
     Value ret = apply_closure(proc, args);
     table_free(letenv);
     return ret;
@@ -950,9 +940,9 @@ static Value let_star(Table *env, Value bindings, Value body)
             runtime_error("let*: malformed binding in let: %s", stringify(b));
         Value ident = car(b), expr = cadr(b);
         expect_type("let*", TYPE_SYMBOL, ident);
-        letenv = newenv(letenv);
+        letenv = table_inherit(letenv);
         Value val = eval(letenv, expr);
-        env_put(letenv, ident, val);
+        table_put(letenv, ident, val);
     }
     return eval_body(letenv, body);
 }
@@ -973,14 +963,14 @@ static Value syn_letrec(Table *env, Value args)
     expect_list_head("letrec", bindings);
     expect_type("letrec", TYPE_PAIR, body);
 
-    Table *letenv = newenv(env);
+    Table *letenv = table_inherit(env);
     for (; bindings != Qnil; bindings = cdr(bindings)) {
         Value b = car(bindings);
         expect_type("letrec", TYPE_PAIR, b);
         Value ident = car(b);
         expect_type("letrec", TYPE_SYMBOL, ident);
         Value val = eval(letenv, cadr(b));
-        env_put(letenv, ident, val);
+        table_put(letenv, ident, val);
     }
     return eval_body_tmpenv(letenv, body);
 }
@@ -1001,7 +991,7 @@ static Value syn_do(Table *env, Value args)
     Value bindings = car(args), tests = cadr(args), body = cddr(args);
     expect_list_head("do", bindings);
     expect_list_head("do", tests);
-    Table *doenv = newenv(env);
+    Table *doenv = table_inherit(env);
     Value steps = Qnil;
     for (; bindings != Qnil; bindings = cdr(bindings)) {
         Value b = car(bindings);
@@ -1010,7 +1000,7 @@ static Value syn_do(Table *env, Value args)
         expect_type("do", TYPE_SYMBOL, var);
         if (step != Qnil)
             steps = cons(cons(var, car(step)), steps);
-        env_put(doenv, var, eval(env, init)); // in the original env
+        table_put(doenv, var, eval(env, init)); // in the original env
     }
     Value test = car(tests), exprs = cdr(tests);
     while (eval(doenv, test) == Qfalse) {
@@ -1122,7 +1112,7 @@ static Value define_variable(Table *env, Value ident, Value expr)
     if (env == toplevel_environment)
         found = table_set(env, ident, val);
     if (!found)
-        env_put(env, ident, val); // prepend new
+        table_put(env, ident, val); // prepend new
     return Qnil;
 }
 
