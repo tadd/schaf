@@ -26,6 +26,7 @@ typedef uintptr_t Symbol;
 extern const Value Qnil, Qundef, Qfalse, Qtrue;
 
 void sch_init(void);
+int sch_fin(void);
 int sch_exit_status(void);
 
 bool value_is_null(Value v);

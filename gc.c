@@ -48,6 +48,14 @@ static Heap *heap_new(size_t size)
     return h;
 }
 
+void gc_fin(void)
+{
+    for (size_t i = 0; i < heaps_length; i++) {
+        free(heaps[i]->body);
+        free(heaps[i]);
+    }
+}
+
 void gc_init(void)
 {
     init_size = align(init_size);

@@ -1900,6 +1900,12 @@ static Value syn_defined_p(Table *env, Value name)
     return OF_BOOL(lookup(env, name) != Qundef);
 }
 
+int sch_fin(void)
+{
+    gc_fin();
+    return exit_status;
+}
+
 int sch_exit_status(void)
 {
     return exit_status;

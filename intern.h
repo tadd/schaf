@@ -79,6 +79,8 @@ ATTR_HIDDEN void *obj_new(size_t size, ValueTag t);
 
 #define INIT_STACK() volatile void *sch_stack_base; gc_stack_init(&sch_stack_base)
 ATTR_HIDDEN void gc_init(void);
+ATTR_HIDDEN void gc_fin(void);
+
 ATTR_HIDDEN void gc_stack_init(const volatile void *b);
 ATTR_HIDDEN size_t gc_stack_get_size(const volatile void *sp);
 ATTR_HIDDEN ATTR_XMALLOC void *gc_malloc(size_t size);

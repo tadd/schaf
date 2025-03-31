@@ -161,5 +161,5 @@ int main(int argc, char **argv)
         print_cputime();
     if (o.memory)
         print_vmhwm();
-    return sch_exit_status();
+    return sch_fin();
 }
