@@ -615,6 +615,8 @@ static bool find_pair(Value tree, Value pair)
     for (; tree != Qnil; tree = cdr(tree)) {
         if (tree == pair)
             return true;
+        if (!value_is_pair(tree))
+            return false;
         Value v = car(tree);
         if (value_is_pair(v) && find_pair(v, pair))
             return true;
