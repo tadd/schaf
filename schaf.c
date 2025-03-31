@@ -449,7 +449,7 @@ static Value apply_closure(Value proc, Value args)
         for (; args != Qnil; args = cdr(args), params = cdr(params))
             env_put(clenv, car(params), car(args));
     }
-    return eval_body(clenv, cl->body);
+    return eval_body(clenv, cl->body); // XXX: table_free(clenv)?
 }
 
 ATTR(noreturn) ATTR(noinline)
@@ -537,6 +537,13 @@ static Value eval_body(Table *env, Value body)
     for (Value next; (next = cdr(p)) != Qnil; p = next)
         eval(env, car(p));
     return eval(env, car(p));
+}
+
+static Value eval_body_tmpenv(Table *env, Value body)
+{
+    Value ret = eval_body(env, body);
+    table_free(env);
+    return ret;
 }
 
 static Value map_eval(Table *env, Value l)
@@ -906,11 +913,16 @@ static Value let(Table *env, Value var, Value bindings, Value body)
     Value params = Qnil, symargs = Qnil;
     transpose_2xn(bindings, &params, &symargs);
     Value args = map_eval(env, symargs);
+    if (var == Qfalse) {
+        Value proc = value_of_closure(env, params, body);
+        return apply_closure(proc, args);
+    }
     Table *letenv = newenv(env);
     Value proc = value_of_closure(letenv, params, body);
-    if (var != Qfalse)
-        env_put(letenv, var, proc); // affects as proc->env
-    return apply_closure(proc, args);
+    env_put(letenv, var, proc); // affects as proc->env
+    Value ret = apply_closure(proc, args);
+    table_free(letenv);
+    return ret;
 }
 
 //PTR
@@ -970,7 +982,7 @@ static Value syn_letrec(Table *env, Value args)
         Value val = eval(letenv, cadr(b));
         env_put(letenv, ident, val);
     }
-    return eval_body(letenv, body);
+    return eval_body_tmpenv(letenv, body);
 }
 
 // 4.2.3. Sequencing
@@ -1011,7 +1023,10 @@ static Value syn_do(Table *env, Value args)
             iset(doenv, var, val);
         }
     }
-    return exprs == Qnil ? Qnil : eval_body(doenv, exprs);
+    if (exprs != Qnil)
+        return eval_body_tmpenv(doenv, exprs);
+    table_free(doenv);
+    return Qnil;
 }
 
 // 4.2.6. Quasiquotation
