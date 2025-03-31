@@ -1741,26 +1741,30 @@ static Value proc_for_each(Table *env, Value args)
     return Qnil;
 }
 
-static Value value_of_continuation(void)
+ATTR(noinline)
+static Value value_of_continuation()
 {
-    Continuation *c = obj_new(sizeof(Continuation), TAG_CONTINUATION);
-    c->proc.arity = 1; // by spec
-    return (Value) c;
+    GET_SP(sp); // must be the first!
+    size_t len = (uint8_t *) stack_base - (uint8_t *) sp;
+    debug("sp: %p, len: %zu", sp, len);
+    Continuation *cont = obj_new(sizeof(Continuation) + len, TAG_CONTINUATION);
+    cont->proc.arity = 1; // by spec
+    cont->sp = sp;
+    cont->shelter_len = len;
+    cont->call_stack = call_stack;
+    cont->retval = Qfalse;
+    memcpy(cont->shelter, (void *) sp, cont->shelter_len);
+    return (Value) cont;
 }
 
 ATTR(noinline)
 static bool continuation_set(Value c)
 {
-    GET_SP(sp); // must be the first!
     Continuation *cont = CONTINUATION(c);
-    cont->sp = sp;
-    cont->shelter_len = stack_base - sp;
-    cont->shelter = xmalloc(cont->shelter_len);
-    memcpy(cont->shelter, (void *) sp, cont->shelter_len);
-    cont->call_stack = call_stack;
     return setjmp(cont->state) != 0;
 }
 
+ATTR(noinline)
 static Value proc_callcc(Table *env, Value proc)
 {
     expect_type("call/cc", TYPE_PROC, proc);
