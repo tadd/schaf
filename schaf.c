@@ -436,9 +436,8 @@ static inline Table *newenv(Table *env)
 
 static Value eval_body(Table *env, Value body);
 
-#define UNUSED ATTR(unused)
 //PTR
-static Value apply_closure(UNUSED Table *env, Value proc, Value args)
+static Value apply_closure(Value proc, Value args)
 {
     Closure *cl = CLOSURE(proc);
     int64_t arity = cl->proc.arity;
@@ -486,7 +485,7 @@ static Value apply(Table *env, Value proc, Value args)
     case TAG_CFUNC:
         return apply_cfunc(env, proc, args);
     case TAG_CLOSURE:
-        return apply_closure(env, proc, args);
+        return apply_closure(proc, args);
     case TAG_CONTINUATION:
         apply_continuation(proc, args); // no return!
     default:
@@ -751,6 +750,7 @@ static Value load_inner(const char *path)
 // Built-in Procedures / Syntax
 //
 
+#define UNUSED ATTR(unused)
 // 4.1. Primitive expression types
 // 4.1.2. Literal expressions
 static Value syn_quote(UNUSED Table *env, Value datum)
@@ -909,8 +909,8 @@ static Value let(Table *env, Value var, Value bindings, Value body)
     Table *letenv = newenv(env);
     Value proc = value_of_closure(letenv, params, body);
     if (var != Qfalse)
-        env_put(letenv, var, proc);
-    return apply_closure(letenv, proc, args);
+        env_put(letenv, var, proc); // affects as proc->env
+    return apply_closure(proc, args);
 }
 
 //PTR
