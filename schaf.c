@@ -2277,26 +2277,22 @@ static Value apply_continuation(UNUSED Value env, Value f, Value args)
 
 static Value continuation_new(int64_t n)
 {
-    Continuation *c = obj_new(TAG_CONTINUATION, sizeof(Continuation));
+    GET_SP(sp); // must be the first!
+    size_t len = gc_stack_get_size(sp);
+    Continuation *c = obj_new(sizeof(Continuation) + len, TAG_CONTINUATION);
     c->proc.arity = n; // call/cc: 1, call-with-values: -1
     c->proc.apply = apply_continuation;
-    c->retval = Qfalse;
     c->sp = NULL;
     c->stack = NULL;
     c->stack_len = 0;
+    c->retval = Qfalse;
     return (Value) c;
 }
 
 [[gnu::noinline]]
 static bool continuation_set(Value c)
 {
-    GET_SP(sp); // must be the first!
     Continuation *cont = CONTINUATION(c);
-    cont->sp = sp;
-    cont->stack_len = gc_stack_get_size(sp);
-    cont->stack = xmalloc(cont->stack_len);
-    UNPOISON(sp, cont->stack_len);
-    memcpy(cont->stack, sp, cont->stack_len);
     return setjmp(cont->state) != 0;
 }
 
