@@ -52,11 +52,11 @@ typedef struct {
 typedef struct {
     Procedure proc;
     uintptr_t *sp;
-    void *shelter;
-    size_t shelter_len;
     Value call_stack;
     jmp_buf state;
     Value retval;
+    size_t shelter_len;
+    uint8_t shelter[];
 } Continuation;
 
 #define PAIR(v) ((Pair *) v)

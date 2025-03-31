@@ -1764,27 +1764,26 @@ static Value proc_for_each(Table *env, Value args)
     return Qnil;
 }
 
+ATTR(noinline)
 static Value value_of_continuation(void)
 {
-    Continuation *c = obj_new(sizeof(Continuation), TAG_CONTINUATION);
+    GET_SP(sp); // must be the first!
+    size_t len = gc_stack_get_size(sp);
+    Continuation *c = obj_new(sizeof(Continuation) + len, TAG_CONTINUATION);
     c->proc.arity = 1; // by spec
-    c->sp = c->shelter = NULL;
-    c->shelter_len = 0;
-    c->call_stack = Qnil;
+    c->call_stack = call_stack;
     c->retval = Qfalse;
+    c->sp = sp;
+    c->shelter_len = len;
+    c->retval = Qfalse;
+    memcpy(c->shelter, (void *) sp, c->shelter_len);
     return (Value) c;
 }
 
 ATTR(noinline)
 static bool continuation_set(Value c)
 {
-    GET_SP(sp); // must be the first!
     Continuation *cont = CONTINUATION(c);
-    cont->sp = sp;
-    cont->shelter_len = gc_stack_get_size(sp);
-    cont->shelter = xmalloc(cont->shelter_len);
-    memcpy(cont->shelter, sp, cont->shelter_len);
-    cont->call_stack = call_stack;
     return setjmp(cont->state) != 0;
 }
 
