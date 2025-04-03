@@ -63,7 +63,7 @@ static const int64_t CFUNCARG_MAX = 3;
 
 // Environment: list of Frames
 // Frame: Table of 'symbol => <value>
-static Table *toplevel_environment;
+static Value toplevel_environment;
 static Value symbol_names = Qnil; // ("name0" "name1" ...)
 Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
     SYM_RARROW;
@@ -113,6 +113,7 @@ static inline bool value_is_procedure(Value v)
     case TAG_STRING:
     case TAG_PAIR:
         return false;
+    case TAG_ENV:
     case TAG_ERROR:
         break;
     }
@@ -158,6 +159,7 @@ Type value_type_of(Value v)
     case TAG_CLOSURE:
     case TAG_CONTINUATION:
         return TYPE_PROC;
+    case TAG_ENV:
     case TAG_ERROR:
         break;
     }
@@ -276,23 +278,23 @@ static void expect_cfunc_arity(int64_t actual)
           CFUNCARG_MAX, actual);
 }
 
-static Value apply_cfunc_v(Table *env, CFunc *f, Value args)
+static Value apply_cfunc_v(Value env, CFunc *f, Value args)
 {
     return f->f1(env, args);
 }
 
-static Value apply_cfunc_0(Table *env, CFunc *f, UNUSED Value args)
+static Value apply_cfunc_0(Value env, CFunc *f, UNUSED Value args)
 {
     return f->f0(env);
 }
 
-static Value apply_cfunc_1(Table *env, CFunc *f, Value args)
+static Value apply_cfunc_1(Value env, CFunc *f, Value args)
 {
     Value a = car(args);
     return f->f1(env, a);
 }
 
-static Value apply_cfunc_2(Table *env, CFunc *f, Value args)
+static Value apply_cfunc_2(Value env, CFunc *f, Value args)
 {
     Value p = args, a0, a1;
     a0 = car(p); p = cdr(p);
@@ -300,7 +302,7 @@ static Value apply_cfunc_2(Table *env, CFunc *f, Value args)
     return f->f2(env, a0, a1);
 }
 
-static Value apply_cfunc_3(Table *env, CFunc *f, Value args)
+static Value apply_cfunc_3(Value env, CFunc *f, Value args)
 {
     Value p = args, a0, a1, a2;
     a0 = car(p); p = cdr(p);
@@ -345,7 +347,7 @@ static Value value_of_syntax(const char *name, void *cfunc, int64_t arity)
     return sp;
 }
 
-static Value value_of_closure(Table *env, Value params, Value body)
+static Value value_of_closure(Value env, Value params, Value body)
 {
     Closure *f = obj_new(sizeof(Closure), TAG_CLOSURE);
     f->proc.arity = (params == Qnil || value_is_pair(params)) ? length(params) : -1;
@@ -464,7 +466,7 @@ static Value expect_arity(int64_t expected, Value args)
                          expected, actual);
 }
 
-static Value apply_cfunc(Table *env, Value proc, Value args)
+static Value apply_cfunc(Value env, Value proc, Value args)
 {
     CFunc *f = CFUNC(proc);
     return f->applier(env, f, args);
@@ -487,32 +489,58 @@ static Value append2(Value l1, Value l2)
     return ret;
 }
 
-static Table *env_put(Table *env, Value sym, Value val)
+static Value env_new(void)
 {
-    return table_put(env, value_to_symbol(sym), val);
+    Env *e = obj_new(sizeof(Env), TAG_ENV);
+    e->table = table_new();
+    e->parent = Qfalse;
+    return (Value) e;
 }
 
-static bool env_set(Table *env, Value sym, Value val)
+static Value env_inherit(Value parent)
 {
-    return table_set(env, value_to_symbol(sym), val);
+    Value e = env_new();
+    ENV(e)->parent = parent;
+    return (Value) e;
 }
 
-static Value env_get(const Table *env, Value sym)
+static Value env_put(Value env, Value key, Value value)
 {
-    Value found = table_get(env, value_to_symbol(sym));
-    if (found == TABLE_NOT_FOUND)
-        return Qundef;
-    return found;
+    table_put(ENV(env)->table, value_to_symbol(key), value);
+    return env;
 }
 
-static Value eval_body(Table *env, Value body);
+// chained!
+static bool env_set(Value env, Value key, Value value)
+{
+    Symbol sym = value_to_symbol(key);
+    for (Value p = env; p != Qfalse; p = ENV(p)->parent) {
+        if (table_set(ENV(p)->table, sym, value))
+            return true;
+    }
+    return false;
+}
+
+// chained!!
+static Value env_get(const Value env, Value name)
+{
+    Symbol sym = value_to_symbol(name);
+    for (Value p = env; p != Qfalse; p = ENV(p)->parent) {
+        Value v = table_get(ENV(p)->table, sym);
+        if (v != TABLE_NOT_FOUND)
+            return v;
+    }
+    return Qundef;
+}
+
+static Value eval_body(Value env, Value body);
 
 //PTR
 static Value apply_closure(Value proc, Value args)
 {
     Closure *cl = CLOSURE(proc);
     int64_t arity = cl->proc.arity;
-    Table *clenv = table_inherit(cl->env);
+    Value clenv = env_inherit(cl->env);
     Value params = cl->params;
     if (arity == -1)
         env_put(clenv, params, args);
@@ -520,7 +548,7 @@ static Value apply_closure(Value proc, Value args)
         for (Value pa = args, pp = params; pa != Qnil; pa = cdr(pa), pp = cdr(pp))
             env_put(clenv, car(pp), car(pa));
     }
-    return eval_body(clenv, cl->body); // XXX: table_free(clenv)?
+    return eval_body(clenv, cl->body);
 }
 
 [[gnu::noreturn]] [[gnu::noinline]]
@@ -547,7 +575,7 @@ static void apply_continuation(Value f, Value args)
 }
 
 // expects proc and args have been evaluated if necessary
-static Value apply(Table *env, Value proc, Value args)
+static Value apply(Value env, Value proc, Value args)
 {
     EXPECT(arity, PROCEDURE(proc)->arity, args);
     switch (VALUE_TAG(proc)) {
@@ -564,12 +592,12 @@ static Value apply(Table *env, Value proc, Value args)
 }
 
 // Note: Do not mistake this for "(define-syntax ...)" which related to macros
-static void define_syntax(Table *env, const char *name, void *cfunc, int64_t arity)
+static void define_syntax(Value env, const char *name, void *cfunc, int64_t arity)
 {
     env_put(env, value_of_symbol(name), value_of_syntax(name, cfunc, arity));
 }
 
-static void define_procedure(Table *env, const char *name, void *cfunc, int64_t arity)
+static void define_procedure(Value env, const char *name, void *cfunc, int64_t arity)
 {
     env_put(env, value_of_symbol(name), value_of_cfunc(name, cfunc, arity));
 }
@@ -589,9 +617,9 @@ CXRS(DEF_CXR)
 //
 // Evaluation
 //
-static Value eval(Table *env, Value v);
+static Value eval(Value env, Value v);
 
-static Value eval_body(Table *env, Value body)
+static Value eval_body(Value env, Value body)
 {
     Value last = Qnil;
     for (Value p = body; p != Qnil; p = cdr(p)) {
@@ -601,14 +629,7 @@ static Value eval_body(Table *env, Value body)
     return last;
 }
 
-static Value eval_body_tmpenv(Table *env, Value body)
-{
-    Value ret = eval_body(env, body);
-    table_free(env);
-    return ret;
-}
-
-static Value map_eval(Table *env, Value l)
+static Value map_eval(Value env, Value l)
 {
     Value mapped = DUMMY_PAIR();
     for (Value last = mapped, p = l, v; p != Qnil; p = cdr(p)) {
@@ -628,7 +649,7 @@ static Value push_stack_frame(Value ve, const char *name, Value loc)
     return ve;
 }
 
-static Value eval_apply(Table *env, Value l)
+static Value eval_apply(Value env, Value l)
 {
     Value symproc = car(l), args = cdr(l);
     Value proc = eval(env, symproc);
@@ -647,7 +668,7 @@ static Value eval_apply(Table *env, Value l)
     return ret;
 }
 
-static Value lookup_or_error(Table *env, Value v)
+static Value lookup_or_error(Value env, Value v)
 {
     Value p = env_get(env, v);
     if (p == Qundef)
@@ -655,7 +676,7 @@ static Value lookup_or_error(Table *env, Value v)
     return p;
 }
 
-static Value eval(Table *env, Value v)
+static Value eval(Value env, Value v)
 {
     if (value_is_symbol(v))
         return lookup_or_error(env, v);
@@ -845,14 +866,14 @@ static Value load_inner(const char *path)
 
 // 4.1. Primitive expression types
 // 4.1.2. Literal expressions
-static Value syn_quote(UNUSED Table *env, Value datum)
+static Value syn_quote(UNUSED Value env, Value datum)
 {
     return datum;
 }
 
 // 4.1.4. Procedures
 //PTR -- proper tail recursion needed
-static Value syn_lambda(Table *env, Value args)
+static Value syn_lambda(Value env, Value args)
 {
     Value params = car(args), body = cdr(args);
     if (params != Qnil)
@@ -863,7 +884,7 @@ static Value syn_lambda(Table *env, Value args)
 
 // 4.1.5. Conditionals
 //PTR
-static Value syn_if(Table *env, Value args)
+static Value syn_if(Value env, Value args)
 {
     EXPECT(arity_range, 2, 3, args);
 
@@ -879,7 +900,7 @@ static Value syn_if(Table *env, Value args)
 }
 
 // 4.1.6. Assignments
-static Value iset(Table *env, Value ident, Value val)
+static Value iset(Value env, Value ident, Value val)
 {
     bool found = env_set(env, ident, val);
     if (!found)
@@ -887,7 +908,7 @@ static Value iset(Table *env, Value ident, Value val)
     return Qnil;
 }
 
-static Value syn_set(Table *env, Value ident, Value expr)
+static Value syn_set(Value env, Value ident, Value expr)
 {
     EXPECT(type, TYPE_SYMBOL, ident);
     Value v = eval(env, expr);
@@ -897,7 +918,7 @@ static Value syn_set(Table *env, Value ident, Value expr)
 
 // 4.2. Derived expression types
 // 4.2.1. Conditionals
-static Value cond_eval_recipient(Table *env, Value test, Value recipients)
+static Value cond_eval_recipient(Value env, Value test, Value recipients)
 {
     EXPECT(type, TYPE_PAIR, recipients);
     Value recipient = eval(env, car(recipients)), rest = cdr(recipients);
@@ -909,7 +930,7 @@ static Value cond_eval_recipient(Table *env, Value test, Value recipients)
 }
 
 //PTR
-static Value syn_cond(Table *env, Value clauses)
+static Value syn_cond(Value env, Value clauses)
 {
     EXPECT(arity_min, 1, clauses);
 
@@ -942,7 +963,7 @@ static Value expect_list_head(Value v)
 static Value memq(Value key, Value l);
 
 //PTR
-static Value syn_case(Table *env, Value args)
+static Value syn_case(Value env, Value args)
 {
     EXPECT(arity_min, 2, args);
     Value key = eval(env, car(args)), clauses = cdr(args);
@@ -961,7 +982,7 @@ static Value syn_case(Table *env, Value args)
 }
 
 //PTR
-static Value syn_and(Table *env, Value args)
+static Value syn_and(Value env, Value args)
 {
     Value last = Qtrue;
     for (Value p = args; p != Qnil; p = cdr(p)) {
@@ -973,7 +994,7 @@ static Value syn_and(Table *env, Value args)
 }
 
 //PTR
-static Value syn_or(Table *env, Value args)
+static Value syn_or(Value env, Value args)
 {
     Value last = Qfalse;
     for (Value p = args; p != Qnil; p = cdr(p)) {
@@ -998,7 +1019,7 @@ static Value transpose_2xn(Value ls, Value *pfirsts, Value *pseconds) // 2 * n
     return Qfalse;
 }
 
-static Value let(Table *env, Value var, Value bindings, Value body)
+static Value let(Value env, Value var, Value bindings, Value body)
 {
     EXPECT(list_head, bindings);
     Value params = Qnil, symargs = Qnil;
@@ -1010,16 +1031,14 @@ static Value let(Table *env, Value var, Value bindings, Value body)
         Value proc = value_of_closure(env, params, body);
         return apply_closure(proc, args);
     }
-    Table *letenv = table_inherit(env);
+    Value letenv = env_inherit(env);
     Value proc = value_of_closure(letenv, params, body);
     env_put(letenv, var, proc); // affects as proc->env
-    Value ret = apply_closure(proc, args);
-    table_free(letenv);
-    return ret;
+    return apply_closure(proc, args);
 }
 
 //PTR
-static Value syn_let(Table *env, Value args)
+static Value syn_let(Value env, Value args)
 {
     EXPECT(arity_min, 2, args);
     Value bind_or_var = car(args), body = cdr(args);
@@ -1032,10 +1051,10 @@ static Value syn_let(Table *env, Value args)
     return let(env, var, bindings, body);
 }
 
-static Value let_star(Table *env, Value bindings, Value body)
+static Value let_star(Value env, Value bindings, Value body)
 {
     EXPECT(list_head, bindings);
-    Table *letenv = env;
+    Value letenv = env;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
         EXPECT(type, TYPE_PAIR, b);
@@ -1043,7 +1062,7 @@ static Value let_star(Table *env, Value bindings, Value body)
             return runtime_error("malformed binding in let: %s", stringify(b));
         Value ident = car(b), expr = cadr(b);
         EXPECT(type, TYPE_SYMBOL, ident);
-        letenv = table_inherit(letenv);
+        letenv = env_inherit(letenv);
         Value val = eval(letenv, expr);
         CHECK_ERROR(val);
         env_put(letenv, ident, val);
@@ -1052,14 +1071,14 @@ static Value let_star(Table *env, Value bindings, Value body)
 }
 
 //PTR
-static Value syn_let_star(Table *env, Value args)
+static Value syn_let_star(Value env, Value args)
 {
     EXPECT(arity_min, 2, args);
     return let_star(env, car(args), cdr(args));
 }
 
 //PTR
-static Value syn_letrec(Table *env, Value args)
+static Value syn_letrec(Value env, Value args)
 {
     EXPECT(arity_min, 2, args);
     Value bindings = car(args);
@@ -1067,7 +1086,7 @@ static Value syn_letrec(Table *env, Value args)
     EXPECT(list_head, bindings);
     EXPECT(type, TYPE_PAIR, body);
 
-    Table *letenv = table_inherit(env);
+    Value letenv = env_inherit(env);
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
         EXPECT(type, TYPE_PAIR, b);
@@ -1076,26 +1095,26 @@ static Value syn_letrec(Table *env, Value args)
         Value val = eval(letenv, cadr(b));
         env_put(letenv, ident, val);
     }
-    return eval_body_tmpenv(letenv, body);
+    return eval_body(letenv, body);
 }
 
 // 4.2.3. Sequencing
 //PTR
-static Value syn_begin(Table *env, Value body)
+static Value syn_begin(Value env, Value body)
 {
     return eval_body(env, body);
 }
 
 // 4.2.4. Iteration
 //PTR
-static Value syn_do(Table *env, Value args)
+static Value syn_do(Value env, Value args)
 {
     EXPECT(arity_min, 2, args);
 
     Value bindings = car(args), tests = cadr(args), body = cddr(args);
     EXPECT(list_head, bindings);
     EXPECT(list_head, tests);
-    Table *doenv = table_inherit(env);
+    Value doenv = env_inherit(env);
     Value steps = Qnil, v;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
@@ -1123,16 +1142,13 @@ static Value syn_do(Table *env, Value args)
         }
     }
     CHECK_ERROR(v);
-    if (exprs != Qnil)
-        return eval_body_tmpenv(doenv, exprs);
-    table_free(doenv);
-    return Qnil;
+    return eval_body(doenv, exprs);
 }
 
 // 4.2.6. Quasiquotation
-static Value qq_list(Table *env, Value datum, int64_t depth);
+static Value qq_list(Value env, Value datum, int64_t depth);
 
-static Value qq(Table *env, Value datum, int64_t depth)
+static Value qq(Value env, Value datum, int64_t depth)
 {
     if (depth == 0)
         return eval(env, datum);
@@ -1176,7 +1192,7 @@ static Value splicer(Value last, Value to_splice)
     return last_pair(to_splice);
 }
 
-static Value qq_list(Table *env, Value datum, int64_t depth)
+static Value qq_list(Value env, Value datum, int64_t depth)
 {
     Value ret = DUMMY_PAIR();
     for (Value last = ret, p = datum; p != Qnil; p = cdr(p)) {
@@ -1197,23 +1213,23 @@ static Value qq_list(Table *env, Value datum, int64_t depth)
     return cdr(ret);
 }
 
-static Value syn_quasiquote(Table *env, Value datum)
+static Value syn_quasiquote(Value env, Value datum)
 {
     return qq(env, datum, 1);
 }
 
-static Value syn_unquote(UNUSED Table *env, UNUSED Value args)
+static Value syn_unquote(UNUSED Value env, UNUSED Value args)
 {
     return runtime_error("applied out of quasiquote (`)");
 }
 
-static Value syn_unquote_splicing(UNUSED Table *env, UNUSED Value args)
+static Value syn_unquote_splicing(UNUSED Value env, UNUSED Value args)
 {
     return runtime_error("applied out of quasiquote (`)");
 }
 
 // 5.2. Definitions
-static Value define_variable(Table *env, Value ident, Value expr)
+static Value define_variable(Value env, Value ident, Value expr)
 {
     EXPECT(type, TYPE_SYMBOL, ident);
 
@@ -1227,14 +1243,14 @@ static Value define_variable(Table *env, Value ident, Value expr)
     return Qnil;
 }
 
-static Value define_proc_internal(Table *env, Value heads, Value body)
+static Value define_proc_internal(Value env, Value heads, Value body)
 {
     Value ident = car(heads), params = cdr(heads);
     Value val = value_of_closure(env, params, body);
     return define_variable(env, ident, val);
 }
 
-static Value syn_define(Table *env, Value args)
+static Value syn_define(Value env, Value args)
 {
     if (args == Qnil)
         return runtime_error("wrong number of arguments: expected 1+");
@@ -1259,7 +1275,7 @@ static Value syn_define(Table *env, Value args)
 }
 
 // 6.1. Equivalence predicates
-static Value proc_eq(UNUSED Table *env, Value x, Value y)
+static Value proc_eq(UNUSED Value env, Value x, Value y)
 {
     return OF_BOOL(x == y);
 }
@@ -1288,7 +1304,7 @@ static bool equal(Value x, Value y)
     UNREACHABLE();
 }
 
-static Value proc_equal(UNUSED Table *env, Value x, Value y)
+static Value proc_equal(UNUSED Value env, Value x, Value y)
 {
     return OF_BOOL(equal(x, y));
 }
@@ -1304,12 +1320,12 @@ static int64_t get_int(Value v, Value *err)
     return value_to_int(v);
 }
 
-static Value proc_integer_p(UNUSED Table *env, Value obj)
+static Value proc_integer_p(UNUSED Value env, Value obj)
 {
     return OF_BOOL(value_is_int(obj));
 }
 
-static Value proc_numeq(UNUSED Table *env, Value args)
+static Value proc_numeq(UNUSED Value env, Value args)
 {
     EXPECT(arity_min, 2, args);
 
@@ -1325,7 +1341,7 @@ static Value proc_numeq(UNUSED Table *env, Value args)
     return Qtrue;
 }
 
-static Value proc_lt(UNUSED Table *env, Value args)
+static Value proc_lt(UNUSED Value env, Value args)
 {
     EXPECT(arity_min, 2, args);
 
@@ -1341,7 +1357,7 @@ static Value proc_lt(UNUSED Table *env, Value args)
     return Qtrue;
 }
 
-static Value proc_gt(UNUSED Table *env, Value args)
+static Value proc_gt(UNUSED Value env, Value args)
 {
     EXPECT(arity_min, 2, args);
 
@@ -1357,7 +1373,7 @@ static Value proc_gt(UNUSED Table *env, Value args)
     return Qtrue;
 }
 
-static Value proc_le(UNUSED Table *env, Value args)
+static Value proc_le(UNUSED Value env, Value args)
 {
     EXPECT(arity_min, 2, args);
 
@@ -1373,7 +1389,7 @@ static Value proc_le(UNUSED Table *env, Value args)
     return Qtrue;
 }
 
-static Value proc_ge(UNUSED Table *env, Value args)
+static Value proc_ge(UNUSED Value env, Value args)
 {
     EXPECT(arity_min, 2, args);
 
@@ -1389,32 +1405,32 @@ static Value proc_ge(UNUSED Table *env, Value args)
     return Qtrue;
 }
 
-static Value proc_zero_p(UNUSED Table *env, Value obj)
+static Value proc_zero_p(UNUSED Value env, Value obj)
 {
     return OF_BOOL(value_is_int(obj) && value_to_int(obj) == 0);
 }
 
-static Value proc_positive_p(UNUSED Table *env, Value obj)
+static Value proc_positive_p(UNUSED Value env, Value obj)
 {
     return OF_BOOL(value_is_int(obj) && value_to_int(obj) > 0);
 }
 
-static Value proc_negative_p(UNUSED Table *env, Value obj)
+static Value proc_negative_p(UNUSED Value env, Value obj)
 {
     return OF_BOOL(value_is_int(obj) && value_to_int(obj) < 0);
 }
 
-static Value proc_odd_p(UNUSED Table *env, Value obj)
+static Value proc_odd_p(UNUSED Value env, Value obj)
 {
     return OF_BOOL(value_is_int(obj) && (value_to_int(obj) % 2) != 0);
 }
 
-static Value proc_even_p(UNUSED Table *env, Value obj)
+static Value proc_even_p(UNUSED Value env, Value obj)
 {
     return OF_BOOL(value_is_int(obj) && (value_to_int(obj) % 2) == 0);
 }
 
-static Value proc_max(UNUSED Table *env, Value args)
+static Value proc_max(UNUSED Value env, Value args)
 {
     EXPECT(arity_min, 1, args);
     Value e = Qfalse;
@@ -1429,7 +1445,7 @@ static Value proc_max(UNUSED Table *env, Value args)
     return value_of_int(max);
 }
 
-static Value proc_min(UNUSED Table *env, Value args)
+static Value proc_min(UNUSED Value env, Value args)
 {
     EXPECT(arity_min, 1, args);
     Value e = Qfalse;
@@ -1444,7 +1460,7 @@ static Value proc_min(UNUSED Table *env, Value args)
     return value_of_int(min);
 }
 
-static Value proc_add(UNUSED Table *env, Value args)
+static Value proc_add(UNUSED Value env, Value args)
 {
     int64_t y = 0;
     Value e = Qfalse;
@@ -1455,7 +1471,7 @@ static Value proc_add(UNUSED Table *env, Value args)
     return value_of_int(y);
 }
 
-static Value proc_sub(UNUSED Table *env, Value args)
+static Value proc_sub(UNUSED Value env, Value args)
 {
     EXPECT(arity_min, 1, args);
 
@@ -1472,7 +1488,7 @@ static Value proc_sub(UNUSED Table *env, Value args)
     return value_of_int(y);
 }
 
-static Value proc_mul(UNUSED Table *env, Value args)
+static Value proc_mul(UNUSED Value env, Value args)
 {
     Value e = Qfalse;
     int64_t y = 1;
@@ -1483,7 +1499,7 @@ static Value proc_mul(UNUSED Table *env, Value args)
     return value_of_int(y);
 }
 
-static Value proc_div(UNUSED Table *env, Value args)
+static Value proc_div(UNUSED Value env, Value args)
 {
     EXPECT(arity_min, 1, args);
 
@@ -1503,7 +1519,7 @@ static Value proc_div(UNUSED Table *env, Value args)
     return value_of_int(y);
 }
 
-static Value proc_abs(UNUSED Table *env, Value x)
+static Value proc_abs(UNUSED Value env, Value x)
 {
     Value e = Qfalse;
     int64_t n = get_int(x, &e);
@@ -1511,7 +1527,7 @@ static Value proc_abs(UNUSED Table *env, Value x)
     return value_of_int(n < 0 ? -n : n);
 }
 
-static Value proc_quotient(UNUSED Table *env, Value x, Value y)
+static Value proc_quotient(UNUSED Value env, Value x, Value y)
 {
     Value e = Qfalse;
     int64_t b = get_int(y, &e);
@@ -1525,7 +1541,7 @@ static Value proc_quotient(UNUSED Table *env, Value x, Value y)
 }
 
 
-static Value proc_remainder(UNUSED Table *env, Value x, Value y)
+static Value proc_remainder(UNUSED Value env, Value x, Value y)
 {
     Value e = Qfalse;
     int64_t b = get_int(y, &e);
@@ -1538,7 +1554,7 @@ static Value proc_remainder(UNUSED Table *env, Value x, Value y)
     return value_of_int(c);
 }
 
-static Value proc_modulo(UNUSED Table *env, Value x, Value y)
+static Value proc_modulo(UNUSED Value env, Value x, Value y)
 {
     Value e = Qfalse;
     int64_t b = get_int(y, &e);
@@ -1584,24 +1600,24 @@ static int64_t vexpt(Value x, Value y)
     return expt(a, b);
 }
 
-static Value proc_expt(UNUSED Table *env, Value x, Value y)
+static Value proc_expt(UNUSED Value env, Value x, Value y)
 {
     return value_of_int(vexpt(x, y));
 }
 
 // 6.3.1. Booleans
-static Value proc_not(UNUSED Table *env, Value x)
+static Value proc_not(UNUSED Value env, Value x)
 {
     return OF_BOOL(x == Qfalse);
 }
 
-static Value proc_boolean_p(UNUSED Table *env, Value x)
+static Value proc_boolean_p(UNUSED Value env, Value x)
 {
     return OF_BOOL(x == Qtrue || x == Qfalse);
 }
 
 // 6.3.2. Pairs and lists
-static Value proc_pair_p(UNUSED Table *env, Value o)
+static Value proc_pair_p(UNUSED Value env, Value o)
 {
     return OF_BOOL(value_is_pair(o));
 }
@@ -1624,18 +1640,18 @@ inline Value cdr(Value v)
     return PAIR(v)->cdr;
 }
 
-static Value proc_cons(UNUSED Table *env, Value car, Value cdr)
+static Value proc_cons(UNUSED Value env, Value car, Value cdr)
 {
     return cons(car, cdr);
 }
 
-static Value proc_car(UNUSED Table *env, Value pair)
+static Value proc_car(UNUSED Value env, Value pair)
 {
     EXPECT(type, TYPE_PAIR, pair);
     return car(pair);
 }
 
-static Value proc_cdr(UNUSED Table *env, Value pair)
+static Value proc_cdr(UNUSED Value env, Value pair)
 {
     EXPECT(type, TYPE_PAIR, pair);
     return cdr(pair);
@@ -1646,12 +1662,12 @@ bool value_is_null(Value v)
     return v == Qnil;
 }
 
-static Value proc_null_p(UNUSED Table *env, Value list)
+static Value proc_null_p(UNUSED Value env, Value list)
 {
     return OF_BOOL(list == Qnil);
 }
 
-static Value proc_list_p(UNUSED Table *env, Value l)
+static Value proc_list_p(UNUSED Value env, Value l)
 {
     for (Value p = l; p != Qnil; p = cdr(p)) {
         if (!value_is_pair(p))
@@ -1660,7 +1676,7 @@ static Value proc_list_p(UNUSED Table *env, Value l)
     return Qtrue;
 }
 
-static Value proc_list(UNUSED Table *env, Value args)
+static Value proc_list(UNUSED Value env, Value args)
 {
     return args;
 }
@@ -1673,7 +1689,7 @@ int64_t length(Value l)
     return len;
 }
 
-static Value proc_length(UNUSED Table *env, Value list)
+static Value proc_length(UNUSED Value env, Value list)
 {
     EXPECT(list_head, list);
     return value_of_int(length(list));
@@ -1694,7 +1710,7 @@ static Value dup_list(Value l, Value *plast)
     return cdr(dup);
 }
 
-static Value proc_append(UNUSED Table *env, Value ls)
+static Value proc_append(UNUSED Value env, Value ls)
 {
     Value l = Qnil, last = Qnil, p = ls;
     for (Value next; p != Qnil && (next = cdr(p)) != Qnil; p = next) {
@@ -1718,7 +1734,7 @@ Value reverse(Value l)
     return ret;
 }
 
-static Value proc_reverse(UNUSED Table *env, Value list)
+static Value proc_reverse(UNUSED Value env, Value list)
 {
     EXPECT(list_head, list);
     return reverse(list);
@@ -1743,12 +1759,12 @@ static Value list_tail(Value list, Value k)
     return p;
 }
 
-static Value proc_list_tail(UNUSED Table *env, Value list, Value k)
+static Value proc_list_tail(UNUSED Value env, Value list, Value k)
 {
     return list_tail(list, k);
 }
 
-static Value proc_list_ref(UNUSED Table *env, Value list, Value k)
+static Value proc_list_ref(UNUSED Value env, Value list, Value k)
 {
     Value tail = list_tail(list, k);
     if (tail == Qnil)
@@ -1766,7 +1782,7 @@ static Value memq(Value key, Value l)
     return Qfalse;
 }
 
-static Value proc_memq(UNUSED Table *env, Value obj, Value list)
+static Value proc_memq(UNUSED Value env, Value obj, Value list)
 {
     EXPECT(list_head, list);
     return memq(obj, list);
@@ -1782,7 +1798,7 @@ static Value member(Value key, Value l)
     return Qfalse;
 }
 
-static Value proc_member(UNUSED Table *env, Value obj, Value list)
+static Value proc_member(UNUSED Value env, Value obj, Value list)
 {
     EXPECT(list_head, list);
     return member(obj, list);
@@ -1798,7 +1814,7 @@ static Value assq(Value key, Value l)
     return Qfalse;
 }
 
-static Value proc_assq(UNUSED Table *env, Value obj, Value alist)
+static Value proc_assq(UNUSED Value env, Value obj, Value alist)
 {
     EXPECT(list_head, alist);
     return assq(obj, alist);
@@ -1814,38 +1830,38 @@ static Value assoc(Value key, Value l)
     return Qfalse;
 }
 
-static Value proc_assoc(UNUSED Table *env, Value obj, Value alist)
+static Value proc_assoc(UNUSED Value env, Value obj, Value alist)
 {
     EXPECT(list_head, alist);
     return assoc(obj, alist);
 }
 
 // 6.3.3. Symbols
-static Value proc_symbol_p(UNUSED Table *env, Value obj)
+static Value proc_symbol_p(UNUSED Value env, Value obj)
 {
     return OF_BOOL(value_is_symbol(obj));
 }
 
 // 6.3.5. Strings
-static Value proc_string_p(UNUSED Table *env, Value obj)
+static Value proc_string_p(UNUSED Value env, Value obj)
 {
     return OF_BOOL(value_is_string(obj));
 }
 
-static Value proc_string_length(UNUSED Table *env, Value s)
+static Value proc_string_length(UNUSED Value env, Value s)
 {
     EXPECT(type, TYPE_STRING, s);
     return value_of_int(strlen(STRING(s)->body));
 }
 
-static Value proc_string_eq(UNUSED Table *env, Value s1, Value s2)
+static Value proc_string_eq(UNUSED Value env, Value s1, Value s2)
 {
     EXPECT(type_twin, TYPE_STRING, s1, s2);
     return OF_BOOL(strcmp(STRING(s1)->body, STRING(s2)->body) == 0);
 }
 
 // 6.4. Control features
-static Value proc_procedure_p(UNUSED Table *env, Value o)
+static Value proc_procedure_p(UNUSED Value env, Value o)
 {
     return OF_BOOL(value_is_procedure(o));
 }
@@ -1860,7 +1876,7 @@ static Value build_apply_args(Value args)
     return append2(cdr(heads), rest);
 }
 
-static Value proc_apply(Table *env, Value args)
+static Value proc_apply(Value env, Value args)
 {
     EXPECT(arity_min, 2, args);
 
@@ -1890,7 +1906,7 @@ static Value cars_cdrs(Value ls, Value *pcars, Value *pcdrs, Value *perr)
     return true;
 }
 
-static Value proc_map(Table *env, Value args)
+static Value proc_map(Value env, Value args)
 {
     EXPECT(arity_min, 2, args);
 
@@ -1907,7 +1923,7 @@ static Value proc_map(Table *env, Value args)
     return cdr(ret);
 }
 
-static Value proc_for_each(Table *env, Value args)
+static Value proc_for_each(Value env, Value args)
 {
     EXPECT(arity_min, 2, args);
 
@@ -1944,7 +1960,7 @@ static bool continuation_set(Value c)
     return setjmp(cont->state) != 0;
 }
 
-static Value proc_callcc(Table *env, Value proc)
+static Value proc_callcc(Value env, Value proc)
 {
     EXPECT(type, TYPE_PROC, proc);
     Value c = value_of_continuation();
@@ -2016,27 +2032,27 @@ void display(Value v)
     fdisplay(stdout, v);
 }
 
-static Value proc_display(UNUSED Table *env, Value obj)
+static Value proc_display(UNUSED Value env, Value obj)
 {
     display(obj);
     return obj;
 }
 
-static Value proc_newline(UNUSED Table *env)
+static Value proc_newline(UNUSED Value env)
 {
     puts("");
     return Qnil;
 }
 
 // 6.6.4. System interface
-static Value proc_load(UNUSED Table *env, Value path)
+static Value proc_load(UNUSED Value env, Value path)
 {
     // Current spec: path is always relative
     return load_inner(value_to_string(path));
 }
 
 // Extensions from R7RS (scheme process-context)
-static Value proc_exit(UNUSED Table *env, Value args)
+static Value proc_exit(UNUSED Value env, Value args)
 {
     EXPECT(arity_range, 0, 1, args);
     exit_status = 0;
@@ -2053,7 +2069,7 @@ static Value proc_exit(UNUSED Table *env, Value args)
 }
 
 // Local Extensions
-static Value proc_print(UNUSED Table *env, Value l)
+static Value proc_print(UNUSED Value env, Value l)
 {
     Value obj = Qnil;
     for (Value p = l, next; p != Qnil; p = next)  {
@@ -2067,7 +2083,7 @@ static Value proc_print(UNUSED Table *env, Value l)
     return obj;
 }
 
-static Value proc_cputime(UNUSED Table *env) // in micro sec
+static Value proc_cputime(UNUSED Value env) // in micro sec
 {
     static const int64_t MICRO = 1000*1000;
     struct timespec t;
@@ -2076,7 +2092,7 @@ static Value proc_cputime(UNUSED Table *env) // in micro sec
     return value_of_int(n);
 }
 
-static Value syn_defined_p(Table *env, Value name)
+static Value syn_defined_p(Value env, Value name)
 {
     if (!value_is_symbol(name))
         return Qfalse;
@@ -2085,8 +2101,8 @@ static Value syn_defined_p(Table *env, Value name)
 
 int sch_fin(void)
 {
+    // table_free(toplevel_environment);
     gc_fin();
-    table_free(toplevel_environment);
     return exit_status;
 }
 
@@ -2096,7 +2112,7 @@ int sch_exit_status(void)
 }
 
 #define DEF_CXR_BUILTIN(x, y) \
-    static Value proc_c##x##y##r(UNUSED Table *env, Value v) \
+    static Value proc_c##x##y##r(UNUSED Value env, Value v) \
     { \
         EXPECT(type, TYPE_PAIR, v); \
         return c##x##y##r(v); \
@@ -2117,8 +2133,8 @@ void sch_init(uintptr_t *sp)
     DEF_SYMBOL(UNQUOTE_SPLICING, "unquote-splicing");
     DEF_SYMBOL(RARROW, "=>");
 
-    toplevel_environment = table_new();
-    Table *e = toplevel_environment;
+    toplevel_environment = env_new();
+    Value e = toplevel_environment;
 
     // 4. Expressions
 

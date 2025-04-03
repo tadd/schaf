@@ -13,7 +13,9 @@ typedef enum {
     TAG_SYNTAX, // almost a C Function
     TAG_CLOSURE,
     TAG_CONTINUATION,
-    TAG_ERROR, // internal use only
+    // internal use only
+    TAG_ENV,
+    TAG_ERROR,
     TAG_LAST = TAG_ERROR
 } ValueTag;
 
@@ -40,19 +42,19 @@ typedef struct {
 typedef struct CFunc {
     Procedure proc;
     char *name;
-    Value (*applier)(Table *env, struct CFunc *f, Value args);
+    Value (*applier)(Value env, struct CFunc *f, Value args);
     union {
         void *cfunc;
-        Value (*f0)(Table *);
-        Value (*f1)(Table *, Value);
-        Value (*f2)(Table *, Value, Value);
-        Value (*f3)(Table *, Value, Value, Value);
+        Value (*f0)(Value);
+        Value (*f1)(Value, Value);
+        Value (*f2)(Value, Value, Value);
+        Value (*f3)(Value, Value, Value, Value);
     };
 } CFunc;
 
 typedef struct {
     Procedure proc;
-    Table *env;
+    Value env;
     Value params;
     Value body;
 } Closure;
@@ -68,6 +70,12 @@ typedef struct {
 
 typedef struct {
     ValueTag tag;
+    Value parent;
+    Table *table;
+} Env;
+
+typedef struct {
+    ValueTag tag;
     Value call_stack; // list of '(func-name . location)
 } Error;
 
@@ -78,6 +86,7 @@ typedef struct {
 #define CFUNC(v) ((CFunc *) v)
 #define CLOSURE(v) ((Closure *) v)
 #define CONTINUATION(v) ((Continuation *) v)
+#define ENV(v) ((Env *) v)
 #define ERROR(v) ((Error *) v)
 
 #pragma GCC visibility push(hidden) // also affects Clang
