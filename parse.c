@@ -100,25 +100,29 @@ static inline void put_newline_pos(Parser *p)
     p->newline_pos = cons(value_of_int(ftell(p->in)), p->newline_pos);
 }
 
+static void skip_comment(Parser *p)
+{
+    int c;
+    while ((c = fgetc(p->in)) != EOF) {
+        if (c == '\n') {
+            put_newline_pos(p);
+            return;
+        }
+    }
+}
+
 static void skip_token_atmosphere(Parser *p)
 {
     int c;
-    for (;;) {
-        c = fgetc(p->in);
-        if (isspace(c)) {
-            if (c == '\n')
-                put_newline_pos(p);
-            continue; // skip
-        }
+    while ((c = fgetc(p->in)) != EOF) {
         if (c == ';') {
-            do {
-                c = fgetc(p->in);
-            } while (c != '\n' && c != EOF);
-            if (c == '\n')
-                put_newline_pos(p);
+            skip_comment(p);
             continue;
         }
-        break;
+        if (!isspace(c))
+            break;
+        if (c == '\n')
+            put_newline_pos(p);
     }
     ungetc(c, p->in);
 }
