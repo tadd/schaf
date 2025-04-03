@@ -15,7 +15,6 @@
 
 #include "schaf.h"
 #include "intern.h"
-#include "table.h"
 #include "utils.h"
 
 //

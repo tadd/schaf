@@ -6,7 +6,7 @@ ANALYZER = -fanalyzer
 SANITIZER = -fsanitize=undefined #,address
 TIMEOUT = timeout 2
 
-OBJ_COMMON = parse.o schaf.o table.o utils.o
+OBJ_COMMON = parse.o schaf.o utils.o
 OBJ = $(OBJ_COMMON) main.o
 OBJ_TEST = $(OBJ_COMMON) test/basic-test.o
 
@@ -42,8 +42,7 @@ microbench: schaf
 
 main.o: schaf.h utils.h
 parse.o: intern.h schaf.h utils.h
-schaf.o: intern.h schaf.h table.h utils.h
-table.o: table.h utils.h
+schaf.o: intern.h schaf.h utils.h
 utils.o: utils.h
 
 .PHONY: all clean analyze sanitize microbench
@@ -68,6 +67,6 @@ test/basic-test: $(OBJ_TEST)
 test/basic-test-san: $(OBJ_TEST:.o=.san.o)
 	$(CC) $(CFLAGS) $(SANITIZER) -o $@ $^ $(LIBS) -lcriterion
 
-test/basic-test.o: schaf.h table.h utils.h
+test/basic-test.o: schaf.h utils.h
 
 .PHONY: test test-san test-c test-c-san test-scheme test-scheme-san 

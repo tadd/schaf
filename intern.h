@@ -4,7 +4,6 @@
 #include <setjmp.h>
 
 #include "schaf.h"
-#include "table.h"
 #include "utils.h"
 
 typedef enum { // some have the same values as Type
