@@ -13,7 +13,8 @@ typedef enum {
     TAG_SYNTAX, // almost a C Function
     TAG_CLOSURE,
     TAG_CONTINUATION,
-    TAG_LAST = TAG_CONTINUATION
+    // internal use
+    TAG_ENV,
 } ValueTag;
 
 typedef struct Pair {
@@ -44,7 +45,7 @@ typedef struct {
 
 typedef struct {
     Procedure proc;
-    Table *env;
+    Value env;
     Value params;
     Value body;
 } Closure;
@@ -59,6 +60,13 @@ typedef struct {
     Value retval;
 } Continuation;
 
+typedef struct {
+    ValueTag tag;
+    Table *body;
+} Env;
+
+#define VALUE_TAG(v) (*(ValueTag *)(v))
+
 #define PAIR(v) ((Pair *) v)
 #define LOCATED_PAIR(v) ((LocatedPair *) v)
 #define STRING(v) ((String *) v)
@@ -66,6 +74,7 @@ typedef struct {
 #define CFUNC(v) ((CFunc *) v)
 #define CLOSURE(v) ((Closure *) v)
 #define CONTINUATION(v) ((Continuation *) v)
+#define ENV(v) ((Env *) v)
 
 extern Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
 
