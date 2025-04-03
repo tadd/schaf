@@ -309,49 +309,6 @@ Test(table, get_put) {
     table_free(t);
 }
 
-Test(table, inherit) {
-    uint64_t N = TABLE_NOT_FOUND;
-    Table *t = table_new();
-    table_put(t, 1, 12);
-    Table *u = table_inherit(t);
-    table_put(u, 2, 34);
-
-    cr_assert(eq(llong, 12, table_get(t, 1)));
-    cr_assert(eq(llong,  N, table_get(t, 2)));
-
-    cr_assert(eq(llong, 12, table_get(u, 1)));
-    cr_assert(eq(llong, 34, table_get(u, 2)));
-
-    table_free(u);
-    table_free(t);
-}
-
-Test(table, inherit_nested) {
-    uint64_t N = TABLE_NOT_FOUND;
-    Table *t = table_new();
-    table_put(t, 1, 2);
-    Table *u = table_inherit(t);
-    table_put(u, 2, 4);
-    Table *v = table_inherit(u);
-    table_put(v, 3, 6);
-
-    cr_assert(eq(llong, 2, table_get(t, 1)));
-    cr_assert(eq(llong, N, table_get(t, 2)));
-    cr_assert(eq(llong, N, table_get(t, 3)));
-
-    cr_assert(eq(llong, 2, table_get(u, 1)));
-    cr_assert(eq(llong, 4, table_get(u, 2)));
-    cr_assert(eq(llong, N, table_get(u, 3)));
-
-    cr_assert(eq(llong, 2, table_get(v, 1)));
-    cr_assert(eq(llong, 4, table_get(v, 2)));
-    cr_assert(eq(llong, 6, table_get(v, 3)));
-
-    table_free(v);
-    table_free(u);
-    table_free(t);
-}
-
 void tabforeach(uint64_t k, uint64_t v, void *data)
 {
     uint64_t *x = data;

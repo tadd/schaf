@@ -94,6 +94,22 @@ class ContinuationPrinter(ProcedurePrinter):
              k in self.child_fields()]
         return f'{sup}, {", ".join(l)}'
 
+class TablePrinter(MyPrinter):
+    TYPE = lookup_type('Table')
+
+    def to_string(self):
+        return self.format_members(*self.TYPE.fields())
+
+class EnvPrinter(MyPrinter):
+    TYPE = lookup_type('Env')
+
+    def to_string(self):
+        ty = TablePrinter.TYPE.pointer()
+        tab = self.val['table'].cast(ty).dereference()
+        s = f'{self.param("table")} = {tab}'
+        t = self.format_members('parent')
+        return f'{s}, {t}'
+
 class ValuePrinter(MyPrinter):
     TYPE = lookup_type('Value')
     TAG_TO_TYPE = {
@@ -101,6 +117,8 @@ class ValuePrinter(MyPrinter):
         'syntax': 'CFunc',
         'closure': 'Closure',
         'continuation': 'Continuation',
+        'env': 'Env',
+        None: None
     }
     HIGHLIGHT = {
         'immediate': 'blue',
@@ -108,12 +126,18 @@ class ValuePrinter(MyPrinter):
     }
 
     @property
+    def is_immediate(self):
+        return (int(self.val) & 0x7) != 0
+
+    @property
     def tag_name(self):
+        if self.is_immediate:
+            return None
         return self.deref_as('ValueTag').format_string()[4:].lower()
 
     @property
     def type_name(self):
-        if self.is_proc:
+        if self.is_internal or self.is_proc:
             return self.TAG_TO_TYPE[self.tag_name]
         return cfuncall('value_to_type_name', self.val).string().title()
 
@@ -121,11 +145,17 @@ class ValuePrinter(MyPrinter):
         s = cfuncall('stringify', self.val).string()
         return self.highlight(s, 'expr')
 
-    def proc_string(self, ty):
+    def format_as(self, ty):
         return f'{{{self.pp(self.deref_as(ty))}}}'
 
     @property
+    def is_internal(self):
+        return not self.is_immediate and self.tag_name == 'env'
+
+    @property
     def is_proc(self):
+        if self.is_immediate or self.is_internal:
+            return False
         return cfuncall('value_is_procedure', self.val)
 
     @property
@@ -133,9 +163,13 @@ class ValuePrinter(MyPrinter):
         hex = f'{int(self.val):#x}'
         return self.highlight(hex, 'immediate')
 
+
     def to_string(self):
         addr, ty = (self.addr, self.type_name)
-        val = self.proc_string(ty) if self.is_proc else self.stringify()
+        if self.is_internal or self.is_proc:
+            val = self.format_as(ty)
+        else:
+            val = self.stringify()
         return f'{addr} {ty}: {val}'
 
 class PP (Command):
@@ -149,8 +183,9 @@ class PP (Command):
         print(s)
 PP()
 
-PRINTERS = [ValuePrinter, ProcedurePrinter,
-            CFuncPrinter, ClosurePrinter, ContinuationPrinter]
+PRINTERS = [ValuePrinter, EnvPrinter, ProcedurePrinter,
+            CFuncPrinter, ClosurePrinter, ContinuationPrinter,
+            TablePrinter]
 def schaf_pp(val):
     ty = Type.unqualified(val.type)
     g = (pr(val) for pr in PRINTERS if pr.TYPE == ty)

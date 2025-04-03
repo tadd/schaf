@@ -75,26 +75,19 @@ enum {
 };
 
 struct Table {
-    const Table *parent;
     size_t size, body_size;
     List **body;
 };
 
 const uint64_t TABLE_NOT_FOUND = UINT64_MAX-1;
 
-Table *table_inherit(const Table *p)
+Table *table_new(void)
 {
     Table *t = xmalloc(sizeof(Table));
     t->size = 0;
     t->body_size = TABLE_INIT_SIZE;
     t->body = xcalloc(TABLE_INIT_SIZE, sizeof(List *)); // set NULL
-    t->parent = p;
     return t;
-}
-
-Table *table_new(void)
-{
-    return table_inherit(NULL);
 }
 
 void table_free(Table *t)
@@ -209,16 +202,10 @@ static List *find1(const List *l, uint64_t key)
     return NULL;
 }
 
-// chained!
 static List *find(const Table *t, uint64_t key)
 {
-    for (const Table *p = t; p != NULL; p = p->parent) {
-        uint64_t i = body_index(p, key);
-        List *found = find1(p->body[i], key);
-        if (found != NULL)
-            return found;
-    }
-    return NULL;
+    uint64_t i = body_index(t, key);
+    return find1(t->body[i], key);
 }
 
 uint64_t table_get(const Table *t, uint64_t key)
