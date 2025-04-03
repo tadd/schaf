@@ -3,6 +3,7 @@
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,7 +33,6 @@ static const char *TYPE_NAMES[] = {
     [TYPE_PROC] = "procedure",
 };
 
-#define VALUE_TAG(v) (*(ValueTag*)(v))
 #define OF_BOOL(v) ((v) ? Qtrue : Qfalse)
 
 // Value (uintptr_t):
@@ -438,7 +438,7 @@ static Value apply_closure(Value proc, Value args)
         for (; args != Qnil; args = cdr(args), params = cdr(params))
             table_put(clenv, car(params), car(args));
     }
-    return eval_body(clenv, cl->body); // XXX: table_free(clenv)?
+    return eval_body(clenv, cl->body);
 }
 
 ATTR(noreturn) ATTR(noinline)
@@ -526,13 +526,6 @@ static Value eval_body(Table *env, Value body)
     for (Value next; (next = cdr(p)) != Qnil; p = next)
         eval(env, car(p));
     return eval(env, car(p));
-}
-
-static Value eval_body_tmpenv(Table *env, Value body)
-{
-    Value ret = eval_body(env, body);
-    table_free(env);
-    return ret;
 }
 
 static Value map_eval(Table *env, Value l)
@@ -975,7 +968,7 @@ static Value syn_letrec(Table *env, Value args)
         Value val = eval(letenv, cadr(b));
         table_put(letenv, ident, val);
     }
-    return eval_body_tmpenv(letenv, body);
+    return eval_body(letenv, body);
 }
 
 // 4.2.3. Sequencing
@@ -1016,10 +1009,9 @@ static Value syn_do(Table *env, Value args)
             iset(doenv, var, val);
         }
     }
-    if (exprs != Qnil)
-        return eval_body_tmpenv(doenv, exprs);
-    table_free(doenv);
-    return Qnil;
+    if (exprs == Qnil)
+        return Qnil;
+    return eval_body(doenv, exprs);
 }
 
 // 4.2.6. Quasiquotation
@@ -1746,6 +1738,8 @@ static Value value_of_continuation(void)
 {
     Continuation *c = obj_new(sizeof(Continuation), TAG_CONTINUATION);
     c->proc.arity = 1; // by spec
+    c->call_stack = Qnil;
+    c->retval = Qfalse;
     return (Value) c;
 }
 
@@ -1934,7 +1928,12 @@ void sch_init(void)
     DEF_SYMBOL(UNQUOTE_SPLICING, "unquote-splicing");
     DEF_SYMBOL(RARROW, "=>");
 
+    gc_add_root(&symbol_names);
+    gc_add_root(&call_stack);
+    gc_add_root(&source_data);
+
     toplevel_environment = table_new();
+    gc_add_root_env(&toplevel_environment);
     Table *e = toplevel_environment;
 
     // 4. Expressions
