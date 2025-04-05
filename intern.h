@@ -68,11 +68,20 @@ typedef struct {
 
 extern Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
 
+ATTR_HIDDEN bool value_is_immediate(Value v);
 ATTR_HIDDEN Value iparse(FILE *in, const char *filename);
 ATTR_HIDDEN void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col);
 ATTR_HIDDEN ATTR(noreturn) void raise_error(jmp_buf buf, const char *fmt, ...);
 ATTR_HIDDEN Value reverse(Value l);
 ATTR_HIDDEN void *obj_new(size_t size, ValueTag t);
+
+#define INIT_STACK() volatile void *sch_stack_base; gc_stack_init(&sch_stack_base)
+ATTR_HIDDEN void gc_init(void);
+ATTR_HIDDEN void gc_fin(void);
+
+ATTR_HIDDEN void gc_stack_init(const volatile void *b);
+ATTR_HIDDEN size_t gc_stack_get_size(const volatile void *sp);
+ATTR_HIDDEN ATTR_XMALLOC void *gc_malloc(size_t size);
 
 static inline Value list1(Value x)
 {
