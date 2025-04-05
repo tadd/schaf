@@ -408,8 +408,10 @@ static void sweep(void)
         uint8_t *p = heap->body, *endp = p + heap->size;
         size_t offset;
         for (Header *h, *prev = NULL; p < endp; p += offset) {
-            assert_header(p);
             h = HEADER(p);
+            if (h->size == 0)
+                break;
+            assert_header(p);
             offset = h->size + CHUNK_OFFSET;
             if (!h->allocated)
                 continue;
