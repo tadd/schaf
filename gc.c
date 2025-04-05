@@ -60,17 +60,27 @@ void sch_set_gc_stress(bool b)
     stress = b;
 }
 
-static inline size_t align(size_t size)
+size_t ALIGN = 8 * 4;
+static inline size_t aalign(size_t size)
 {
-    return (size + 7U) / 8U * 8U;
+    return (size + ALIGN-1) / ALIGN * ALIGN;
+}
+
+static void *axmalloc(size_t size)
+{
+    size = aalign(size);
+    void *p = aligned_alloc(ALIGN, size);
+    if (p == NULL)
+        error("malloc(%zu) failed", size);
+    return p;
 }
 
 static Heap *heap_new(size_t size)
 {
-    Heap *h = xmalloc(sizeof(Heap));
+    Heap *h = axmalloc(sizeof(Heap));
     h->size = size;
     h->used = 0;
-    h->body = xmalloc(size);
+    h->body = axmalloc(size);
     memset(h->body, 0, size);
     return h;
 }
@@ -81,6 +91,11 @@ void gc_fin(void)
         free(heaps[i]->body);
         free(heaps[i]);
     }
+}
+
+static inline size_t align(size_t size)
+{
+    return (size + 7U) / 8U * 8U;
 }
 
 #if 0
@@ -102,7 +117,7 @@ void gc_fin(void)
 
 void gc_init(void)
 {
-    init_size = align(init_size);
+    init_size = aalign(init_size);
     heaps[0] = heap_new(init_size);
     heaps_length = 1;
 
@@ -141,7 +156,7 @@ static void *allocate_from_chunk(Chunk *prev, Chunk *curr, size_t size)
 
 static void *allocate(size_t size)
 {
-    size = align(size);
+    size = aalign(size);
     size_t hsize = size + CHUNK_OFFSET;
     for (Chunk *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = curr->next) {
         if (curr->h.size >= hsize) // First-fit
@@ -497,7 +512,7 @@ void *gc_malloc(size_t size)
 {
     if (stress)
         gc();
-    size = align(size);
+    size = aalign(size);
     void *p = allocate(size);
     if (p == NULL) {
         gc();
@@ -507,5 +522,7 @@ void *gc_malloc(size_t size)
         error("out of memory; heap (~%lld MiB) exhausted",
               llround(heaps_size() / MiB));
     memset(p, 0, size); // for debug
+    debug("alg: %zu", (uintptr_t)p % ALIGN);
+    assert((uintptr_t)p % ALIGN == 0);
     return p;
 }
