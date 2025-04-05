@@ -13,10 +13,10 @@ static void usage(FILE *out)
 {
     fprintf(out, "Usage: schaf [-e <source>] [-pPTMh] <file>\n");
     fprintf(out, "  -e <source>\tevaluate <source> directly instead of <file>\n");
+    fprintf(out, "  -M\t\tprint memory usage (VmHWM) at exit\n");
     fprintf(out, "  -p\t\tprint last expression in the input\n");
     fprintf(out, "  -P\t\tonly parse then exit before evaluation. implies -p\n");
     fprintf(out, "  -T\t\tprint consumed CPU time at exit\n");
-    fprintf(out, "  -M\t\tprint memory usage (VmHWM) at exit\n");
     fprintf(out, "  -h\t\tprint this help\n");
     exit(out == stdout ? 0 : 2);
 }
@@ -53,13 +53,14 @@ static Option parse_opt(int argc, char *const *argv)
         .memory = false,
     };
     int opt;
-    while ((opt = getopt(argc, argv, "e:hPpTM")) != -1) {
+    while ((opt = getopt(argc, argv, "e:MPpTh")) != -1) {
         switch (opt) {
         case 'e':
             o.script = optarg;
             break;
-        case 'h':
-            usage(stdout);
+        case 'M':
+            o.memory = true;
+            break;
         case 'P':
             o.parse_only = o.print = true;
             break;
@@ -69,9 +70,8 @@ static Option parse_opt(int argc, char *const *argv)
         case 'T':
             o.cputime = true;
             break;
-        case 'M':
-            o.memory = true;
-            break;
+        case 'h':
+            usage(stdout);
         case '?':
             usage(stderr);
         }
