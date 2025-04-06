@@ -75,7 +75,7 @@ ATTR_HIDDEN ATTR(noreturn) void raise_error(jmp_buf buf, const char *fmt, ...);
 ATTR_HIDDEN Value reverse(Value l);
 ATTR_HIDDEN void *obj_new(size_t size, ValueTag t);
 
-#define INIT_STACK() volatile void *sch_stack_base; gc_stack_init(&sch_stack_base)
+#define INIT_STACK() uintptr_t sch_stack_base[1]; gc_stack_init(sch_stack_base+1)
 ATTR_HIDDEN void gc_init(void);
 ATTR_HIDDEN void gc_fin(void);
 
