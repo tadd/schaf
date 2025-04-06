@@ -91,8 +91,27 @@ static Heap *heap_new(size_t size)
     return h;
 }
 
+static void free_val(void *p);
+static bool in_heap(uintptr_t v);
+
+void free_heap(Heap *heap)
+{
+    size_t offset;
+    for (uint8_t *p = heap->body, *endp = p + heap->size; p < endp; p += offset) {
+        Header *h = HEADER(p);
+        if (h == NULL || h->size == 0)
+            continue;
+        offset = h->size + CHUNK_OFFSET;
+        Value *v = (Value *) (p + CHUNK_OFFSET);
+        if (in_heap(*v))
+            free_val(v);
+    }
+}
+
 void gc_fin(void)
 {
+    for (size_t i = 0; i < heaps_length; i++)
+        free_heap(heaps[i]);
     for (size_t i = 0; i < heaps_length; i++) {
         free(heaps[i]->body);
         free(heaps[i]);
