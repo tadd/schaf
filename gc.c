@@ -36,7 +36,7 @@ static Heap heap;
 
 static uintptr_t *stack_base;
 
-static bool stress;
+static bool stress, print_stat;
 
 void sch_set_gc_init_size(double init_mib)
 {
@@ -46,6 +46,11 @@ void sch_set_gc_init_size(double init_mib)
 void sch_set_gc_stress(bool b)
 {
     stress = b;
+}
+
+void sch_set_gc_print_stat(bool b)
+{
+    print_stat = b;
 }
 
 static inline size_t align(size_t size)
@@ -106,11 +111,14 @@ static void increase_heaps(void)
     heap.slot[heap.size++] = heap_slot_new(last->size * HEAP_RATIO);
 }
 
-static void gc(void)
+static void heap_stat_table(size_t tab[])
 {
-    // collects nothing
-    if (!enough_free_space())
-        increase_heaps();
+    for (size_t i = 0; i < TABMAX; i++) {
+        if (tab[i] > 0)
+            fprintf(stderr, "    [%5zu] %zu\n", i+1, tab[i]);
+    }
+    if (tab[TABMAX] > 0)
+        fprintf(stderr, "    [>%d] %zu\n", TABMAX, tab[TABMAX]);
 }
 
 static void heap_stat(HeapStat *stat)
@@ -123,6 +131,34 @@ static void heap_stat(HeapStat *stat)
         stat->size += slot->size;
         stat->used += slot->used;
     }
+}
+
+static void heap_print_stat(const char *header)
+{
+    if (header != NULL)
+        debug("%s:", header);
+    HeapStat stat;
+    heap_stat(&stat);
+    int n = ceil(log10(stat.size));
+    long r = lround(((double) stat.used / stat.size) * 1000);
+    debug("heap usage: %*zu / %*zu (%3ld.%1ld%%)",
+          n, stat.used, n, stat.size, r/10, r%10);
+    debug("used:");
+    heap_stat_table(stat.tab_used);
+    debug("free:");
+    heap_stat_table(stat.tab_free);
+    debug("");
+}
+
+static void gc(void)
+{
+    if (print_stat)
+        heap_print_stat("GC begin");
+    // collects nothing
+    if (!enough_free_space())
+        increase_heaps();
+    if (print_stat)
+        heap_print_stat("GC end");
 }
 
 static size_t heaps_size(void)
