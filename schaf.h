@@ -17,7 +17,6 @@ typedef enum {
     TYPE_PAIR,
     TYPE_STR,
     TYPE_PROC,
-    TYPE_LAST = TYPE_PROC
 } Type;
 
 typedef uintptr_t Value;

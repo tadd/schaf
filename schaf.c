@@ -98,7 +98,7 @@ static inline bool value_tag_is(Value v, ValueTag expected)
 
 inline bool value_is_string(Value v)
 {
-    return value_tag_is(v, TAG_STR);
+    return value_tag_is(v, TAG_STRING);
 }
 
 static inline bool value_is_procedure(Value v)
@@ -142,9 +142,10 @@ Type value_type_of(Value v)
         return immediate_type_of(v);
     ValueTag t = VALUE_TAG(v);
     switch (t) {
-    case TAG_STR:
+    case TAG_STRING:
+        return TYPE_STR;
     case TAG_PAIR:
-        return (Type) t;
+        return TYPE_PAIR;
     case TAG_CFUNC:
     case TAG_SYNTAX:
     case TAG_CLOSURE:
@@ -253,7 +254,7 @@ void *obj_new(size_t size, ValueTag t)
 Value value_of_string(const char *s)
 {
     size_t len = strlen(s) + 1;
-    String *str = obj_new(sizeof(String) + len, TAG_STR);
+    String *str = obj_new(sizeof(String) + len, TAG_STRING);
     strcpy(str->body, s);
     return (Value) str;
 }

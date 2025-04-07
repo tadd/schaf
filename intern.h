@@ -6,13 +6,14 @@
 #include "schaf.h"
 #include "utils.h"
 
-typedef enum { // some have the same values as Type
-    TAG_PAIR    = TYPE_PAIR,
-    TAG_STR     = TYPE_STR,
-    TAG_CFUNC   = TYPE_LAST + 1,
+typedef enum {
+    TAG_PAIR,
+    TAG_STRING,
+    TAG_CFUNC,
     TAG_SYNTAX, // almost a C Function
     TAG_CLOSURE,
     TAG_CONTINUATION,
+    TAG_LAST = TAG_CONTINUATION
 } ValueTag;
 
 typedef struct Pair {
