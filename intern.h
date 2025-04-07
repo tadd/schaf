@@ -178,6 +178,7 @@ void source_free(Source *s);
 void gc_init(const uintptr_t *volatile base_sp);
 void gc_fin(void);
 size_t gc_stack_get_size(const uintptr_t *volatile sp);
+void gc_add_root(const Value *r);
 ATTR_XMALLOC void *gc_malloc(size_t size);
 
 bool sch_value_is_integer(Value v);

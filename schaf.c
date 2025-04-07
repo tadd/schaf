@@ -2886,6 +2886,12 @@ void sch_init(const uintptr_t *sp)
 {
     gc_init(sp);
 
+    gc_add_root(&eof_object);
+    gc_add_root(&current_input_port);
+    gc_add_root(&current_output_port);
+    gc_add_root(&inner_winders);
+    gc_add_root(&inner_continuation);
+
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
     symbol_names = scary_new(sizeof(char *));
@@ -2899,6 +2905,7 @@ void sch_init(const uintptr_t *sp)
     source_data = scary_new(sizeof(Source *));
 
     env_toplevel = env_new("default");
+    gc_add_root(&env_toplevel);
     Value e = env_toplevel;
 
     // 4. Expressions
@@ -2943,6 +2950,7 @@ void sch_init(const uintptr_t *sp)
     // 5.3. Syntax definitions
     //- define-syntax
     env_null = env_dup("null", e);
+    gc_add_root(&env_null);
 
     // 6. Standard procedures
 
@@ -3061,6 +3069,7 @@ void sch_init(const uintptr_t *sp)
     define_procedure(e, "load", proc_load, 1);
 
     env_r5rs = env_dup("r5rs", e);
+    gc_add_root(&env_r5rs);
 
     // Extensions from R7RS
     // (scheme base)
@@ -3079,4 +3088,5 @@ void sch_init(const uintptr_t *sp)
     define_procedure(e, "schaf-environment", proc_schaf_environment, 0);
 
     env_default = env_dup("default", e);
+    gc_add_root(&env_default);
 }

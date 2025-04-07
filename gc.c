@@ -26,12 +26,14 @@ enum {
 
 typedef struct {
     size_t size, used;
+    size_t tab_free[TABMAX+1], tab_used[TABMAX+1];
 } HeapStat;
 
 typedef struct {
     void (*init)(const uintptr_t *volatile sp);
     void (*fin)(void);
     void *(*malloc)(size_t size);
+    void (*add_root)(const Value *r);
     void (*stat)(HeapStat *stat);
 } GCFunctions;
 
@@ -129,9 +131,13 @@ static void eps_increase_heap(void)
     heap->slot[heap->size++] = eps_heap_slot_new(last->size * HEAP_RATIO);
 }
 
+static void eps_add_root(UNUSED const Value *p) {} // dummy
+
 static void eps_stat(HeapStat *stat)
 {
     EpsHeap *heap = gc_data;
+    memset(stat->tab_free, 0, sizeof(stat->tab_free));
+    memset(stat->tab_used, 0, sizeof(stat->tab_used));
     stat->size = stat->used = 0;
     for (size_t i = 0; i < heap->size; i++) {
         EpsHeapSlot* slot = heap->slot[i];
@@ -170,7 +176,7 @@ static void *eps_malloc(size_t size)
 }
 
 static const GCFunctions GC_FUNCS_EPSILON = {
-    eps_init, eps_fin, eps_malloc, eps_stat
+    eps_init, eps_fin, eps_malloc, eps_add_root, eps_stat
 };
 static const GCFunctions GC_FUNCS_DEFAULT = GC_FUNCS_EPSILON;
 
@@ -181,6 +187,22 @@ static const GCFunctions GC_FUNCS_DEFAULT = GC_FUNCS_EPSILON;
 static void error_out_of_memory(void)
 {
     error("out of memory; heap (~%zu MiB) exhausted", heap_size() / MiB);
+}
+
+void gc_add_root(const Value *r)
+{
+    funcs.add_root(r);
+}
+
+static void heap_print_stat_table(const char *header, size_t tab[])
+{
+    debug("%s:", header);
+    for (size_t i = 0; i < TABMAX; i++) {
+        if (tab[i] > 0)
+            fprintf(stderr, "    [%5zu] %zu\n", i+1, tab[i]);
+    }
+    if (tab[TABMAX] > 0)
+        fprintf(stderr, "    [>%d] %zu\n", TABMAX, tab[TABMAX]);
 }
 
 static void heap_stat(HeapStat *stat)
@@ -198,6 +220,9 @@ static void heap_print_stat(const char *header)
     long r = lround(((double) stat.used / stat.size) * 1000);
     debug("heap usage: %*zu / %*zu (%3ld.%1ld%%)",
           n, stat.used, n, stat.size, r/10, r%10);
+    heap_print_stat_table("used", stat.tab_used);
+    heap_print_stat_table("free", stat.tab_free);
+    debug("");
 }
 
 static size_t heap_size(void)
