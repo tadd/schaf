@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "intern.h"
+#include "libscary.h"
 #include "schaf.h"
 #include "utils.h"
 
@@ -40,6 +41,7 @@ typedef struct {
 static void heap_print_stat(const char *header);
 static size_t heap_size(void);
 [[gnu::noreturn]] static void error_out_of_memory(void);
+static inline size_t align(size_t size);
 
 // Static data
 static void *gc_data; // singleton; maybe a heap or some context
@@ -50,6 +52,73 @@ static const uintptr_t *volatile stack_base;
 
 static bool stress, print_stat;
 static bool in_gc, initialized;
+
+//
+// Algorithm: Mark-and-sweep
+//
+
+typedef struct {
+    size_t size;
+    uint8_t *body;
+} MSHeapSlot;
+
+typedef struct {
+    size_t size;
+    // 64 is enough large, it can use up the entire 64-bit memory space
+    // (= (fold + 0 (map (cut expt 2 <>) (iota 64))) (- (expt 2 64) 1)) ;;=> #t
+    MSHeapSlot *slot[64];
+    Value **roots;
+} MSHeap;
+
+
+static MSHeapSlot *ms_heap_slot_new(size_t size)
+{
+    MSHeapSlot *h = xmalloc(sizeof(MSHeapSlot));
+    h->size = align(size);
+    h->body = xmalloc(size);
+    return h;
+}
+
+static void ms_init(const uintptr_t *volatile sp)
+{
+    stack_base = sp;
+    MSHeap *heap = xmalloc(sizeof(MSHeap));
+    heap->roots = scary_new(sizeof(Value *));
+    heap->slot[0] = ms_heap_slot_new(init_size);
+    heap->size = 1;
+    gc_data = heap;
+}
+
+static void ms_fin(void)
+{
+    MSHeap *heap = gc_data;
+    for (size_t i = 0; i < heap->size; i++) {
+        free(heap->slot[i]->body);
+        free(heap->slot[i]);
+    }
+    scary_free(heap->roots);
+}
+
+static void ms_add_root(const Value *r)
+{
+    MSHeap *heap = gc_data;
+    scary_push((void ***) &heap->roots, (void *) r);
+}
+
+static void *ms_malloc(size_t size)
+{
+    (void) size;
+    return NULL; // DUMMY
+}
+
+static void ms_stat(HeapStat *stat)
+{
+    (void) stat; // DUMMY
+}
+
+UNUSED static const GCFunctions GC_FUNCS_MARK_SWEEP = {
+    ms_init, ms_fin, ms_malloc, ms_add_root, ms_stat
+};
 
 //
 // Algorithm: Epsilon

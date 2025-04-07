@@ -303,6 +303,7 @@ SchObject *obj_new(ValueTag t)
     Header *h = HEADER(p);
     h->tag = t;
     h->immutable = false;
+    h->living = false;
     return p;
 }
 
