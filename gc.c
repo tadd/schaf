@@ -11,6 +11,7 @@
 enum {
     MiB = 1024 * 1024,
     HEAP_RATIO = 2,
+    TABMAX = 1024,
 };
 
 typedef struct {
@@ -24,6 +25,11 @@ typedef struct {
     // (= (fold + 0 (map (cut expt 2 <>) (iota 64))) (- (expt 2 64) 1)) ;;=> #t
     HeapSlot *slot[64];
 } Heap;
+
+typedef struct {
+    size_t size, used;
+    size_t tab_free[TABMAX+1], tab_used[TABMAX+1];
+} HeapStat;
 
 static size_t init_size = 1 * MiB;
 static Heap heap;
@@ -107,11 +113,23 @@ static void gc(void)
         increase_heaps();
 }
 
-static double heaps_size(void)
+static void heap_stat(HeapStat *stat)
 {
-    // Sum of a geometric sequence
-    return init_size * (pow(HEAP_RATIO, heap.size) - 1)
-        / (HEAP_RATIO - 1);
+    stat->size = stat->used = 0;
+    memset(stat->tab_free, 0, sizeof(stat->tab_free));
+    memset(stat->tab_used, 0, sizeof(stat->tab_used));
+    for (size_t i = 0; i < heap.size; i++) {
+        HeapSlot* slot = heap.slot[i];
+        stat->size += slot->size;
+        stat->used += slot->used;
+    }
+}
+
+static size_t heaps_size(void)
+{
+    HeapStat stat;
+    heap_stat(&stat);
+    return stat.size;
 }
 
 void *gc_malloc(size_t size)
@@ -125,7 +143,7 @@ void *gc_malloc(size_t size)
         p = allocate(size);
     }
     if (p == NULL)
-        error("out of memory; heap (~%lld MiB) exhausted",
-              llround(heaps_size() / MiB));
+        error("out of memory; heap (~%zu MiB) exhausted",
+              heaps_size() / MiB);
     return p;
 }
