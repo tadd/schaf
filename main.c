@@ -18,6 +18,7 @@ static void usage(FILE *out)
     fprintf(out, "  -p\t\tprint last expression in the input\n");
     fprintf(out, "  -P\t\tonly parse then exit before evaluation. implies -p\n");
     fprintf(out, "  -S\t\tput stress on GC\n");
+    fprintf(out, "  -s\t\tprint heap statistics before/after GC\n");
     fprintf(out, "  -T\t\tprint consumed CPU time at exit\n");
     fprintf(out, "  -h\t\tprint this help\n");
     exit(out == stdout ? 0 : 2);
@@ -35,6 +36,7 @@ typedef struct {
     bool parse_only;
     bool cputime;
     bool memory;
+    bool heap_stat;
     double init_heap_size_mib;
     bool stress_gc;
 } Option;
@@ -57,11 +59,12 @@ static Option parse_opt(int argc, char *const *argv)
         .parse_only = false,
         .cputime = false,
         .memory = false,
+        .heap_stat = false,
         .init_heap_size_mib = 0.0,
         .stress_gc = false,
     };
     int opt;
-    while ((opt = getopt(argc, argv, "e:H:MPpSTh")) != -1) {
+    while ((opt = getopt(argc, argv, "e:H:MPpSsTh")) != -1) {
         switch (opt) {
         case 'e':
             o.script = optarg;
@@ -80,6 +83,9 @@ static Option parse_opt(int argc, char *const *argv)
             break;
         case 'S':
             o.stress_gc = true;
+            break;
+        case 's':
+            o.heap_stat = true;
             break;
         case 'T':
             o.cputime = true;
@@ -136,6 +142,7 @@ int main(int argc, char **argv)
 {
     Option o = parse_opt(argc, argv);
     sch_set_gc_stress(o.stress_gc);
+    sch_set_gc_print_stat(o.heap_stat);
     if (o.init_heap_size_mib > 0.0)
         sch_set_gc_init_size(o.init_heap_size_mib);
 
