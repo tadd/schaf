@@ -8,15 +8,17 @@
 #include "intern.h"
 #include "utils.h"
 
-enum {
-    MiB = 1024 * 1024,
-    HEAP_RATIO = 2,
-};
-static size_t init_size = 1 * MiB;
 typedef struct {
     size_t size, used;
     uint8_t *body;
 } Heap;
+
+enum {
+    MiB = 1024 * 1024,
+    HEAP_RATIO = 2,
+};
+
+static size_t init_size = 1 * MiB;
 // 64 is enough large, it can use up the entire 64-bit memory space
 static Heap *heaps[64];
 static size_t heaps_length;
@@ -94,8 +96,7 @@ static bool enough_free_space(void)
 static void increase_heaps(void)
 {
     Heap *heap = heaps[heaps_length-1];
-    size_t newsize = heap->size * HEAP_RATIO;
-    heaps[heaps_length++] = heap_new(newsize);
+    heaps[heaps_length++] = heap_new(heap->size * HEAP_RATIO);
 }
 
 static void gc(void)
