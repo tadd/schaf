@@ -1,4 +1,3 @@
-#include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -12,6 +11,15 @@ typedef struct {
     size_t size, used;
     uint8_t *body;
 } Heap;
+
+enum {
+    TABMAX = 1024,
+};
+
+typedef struct {
+    size_t size, used;
+    size_t tab_free[TABMAX+1], tab_used[TABMAX+1];
+} HeapStat;
 
 enum {
     MiB = 1024 * 1024,
@@ -102,11 +110,23 @@ static void gc(void)
         increase_heaps();
 }
 
-static double heaps_size(void)
+static void heap_stat(HeapStat *stat)
 {
-    // Sum of a geometric sequence
-    return init_size * (pow(HEAP_RATIO, heaps_length) - 1)
-        / (HEAP_RATIO - 1);
+    stat->size = stat->used = 0;
+    memset(stat->tab_free, 0, sizeof(stat->tab_free));
+    memset(stat->tab_used, 0, sizeof(stat->tab_used));
+    for (size_t i = 0; i < heaps_length; i++) {
+        Heap *heap = heaps[i];
+        stat->size += heap->size;
+        stat->used += heap->used;
+    }
+}
+
+static size_t heaps_size(void)
+{
+    HeapStat stat;
+    heap_stat(&stat);
+    return stat.size;
 }
 
 void *gc_malloc(size_t size)
@@ -119,7 +139,7 @@ void *gc_malloc(size_t size)
         p = allocate(size);
     }
     if (p == NULL)
-        error("out of memory; heap (~%lld MiB) exhausted",
-              llround(heaps_size() / MiB));
+        error("out of memory; heap (~%zu MiB) exhausted",
+              heaps_size() / MiB);
     return p;
 }
