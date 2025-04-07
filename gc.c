@@ -118,7 +118,7 @@ void *gc_malloc(size_t size)
     if (stress)
         gc();
     void *p = allocate(size);
-    if (p == NULL) {
+    if (!stress && p == NULL) {
         gc();
         p = allocate(size);
     }
