@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "intern.h"
+#include "libscary.h"
 #include "utils.h"
 
 #ifdef DEBUG
@@ -32,12 +33,14 @@ typedef struct {
 
 typedef struct {
     size_t size, used;
+    size_t tab_free[TABMAX+1], tab_used[TABMAX+1];
 } HeapStat;
 
 static size_t init_size = 1 * MiB;
 static Heap heap; // singleton
 
 static uintptr_t *volatile stack_base;
+static const Value **roots;
 
 static bool stress, print_stat;
 static bool in_gc;
@@ -82,6 +85,7 @@ void gc_fin(void)
 void gc_init(uintptr_t *volatile sp)
 {
     stack_base = sp;
+    roots = scary_new(sizeof(Value *));
     heap.slot[0] = heap_slot_new(init_size);
     heap.size = 1;
 }
@@ -114,9 +118,26 @@ static void increase_heaps(void)
     heap.slot[heap.size++] = heap_slot_new(last->size * HEAP_RATIO);
 }
 
+void gc_add_root(const Value *r)
+{
+    scary_push((void ***) &roots, (void *) r);
+}
+
+static void heap_print_stat_table(size_t tab[])
+{
+    for (size_t i = 0; i < TABMAX; i++) {
+        if (tab[i] > 0)
+            fprintf(stderr, "    [%5zu] %zu\n", i+1, tab[i]);
+    }
+    if (tab[TABMAX] > 0)
+        fprintf(stderr, "    [>%d] %zu\n", TABMAX, tab[TABMAX]);
+}
+
 static void heap_stat(HeapStat *stat)
 {
     stat->size = stat->used = 0;
+    memset(stat->tab_free, 0, sizeof(stat->tab_free));
+    memset(stat->tab_used, 0, sizeof(stat->tab_used));
     for (size_t i = 0; i < heap.size; i++) {
         HeapSlot* slot = heap.slot[i];
         stat->size += slot->size;
@@ -134,6 +155,11 @@ static void heap_print_stat(const char *header)
     long r = lround(((double) stat.used / stat.size) * 1000);
     debug("heap usage: %*zu / %*zu (%3ld.%1ld%%)",
           n, stat.used, n, stat.size, r/10, r%10);
+    debug("used:");
+    heap_print_stat_table(stat.tab_used);
+    debug("free:");
+    heap_print_stat_table(stat.tab_free);
+    debug("");
 }
 
 static void gc(void)
