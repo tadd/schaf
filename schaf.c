@@ -291,6 +291,7 @@ SchObject *obj_new(ValueTag t)
     Header *h = HEADER(p);
     h->tag = t;
     h->immutable = false;
+    h->living = false;
     return p;
 }
 
@@ -2737,6 +2738,16 @@ int sch_fin(void)
 void sch_init(uintptr_t *sp)
 {
     gc_init(sp);
+
+    gc_add_root(&env_null);
+    gc_add_root(&env_r5rs);
+    gc_add_root(&env_toplevel);
+    gc_add_root(&env_default);
+    gc_add_root(&eof_object);
+    gc_add_root(&current_input_port);
+    gc_add_root(&current_output_port);
+    gc_add_root(&inner_winders);
+    gc_add_root(&inner_continuation);
 
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
