@@ -24,20 +24,17 @@ typedef struct {
 static Heap *heaps[64];
 static size_t heaps_length;
 
-#define HEADER(v) ((Header *) (v))
-typedef struct {
+typedef struct Chunk {
     size_t size; // size of managed space w/o header
     bool allocated;
     bool living;
-} Header;
-
-typedef struct Chunk {
-    Header h;
     struct Chunk *next;
 } Chunk;
+#define CHUNK(v) ((Chunk *) (v))
+
 
 enum {
-    CHUNK_OFFSET = offsetof(Chunk, next),
+    CHUNK_OFFSET = sizeof(Chunk),
 };
 
 static Chunk *free_list;
@@ -106,9 +103,9 @@ void gc_init(void)
     heaps_length = 1;
 
     Chunk *ch = (void *) heaps[0]->body;
-    ch->h.size = init_size - CHUNK_OFFSET;
-    ch->h.allocated = false;
-    ch->h.living = false;
+    ch->size = init_size - CHUNK_OFFSET;
+    ch->allocated = false;
+    ch->living = false;
     ch->next = NULL;
     free_list = ch;
 }
@@ -117,12 +114,10 @@ static void *allocate_from_chunk(Chunk *prev, Chunk *curr, size_t size)
 {
     size_t hsize = size + CHUNK_OFFSET;
     Chunk *next = curr->next;
-    if (curr->h.size > hsize) {
-        assert_header(curr);
-        Header h = curr->h;
-        h.size -= hsize;
+    if (curr->size > hsize + 8) {
         Chunk *rest = (Chunk *)((uint8_t *) curr + hsize);
-        rest->h = h;
+        rest->size = curr->size - hsize;
+        rest->allocated = rest->living = false;
         rest->next = next;
         next = rest;
     }
@@ -130,19 +125,20 @@ static void *allocate_from_chunk(Chunk *prev, Chunk *curr, size_t size)
         free_list = next;
     else
         prev->next = next;
-    assert_header(curr);
-    Header *o = HEADER(curr);
-    o->size = size;
-    o->allocated = true;
+    // assert_header(curr);
+    curr->size = size;
+    curr->allocated = true;
+    curr->living = true;
+    curr->next = NULL; // for debug
     return (uint8_t *) curr + CHUNK_OFFSET; // use curr->next space and so-on as allocated
 }
 
 static void *allocate(size_t size)
 {
     size = align(size);
-    size_t hsize = size + CHUNK_OFFSET;
+    size_t hsize = align(size + CHUNK_OFFSET);
     for (Chunk *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = curr->next) {
-        if (curr->h.size >= hsize) // First-fit
+        if (curr->size >= hsize) // First-fit
             return allocate_from_chunk(prev, curr, size);
     }
     return NULL;
@@ -170,9 +166,9 @@ void gc_add_root_env(Table **env)
     topenv = env;
 }
 
-static inline Header *get_header(Value v)
+static inline Chunk *get_header(Value v)
 {
-    return HEADER((uint8_t *) v - CHUNK_OFFSET);
+    return CHUNK((uint8_t *) v - CHUNK_OFFSET);
 }
 
 static void mark_val(Value v);
@@ -195,11 +191,11 @@ static void mark_val(Value v)
 {
     if (value_is_immediate(v))
         return;
-    Header *h = get_header(v);
-    assert_header(h);
-    if (h->living)
+    Chunk *c = get_header(v);
+    // assert_header(h);
+    if (c->living)
         return;
-    h->living = true;
+    c->living = true;
     switch (VALUE_TAG(v)) {
     case TAG_PAIR: {
         Pair *p = PAIR(v);
@@ -279,11 +275,11 @@ static void mark_stack(void)
 }
 
 ATTR(unused)
-static bool header_equal(Header a, Header b)
+static bool header_equal(Chunk *a, Chunk *b)
 {
-    return a.size == b.size &&
-        a.allocated == b.allocated &&
-        a.living == b.living;
+    return a->size == b->size &&
+        a->allocated == b->allocated &&
+        a->living == b->living;
 }
 
 ATTR(unused)
@@ -293,10 +289,10 @@ static void heap_dump_single(const Heap *heap)
     fprintf(stderr, "begin: %p..%p\n", p, endp);
     size_t offset;
     bool ellipsis = false;
-    for (Header *h, *prev = NULL; p < endp; p += offset, prev = h) {
-        h = HEADER(p);
+    for (Chunk *h, *prev = NULL; p < endp; p += offset, prev = h) {
+        h = CHUNK(p);
         offset = h->size + CHUNK_OFFSET;
-        if (prev != NULL && header_equal(*h, *prev)) {
+        if (prev != NULL && header_equal(h, prev)) {
             if (!ellipsis) {
                 fprintf(stderr, "  [..]\n");
                 ellipsis = true;
@@ -345,8 +341,8 @@ static void heap_get_stat(HeapStat *stat)
         stat->size += heap->size;
         size_t offset;
         for (uint8_t *p = heap->body, *endp = p + heap->size; p < endp; p += offset) {
-            assert_header(p);
-            Header *h = HEADER(p);
+            // assert_header(p);
+            Chunk *h = CHUNK(p);
             offset = h->size + CHUNK_OFFSET;
             size_t j = h->size > TABMAX ? TABMAX : h->size-1;
             if (h->allocated) {
@@ -377,9 +373,8 @@ static void heap_stat(const char *header, HeapStat *pstat)
     debug("");
 }
 
-static void add_to_free_list(Header *h)
+static void add_to_free_list(Chunk *ch)
 {
-    Chunk *ch = (Chunk *) h;
     ch->next = free_list; // prepend
     free_list = ch;
 }
@@ -417,9 +412,9 @@ static void sweep(void)
         Heap *heap = heaps[i];
         uint8_t *p = heap->body, *endp = p + heap->size;
         size_t offset;
-        for (Header *h, *prev = NULL; p < endp; p += offset) {
-            h = HEADER(p);
-            assert_header(h);
+        for (Chunk *h, *prev = NULL; p < endp; p += offset) {
+            h = CHUNK(p);
+            // assert_header(h);
             offset = h->size + CHUNK_OFFSET;
             if (!h->allocated)
                 continue;
@@ -473,7 +468,7 @@ static bool enough_free_chunks(void)
 {
     static const size_t minreq = sizeof(Continuation); // maybe the largest
     for (Chunk *curr = free_list; curr != NULL; curr = curr->next) {
-        if (curr->h.size >= minreq)
+        if (curr->size >= minreq)
             return true;
     }
     return false;
