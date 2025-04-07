@@ -43,10 +43,10 @@ static inline size_t align(size_t size)
 
 static Heap *heap_new(size_t size)
 {
-    Heap *h = xmalloc(sizeof(Heap));
+    Heap *h = xcalloc(1, sizeof(Heap));
     h->size = size;
     h->used = 0;
-    h->body = xmalloc(size);
+    h->body = xcalloc(1, size);
     return h;
 }
 
