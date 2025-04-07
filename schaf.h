@@ -64,6 +64,7 @@ const char *error_message(void);
 
 void sch_set_gc_init_size(double mib);
 void sch_set_gc_stress(bool b);
+void sch_set_gc_print_stat(bool b);
 
 void sch_register_user_obj(const char *typename, GCFunction mark, GCFunction free, void *p);
 void sch_gc_mark(Value v);
