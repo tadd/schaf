@@ -1937,6 +1937,10 @@ void sch_init(volatile void *sp)
 {
     gc_init(sp);
 
+    gc_add_root(&symbol_names);
+    gc_add_root(&call_stack);
+    gc_add_root(&source_data);
+
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
 #define DEF_SYMBOL(var, name) SYM_##var = value_of_symbol(name)
@@ -1948,6 +1952,7 @@ void sch_init(volatile void *sp)
     DEF_SYMBOL(RARROW, "=>");
 
     toplevel_environment = table_new();
+    gc_add_root_env(&toplevel_environment);
     Table *e = toplevel_environment;
 
     // 4. Expressions
