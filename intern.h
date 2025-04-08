@@ -153,6 +153,7 @@ void source_free(Source *s);
 void gc_init(uintptr_t *base_sp);
 void gc_fin(void);
 
+void gc_add_root(const Value *r);
 size_t gc_stack_get_size(uintptr_t *sp);
 ATTR_XMALLOC void *gc_malloc(size_t size);
 
