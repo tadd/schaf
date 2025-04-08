@@ -2389,6 +2389,13 @@ void sch_init(uintptr_t *sp)
 {
     gc_init(sp);
 
+    gc_add_root(&symbol_names);
+    gc_add_root(&source_data);
+    gc_add_root(&env_null);
+    gc_add_root(&env_r5rs);
+    gc_add_root(&env_toplevel);
+    gc_add_root(&env_default);
+
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
 #define DEF_SYMBOL(var, name) SYM_##var = value_of_symbol(name)
