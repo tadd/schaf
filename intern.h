@@ -90,6 +90,8 @@ ATTR_HIDDEN void *obj_new(size_t size, ValueTag t);
 ATTR_HIDDEN void gc_init(uintptr_t *base_sp);
 ATTR_HIDDEN void gc_fin(void);
 
+ATTR_HIDDEN void gc_add_root(const Value *r);
+ATTR_HIDDEN void gc_add_root_env(Table **env);
 ATTR_HIDDEN size_t gc_stack_get_size(uintptr_t *sp);
 ATTR_HIDDEN ATTR_XMALLOC void *gc_malloc(size_t size);
 
