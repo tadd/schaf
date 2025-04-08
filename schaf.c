@@ -2589,6 +2589,11 @@ void sch_init(uintptr_t *sp)
 {
     gc_init(sp);
 
+    gc_add_root(&env_null);
+    gc_add_root(&env_r5rs);
+    gc_add_root(&env_toplevel);
+    gc_add_root(&env_default);
+
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
     symbol_names = scary_new(sizeof(char *));
