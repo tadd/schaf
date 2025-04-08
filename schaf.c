@@ -529,7 +529,7 @@ static Value apply_closure(Value proc, Value args)
         for (Value pa = args, pp = params; pa != Qnil; pa = cdr(pa), pp = cdr(pp))
             env_put(clenv, car(pp), car(pa));
     }
-    return eval_body(clenv, cl->body); // XXX: table_free(clenv)?
+    return eval_body(clenv, cl->body);
 }
 
 [[gnu::noreturn]] [[gnu::noinline]]
