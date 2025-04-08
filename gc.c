@@ -12,6 +12,7 @@ enum {
     MiB = 1024 * 1024,
     HEAP_RATIO = 2,
     TABMAX = 1024,
+    ROOT_SIZE = 0x08,
 };
 
 typedef struct {
@@ -35,6 +36,8 @@ static size_t init_size = 1 * MiB;
 static Heap heap;
 
 static uintptr_t *stack_base;
+static const Value *root[ROOT_SIZE];
+static size_t nroot;
 
 static bool stress, print_stat;
 
@@ -109,6 +112,13 @@ static void increase_heaps(void)
 {
     HeapSlot *last = heap.slot[heap.size-1];
     heap.slot[heap.size++] = heap_slot_new(last->size * HEAP_RATIO);
+}
+
+void gc_add_root(const Value *r)
+{
+    if (nroot == ROOT_SIZE)
+        error("%s: too many roots added", __func__);
+    root[nroot++] = r;
 }
 
 static void heap_stat_table(size_t tab[])
