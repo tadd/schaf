@@ -76,3 +76,4 @@
 (define (test-init)
   (set! n-failure 0)
   (set! n-success 0))
+

@@ -1,3 +1,6 @@
+#ifdef DEBUG
+#include <assert.h>
+#endif
 #include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -9,7 +12,7 @@
 #include "utils.h"
 
 typedef struct {
-    size_t size, used;
+    size_t size;
     uint8_t *body;
 } Heap;
 
@@ -22,16 +25,29 @@ typedef struct {
     size_t tab_free[TABMAX+1], tab_used[TABMAX+1];
 } HeapStat;
 
+typedef struct Chunk {
+    size_t size; // size of managed space w/o header
+    bool allocated;
+    bool living;
+    struct Chunk *next;
+} Chunk;
+
+#define CHUNK(v) ((Chunk *) (v))
+
 enum {
     MiB = 1024 * 1024,
     HEAP_RATIO = 2,
     ROOT_SIZE = 0x08,
+    OBJ_SIZE = sizeof(SchObject),
 };
 
 static size_t init_size = 1 * MiB;
 // 64 is enough large, it can use up the entire 64-bit memory space
 static Heap *heaps[64];
 static size_t heaps_length;
+
+static Chunk *free_list;
+
 static uintptr_t *stack_base;
 static const Value *root[ROOT_SIZE];
 static size_t nroot;
@@ -56,15 +72,74 @@ void sch_set_gc_print_stat(bool b)
 
 static inline size_t align(size_t size)
 {
-    return (size + 7U) / 8U * 8U;
+    return (size + OBJ_SIZE - 1) / OBJ_SIZE * OBJ_SIZE;
 }
+
+#ifdef DEBUG
+#define assert_ptr(p) do { \
+        assert(p != NULL); \
+        assert((uintptr_t) p % 8U == 0); \
+        assert((uintptr_t) p > 0x1000); \
+    } while (0)
+#define assert_stack_ptr(p) do { \
+        assert_ptr(p); \
+        assert((uintptr_t) p % 8U == 0); \
+    } while (0)
+#define assert_ptr_if_nonnull(p) if (p) assert_ptr(p)
+#define assert_bool(b) assert(b == false || b == true)
+#define assert_chunk(p) do { \
+        Chunk *c = (void *) p; \
+        assert_ptr(c); \
+        assert_ptr_if_nonnull(c->next); \
+        assert_bool(c->allocated); \
+        assert_bool(c->living); \
+        assert(c->size > 0); \
+        assert(c->size < 1000*1000*1000); \
+    } while (0)
+#define assert_freelist() do { \
+        assert_ptr_if_nonnull(free_list); \
+        for (Chunk *p = free_list; p != NULL; p = p->next) { \
+            assert_chunk(p); \
+            assert(!p->allocated); \
+        } \
+    } while (0)
+#define assert_heaps() do { \
+        for (size_t i = 0; i < heaps_length; i++) { \
+            Heap *heap = heaps[i]; \
+            size_t offset; \
+            uint8_t *p = heap->body, *endp = p + heap->size; \
+            for (Chunk *c; p < endp; p += offset) { \
+                assert_chunk(p); \
+                c = CHUNK(p); \
+                offset = sizeof(Chunk) + c->size; \
+                assert(offset % 8U == 0); \
+            } \
+            assert(p == endp); \
+        } \
+    } while (0)
+#define assert_whole() do { assert_freelist(); assert_heaps(); } while (0)
+#else
+#define assert_ptr(p)
+#define assert_stack_ptr(p)
+#define assert_ptr_if_nonnull(p)
+#define assert_bool(b)
+#define assert_chunk(p) do {} while (0)
+#define assert_freelist()
+#define assert_heaps()
+#define assert_whole()
+#endif
 
 static Heap *heap_new(size_t size)
 {
     Heap *h = xcalloc(1, sizeof(Heap));
+    assert_ptr(h);
     h->size = size;
-    h->used = 0;
     h->body = xcalloc(1, size);
+    assert_ptr(h->body);
+    Chunk *ch = (Chunk *) h->body;
+    ch->size = size - sizeof(Chunk);
+    ch->allocated = false;
+    ch->living = false;
     return h;
 }
 
@@ -80,19 +155,62 @@ void gc_init(uintptr_t *sp)
 {
     stack_base = sp;
     init_size = align(init_size);
-    heaps[0] = heap_new(init_size);
     heaps_length = 1;
+    heaps[0] = heap_new(init_size);
+
+    Chunk *ch = (Chunk *) heaps[0]->body;
+    assert_ptr(ch);
+    ch->next = NULL;
+    free_list = ch;
+
+    user_objects = Qnil;
+    gc_add_root(&user_objects);
+
+    assert_whole();
+}
+
+static void *allocate_from_chunk(Chunk *prev, Chunk *curr, size_t size)
+{
+    assert_freelist();
+    assert_chunk(curr);
+    if (prev)
+        assert_chunk(prev);
+    size_t hsize = sizeof(Chunk) + size;
+    Chunk *next = curr->next;
+    if (next)
+        assert_chunk(next);
+    if (curr->size > hsize) {
+        assert_chunk(curr);
+        Chunk *rest = (Chunk *)((uint8_t *) curr + hsize);
+        rest->size = curr->size - hsize;
+        rest->allocated = rest->living = false;
+        rest->next = next;
+        assert_chunk(rest);
+        next = rest;
+        curr->size = size;
+    }
+    if (prev == NULL)
+        free_list = next;
+    else
+        prev->next = next;
+    curr->size = size;
+    curr->allocated = true;
+    assert_chunk(curr);
+    return curr + 1;
 }
 
 static void *allocate(size_t size)
 {
+    assert_freelist();
     size = align(size);
-    Heap *heap = heaps[heaps_length-1]; // use the last heap only
-    if (heap->used + size > heap->size)
-        return NULL;
-    uint8_t *ret = heap->body + heap->used;
-    heap->used += size;
-    return ret;
+    size_t hsize = sizeof(Chunk) + size;
+    for (Chunk *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = curr->next) {
+        assert_ptr(curr);
+        if (curr->size >= hsize) // First-fit
+            return allocate_from_chunk(prev, curr, size);
+    }
+    assert_freelist();
+    return NULL;
 }
 
 size_t gc_stack_get_size(uintptr_t *sp)
@@ -100,9 +218,11 @@ size_t gc_stack_get_size(uintptr_t *sp)
     return (uint8_t *) stack_base - (uint8_t *) sp;
 }
 
-void sch_gc_mark(ATTR(unused) Value v)
+static void mark_val(Value v);
+
+void sch_gc_mark(Value v)
 {
-    // do nothing
+    mark_val(v);
 }
 
 static Value user_obj_new(const char *typename, GCFunction mark, GCFunction ffree, void *p)
@@ -123,17 +243,170 @@ void sch_register_user_obj(const char *typename, GCFunction mark, GCFunction ffr
     user_objects = cons(v, user_objects);
 }
 
-static bool enough_free_space(void)
+static bool user_obj_equal(UserObject *x, UserObject *y)
 {
-    static const size_t minreq = sizeof(Continuation) * 2; // maybe the largest
-    Heap *heap = heaps[heaps_length-1];
-    return (heap->size - heap->used) >= minreq;
+    return x->obj == y->obj &&
+        x->mark == y->mark &&
+        x->free == y->free &&
+        strcmp(x->name, y->name) == 0;
 }
 
-static void increase_heaps(void)
+static void unregister_user_obj(UserObject *o)
 {
-    Heap *heap = heaps[heaps_length-1];
-    heaps[heaps_length++] = heap_new(heap->size * HEAP_RATIO);
+    for (Value curr = user_objects, prev = Qnil; curr != Qnil; prev = curr, curr = cdr(curr)) {
+        if (!user_obj_equal(USER_OBJ(curr), o))
+            continue;
+        Value next = cdr(curr);
+        if (prev == Qnil)
+            user_objects = next;
+        else
+            PAIR(prev)->cdr = next;
+        return;
+    }
+    // UNREACHABLE();
+}
+
+static inline Chunk *get_chunk(Value v)
+{
+    return (Chunk *) v - 1;
+}
+
+static void mark_env_each(uint64_t key, uint64_t val, ATTR(unused) void *data)
+{
+    mark_val(key);
+    mark_val(val);
+}
+
+static void mark_env(Table *env)
+{
+    table_foreach(env, mark_env_each, NULL);
+}
+
+static void mark_val(Value v)
+{
+    if (value_is_immediate(v))
+        return;
+    Chunk *ch = get_chunk(v);
+    if (ch->living)
+        return;
+    ch->living = true;
+    switch (VALUE_TAG(v)) {
+    case TAG_PAIR: {
+        Pair *p = PAIR(v);
+        mark_val(p->car);
+        mark_val(p->cdr);
+        return;
+    }
+    case TAG_CLOSURE: {
+        Closure *p = CLOSURE(v);
+        mark_env(p->env);
+        mark_val(p->params);
+        mark_val(p->body);
+        return;
+    }
+    case TAG_CONTINUATION: {
+        Continuation *p = CONTINUATION(v);
+        mark_val(p->state->call_stack);
+        mark_val(p->retval);
+        return;
+    }
+    case TAG_USER_OBJ: {
+        UserObject *p = USER_OBJ(v);
+        if (p->mark != NULL)
+            p->mark(p->obj);
+        return;
+    }
+    case TAG_STRING:
+    case TAG_CFUNC:
+    case TAG_SYNTAX:
+        return;
+    }
+}
+
+static void mark_roots(void)
+{
+    for (size_t i = 0; i < nroot; i++)
+        mark_val(*root[i]);
+}
+
+bool in_heap_range(uintptr_t v)
+{
+    const uint8_t *p = (uint8_t *) v;
+    for (size_t i = 0; i < heaps_length; i++) {
+        Heap *heap = heaps[i];
+        if (p >= heap->body &&
+            p < heap->body + heap->size &&
+            (p - heap->body) % sizeof(uintptr_t) == 0)
+            return true;
+    }
+    return false;
+}
+
+static bool in_heap_val(Value v)
+{
+    if (value_is_immediate(v) ||
+        !in_heap_range(v))
+        return false;
+    ValueTag t = VALUE_TAG(v);
+    return t >= TAG_PAIR && t <= TAG_LAST; // need to be precise more?
+}
+
+static void mark_array(void *beg, size_t n)
+{
+    assert_stack_ptr(beg);
+    Value *p = beg;
+    for (size_t i = 0; i < n; i++, p++) {
+        if (in_heap_val(*p))
+            mark_val(*p);
+    }
+}
+
+#define GET_SP(p) uintptr_t v##p = 0, *p = &v##p
+
+ATTR(noinline)
+static void mark_stack(void)
+{
+    GET_SP(sp);
+    mark_array(sp, stack_base - sp);
+}
+
+ATTR(unused)
+static bool header_equal(Chunk *a, Chunk *b)
+{
+    return a->size == b->size &&
+        a->allocated == b->allocated &&
+        a->living == b->living;
+}
+
+ATTR(unused)
+static void heap_dump_single(const Heap *heap)
+{
+    uint8_t *p = heap->body, *endp = p + init_size;
+    fprintf(stderr, "begin: %p..%p\n", p, endp);
+    size_t offset;
+    bool ellipsis = false;
+    for (Chunk *ch, *prev = NULL; p < endp; p += offset, prev = ch) {
+        ch = CHUNK(p);
+        offset = sizeof(Chunk) + ch->size;
+        if (prev != NULL && header_equal(ch, prev)) {
+            if (!ellipsis) {
+                fprintf(stderr, "  [..]\n");
+                ellipsis = true;
+            }
+            continue;
+        }
+        ellipsis = false;
+        fprintf(stderr, "  [%p] size: %2zu, alloc: %d, liv: %d\n",
+                ch, ch->size, ch->allocated, ch->living);
+    }
+    fprintf(stderr, "end: %p..%p\n", p, endp);
+}
+
+ATTR(unused)
+static void heap_dump(void)
+{
+    for (size_t i = 0; i < heaps_length; i++)
+        heap_dump_single(heaps[i]);
 }
 
 void gc_add_root(const Value *r)
@@ -141,16 +414,6 @@ void gc_add_root(const Value *r)
     if (nroot == ROOT_SIZE)
         error("%s: too many roots added", __func__);
     root[nroot++] = r;
-}
-
-static void heap_stat_table(size_t tab[])
-{
-    for (size_t i = 0; i < TABMAX; i++) {
-        if (tab[i] > 0)
-            fprintf(stderr, "    [%5zu] %zu\n", i+1, tab[i]);
-    }
-    if (tab[TABMAX] > 0)
-        fprintf(stderr, "    [>%d] %zu\n", TABMAX, tab[TABMAX]);
 }
 
 static void heap_stat(HeapStat *stat)
@@ -161,8 +424,30 @@ static void heap_stat(HeapStat *stat)
     for (size_t i = 0; i < heaps_length; i++) {
         Heap *heap = heaps[i];
         stat->size += heap->size;
-        stat->used += heap->used;
+        size_t offset;
+        for (uint8_t *p = heap->body, *endp = p + heap->size; p < endp; p += offset) {
+            Chunk *ch = CHUNK(p);
+            offset = sizeof(Chunk) + ch->size;
+            size_t j = ch->size - 1;
+            if (j > TABMAX)
+                j = TABMAX;
+            if (ch->allocated) {
+                stat->used += offset;
+                stat->tab_used[j]++;
+            } else
+                stat->tab_free[j]++;
+        }
     }
+}
+
+static void heap_print_stat_table(size_t tab[])
+{
+    for (size_t i = 0; i < TABMAX; i++) {
+        if (tab[i] > 0)
+            fprintf(stderr, "    [%5zu] %zu\n", i+1, tab[i]);
+    }
+    if (tab[TABMAX] > 0)
+        fprintf(stderr, "    [>%d] %zu\n", TABMAX, tab[TABMAX]);
 }
 
 static void heap_print_stat(const char *header)
@@ -176,24 +461,162 @@ static void heap_print_stat(const char *header)
     debug("heap usage: %*zu / %*zu (%3ld.%1ld%%)",
           n, stat.used, n, stat.size, r/10, r%10);
     debug("used:");
-    heap_stat_table(stat.tab_used);
+    heap_print_stat_table(stat.tab_used);
     debug("free:");
-    heap_stat_table(stat.tab_free);
+    heap_print_stat_table(stat.tab_free);
     debug("");
+}
+
+static void add_to_free_list(Chunk *h)
+{
+    assert_freelist();
+    assert_chunk(h);
+    Chunk *ch = (Chunk *) h;
+    ch->next = free_list; // prepend
+    free_list = ch;
+    assert_chunk(ch);
+    assert_freelist();
+}
+
+static void free_val(Value v)
+{
+    if (value_is_immediate(v))
+        return;
+    switch (VALUE_TAG(v)) {
+    case TAG_CLOSURE:
+        env_free(CLOSURE(v)->env);
+        return;
+    case TAG_CONTINUATION:
+        free(CONTINUATION(v)->state->stack);
+        return;
+    case TAG_PAIR:
+    case TAG_USER_OBJ: {
+        UserObject *p = USER_OBJ(v);
+        unregister_user_obj(p);
+        if (p->free != NULL)
+            p->free(p->obj);
+        return;
+    }
+    case TAG_STRING:
+    case TAG_CFUNC:
+    case TAG_SYNTAX:
+        return;
+    }
+}
+
+static Chunk *free_chunk(Chunk *prev, Chunk *curr, size_t offset)
+{
+    Value *val = (Value *) (curr + 1);
+    if (in_heap_val(*val))
+        free_val(*val);
+    if (prev != NULL && !prev->allocated) {
+        memset(curr, 0, offset);
+        prev->size += offset;
+        return prev;
+    }
+    memset(val, 0, curr->size);
+    curr->allocated = false;
+    add_to_free_list(curr);
+    return curr;
+}
+
+static void sweep(void)
+{
+    assert_heaps();
+    for (size_t i = 0; i < heaps_length; i++) {
+        Heap *heap = heaps[i];
+        uint8_t *p = heap->body, *endp = p + heap->size;
+        size_t offset;
+        for (Chunk *ch, *prev = NULL; p < endp; p += offset) {
+            assert_ptr_if_nonnull(prev);
+            ch = CHUNK(p);
+            // if (ch->size == 0)
+            //     continue; // XXX
+            assert_chunk(ch);
+            offset = sizeof(Chunk) + ch->size;
+            if (!ch->allocated)
+                continue;
+            if (ch->living) {
+                ch->living = false;
+                prev = ch;
+                continue;
+            }
+            prev = free_chunk(prev, ch, offset);
+        }
+    }
+    assert_heaps();
+}
+
+static void mark(void)
+{
+    mark_stack();
+    mark_roots();
+    jmp_buf jmp;
+    memset(&jmp, 0, sizeof(jmp_buf));
+    setjmp(jmp);
+    mark_array(&jmp, (size_t) sizeof(jmp_buf) / sizeof(uintptr_t));
+}
+
+static void increase_heaps(void)
+{
+    Heap *last = heaps[heaps_length-1];
+    size_t new_size = last->size * HEAP_RATIO;
+    last = heaps[heaps_length++] = heap_new(new_size);
+    Chunk *ch = (Chunk *) last->body;
+    ch->next = free_list;
+    free_list = ch;
+    assert_chunk(ch);
+    assert_freelist();
+}
+
+static bool enough_free_chunks(void)
+{
+    static const size_t minreq = sizeof(Continuation) * 2; // maybe the largest
+    for (Chunk *curr = free_list; curr != NULL; curr = curr->next) {
+        if (curr->size >= minreq)
+            return true;
+    }
+    return false;
+}
+
+ATTR(unused)
+static size_t heap_used(void)
+{
+    HeapStat stat;
+    heap_stat(&stat);
+    return stat.used;
 }
 
 static void gc(void)
 {
+    assert_freelist();
+    assert_heaps();
     if (print_stat)
         heap_print_stat("GC begin");
-    // collects nothing
-    if (!enough_free_space())
+#if DEBUG
+    size_t before_used = heap_used();
+#endif
+    // debug("GC: mark");
+    mark();
+    assert_freelist();
+    assert_heaps();
+    // debug("GC: sweep");
+    sweep();
+#if DEBUG
+    assert(heap_used() <= before_used);
+#endif
+    assert_freelist();
+    assert_heaps();
+    // debug("GC: maybe increase");
+    if (!enough_free_chunks())
         increase_heaps();
     if (print_stat)
         heap_print_stat("GC end");
+    assert_freelist();
+    assert_heaps();
 }
 
-static size_t heaps_size(void)
+static size_t heap_size(void)
 {
     HeapStat stat;
     heap_stat(&stat);
@@ -202,8 +625,11 @@ static size_t heaps_size(void)
 
 void *gc_malloc(size_t size)
 {
+    assert_freelist();
+    assert_heaps();
     if (stress)
         gc();
+    size = align(size);
     void *p = allocate(size);
     if (!stress && p == NULL) {
         gc();
@@ -211,6 +637,12 @@ void *gc_malloc(size_t size)
     }
     if (p == NULL)
         error("out of memory; heap (~%zu MiB) exhausted",
-              heaps_size() / MiB);
+              heap_size() / MiB);
+    assert_ptr(p);
+    assert_freelist();
+    assert_heaps();
+    memset(p, 0, size); // for debug
+    assert_freelist();
+    assert_heaps();
     return p;
 }
