@@ -437,9 +437,19 @@ static Value parse_program(Parser *p)
     return ast_new(p, cdr(v));
 }
 
+static void parser_mark(void *p)
+{
+    Parser *ps = p;
+    sch_gc_mark(ps->newline_pos);
+    TokenType tt = ps->prev_token.type;
+    if (tt == TOK_TYPE_IDENT || tt == TOK_TYPE_STR)
+        sch_gc_mark(ps->prev_token.value);
+}
+
 Value iparse(FILE *in, const char *filename)
 {
     Parser *p = parser_new(in, filename);
+    sch_register_user_obj("parser", parser_mark, free, p);
     Value ast;
     if (setjmp(jmp_parse_error) == 0)
         ast = parse_program(p); // success
