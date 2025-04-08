@@ -2131,6 +2131,9 @@ void sch_init(uintptr_t *sp)
 {
     gc_init(sp);
 
+    gc_add_root(&symbol_names);
+    gc_add_root(&source_data);
+
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
 #define DEF_SYMBOL(var, name) SYM_##var = value_of_symbol(name)
@@ -2142,6 +2145,7 @@ void sch_init(uintptr_t *sp)
     DEF_SYMBOL(RARROW, "=>");
 
     toplevel_environment = env_new();
+    gc_add_root(&toplevel_environment);
     Value e = toplevel_environment;
 
     // 4. Expressions
