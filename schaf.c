@@ -443,7 +443,7 @@ static Value apply_closure(Value proc, Value args)
         for (; args != Qnil; args = cdr(args), params = cdr(params))
             table_put(clenv, car(params), car(args));
     }
-    return eval_body(clenv, cl->body); // XXX: table_free(clenv)?
+    return eval_body(clenv, cl->body);
 }
 
 ATTR(noreturn) ATTR(noinline)
@@ -531,13 +531,6 @@ static Value eval_body(Table *env, Value body)
     for (Value next; (next = cdr(p)) != Qnil; p = next)
         eval(env, car(p));
     return eval(env, car(p));
-}
-
-static Value eval_body_tmpenv(Table *env, Value body)
-{
-    Value ret = eval_body(env, body);
-    table_free(env);
-    return ret;
 }
 
 static Value map_eval(Table *env, Value l)
@@ -979,7 +972,7 @@ static Value syn_letrec(Table *env, Value args)
         Value val = eval(letenv, cadr(b));
         table_put(letenv, ident, val);
     }
-    return eval_body_tmpenv(letenv, body);
+    return eval_body(letenv, body);
 }
 
 // 4.2.3. Sequencing
@@ -1020,10 +1013,9 @@ static Value syn_do(Table *env, Value args)
             iset(doenv, var, val);
         }
     }
-    if (exprs != Qnil)
-        return eval_body_tmpenv(doenv, exprs);
-    table_free(doenv);
-    return Qnil;
+    if (exprs == Qnil)
+        return Qnil;
+    return eval_body(doenv, exprs);
 }
 
 // 4.2.6. Quasiquotation
