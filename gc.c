@@ -25,6 +25,7 @@ typedef struct {
 enum {
     MiB = 1024 * 1024,
     HEAP_RATIO = 2,
+    ROOT_SIZE = 0x08,
 };
 
 static size_t init_size = 1 * MiB;
@@ -32,6 +33,8 @@ static size_t init_size = 1 * MiB;
 static Heap *heaps[64];
 static size_t heaps_length;
 static uintptr_t *stack_base;
+static const Value *root[ROOT_SIZE];
+static size_t nroot;
 static Value user_objects;
 
 static bool stress, print_stat;
@@ -131,6 +134,13 @@ static void increase_heaps(void)
 {
     Heap *heap = heaps[heaps_length-1];
     heaps[heaps_length++] = heap_new(heap->size * HEAP_RATIO);
+}
+
+void gc_add_root(const Value *r)
+{
+    if (nroot == ROOT_SIZE)
+        error("%s: too many roots added", __func__);
+    root[nroot++] = r;
 }
 
 static void heap_stat_table(size_t tab[])
