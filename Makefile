@@ -16,7 +16,7 @@ schaf: $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
 clean:
-	rm -f schaf test/basic-test *-san *.o test/*.o
+	rm -f schaf test/basic-test *-san test/*-san *.o test/*.o
 
 analyze: $(OBJ:.o=.analyzer)
 
