@@ -84,12 +84,12 @@ static Value list(Value arg, ...)
 {
     if (arg == Qundef)
         return Qnil;
-    Value vec[0x100] = { arg, }, o;
+    Value vec[0x10] = { arg, }, o;
     va_list ap;
     va_start(ap, arg);
-    long i = 1;
-    while ((o = va_arg(ap, Value)) != Qundef)
-        vec[i++] = o;
+    ssize_t i;
+    for (i = 1; (o = va_arg(ap, Value)) != Qundef; i++)
+        vec[i] = o;
     va_end(ap);
     Value l = Qnil;
     while (--i >= 0)
@@ -221,14 +221,15 @@ Test(schaf, map) {
     expect_runtime_error("expected pair but got integer", "(for-each + 1)");
 }
 
+#define type_name(v) (char *) value_to_type_name(v)
 Test(schaf, type_name) {
-    cr_assert(eq(str, "boolean", (char *) value_to_type_name(Qfalse)));
-    cr_assert(eq(str, "integer", (char *) value_to_type_name(value_of_int(42))));
-    cr_assert(eq(str, "symbol", (char *) value_to_type_name(value_of_symbol("foo"))));
-    cr_assert(eq(str, "undef", (char *) value_to_type_name(Qundef)));
-    cr_assert(eq(str, "pair", (char *) value_to_type_name(cons(Qfalse, Qnil))));
-    cr_assert(eq(str, "null", (char *) value_to_type_name(Qnil)));
-    cr_assert(eq(str, "string", (char *) value_to_type_name(value_of_string("bar"))));
+    cr_assert(eq(str, "boolean", type_name(Qfalse)));
+    cr_assert(eq(str, "integer", type_name(value_of_int(42))));
+    cr_assert(eq(str, "symbol", type_name(value_of_symbol("foo"))));
+    cr_assert(eq(str, "undef", type_name(Qundef)));
+    cr_assert(eq(str, "pair", type_name(cons(Qfalse, Qnil))));
+    cr_assert(eq(str, "null", type_name(Qnil)));
+    cr_assert(eq(str, "string", type_name(value_of_string("bar"))));
     // "procedure",
 }
 
