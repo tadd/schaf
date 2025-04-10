@@ -58,7 +58,7 @@
 #define expect_x_eq_parsed(x, exp, act) expect_##x##_eq(exp, parse_expr_string(act))
 
 #define expect_vint_eq(exp, act) expect_vx_eq(TYPE_INT, int, exp, act)
-#define expect_vstr_eq(exp, act) expect_vx_eq(TYPE_STR, string, exp, act)
+#define expect_vstr_eq(exp, act) expect_vx_eq(TYPE_STRING, string, exp, act)
 #define expect_vsym_eq(exp, act) expect_vx_eq(TYPE_SYMBOL, string, exp, act)
 
 #define expect_vint_eq_parsed(exp, act) expect_x_eq_parsed(vint, exp, act)

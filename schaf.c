@@ -28,7 +28,7 @@ static const char *TYPE_NAMES[] = {
     [TYPE_SYMBOL] = "symbol",
     [TYPE_UNDEF] = "undef",
     [TYPE_PAIR] = "pair",
-    [TYPE_STR] = "string",
+    [TYPE_STRING] = "string",
     [TYPE_PROC] = "procedure",
 };
 
@@ -145,7 +145,7 @@ Type value_type_of(Value v)
     ValueTag t = VALUE_TAG(v);
     switch (t) {
     case TAG_STRING:
-        return TYPE_STR;
+        return TYPE_STRING;
     case TAG_PAIR:
         return TYPE_PAIR;
     case TAG_CFUNC:
@@ -1142,7 +1142,7 @@ static Value syn_define(Table *env, Value args)
     case TYPE_NULL:
     case TYPE_BOOL:
     case TYPE_INT:
-    case TYPE_STR:
+    case TYPE_STRING:
     case TYPE_PROC:
     case TYPE_UNDEF:
         runtime_error("define: the first argument expected symbol or pair but got %s",
@@ -1173,7 +1173,7 @@ static bool equal(Value x, Value y)
     case TYPE_PAIR:
         return equal(car(x), car(y)) &&
                equal(cdr(x), cdr(y));
-    case TYPE_STR:
+    case TYPE_STRING:
         return (strcmp(STRING(x)->body, STRING(y)->body) == 0);
     case TYPE_SYMBOL:
     case TYPE_NULL:
@@ -1673,13 +1673,13 @@ static Value proc_string_p(UNUSED Table *env, Value obj)
 
 static Value proc_string_length(UNUSED Table *env, Value s)
 {
-    expect_type("string-length", TYPE_STR, s);
+    expect_type("string-length", TYPE_STRING, s);
     return value_of_int(strlen(STRING(s)->body));
 }
 
 static Value proc_string_eq(UNUSED Table *env, Value s1, Value s2)
 {
-    expect_type_twin("string=?", TYPE_STR, s1, s2);
+    expect_type_twin("string=?", TYPE_STRING, s1, s2);
     return OF_BOOL(strcmp(STRING(s1)->body, STRING(s2)->body) == 0);
 }
 
@@ -1815,7 +1815,7 @@ static void fdisplay(FILE* f, Value v)
         fprintf(f, "%"PRId64, value_to_int(v));
         break;
     case TYPE_SYMBOL:
-    case TYPE_STR:
+    case TYPE_STRING:
         fprintf(f, "%s", value_to_string(v));
         break;
     case TYPE_PAIR:

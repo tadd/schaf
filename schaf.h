@@ -15,7 +15,7 @@ typedef enum {
     TYPE_UNDEF,
 // boxed (tagged)
     TYPE_PAIR,
-    TYPE_STR,
+    TYPE_STRING,
     TYPE_PROC,
 } Type;
 
