@@ -247,3 +247,48 @@ void table_foreach(const Table *t, TableForeachFunc f, void *data)
         }
     }
 }
+
+// Set
+
+Set *set_new(void)
+{
+    return table_new();
+}
+
+void set_free(Set *s)
+{
+    table_free(s);
+}
+
+Set *set_add(Set *s, uint64_t val)
+{
+    return table_put(s, val, true);
+}
+
+bool set_include_p(const Set *s, uint64_t val)
+{
+    uint64_t ret = table_get(s, val);
+    return ret != TABLE_NOT_FOUND && ret;
+}
+
+bool set_delete(Set *s, uint64_t val)
+{
+    return table_delete(s, val);
+}
+
+typedef struct {
+    void *a, *b;
+} DataPair;
+
+static void set_foreach_internal(uint64_t key, uint64_t val, void *data)
+{
+    DataPair *p = data;
+    if (val)
+        ((SetForeachFunc) p->a)(key, p->b);
+}
+
+void set_foreach(const Set *s, SetForeachFunc f, void *data)
+{
+    DataPair p = { f, data };
+    table_foreach(s, set_foreach_internal, &p);
+}
