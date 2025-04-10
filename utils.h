@@ -26,6 +26,8 @@ ATTR_XMALLOC char *xstrdup(const char *s);
 
 typedef struct Table Table;
 typedef void (*TableForeachFunc)(uint64_t key, uint64_t val, void *data);
+typedef Table Set;
+typedef void (*SetForeachFunc)(uint64_t val, void *data);
 
 extern const uint64_t TABLE_NOT_FOUND;
 Table *table_new(void);
@@ -36,5 +38,11 @@ bool table_set(Table *t, uint64_t key, uint64_t val); // set if found
 uint64_t table_get(const Table *t, uint64_t key);
 void table_foreach(const Table *t, TableForeachFunc f, void *data);
 ATTR(unused) void table_dump(const Table *t); // for debug
+
+Set *set_new(void);
+void set_free(Set *s);
+Set *set_add(Set *s, uint64_t val);
+bool set_include_p(const Set *s, uint64_t val);
+Set *set_sub(const Set *x, const Set *y);
 
 #endif
