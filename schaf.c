@@ -113,6 +113,7 @@ static inline bool value_is_procedure(Value v)
         return true;
     case TAG_STRING:
     case TAG_PAIR:
+    case TAG_USER_OBJ:
         return false;
     case TAG_ENV:
         break;
@@ -156,6 +157,8 @@ Type value_type_of(Value v)
         return TYPE_PROC;
     case TAG_ENV:
         break;
+    case TAG_USER_OBJ:
+        return TYPE_USER_OBJ;
     }
     UNREACHABLE();
 }
@@ -168,6 +171,8 @@ static inline const char *value_type_to_string(Type t)
 const char *value_to_type_name(Value v)
 {
     Type t = value_type_of(v);
+    if (t == TYPE_USER_OBJ)
+        return USER_OBJ(v)->name;
     return value_type_to_string(t);
 }
 
@@ -1199,6 +1204,7 @@ static Value syn_define(Value env, Value args)
     case TYPE_STRING:
     case TYPE_PROC:
     case TYPE_UNDEF:
+    case TYPE_USER_OBJ:
         runtime_error("the first argument expected symbol or pair but got %s",
                       value_type_to_string(t));
     }
@@ -1231,6 +1237,8 @@ static bool equal(Value x, Value y)
     case TYPE_PROC:
     case TYPE_UNDEF:
         return false;
+    case TYPE_USER_OBJ:
+        break;
     }
     UNREACHABLE();
 }
@@ -1881,6 +1889,8 @@ static void fdisplay(FILE* f, Value v)
     case TYPE_UNDEF:
         fprintf(f, "<undef>");
         break;
+    case TYPE_USER_OBJ:
+        UNREACHABLE();
     }
 }
 

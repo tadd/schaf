@@ -15,7 +15,8 @@ typedef enum {
     TAG_CONTINUATION,
     // internal use
     TAG_ENV,
-    TAG_LAST = TAG_ENV,
+    TAG_USER_OBJ,
+    TAG_LAST = TAG_USER_OBJ
 } ValueTag;
 
 typedef struct {
@@ -74,6 +75,13 @@ typedef struct {
     Table *table;
 } Env;
 
+typedef struct {
+    void *obj;
+    void (*mark)(void *p);
+    void (*free)(void *p);
+    char name[];
+} UserObject;
+
 #define VALUE_TAG(v) (*(ValueTag *)(v))
 
 #define PAIR(v) ((Pair *) v)
@@ -84,6 +92,7 @@ typedef struct {
 #define CLOSURE(v) ((Closure *) v)
 #define CONTINUATION(v) ((Continuation *) v)
 #define ENV(v) ((Env *) v)
+#define USER_OBJ(v) ((UserObject *) (v))
 
 #pragma GCC visibility push(hidden) // also affects Clang
 
