@@ -227,3 +227,26 @@ void table_foreach(const Table *t, TableForeachFunc f, void *data)
         }
     }
 }
+
+// Set
+
+Set *set_new(void)
+{
+    return table_new();
+}
+
+void set_free(Set *s)
+{
+    table_free(s);
+}
+
+Set *set_add(Set *s, uint64_t val)
+{
+    return table_put(s, val, true);
+}
+
+bool set_include_p(const Set *s, uint64_t val)
+{
+    uint64_t ret = table_get(s, val);
+    return ret != TABLE_NOT_FOUND && ret;
+}
