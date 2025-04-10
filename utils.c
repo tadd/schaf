@@ -246,3 +246,45 @@ void table_foreach(const Table *t, TableForeachFunc f, void *data)
         }
     }
 }
+
+// Set
+
+Set *set_new(void)
+{
+    return table_new();
+}
+
+void set_free(Set *s)
+{
+    table_free(s);
+}
+
+Set *set_add(Set *s, uint64_t val)
+{
+    if (table_get(s, val) == TABLE_NOT_FOUND)
+        table_put(s, val, true);
+    return s;
+}
+
+bool set_include_p(const Set *s, uint64_t val)
+{
+    uint64_t ret = table_get(s, val);
+    return ret != TABLE_NOT_FOUND && ret;
+}
+
+static void add_if_not_exist(ATTR(unused) const Table *x, uint64_t val,
+                             ATTR(unused) uint64_t t, void *data)
+{
+    Set **pair = data, *diff = pair[1];
+    const Set *y = pair[0];
+    if (!set_include_p(y, val))
+        set_add(diff, val);
+}
+
+Set *set_sub(const Set *x, const Set *y)
+{
+    Set *diff = set_new();
+    Set *pair[2] = { (Set *) y, diff };
+    table_foreach(x, add_if_not_exist, pair);
+    return diff;
+}
