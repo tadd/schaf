@@ -23,6 +23,7 @@ static size_t init_size = 1 * MiB;
 static Heap *heaps[64];
 static size_t heaps_length;
 static uintptr_t *stack_base;
+static Value user_objects;
 
 static bool stress;
 
@@ -80,6 +81,28 @@ static void *allocate(size_t size)
 size_t gc_stack_get_size(uintptr_t *sp)
 {
     return (uint8_t *) stack_base - (uint8_t *) sp;
+}
+
+void sch_gc_mark(ATTR(unused) Value v)
+{
+    // do nothing
+}
+
+static Value user_obj_new(const char *typename, GCFunction mark, GCFunction ffree, void *p)
+{
+    size_t len = strlen(typename) + 1;
+    UserObject *o = obj_new(sizeof(UserObject) + len, TAG_USER_OBJ);
+    o->mark = mark;
+    o->free = ffree;
+    o->obj = p;
+    strcpy(o->name, typename);
+    return (Value) o;
+}
+
+void sch_register_user_obj(const char *typename, GCFunction mark, GCFunction ffree, void *p)
+{
+    Value v = user_obj_new(typename, mark, ffree, p);
+    user_objects = cons(v, user_objects);
 }
 
 static bool enough_free_space(void)
