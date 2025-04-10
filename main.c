@@ -94,6 +94,7 @@ static Option parse_opt(int argc, char *const *argv)
         case 'h':
             usage(stdout);
         case '?':
+        default:
             usage(stderr);
         }
     }

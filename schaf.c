@@ -111,9 +111,11 @@ static inline bool value_is_procedure(Value v)
     case TAG_CLOSURE:
     case TAG_CONTINUATION:
         return true;
-    default:
+    case TAG_STRING:
+    case TAG_PAIR:
         return false;
     }
+    UNREACHABLE();
 }
 
 inline bool value_is_pair(Value v)
@@ -1137,10 +1139,16 @@ static Value syn_define(Table *env, Value args)
         return define_variable(env, head, cadr(args));
     case TYPE_PAIR:
         return define_proc_internal(env, head, cdr(args));
-    default:
+    case TYPE_NULL:
+    case TYPE_BOOL:
+    case TYPE_INT:
+    case TYPE_STR:
+    case TYPE_PROC:
+    case TYPE_UNDEF:
         runtime_error("define: the first argument expected symbol or pair but got %s",
                       value_type_to_string(t));
     }
+    UNREACHABLE();
 }
 
 // 6.1. Equivalence predicates
@@ -1167,9 +1175,15 @@ static bool equal(Value x, Value y)
                equal(cdr(x), cdr(y));
     case TYPE_STR:
         return (strcmp(STRING(x)->body, STRING(y)->body) == 0);
-    default:
+    case TYPE_SYMBOL:
+    case TYPE_NULL:
+    case TYPE_BOOL:
+    case TYPE_INT:
+    case TYPE_PROC:
+    case TYPE_UNDEF:
         return false;
     }
+    UNREACHABLE();
 }
 
 static Value proc_equal(UNUSED Table *env, Value x, Value y)
