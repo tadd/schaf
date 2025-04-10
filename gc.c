@@ -50,7 +50,6 @@ static const Value *root[ROOT_SIZE];
 static size_t nroot;
 static Table **topenv;
 static Value user_objects;
-static Table *envs; // used in marking
 
 static bool stress, print_stat;
 
@@ -104,6 +103,9 @@ void gc_init(volatile void *sp)
     ch->living = false;
     ch->next = NULL;
     free_list = ch;
+
+    user_objects = Qnil;
+    gc_add_root(&user_objects);
 }
 
 static void *allocate_from_chunk(Chunk *prev, Chunk *curr, size_t size)
@@ -180,9 +182,6 @@ static void mark_env_each(uint64_t key, uint64_t val, ATTR(unused) void *data)
 
 static void mark_env(Table *env)
 {
-    uint64_t key = (uint64_t) env;
-    if (table_get(envs, key) == TABLE_NOT_FOUND)
-        table_put(envs, key, 1); // mark it
     table_foreach(env, mark_env_each, NULL);
 }
 
@@ -386,20 +385,13 @@ static void add_to_free_list(Chunk *h)
     free_list = ch;
 }
 
-static void free_env(Table *env)
-{
-    uint64_t key = (uint64_t) env;
-    if (table_get(envs, key) == TABLE_NOT_FOUND)
-        table_free(env);
-}
-
 static void free_val(Value v)
 {
     if (value_is_immediate(v))
         return;
     switch (VALUE_TAG(v)) {
     case TAG_CLOSURE:
-        free_env(CLOSURE(v)->env);
+        env_free(CLOSURE(v)->env);
         return;
     case TAG_CONTINUATION:
         free(CONTINUATION(v)->shelter);
@@ -454,15 +446,11 @@ static void sweep(void)
             prev = free_chunk(prev, h, offset);
         }
     }
-    table_free(envs);
 }
 
 static void mark(void)
 {
-    envs = table_new();
     mark_stack();
-    if (topenv)
-        mark_env(*topenv);
     mark_roots();
     jmp_buf jmp;
     memset(&jmp, 0, sizeof(jmp_buf));

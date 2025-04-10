@@ -64,6 +64,8 @@ static const int64_t CFUNCARG_MAX = 3;
 // Environment: list of Frames
 // Frame: Table of 'symbol => <value>
 static Table *toplevel_environment;
+static bool marking = false;
+static Set *marked_env;
 static Value symbol_names = Qnil; // ("name0" "name1" ...)
 Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
     SYM_RARROW;
@@ -1938,6 +1940,30 @@ int sch_exit_status(void)
     }
 CXRS(DEF_CXR_BUILTIN)
 
+static void env_mark_each(uint64_t key, uint64_t val, ATTR(unused) void *data)
+{
+    sch_gc_mark(key);
+    sch_gc_mark(val);
+}
+
+void env_mark(void *env)
+{
+    if (!marking) {
+        set_free(marked_env);
+        marked_env = set_new();
+        marking = true;
+    }
+    set_add(marked_env, (uint64_t) env);
+    table_foreach(env, env_mark_each, NULL);
+}
+
+void env_free(void *env)
+{
+    marking = false;
+    if (!set_include_p(marked_env, (uint64_t) env))
+        table_free(env);
+}
+
 void sch_init(volatile void *sp)
 {
     gc_init(sp);
@@ -1957,8 +1983,7 @@ void sch_init(volatile void *sp)
     DEF_SYMBOL(RARROW, "=>");
 
     toplevel_environment = table_new();
-    gc_add_root_env(&toplevel_environment);
-    sch_register_user_obj("environment", NULL, NULL, toplevel_environment);
+    sch_register_user_obj("environment", env_mark, env_free, toplevel_environment);
     Table *e = toplevel_environment;
 
     // 4. Expressions
