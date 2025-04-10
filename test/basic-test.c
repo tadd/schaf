@@ -323,3 +323,25 @@ Test(table, foreach) {
 
     table_free(t);
 }
+
+Test(set, add_include_delete) {
+    Set *t = set_new();
+
+    set_add(t, 1);
+    cr_assert(set_include_p(t, 1));
+
+    set_add(t, 2);
+    set_add(t, 3);
+    set_add(t, 4);
+    cr_assert(set_include_p(t, 1));
+    cr_assert(set_include_p(t, 2));
+    cr_assert(set_include_p(t, 3));
+    cr_assert(set_include_p(t, 4));
+
+    for (int i = 1; i <= 17; i++)
+        set_add(t, i*10000000);
+    for (int i = 1; i <= 17; i++)
+        cr_assert(set_include_p(t, i*10000000));
+
+    set_free(t);
+}
