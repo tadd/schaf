@@ -13,7 +13,8 @@ typedef enum {
     TAG_SYNTAX, // almost a C Function
     TAG_CLOSURE,
     TAG_CONTINUATION,
-    TAG_LAST = TAG_CONTINUATION
+    TAG_USER_OBJ,
+    TAG_LAST = TAG_USER_OBJ
 } ValueTag;
 
 typedef struct {
@@ -60,6 +61,16 @@ typedef struct {
     Value retval;
 } Continuation;
 
+typedef struct {
+    ValueTag tag;
+    void *obj;
+    void (*mark)(void *p);
+    void (*free)(void *p);
+    char name[];
+} UserObject;
+
+#define VALUE_TAG(v) (*(ValueTag*)(v))
+
 #define PAIR(v) ((Pair *) v)
 #define LOCATED_PAIR(v) ((LocatedPair *) v)
 #define STRING(v) ((String *) v)
@@ -67,6 +78,7 @@ typedef struct {
 #define CFUNC(v) ((CFunc *) v)
 #define CLOSURE(v) ((Closure *) v)
 #define CONTINUATION(v) ((Continuation *) v)
+#define USER_OBJ(v) ((UserObject *) (v))
 
 #pragma GCC visibility push(hidden) // also affects Clang
 
