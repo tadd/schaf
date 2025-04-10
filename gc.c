@@ -233,7 +233,7 @@ static void mark_roots(void)
         mark_val(*root[i]);
 }
 
-static bool in_heap_range(uintptr_t v)
+bool in_heap_range(uintptr_t v)
 {
     const uint8_t *p = (uint8_t *) v;
     for (size_t i = 0; i < heaps_length; i++) {

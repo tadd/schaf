@@ -86,9 +86,10 @@ inline bool value_is_symbol(Value v)
     return (v & FLAG_MASK_SYM) == FLAG_SYM;
 }
 
+bool in_heap_range(uintptr_t v);
 bool value_is_immediate(Value v)
 {
-    return v & FLAG_MASK;
+    return v & FLAG_MASK || v == 0 || v < 0x1000 || !in_heap_range(v);
 }
 
 static inline bool value_tag_is(Value v, ValueTag expected)

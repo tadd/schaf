@@ -414,6 +414,7 @@ static Parser *parser_new(FILE *in, const char *filename)
     p->filename = filename;
     p->prev_token = TOK_EOF; // we use this since we never postpone EOF things
     p->newline_pos = Qnil;
+    gc_add_root(&p->newline_pos); // XXX
     return p;
 }
 
