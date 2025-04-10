@@ -142,8 +142,7 @@ Type value_type_of(Value v)
 {
     if (value_is_immediate(v))
         return immediate_type_of(v);
-    ValueTag t = VALUE_TAG(v);
-    switch (t) {
+    switch (VALUE_TAG(v)) {
     case TAG_STRING:
         return TYPE_STRING;
     case TAG_PAIR:
