@@ -13,7 +13,8 @@ typedef enum {
     TAG_SYNTAX, // almost a C Function
     TAG_CLOSURE,
     TAG_CONTINUATION,
-    TAG_LAST = TAG_CONTINUATION
+    TAG_USER_OBJ,
+    TAG_LAST = TAG_USER_OBJ
 } ValueTag;
 
 typedef struct {
@@ -53,6 +54,14 @@ typedef struct {
 } Continuation;
 
 typedef struct {
+    void *obj;
+    void (*mark)(void *p);
+    void (*free)(void *p);
+    char *name;
+} UserObject;
+
+
+typedef struct {
     ValueTag tag; // common
     union {
         char *string;
@@ -61,16 +70,22 @@ typedef struct {
         CFunc cfunc;
         Closure closure;
         Continuation continuation;
+        UserObject user_object;
     };
 } SchObject;
 
+
 #define OBJ(v) ((SchObject *) v)
+
+#define VALUE_TAG(v) (OBJ(v)->tag)
+
 #define STRING(v) (OBJ(v)->string)
 #define PAIR(v) (&OBJ(v)->pair)
 #define LOCATED_PAIR(v) (&OBJ(v)->lpair)
 #define CFUNC(v) (&OBJ(v)->cfunc)
 #define CLOSURE(v) (&OBJ(v)->closure)
 #define CONTINUATION(v) (&OBJ(v)->continuation)
+#define USER_OBJ(v) (&OBJ(v)->user_object)
 
 extern Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
 
