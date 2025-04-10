@@ -17,10 +17,12 @@ typedef enum {
     TYPE_PAIR,
     TYPE_STRING,
     TYPE_PROC,
+    TYPE_USER_OBJ,
 } Type;
 
 typedef uintptr_t Value;
 typedef uintptr_t Symbol;
+typedef void (*GCFunction)(void *p);
 
 extern const Value Qnil, Qundef, Qfalse, Qtrue;
 
@@ -63,5 +65,8 @@ const char *error_message(void);
 void sch_set_gc_init_size(size_t mib);
 void sch_set_gc_stress(bool b);
 void sch_set_gc_print_stat(bool b);
+
+void sch_register_user_obj(const char *typename, GCFunction mark, GCFunction free, void *p);
+void sch_gc_mark(Value v);
 
 #endif
