@@ -24,7 +24,8 @@ typedef uintptr_t Symbol;
 
 extern const Value Qnil, Qundef, Qfalse, Qtrue;
 
-void sch_init(void);
+void sch_init(volatile void *base);
+#define SCH_INIT() uintptr_t sch_stack_base[1]; sch_init(sch_stack_base+1)
 int sch_fin(void);
 int sch_exit_status(void);
 

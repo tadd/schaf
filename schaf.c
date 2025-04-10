@@ -690,7 +690,6 @@ static Value iload(FILE *in, const char *filename)
     }
     if (setjmp(jmp_exit) != 0)
         return value_of_int(exit_status);
-    INIT_STACK();
     call_stack = Qnil;
     Value ret = eval_body(toplevel_environment, l);
     call_stack_check_consistency();
@@ -1921,9 +1920,10 @@ int sch_exit_status(void)
     }
 CXRS(DEF_CXR_BUILTIN)
 
-void sch_init(void)
+void sch_init(volatile void *sp)
 {
-    gc_init();
+    gc_init(sp);
+
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
 #define DEF_SYMBOL(var, name) SYM_##var = value_of_symbol(name)

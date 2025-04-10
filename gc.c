@@ -58,8 +58,9 @@ void gc_fin(void)
     }
 }
 
-void gc_init(void)
+void gc_init(volatile void *sp)
 {
+    stack_base = sp;
     init_size = align(init_size);
     heaps[0] = heap_new(init_size);
     heaps_length = 1;
@@ -74,11 +75,6 @@ static void *allocate(size_t size)
     uint8_t *ret = heap->body + heap->used;
     heap->used += size;
     return ret;
-}
-
-void gc_stack_init(const volatile void *b)
-{
-    stack_base = b;
 }
 
 size_t gc_stack_get_size(const volatile void *sp)

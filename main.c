@@ -145,7 +145,7 @@ int main(int argc, char **argv)
     if (o.init_heap_size > 0)
         sch_set_gc_init_size(o.init_heap_size);
 
-    sch_init();
+    SCH_INIT();
     Value v;
     if (o.parse_only)
         v = o.script ? parse_string(o.script) : parse(o.path);
