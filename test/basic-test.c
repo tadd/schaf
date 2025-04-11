@@ -262,6 +262,29 @@ Test(table, get_put) {
     table_free(t);
 }
 
+Test(table, delete) {
+    uint64_t N = TABLE_NOT_FOUND;
+    Table *t = table_new();
+
+    table_put(t, 1, 100);
+    table_put(t, 1, 110);
+    table_put(t, 2, 200);
+    table_put(t, 3, 300);
+    cr_assert(eq(ullong, 110, table_get(t, 1)));
+    cr_assert(eq(ullong, 200, table_get(t, 2)));
+    cr_assert(eq(ullong, 300, table_get(t, 3)));
+
+    cr_assert(table_delete(t, 1));
+    cr_assert(not(table_delete(t, 1)));
+    table_put(t, 2, 220);
+    cr_assert(table_delete(t, 3));
+    cr_assert(eq(ullong, N, table_get(t, 1)));
+    cr_assert(eq(ullong, 220, table_get(t, 2)));
+    cr_assert(eq(ullong, N, table_get(t, 3)));
+
+    table_free(t);
+}
+
 Test(table, inherit) {
     uint64_t N = TABLE_NOT_FOUND;
     Table *t = table_new();
