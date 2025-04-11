@@ -1835,7 +1835,7 @@ char *stringify(Value v)
     size_t size;
     FILE *stream = open_memstream(&s, &size);
     if (stream == NULL)
-        return NULL;
+        error("open_memstream() failed");
     fdisplay(stream, v);
     fclose(stream);
     return s;

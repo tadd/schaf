@@ -51,7 +51,7 @@ int64_t length(Value list);
 Value car(Value v);
 Value cdr(Value v);
 
-ATTR_MALLOC char *stringify(Value v);
+ATTR_XMALLOC char *stringify(Value v);
 void display(Value v);
 Value parse(const char *path);
 Value parse_string(const char *in);
