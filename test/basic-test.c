@@ -228,36 +228,36 @@ Test(schaf, map) {
 #define type_name(v) (char *) value_to_type_name(v)
 Test(schaf, type_name) {
     cr_assert(eq(str, "boolean", type_name(Qfalse)));
-    cr_assert(eq(str, "integer", type_name(value_of_int(42))));
+    cr_assert(eq(str, "integer", type_name(V(42))));
     cr_assert(eq(str, "symbol", type_name(value_of_symbol("foo"))));
     cr_assert(eq(str, "undef", type_name(Qundef)));
     cr_assert(eq(str, "pair", type_name(cons(Qfalse, Qnil))));
     cr_assert(eq(str, "null", type_name(Qnil)));
-    cr_assert(eq(str, "string", type_name(value_of_string("bar"))));
+    cr_assert(eq(str, "string", type_name(V("bar"))));
     // "procedure",
 }
 
 Test(table, get_put) {
     Table *t = table_new();
     table_put(t, 1, 100);
-    cr_assert(eq(int, 100, table_get(t, 1)));
+    cr_assert(eq(llong, 100, table_get(t, 1)));
     table_put(t, 2, 200);
     table_put(t, 3, 300);
     table_put(t, 4, 400);
-    cr_assert(eq(int, 100, table_get(t, 1)));
-    cr_assert(eq(int, 200, table_get(t, 2)));
-    cr_assert(eq(int, 300, table_get(t, 3)));
-    cr_assert(eq(int, 400, table_get(t, 4)));
+    cr_assert(eq(llong, 100, table_get(t, 1)));
+    cr_assert(eq(llong, 200, table_get(t, 2)));
+    cr_assert(eq(llong, 300, table_get(t, 3)));
+    cr_assert(eq(llong, 400, table_get(t, 4)));
     table_put(t, 1, 42);
-    cr_assert(eq(int, 42, table_get(t, 1)));
-    cr_assert(eq(int, 200, table_get(t, 2)));
-    cr_assert(eq(int, 300, table_get(t, 3)));
-    cr_assert(eq(int, 400, table_get(t, 4)));
+    cr_assert(eq(llong, 42, table_get(t, 1)));
+    cr_assert(eq(llong, 200, table_get(t, 2)));
+    cr_assert(eq(llong, 300, table_get(t, 3)));
+    cr_assert(eq(llong, 400, table_get(t, 4)));
 
     for (int i = 1; i <= 17; i++)
         table_put(t, i, i*10000000);
     for (int i = 1; i <= 17; i++)
-        cr_assert(eq(int, i*10000000, table_get(t, i)));
+        cr_assert(eq(llong, i*10000000, table_get(t, i)));
 
     table_free(t);
 }
@@ -269,11 +269,11 @@ Test(table, inherit) {
     Table *u = table_inherit(t);
     table_put(u, 2, 34);
 
-    cr_assert(eq(int, 12, table_get(t, 1)));
-    cr_assert(eq(int,  N, table_get(t, 2)));
+    cr_assert(eq(llong, 12, table_get(t, 1)));
+    cr_assert(eq(llong,  N, table_get(t, 2)));
 
-    cr_assert(eq(int, 12, table_get(u, 1)));
-    cr_assert(eq(int, 34, table_get(u, 2)));
+    cr_assert(eq(llong, 12, table_get(u, 1)));
+    cr_assert(eq(llong, 34, table_get(u, 2)));
 
     table_free(u);
     table_free(t);
@@ -288,17 +288,17 @@ Test(table, inherit_nested) {
     Table *v = table_inherit(u);
     table_put(v, 3, 6);
 
-    cr_assert(eq(int, 2, table_get(t, 1)));
-    cr_assert(eq(int, N, table_get(t, 2)));
-    cr_assert(eq(int, N, table_get(t, 3)));
+    cr_assert(eq(llong, 2, table_get(t, 1)));
+    cr_assert(eq(llong, N, table_get(t, 2)));
+    cr_assert(eq(llong, N, table_get(t, 3)));
 
-    cr_assert(eq(int, 2, table_get(u, 1)));
-    cr_assert(eq(int, 4, table_get(u, 2)));
-    cr_assert(eq(int, N, table_get(u, 3)));
+    cr_assert(eq(llong, 2, table_get(u, 1)));
+    cr_assert(eq(llong, 4, table_get(u, 2)));
+    cr_assert(eq(llong, N, table_get(u, 3)));
 
-    cr_assert(eq(int, 2, table_get(v, 1)));
-    cr_assert(eq(int, 4, table_get(v, 2)));
-    cr_assert(eq(int, 6, table_get(v, 3)));
+    cr_assert(eq(llong, 2, table_get(v, 1)));
+    cr_assert(eq(llong, 4, table_get(v, 2)));
+    cr_assert(eq(llong, 6, table_get(v, 3)));
 
     table_free(v);
     table_free(u);
