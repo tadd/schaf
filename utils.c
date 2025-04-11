@@ -218,6 +218,27 @@ bool table_set(Table *t, uint64_t key, uint64_t value)
     return true;
 }
 
+bool table_delete(Table *t, uint64_t key)
+{
+    bool found = false;
+    uint64_t i = body_index(t, key);
+    List **beg = &t->body[i];
+    for (List *prev = NULL, *p = *beg, *next; p != NULL; prev = p, p = next) {
+        next = p->next;
+        if (p->key != key)
+            continue;
+        found = true;
+        if (prev == NULL)
+            *beg = next;
+        else
+            prev->next = next;
+        free(p);
+        p = prev;
+        t->size--;
+    }
+    return found;
+}
+
 void table_foreach(const Table *t, TableForeachFunc f, void *data)
 {
     for (size_t i = 0; i < t->body_size; i++) {
