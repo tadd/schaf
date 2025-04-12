@@ -42,6 +42,9 @@ typedef struct List {
     struct List *next;
 } List;
 
+typedef void (*TableFreeFunc)(uint64_t p);
+#define FREE(f, x) ((f) != NULL ? f(x) : (void) 0)
+
 static List *list_new(uint64_t key, uint64_t value, List *next)
 {
     List *l = xmalloc(sizeof(List));
@@ -51,10 +54,11 @@ static List *list_new(uint64_t key, uint64_t value, List *next)
     return l;
 }
 
-static void list_free(List *l)
+static void list_free(List *l, TableFreeFunc free_key)
 {
     for (List *next; l != NULL; l = next) {
         next = l->next;
+        FREE(free_key, l->key);
         free(l);
     }
 }
@@ -67,27 +71,68 @@ enum {
     TABLE_TOO_MANY_FACTOR = 3,
 };
 
+typedef bool (*TableEqualFunc)(uint64_t x, uint64_t y);
+typedef uint64_t (*TableHashFunc)(uint64_t x);
+#define EQ(f, x, y) ((f) != NULL ? f(x, y) : ((x) == (y)))
+
 struct Table {
     const Table *parent;
     size_t size, body_size;
+    TableEqualFunc eq;
+    TableHashFunc hash;
+    TableFreeFunc free_key;
     List **body;
 };
 
 const uint64_t TABLE_NOT_FOUND = UINT64_MAX-1;
 
-Table *table_inherit(const Table *p)
+static uint64_t direct_hash(uint64_t x)
+{
+    return x; // id; do nothing
+}
+
+static Table *table_new_full(TableEqualFunc eq, TableHashFunc hash, TableFreeFunc free_key,
+                             const Table *p)
 {
     Table *t = xmalloc(sizeof(Table));
     t->size = 0;
     t->body_size = TABLE_INIT_SIZE;
     t->body = xcalloc(TABLE_INIT_SIZE, sizeof(List *)); // set NULL
+    t->eq = eq;
+    t->hash = hash;
+    t->free_key = free_key;
     t->parent = p;
     return t;
 }
 
 Table *table_new(void)
 {
-    return table_inherit(NULL);
+    return table_new_full(NULL, direct_hash, NULL, NULL);
+}
+
+static inline bool str_equal(uint64_t s, uint64_t t)
+{
+    return strcmp((const char *) s, (const char *) t) == 0;
+}
+
+static uint64_t str_hash(uint64_t x)
+{
+    uint64_t h = 0;
+    for (const char *s = (char *) x; *s != '\0'; s++)
+        h = h * 37U + *s;
+    return h;
+}
+
+Table *table_new_str(void)
+{
+    return table_new_full(str_equal, str_hash,
+                          (TableFreeFunc)(void*) free,
+                          NULL);
+}
+
+Table *table_inherit(const Table *p)
+{
+    return table_new_full(p->eq, p->hash, p->free_key, p);
 }
 
 void table_free(Table *t)
@@ -95,7 +140,7 @@ void table_free(Table *t)
     if (t == NULL)
         return;
     for (size_t i = 0; i < t->body_size; i++)
-        list_free(t->body[i]);
+        list_free(t->body[i], t->free_key);
     free(t->body);
     free(t);
 }
@@ -122,14 +167,9 @@ void table_dump(const Table *t)
     }
 }
 
-static inline uint64_t table_hash(uint64_t x)
-{
-    return x; // id; do nothing
-}
-
 static inline uint64_t body_index(const Table *t, uint64_t key)
 {
-    return table_hash(key) & (t->body_size - 1U);
+    return t->hash(key) & (t->body_size - 1U);
 }
 
 static inline bool table_too_many_elements(const Table *t)
@@ -180,10 +220,10 @@ Table *table_put(Table *t, uint64_t key, uint64_t value)
     return t;
 }
 
-static List *find1(const List *p, uint64_t key)
+static List *find1(const List *p, uint64_t key, TableEqualFunc eq)
 {
     for (; p != NULL; p = p->next) {
-        if (p->key == key) // direct
+        if (EQ(eq, p->key, key))
             return (List *) p;
     }
     return NULL;
@@ -194,7 +234,7 @@ static List *find(const Table *t, uint64_t key)
 {
     for (; t != NULL; t = t->parent) {
         uint64_t i = body_index(t, key);
-        List *found = find1(t->body[i], key);
+        List *found = find1(t->body[i], key, t->eq);
         if (found != NULL)
             return found;
     }
@@ -225,4 +265,12 @@ void table_foreach(const Table *t, TableForeachFunc f, void *data)
             (*f)(l->key, l->value, data);
         }
     }
+}
+
+char *xstrdup(const char *s)
+{
+    char *dup = strdup(s);
+    if (dup == NULL)
+        error("strdup(\"%s\") failed", s);
+    return dup;
 }

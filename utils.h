@@ -14,6 +14,7 @@
 ATTR(noreturn) ATTR(format(printf, 1, 2)) void error(const char *fmt, ...);
 ATTR_XMALLOC void *xmalloc(size_t size);
 ATTR_XMALLOC void *xcalloc(size_t nmem, size_t memsize);
+ATTR_XMALLOC char *xstrdup(const char *s);
 
 #define debug(fmt, ...) fprintf(stderr, fmt "\n" __VA_OPT__(,) __VA_ARGS__);
 
@@ -22,6 +23,7 @@ typedef void (*TableForeachFunc)(uint64_t key, uint64_t val, void *data);
 
 extern const uint64_t TABLE_NOT_FOUND;
 Table *table_new(void);
+Table *table_new_str(void);
 Table *table_inherit(const Table *t);
 void table_free(Table *t);
 Table *table_put(Table *t, uint64_t key, uint64_t val); // `val` can't be TABLE_NOT_FOUND
