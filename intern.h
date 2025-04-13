@@ -69,7 +69,6 @@ typedef struct {
 
 extern Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
 
-ATTR_HIDDEN bool value_is_immediate(Value v);
 ATTR_HIDDEN Value iparse(FILE *in, const char *filename);
 ATTR_HIDDEN void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col);
 ATTR_HIDDEN ATTR(noreturn) void raise_error(jmp_buf buf, const char *fmt, ...);
