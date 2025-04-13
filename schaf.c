@@ -424,6 +424,24 @@ static Value append2(Value l1, Value l2)
     return ret;
 }
 
+static Table *env_put(Table *env, Value sym, Value val)
+{
+    return table_put(env, value_to_symbol(sym), val);
+}
+
+static bool env_set(Table *env, Value sym, Value val)
+{
+    return table_set(env, value_to_symbol(sym), val);
+}
+
+static Value env_get(const Table *env, Value sym)
+{
+    Value found = table_get(env, value_to_symbol(sym));
+    if (found == TABLE_NOT_FOUND)
+        return Qundef;
+    return found;
+}
+
 static Value eval_body(Table *env, Value body);
 
 //PTR
@@ -434,10 +452,10 @@ static Value apply_closure(Value proc, Value args)
     Table *clenv = table_inherit(cl->env);
     Value params = cl->params;
     if (arity == -1)
-        table_put(clenv, params, args);
+        env_put(clenv, params, args);
     else {
         for (; args != Qnil; args = cdr(args), params = cdr(params))
-            table_put(clenv, car(params), car(args));
+            env_put(clenv, car(params), car(args));
     }
     return eval_body(clenv, cl->body); // XXX: table_free(clenv)?
 }
@@ -486,23 +504,15 @@ static Value apply(Table *env, Value proc, Value args)
 // Note: Do not mistake this for "(define-syntax ...)" which related to macros
 static void define_syntax(Table *env, const char *name, cfunc_t cfunc, int64_t arity)
 {
-    table_put(env, value_of_symbol(name), value_of_syntax(cfunc, arity));
+    env_put(env, value_of_symbol(name), value_of_syntax(cfunc, arity));
 }
 
 static void define_procedure(Table *env, const char *name, cfunc_t cfunc, int64_t arity)
 {
-    table_put(env, value_of_symbol(name), value_of_cfunc(cfunc, arity));
+    env_put(env, value_of_symbol(name), value_of_cfunc(cfunc, arity));
 }
 
 static Value assq(Value key, Value l);
-
-static Value lookup(const Table *env, Value name)
-{
-    Value found = (Value) table_get(env, name);
-    if (found == TABLE_NOT_FOUND)
-        return Qundef;
-    return found;
-}
 
 #define CXR1(f, x) f(a, x); f(d, x);
 #define CXR2(f, x) CXR1(f, a ## x) CXR1(f, d ## x)
@@ -570,7 +580,7 @@ static Value eval_apply(Table *env, Value l)
 
 static Value lookup_or_error(Table *env, Value v)
 {
-    Value p = lookup(env, v);
+    Value p = env_get(env, v);
     if (p == Qundef)
         runtime_error("unbound variable: %s", value_to_string(v));
     return p;
@@ -787,7 +797,7 @@ static Value syn_if(Table *env, Value args)
 // 4.1.6. Assignments
 static Value iset(Table *env, Value ident, Value val)
 {
-    bool found = table_set(env, ident, val);
+    bool found = env_set(env, ident, val);
     if (!found)
         runtime_error("set!: unbound variable: %s", value_to_string(ident));
     return Qnil;
@@ -912,7 +922,7 @@ static Value let(Table *env, Value var, Value bindings, Value body)
     }
     Table *letenv = table_inherit(env);
     Value proc = value_of_closure(letenv, params, body);
-    table_put(letenv, var, proc); // affects as proc->env
+    env_put(letenv, var, proc); // affects as proc->env
     Value ret = apply_closure(proc, args);
     table_free(letenv);
     return ret;
@@ -945,7 +955,7 @@ static Value let_star(Table *env, Value bindings, Value body)
         expect_type("let*", TYPE_SYMBOL, ident);
         letenv = table_inherit(letenv);
         Value val = eval(letenv, expr);
-        table_put(letenv, ident, val);
+        env_put(letenv, ident, val);
     }
     return eval_body(letenv, body);
 }
@@ -973,7 +983,7 @@ static Value syn_letrec(Table *env, Value args)
         Value ident = car(b);
         expect_type("letrec", TYPE_SYMBOL, ident);
         Value val = eval(letenv, cadr(b));
-        table_put(letenv, ident, val);
+        env_put(letenv, ident, val);
     }
     return eval_body_tmpenv(letenv, body);
 }
@@ -1003,7 +1013,7 @@ static Value syn_do(Table *env, Value args)
         expect_type("do", TYPE_SYMBOL, var);
         if (step != Qnil)
             steps = cons(cons(var, car(step)), steps);
-        table_put(doenv, var, eval(env, init)); // in the original env
+        env_put(doenv, var, eval(env, init)); // in the original env
     }
     Value test = car(tests), exprs = cdr(tests);
     while (eval(doenv, test) == Qfalse) {
@@ -1113,9 +1123,9 @@ static Value define_variable(Table *env, Value ident, Value expr)
     Value val = eval(env, expr);
     bool found = false;
     if (env == toplevel_environment)
-        found = table_set(env, ident, val);
+        found = env_set(env, ident, val);
     if (!found)
-        table_put(env, ident, val); // prepend new
+        env_put(env, ident, val); // prepend new
     return Qnil;
 }
 
@@ -1911,7 +1921,7 @@ static Value syn_defined_p(Table *env, Value name)
 {
     if (!value_is_symbol(name))
         return Qfalse;
-    return OF_BOOL(lookup(env, name) != Qundef);
+    return OF_BOOL(env_get(env, name) != Qundef);
 }
 
 int sch_fin(void)
