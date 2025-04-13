@@ -287,7 +287,7 @@ static Value value_of_syntax(cfunc_t cfunc, int64_t arity)
 static Value value_of_closure(Table *env, Value params, Value body)
 {
     Closure *f = obj_new(sizeof(Closure), TAG_CLOSURE);
-    f->proc.arity = value_is_pair(params) ? length(params) : -1;
+    f->proc.arity = (params == Qnil || value_is_pair(params)) ? length(params) : -1;
     f->env = env;
     f->params = params;
     f->body = body;
@@ -1446,7 +1446,7 @@ static Value proc_boolean_p(UNUSED Table *env, Value x)
 // 6.3.2. Pairs and lists
 static Value proc_pair_p(UNUSED Table *env, Value o)
 {
-    return OF_BOOL(o != Qnil && value_is_pair(o));
+    return OF_BOOL(value_is_pair(o));
 }
 
 Value cons(Value car, Value cdr)
