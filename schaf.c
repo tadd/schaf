@@ -72,6 +72,13 @@ static Value call_stack = Qnil; // list of pairs
 static const char *curr_cfunc_name;
 static Value source_data = Qnil; // (a)list of AST: (filename syntax_list newline_positions)
 // newline_positions: list of pos | int
+static jmp_buf jmp_runtime_error, jmp_exit;
+static uint8_t exit_status; // use uint8_t to be portable
+static char errmsg[BUFSIZ];
+
+#define internal_error(fmt, ...) \
+    error("[internal error] %s:%d of %s: " fmt, \
+          __FILE__, __LINE__, __func__ __VA_OPT__(,) __VA_ARGS__)
 
 //
 // value_is_*: Type Checks
@@ -200,7 +207,7 @@ static const char *unintern(Symbol sym)
 {
     const char *name = name_nth(symbol_names, (int64_t) sym);
     if (name == NULL) // fatal; every known symbols should have a name
-        error("symbol %lu not found", sym);
+        internal_error("symbol %lu not found", sym);
     return name;
 }
 
@@ -265,8 +272,8 @@ static void expect_cfunc_arity(int64_t actual)
 {
     if (actual <= CFUNCARG_MAX)
         return;
-    error("arity too large: expected ..%"PRId64" but got %"PRId64,
-          CFUNCARG_MAX, actual);
+    internal_error("arity too large: expected ..%"PRId64" but got %"PRId64,
+                   CFUNCARG_MAX, actual);
 }
 
 static Value value_of_cfunc(const char *name, cfunc_t cfunc, int64_t arity)
@@ -301,13 +308,6 @@ static Value value_of_closure(Table *env, Value params, Value body)
 //
 // Errors
 //
-
-#define error(fmt, ...) \
-    error("%s:%d of %s: " fmt, __FILE__, __LINE__, __func__ __VA_OPT__(,) __VA_ARGS__)
-
-static jmp_buf jmp_runtime_error, jmp_exit;
-static uint8_t exit_status; // to be portable
-static char errmsg[BUFSIZ];
 
 ATTR(noreturn)
 void raise_error(jmp_buf buf, const char *fmt, ...)
@@ -412,7 +412,7 @@ static Value apply_cfunc(Table *env, Value proc, Value args)
     case 3:
         return (*f)(env, a[0], a[1], a[2]);
     default:
-        error("arity too large: %"PRId64, n);
+        internal_error("arity too large: %"PRId64, n);
     }
 #if defined(__clang__) && __clang_major__ >= 15
 #pragma clang diagnostic pop
@@ -746,7 +746,7 @@ static FILE *open_loadable(const char *path)
 
     FILE *in = fopen(rpath, "r");
     if (in == NULL)
-        return NULL;
+        runtime_error("load: can't open file: %s", path);
     load_basedir = dirname(rpath);
     return in;
 }
@@ -1862,7 +1862,7 @@ char *stringify(Value v)
     size_t size;
     FILE *stream = open_memstream(&s, &size);
     if (stream == NULL)
-        error("open_memstream() failed");
+        internal_error("open_memstream() failed");
     fdisplay(stream, v);
     fclose(stream);
     return s;
