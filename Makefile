@@ -1,4 +1,4 @@
-CC = gcc
+CC = clang-19
 OPTFLAGS = -O0 -ggdb3 -DDEBUG
 CFLAGS = -std=gnu2x -Wall -Wextra -I. $(OPTFLAGS) $(XCFLAGS)
 LIBS = -lm

@@ -571,6 +571,7 @@ static void define_procedure(Value env, const char *name, void *cfunc, int64_t a
     env_put(env, value_of_symbol(name), value_of_cfunc(name, cfunc, arity));
 }
 
+#define returntail [[clang::musttail]] return
 //
 // Evaluation
 //
@@ -578,12 +579,14 @@ static Value eval(Value env, Value v);
 
 static Value eval_body(Value env, Value body)
 {
-    Value last = Qnil;
-    for (Value p = body; p != Qnil; p = cdr(p)) {
+    if (body == Qnil)
+        return Qnil;
+    Value p = body, last = Qnil;
+    for (Value next; (next = cdr(p)) != Qnil; p = next) {
         last = eval(env, car(p));
         CHECK_ERROR(last);
     }
-    return last;
+    returntail eval(env, car(p));
 }
 
 static Value map_eval(Value env, Value l)
@@ -616,7 +619,7 @@ static Value push_stack_frame(Value ve, const char *name, Value loc)
 static Value apply(Value env, Value proc, Value args)
 {
     EXPECT(arity, PROCEDURE(proc)->arity, args);
-    return PROCEDURE(proc)->apply(env, proc, args);
+    returntail PROCEDURE(proc)->apply(env, proc, args);
 }
 
 static Value eval_apply(Value env, Value l)
@@ -649,10 +652,10 @@ static Value lookup_or_error(Value env, Value v)
 static Value eval(Value env, Value v)
 {
     if (value_is_symbol(v))
-        return lookup_or_error(env, v);
+        returntail lookup_or_error(env, v);
     if (v == Qnil || !value_is_pair(v))
         return v;
-    return eval_apply(env, v);
+    returntail eval_apply(env, v);
 }
 
 [[gnu::format(printf, 1, 2)]]
@@ -870,11 +873,11 @@ static Value syn_if(Value env, Value args)
     Value v = eval(env, cond);
     CHECK_ERROR(v);
     if (v != Qfalse)
-        return eval(env, then);
+        returntail eval(env, then);
     Value els = cddr(args);
     if (els == Qnil)
         return Qfalse;
-    return eval(env, car(els));
+    returntail eval(env, car(els));
 }
 
 // 4.1.6. Assignments
@@ -891,7 +894,7 @@ static Value syn_set(Value env, Value ident, Value expr)
     EXPECT(type, TYPE_SYMBOL, ident);
     Value v = eval(env, expr);
     CHECK_ERROR(v);
-    return iset(env, ident, v);
+    returntail iset(env, ident, v);
 }
 
 // 4.2. Derived expression types
@@ -918,7 +921,7 @@ static Value syn_cond(Value env, Value clauses)
         Value test = car(clause);
         Value exprs = cdr(clause);
         if (test == SYM_ELSE)
-            return eval_body(env, exprs);
+            returntail eval_body(env, exprs);
         Value t = eval(env, test);
         CHECK_ERROR(t);
         if (t != Qfalse) {
@@ -926,7 +929,7 @@ static Value syn_cond(Value env, Value clauses)
                 return t;
             if (car(exprs) == SYM_RARROW)
                 return cond_eval_recipient(env, t, cdr(exprs));
-            return eval_body(env, exprs);
+            returntail eval_body(env, exprs);
         }
     }
     return Qfalse;
@@ -954,40 +957,56 @@ static Value syn_case(Value env, Value args)
         Value data = car(clause), exprs = cdr(clause);
         EXPECT(type, TYPE_PAIR, exprs);
         if (data == SYM_ELSE)
-            return eval_body(env, exprs);
+            returntail eval_body(env, exprs);
         EXPECT(type, TYPE_PAIR, data);
         if (memq(key, data) != Qfalse)
-            return eval_body(env, exprs);
+            returntail eval_body(env, exprs);
     }
     return Qfalse;
+}
+
+static Value iand(Value env, Value args)
+{
+    Value curr = car(args), next = cdr(args), v;
+    if (next == Qnil)
+        returntail eval(env, curr);
+    if ((v = eval(env, curr)) == Qfalse)
+        return Qfalse;
+    CHECK_ERROR(v);
+    returntail iand(env, next);
 }
 
 //PTR
 static Value syn_and(Value env, Value args)
 {
-    Value last = Qtrue;
-    for (Value p = args; p != Qnil; p = cdr(p)) {
-        if ((last = eval(env, car(p))) == Qfalse)
-            break;
-        CHECK_ERROR(last);
-    }
-    return last;
+    if (args == Qnil)
+        return Qtrue;
+    returntail iand(env, args);
+}
+
+static Value ior(Value env, Value args)
+{
+    Value curr = car(args), next = cdr(args);
+    if (next == Qnil)
+        returntail eval(env, curr);
+    Value v = eval(env, curr);
+    if (v != Qfalse)
+        return v;
+    returntail ior(env, next);
 }
 
 //PTR
 static Value syn_or(Value env, Value args)
 {
-    Value last = Qfalse;
-    for (Value p = args; p != Qnil; p = cdr(p)) {
-        if ((last = eval(env, car(p))) != Qfalse) // include errors
-            break;
-    }
-    return last;
+    if (args == Qnil)
+        return Qfalse;
+    returntail ior(env, args);
 }
 
 // 4.2.2. Binding constructs
-static Value let(Value env, Value var, Value bindings, Value body)
+static Value let(Value env, Value tripl)
 {
+    Value var = car(tripl), bindings = cadr(tripl), body = caddr(tripl);
     EXPECT(list_head, bindings);
     bool named = var != Qfalse;
     Value letenv = env_inherit(env);
@@ -1012,6 +1031,8 @@ static Value let(Value env, Value var, Value bindings, Value body)
     return eval_body(letenv, body);
 }
 
+#define list3(a,b,c) list2_const(a, list2_const(b, c))
+
 //PTR
 static Value syn_let(Value env, Value args)
 {
@@ -1023,11 +1044,12 @@ static Value syn_let(Value env, Value args)
         bindings = car(body);
         body = cdr(body);
     }
-    return let(env, var, bindings, body);
+    returntail let(env, list3(var, bindings, body));
 }
 
-static Value let_star(Value env, Value bindings, Value body)
+static Value let_star(Value env, Value args)
 {
+    Value bindings = car(args), body = cdr(args);
     EXPECT(list_head, bindings);
     Value letenv = env;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
@@ -1049,7 +1071,7 @@ static Value let_star(Value env, Value bindings, Value body)
 static Value syn_let_star(Value env, Value args)
 {
     EXPECT(arity_min, 2, args);
-    return let_star(env, car(args), cdr(args));
+    return let_star(env, args);
 }
 
 //PTR
@@ -1071,14 +1093,14 @@ static Value syn_letrec(Value env, Value args)
         CHECK_ERROR(val);
         env_put(letenv, ident, val);
     }
-    return eval_body(letenv, body);
+    returntail eval_body(letenv, body);
 }
 
 // 4.2.3. Sequencing
 //PTR
 static Value syn_begin(Value env, Value body)
 {
-    return eval_body(env, body);
+    returntail eval_body(env, body);
 }
 
 // 4.2.4. Iteration
@@ -1118,7 +1140,7 @@ static Value syn_do(Value env, Value args)
         }
     }
     CHECK_ERROR(v);
-    return eval_body(doenv, exprs);
+    returntail eval_body(doenv, exprs);
 }
 
 // 4.2.6. Quasiquotation
@@ -1139,11 +1161,13 @@ static Value qq(Value env, Value datum, int64_t depth)
     }
     if (a == SYM_UNQUOTE || a == SYM_UNQUOTE_SPLICING) {
         EXPECT(type, TYPE_PAIR, d);
+        if (depth == 1)
+            returntail qq(env, car(d), depth - 1);
         Value v = qq(env, car(d), depth - 1);
         CHECK_ERROR(v);
-        return depth == 1 ? v : list2_const(a, v);
+        return list2_const(a, v);
     }
-    return qq_list(env, datum, depth);
+    returntail qq_list(env, datum, depth);
 }
 
 static Value last_pair(Value l)
