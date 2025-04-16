@@ -91,6 +91,11 @@ static inline Value list2(Value x, Value y)
     return cons(x, list1(y));
 }
 
+static inline Value list3(Value x, Value y, Value z)
+{
+    return cons(x, list2(y, z));
+}
+
 #define DUMMY_PAIR() ((Value) &(Pair) { .tag = TAG_PAIR, .car = Qundef, .cdr = Qnil })
 
 #endif // INTERN_H

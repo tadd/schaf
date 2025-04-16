@@ -417,11 +417,6 @@ static Parser *parser_new(FILE *in, const char *filename)
     return p;
 }
 
-static inline Value list3(Value x, Value y, Value z)
-{
-    return cons(x, list2(y, z));
-}
-
 // AST: (filename syntax_list newline_positions)
 static Value ast_new(Parser *p, Value syntax_list)
 {

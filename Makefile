@@ -1,4 +1,4 @@
-CC = gcc
+CC = clang-16
 OPTFLAGS = -O0 -ggdb3
 CFLAGS = -std=gnu17 -Wall -Wextra -I. $(OPTFLAGS) $(XCFLAGS)
 LIBS = -lm
