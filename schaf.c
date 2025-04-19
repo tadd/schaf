@@ -464,11 +464,11 @@ ATTR(noreturn) ATTR(noinline)
 static void jump(Continuation *cont)
 {
     call_stack = cont->call_stack;
-    memcpy((void *) cont->sp, cont->shelter, cont->shelter_len);
+    memcpy(cont->sp, cont->shelter, cont->shelter_len);
     longjmp(cont->state, 1);
 }
 
-#define GET_SP(p) volatile void *p = &p
+#define GET_SP(p) uintptr_t v##p = 0, *p = &v##p
 
 ATTR(noreturn) ATTR(noinline)
 static void apply_continuation(Value f, Value args)
@@ -479,7 +479,7 @@ static void apply_continuation(Value f, Value args)
     int64_t d = sp - cont->sp;
     if (d < 1)
         d = 1;
-    volatile uint8_t pad[d];
+    volatile uintptr_t pad[d];
     pad[0] = pad[d-1] = 0; // avoid unused
     jump(cont);
 }
@@ -1783,7 +1783,7 @@ static bool continuation_set(Value c)
     cont->sp = sp;
     cont->shelter_len = gc_stack_get_size(sp);
     cont->shelter = xmalloc(cont->shelter_len);
-    memcpy(cont->shelter, (void *) sp, cont->shelter_len);
+    memcpy(cont->shelter, sp, cont->shelter_len);
     cont->call_stack = call_stack;
     return setjmp(cont->state) != 0;
 }
@@ -1947,7 +1947,7 @@ int sch_exit_status(void)
     }
 CXRS(DEF_CXR_BUILTIN)
 
-void sch_init(volatile void *sp)
+void sch_init(uintptr_t *sp)
 {
     gc_init(sp);
 

@@ -51,7 +51,7 @@ typedef struct {
 
 typedef struct {
     Procedure proc;
-    volatile void *sp;
+    uintptr_t *sp;
     void *shelter;
     size_t shelter_len;
     Value call_stack;
@@ -75,10 +75,10 @@ ATTR_HIDDEN ATTR(noreturn) void raise_error(jmp_buf buf, const char *fmt, ...);
 ATTR_HIDDEN Value reverse(Value l);
 ATTR_HIDDEN void *obj_new(size_t size, ValueTag t);
 
-ATTR_HIDDEN void gc_init(volatile void *base_sp);
+ATTR_HIDDEN void gc_init(uintptr_t *base_sp);
 ATTR_HIDDEN void gc_fin(void);
 
-ATTR_HIDDEN size_t gc_stack_get_size(const volatile void *sp);
+ATTR_HIDDEN size_t gc_stack_get_size(uintptr_t *sp);
 ATTR_HIDDEN ATTR_XMALLOC void *gc_malloc(size_t size);
 
 static inline Value list1(Value x)

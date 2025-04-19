@@ -22,7 +22,7 @@ static size_t init_size = 1 * MiB;
 // 64 is enough large, it can use up the entire 64-bit memory space
 static Heap *heaps[64];
 static size_t heaps_length;
-static const volatile uint8_t *stack_base;
+static uintptr_t *stack_base;
 
 static bool stress;
 
@@ -58,7 +58,7 @@ void gc_fin(void)
     }
 }
 
-void gc_init(volatile void *sp)
+void gc_init(uintptr_t *sp)
 {
     stack_base = sp;
     init_size = align(init_size);
@@ -77,9 +77,9 @@ static void *allocate(size_t size)
     return ret;
 }
 
-size_t gc_stack_get_size(const volatile void *sp)
+size_t gc_stack_get_size(uintptr_t *sp)
 {
-    return stack_base - (uint8_t *) sp;
+    return (uint8_t *) stack_base - (uint8_t *) sp;
 }
 
 static bool enough_free_space(void)
