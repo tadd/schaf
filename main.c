@@ -42,16 +42,16 @@ typedef struct {
     bool parse_only;
     bool cputime;
     bool memory;
-    size_t init_heap_size;
+    double init_heap_size_mib;
     bool stress_gc;
 } Option;
 
-static long parse_posint(const char *s)
+static double parse_posnum(const char *s)
 {
     char *ep;
-    long val = strtol(s, &ep, 10);
+    double val = strtod(s, &ep);
     if (val <= 0 || ep[0] != '\0')
-        error("invalid positive integer '%s'", s);
+        error("invalid positive number '%s'", s);
     return val;
 }
 
@@ -64,7 +64,7 @@ static Option parse_opt(int argc, char *const *argv)
         .parse_only = false,
         .cputime = false,
         .memory = false,
-        .init_heap_size = 0,
+        .init_heap_size_mib = 0.0,
         .stress_gc = false,
     };
     int opt;
@@ -74,7 +74,7 @@ static Option parse_opt(int argc, char *const *argv)
             o.script = optarg;
             break;
         case 'H':
-            o.init_heap_size = parse_posint(optarg);
+            o.init_heap_size_mib = parse_posnum(optarg);
             break;
         case 'M':
             o.memory = true;
@@ -143,8 +143,8 @@ int main(int argc, char **argv)
 {
     Option o = parse_opt(argc, argv);
     sch_set_gc_stress(o.stress_gc);
-    if (o.init_heap_size > 0)
-        sch_set_gc_init_size(o.init_heap_size);
+    if (o.init_heap_size_mib > 0.0)
+        sch_set_gc_init_size(o.init_heap_size_mib);
 
     SCH_INIT();
     Value v;

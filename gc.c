@@ -26,9 +26,9 @@ static const volatile uint8_t *stack_base;
 
 static bool stress;
 
-void sch_set_gc_init_size(size_t init_mib)
+void sch_set_gc_init_size(double init_mib)
 {
-    init_size = init_mib * MiB;
+    init_size = round(init_mib * MiB);
 }
 
 void sch_set_gc_stress(bool b)
