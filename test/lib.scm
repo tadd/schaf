@@ -72,3 +72,7 @@
             n-success " succeeded, "
             n-failure " failed.")
   (newline))
+
+(define (test-init)
+  (set! n-failure 0)
+  (set! n-success 0))
