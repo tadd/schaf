@@ -62,6 +62,8 @@ test-scheme: schaf
 	$(TIMEOUT) ./$< test/test.scm
 test-scheme-san: schaf-san
 	$(TIMEOUT) ./$< test/test.scm
+test-scheme-stress: schaf
+	./$< -S test/test.scm
 
 test/basic-test: $(OBJ_TEST)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) -lcriterion
