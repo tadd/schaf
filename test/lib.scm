@@ -1,7 +1,6 @@
 (define tests '())
 (define n-failure 0)
 (define n-success 0)
-(define test-name '())
 
 (define (describe name f)
   (set! tests `((,name . ,f) . ,tests)))
@@ -64,10 +63,9 @@
   (exit (zero? n-failure)))
 
 (define (test-run-single pair)
-  (let ((name (car pair))
+  (let ((test-name (car pair))
         (func (cdr pair)))
-    (set! test-name name)
-    (func)))
+      (func)))
 
 (define (test-summarize)
   (display* "Test summary: "
