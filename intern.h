@@ -32,7 +32,8 @@ typedef enum {
 
 typedef enum {
     TAG_PAIR,
-    TAG_STRING,
+    TAG_HSTRING,
+    TAG_ESTRING,
     TAG_CFUNC,
     TAG_SYNTAX, // almost a C Function
     TAG_CLOSURE,
@@ -53,7 +54,6 @@ typedef struct {
 } Header;
 
 typedef struct {
-    Header header; // common
     Value car, cdr;
 } Pair;
 
@@ -61,11 +61,6 @@ typedef struct {
     Pair pair;   // inherit
     int64_t pos; // value from ftell(3)
 } LocatedPair;
-
-typedef struct {
-    Header header;
-    char body[];
-} String;
 
 typedef struct {
     Header header;
@@ -98,12 +93,16 @@ typedef struct {
 } Closure;
 
 typedef struct {
-    Procedure proc;
     uintptr_t *sp;
     void *stack;
     size_t stack_len;
-    jmp_buf state;
+    jmp_buf regs;
+} ExecutionState;
+
+typedef struct {
+    Procedure proc;
     Value retval;
+    ExecutionState *exstate;
 } Continuation;
 
 typedef struct {
@@ -115,7 +114,7 @@ typedef struct {
     Header header;
     Value parent;
     Table *table;
-    char name[];
+    char *name;
 } Env;
 
 typedef enum {
@@ -124,7 +123,6 @@ typedef enum {
 } PortType;
 
 typedef struct {
-    Header header;
     FILE *fp;
     PortType type;
     char *string;
@@ -136,25 +134,43 @@ typedef struct {
 } StackFrame;
 
 typedef struct {
-    Header header;
-    StackFrame **call_stack;
-} Error;
+    Header header; // common
+    union {
+        alignas(16) Header *next;
+        char *hstring;
+        char estring[sizeof(Continuation)];// may be the largest
+        Pair pair;
+        LocatedPair lpair;
+        Procedure proc;
+        CFunc cfunc;
+        Closure closure;
+        Continuation continuation;
+        CFuncClosure cfunc_closure;
+        Value *vector;// use scary
+        Env env;
+        Port port;
+        StackFrame **error;// ditto
+    };
+} SchObject;
 
-#define HEADER(v) ((Header *) v)
+#define OBJ(v) ((SchObject *) v)
+#define HEADER(v) (&OBJ(v)->header)
 #define VALUE_TAG(v) (HEADER(v)->tag)
 
-#define PAIR(v) ((Pair *) v)
-#define LOCATED_PAIR(v) ((LocatedPair *) v)
-#define STRING(v) (((String *) v)->body)
-#define PROCEDURE(v) ((Procedure *) v)
-#define CFUNC(v) ((CFunc *) v)
-#define CLOSURE(v) ((Closure *) v)
-#define CONTINUATION(v) ((Continuation *) v)
-#define CFUNC_CLOSURE(v) ((CFuncClosure *) v)
-#define VECTOR(v) (((Vector *) v)->body)
-#define ENV(v) ((Env *) v)
-#define PORT(v) ((Port *) v)
-#define ERROR(v) (((Error *) v)->call_stack)
+#define PAIR(v) (&OBJ(v)->pair)
+#define LOCATED_PAIR(v) (&OBJ(v)->lpair)
+#define ESTRING(v) (OBJ(v)->estring)
+#define HSTRING(v) (OBJ(v)->hstring)
+#define STRING(v) (VALUE_TAG(v) == TAG_HSTRING ? HSTRING(v) : ESTRING(v))
+#define PROCEDURE(v) (&OBJ(v)->proc)
+#define CFUNC(v) (&OBJ(v)->cfunc)
+#define CLOSURE(v) (&OBJ(v)->closure)
+#define CONTINUATION(v) (&OBJ(v)->continuation)
+#define CFUNC_CLOSURE(v) (&OBJ(v)->cfunc_closure)
+#define VECTOR(v) (OBJ(v)->vector)
+#define ENV(v) (&OBJ(v)->env)
+#define PORT(v) (&OBJ(v)->port)
+#define ERROR(v) (OBJ(v)->error)
 
 typedef struct {
     int64_t *newline_pos; // list of position | int
@@ -170,7 +186,7 @@ Source *iparse(FILE *in, const char *filename);
 Value parse_datum(FILE *in, const char *filename);
 void pos_to_line_col(int64_t pos, int64_t *newline_pos, int64_t *line, int64_t *col);
 [[gnu::noreturn]] void raise_error(jmp_buf buf, const char *fmt, ...);
-void *obj_new(size_t size, ValueTag t);
+SchObject *obj_new(ValueTag t);
 void source_free(Source *s);
 
 void gc_init(const uintptr_t *volatile base_sp);
@@ -211,11 +227,12 @@ static inline Value list1(Value x)
 
 static Value cons_const(Value car, Value cdr)
 {
-    Pair *p = obj_new(sizeof(Pair), TAG_PAIR);
+    SchObject *o = obj_new(TAG_PAIR);
+    HEADER(o)->immutable = true;
+    Pair *p = PAIR(o);
     p->car = car;
     p->cdr = cdr;
-    HEADER(p)->immutable = true;
-    return (Value) p;
+    return (Value) o;
 }
 
 static inline Value list1_const(Value x)
@@ -228,9 +245,9 @@ static inline Value list2_const(Value x, Value y)
     return cons_const(x, list1_const(y));
 }
 
-#define DUMMY_PAIR() ((Value) &(Pair) { \
+#define DUMMY_PAIR() ((Value) &(SchObject) { \
             .header = { .tag = TAG_PAIR, .immutable = false }, \
-            .car = Qundef, .cdr = Qnil \
+            .pair = { .car = Qundef, .cdr = Qnil } \
         })
 
 #endif // INTERN_H

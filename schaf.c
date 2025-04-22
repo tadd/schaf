@@ -97,7 +97,10 @@ static inline bool value_tag_is(Value v, ValueTag expected)
 
 inline bool sch_value_is_string(Value v)
 {
-    return value_tag_is(v, TAG_STRING);
+    if (value_is_immediate(v))
+        return false;
+    ValueTag t = VALUE_TAG(v);
+    return t == TAG_HSTRING || t == TAG_ESTRING;
 }
 
 #define bug_invalid_tag(t) bug("got invalid tag %u", t)
@@ -113,7 +116,8 @@ static inline bool value_is_procedure(Value v)
     case TAG_CONTINUATION:
     case TAG_CFUNC_CLOSURE:
         return true;
-    case TAG_STRING:
+    case TAG_HSTRING:
+    case TAG_ESTRING:
     case TAG_PAIR:
     case TAG_VECTOR:
     case TAG_ENV:
@@ -156,7 +160,8 @@ Type sch_value_type_of(Value v)
     if (value_is_immediate(v))
         return immediate_type_of(v);
     switch (VALUE_TAG(v)) {
-    case TAG_STRING:
+    case TAG_HSTRING:
+    case TAG_ESTRING:
         return TYPE_STRING;
     case TAG_PAIR:
         return TYPE_PAIR;
@@ -293,26 +298,49 @@ inline Value sch_symbol_new(const char *s)
     return (Value) (sym << FLAG_NBIT_SYM | FLAG_SYM);
 }
 
-void *obj_new(size_t size, ValueTag t)
+SchObject *obj_new(ValueTag t)
 {
-    void *p = gc_malloc(size);
+    SchObject *p = gc_malloc(sizeof(SchObject));
     Header *h = HEADER(p);
     h->tag = t;
     h->immutable = false;
     return p;
 }
 
-static Value string_new_sized(size_t size)
+static Value string_in_heap(char *str) // moved
 {
-    return (Value) obj_new(sizeof(String) + size, TAG_STRING);
+    SchObject *o = obj_new(TAG_HSTRING);
+    HSTRING(o) = str; // move ownership then use as is
+    return (Value) o;
 }
 
-Value sch_string_new(const char *s)
+static Value string_embedded(const char *str)
 {
-    size_t len = strlen(s);
-    String *str = obj_new(sizeof(String) + len + 1, TAG_STRING);
-    strcpy(STRING(str), s);
-    return (Value) str;
+    SchObject *o = obj_new(TAG_ESTRING);
+    strcpy(ESTRING(o), str);
+    return (Value) o;
+}
+
+static bool is_string_embeddable(const char *str)
+{
+    return strlen(str) + 1 <= sizeof(((SchObject *) NULL)->estring);
+}
+
+static Value string_new_moved(char *str)
+{
+    if (is_string_embeddable(str)) {
+        Value s = string_embedded(str);
+        free(str);
+        return s;
+    }
+    return string_in_heap(str);
+}
+
+Value sch_string_new(const char *str)
+{
+    if (is_string_embeddable(str))
+        return string_embedded(str);
+    return string_in_heap(xstrdup(str));
 }
 
 static void expect_cfunc_arity(int64_t actual)
@@ -379,7 +407,8 @@ static Value apply_cfunc_3(Value env, Value f, Value args)
 static Value cfunc_new_internal(ValueTag tag, const char *name, void *cfunc, int64_t arity)
 {
     expect_cfunc_arity(arity);
-    CFunc *f = obj_new(sizeof(CFunc), tag);
+    SchObject *o = obj_new(tag);
+    CFunc *f = CFUNC(o);
     f->proc.arity = arity;
     f->name = xstrdup(name);
     f->cfunc = cfunc;
@@ -402,7 +431,7 @@ static Value cfunc_new_internal(ValueTag tag, const char *name, void *cfunc, int
     default:
         bug("invalid arity: %"PRId64, arity);
     }
-    return (Value) f;
+    return (Value) o;
 }
 
 static Value cfunc_new(const char *name, void *cfunc, int64_t arity)
@@ -425,16 +454,17 @@ static Value cfunc_closure_new(const char *name, void *cfunc,
                                int64_t arity, Value data)
 {
     expect_cfunc_arity(arity);
-    CFuncClosure *cc = obj_new(sizeof(CFuncClosure), TAG_CFUNC_CLOSURE);
+    SchObject *o = obj_new(TAG_CFUNC_CLOSURE);
+    CFuncClosure *cc = CFUNC_CLOSURE(o);
     cc->data = data;
-    CFunc *f = CFUNC(cc);
+    CFunc *f = CFUNC(o);
     f->proc.arity = arity;
+    f->proc.apply = apply_cfunc_closure_1;
     f->name = xstrdup(name);
     f->cfunc = cfunc;
     if (UNLIKELY(arity != 1))
         bug("invalid arity: %"PRId64, arity);
-    f->proc.apply = apply_cfunc_closure_1;
-    return (Value) cc;
+    return (Value) o;
 }
 
 static Value eval_body(Value env, Value body);
@@ -461,13 +491,15 @@ static Value apply_closure(UNUSED Value env, Value proc, Value args)
 
 static Value closure_new(Value env, Value params, Value body)
 {
-    Closure *f = obj_new(sizeof(Closure), TAG_CLOSURE);
-    f->proc.arity = (params == Qnil || sch_value_is_pair(params)) ? length(params) : -1;
+    SchObject *o = obj_new(TAG_CLOSURE);
+    bool headp = (params == Qnil || sch_value_is_pair(params));
+    Closure *f = CLOSURE(o);
+    f->proc.arity = headp ? length(params) : -1;
     f->proc.apply = apply_closure;
     f->env = env;
     f->params = params;
     f->body = body;
-    return (Value) f;
+    return (Value) o;
 }
 
 // and `cons` is well-known name than `pair_new`
@@ -494,9 +526,9 @@ static Value runtime_error(const char *fmt, ...)
     vsnprintf(errmsg, sizeof(errmsg), fmt, ap);
     va_end(ap);
 
-    Error *e = obj_new(sizeof(Error), TAG_ERROR);
-    e->call_stack = scary_new(sizeof(StackFrame *));
-    return (Value) e;
+    SchObject *o = obj_new(TAG_ERROR);
+    ERROR(o) = scary_new(sizeof(StackFrame *));
+    return (Value) o;
 }
 
 const char *sch_error_message(void)
@@ -608,25 +640,24 @@ static Value expect_arity_3(Value args)
 [[gnu::nonnull(1)]]
 static Value env_new(const char *name)
 {
-    size_t len = strlen(name);
-    Env *e = obj_new(sizeof(Env) + len + 1, TAG_ENV);
+    SchObject *o = obj_new(TAG_ENV);
+    Env *e = ENV(o);
     e->table = table_new();
     e->parent = Qfalse;
-    strcpy(e->name, name);
-    return (Value) e;
+    e->name = xstrdup(name);
+    return (Value) o;
 }
 
 static Value env_dup(const char *name, const Value orig)
 {
     if (UNLIKELY(ENV(orig)->parent != Qfalse))
         bug("duplication of chained environment not permitted");
-    const char *n = name != NULL ? name : ENV(orig)->name;
-    size_t len = strlen(n);
-    Env *e = obj_new(sizeof(Env) + len + 1, TAG_ENV);
+    SchObject *o = obj_new(TAG_ENV);
+    Env *e = ENV(o);
+    e->name = xstrdup(name != NULL ? name : ENV(orig)->name);
     e->table = table_dup(ENV(orig)->table);
     e->parent = Qfalse;
-    strcpy(e->name, n);
-    return (Value) e;
+    return (Value) o;
 }
 
 static Value env_inherit(Value parent)
@@ -1701,10 +1732,11 @@ static Value proc_pair_p(UNUSED Value env, Value o)
 
 Value cons(Value car, Value cdr)
 {
-    Pair *p = obj_new(sizeof(Pair), TAG_PAIR);
+    SchObject *o = obj_new(TAG_PAIR);
+    Pair *p = PAIR(o);
     p->car = car;
     p->cdr = cdr;
-    return (Value) p;
+    return (Value) o;
 }
 
 inline Value car(Value v)
@@ -1988,20 +2020,19 @@ static Value proc_string_append(UNUSED Value env, Value args)
         EXPECT(type, TYPE_STRING, v);
         len += strlen(STRING(v));
     }
-    Value v = string_new_sized(len + 1);
-    char *s = STRING(v);
+    char *s = xmalloc(len + 1);
     s[0] = '\0';
     for (Value p = args; p != Qnil; p = cdr(p))
         strcat(s, STRING(car(p)));
-    return v;
+    return string_new_moved(s);
 }
 
 // 6.3.6. Vectors
 Value vector_new(void)
 {
-    Vector *v = obj_new(sizeof(Vector), TAG_VECTOR);
-    v->body = scary_new(sizeof(Value));
-    return (Value) v;
+    SchObject *o = obj_new(TAG_VECTOR);
+    VECTOR(o) = scary_new(sizeof(Value));
+    return (Value) o;
 }
 
 Value vector_push(Value v, Value e)
@@ -2144,8 +2175,8 @@ static Value proc_for_each(Value env, Value args)
 [[gnu::noreturn, gnu::noinline]]
 static void jump(Continuation *cont)
 {
-    memcpy(cont->sp, cont->stack, cont->stack_len);
-    longjmp(cont->state, 1);
+    memcpy(cont->exstate->sp, cont->exstate->stack, cont->exstate->stack_len);
+    longjmp(cont->exstate->regs, 1);
 }
 
 #define GET_SP(p) uintptr_t v##p = 0, *volatile p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
@@ -2157,7 +2188,7 @@ static Value apply_continuation(UNUSED Value env, Value f, Value args)
     EXPECT(arity, PROCEDURE(f)->arity, args);
     Continuation *cont = CONTINUATION(f);
     cont->retval = PROCEDURE(f)->arity == 1 ? car(args) : args;
-    int64_t d = sp - cont->sp;
+    int64_t d = sp - cont->exstate->sp;
     if (d < 1)
         d = 1;
     volatile uintptr_t pad[d];
@@ -2165,15 +2196,24 @@ static Value apply_continuation(UNUSED Value env, Value f, Value args)
     jump(cont);
 }
 
+static ExecutionState *execstate_new(void)
+{
+    ExecutionState *s = xmalloc(sizeof(ExecutionState));
+    s->sp = NULL;
+    s->stack = NULL;
+    s->stack_len = 0;
+    return s;
+}
+
 static Value continuation_new(int64_t n)
 {
-    Continuation *c = obj_new(sizeof(Continuation), TAG_CONTINUATION);
+    SchObject *o = obj_new(TAG_CONTINUATION);
+    Continuation *c = CONTINUATION(o);
     c->proc.arity = n; // call/cc: 1, call-with-values: -1
     c->proc.apply = apply_continuation;
-    c->sp = c->stack = NULL;
-    c->stack_len = 0;
     c->retval = Qfalse;
-    return (Value) c;
+    c->exstate = execstate_new();
+    return (Value) o;
 }
 
 [[gnu::noinline]]
@@ -2181,12 +2221,12 @@ static bool continuation_set(Value c)
 {
     GET_SP(sp); // must be the first!
     Continuation *cont = CONTINUATION(c);
-    cont->sp = sp;
-    cont->stack_len = gc_stack_get_size(sp);
-    cont->stack = xmalloc(cont->stack_len);
-    UNPOISON(sp, cont->stack_len);
-    memcpy(cont->stack, sp, cont->stack_len);
-    return setjmp(cont->state) != 0;
+    cont->exstate->sp = sp;
+    cont->exstate->stack_len = gc_stack_get_size(sp);
+    cont->exstate->stack = xmalloc(cont->exstate->stack_len);
+    UNPOISON(sp, cont->exstate->stack_len);
+    memcpy(cont->exstate->stack, sp, cont->exstate->stack_len);
+    return setjmp(cont->exstate->regs) != 0;
 }
 
 // shared with dynamic-wind
@@ -2367,11 +2407,12 @@ static Value proc_output_port_p(UNUSED Value env, Value port)
 
 static Value port_new(FILE *fp, PortType type)
 {
-    Port *p = obj_new(sizeof(Port), TAG_PORT);
+    SchObject *o = obj_new(TAG_PORT);
+    Port *p = PORT(o);
     p->fp = fp;
     p->type = type;
     p->string = NULL;
-    return (Value) p;
+    return (Value) o;
 }
 
 static Value get_current_input_port(void)
@@ -2463,7 +2504,7 @@ static Value proc_close_port(UNUSED Value env, Value port)
 static Value eof_new(void)
 {
     // an empty object
-    return (Value) obj_new(sizeof(Header), TAG_EOF);
+    return (Value) obj_new(TAG_EOF);
 }
 
 static Value get_eof_object(void)
@@ -2561,9 +2602,8 @@ static const char *file_to_name(const FILE *fp)
         NULL;
 }
 
-static void display_port(FILE *f, const Port *p)
+static void display_port(FILE *f, const FILE *fp)
 {
-    FILE *fp = p->fp;
     const char *name = file_to_name(fp);
     if (name != NULL)
         fprintf(f, "<port: %s>", name);
@@ -2611,7 +2651,7 @@ static void fdisplay_rec(FILE* f, Value v, Value record)
         fprintf(f, "<environment: %s>", ENV(v)->name);
         break;
     case TYPE_PORT:
-        display_port(f, PORT(v));
+        display_port(f, PORT(v)->fp);
         break;
     case TYPE_EOF:
         fprintf(f, "<eof>");
@@ -2698,14 +2738,15 @@ static Value proc_read_string(UNUSED Value env, Value args)
 
 static Value string_port_new(void)
 {
-    Port *p = PORT(port_new(NULL, PORT_OUTPUT));
+    Value o = port_new(NULL, PORT_OUTPUT);
+    Port *p = PORT(o);
     p->string = (void *) 1U; // non-NULL dummy value to indicate string port 
     errno = 0;
     FILE *fp = mopen_w(&p->string);
     if (fp == NULL)
         return runtime_error("open_memstream failed: %s", strerror(errno));
     p->fp = fp;
-    return (Value) p;
+    return (Value) o;
 }
 
 static Value proc_open_output_string(UNUSED Value env)
