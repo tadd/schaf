@@ -263,9 +263,9 @@ inline Value value_of_symbol(const char *s)
     return (Value) (sym << FLAG_NBIT_SYM | FLAG_SYM);
 }
 
-void *obj_new(size_t size, ValueTag t)
+SchObject *obj_new(ValueTag t)
 {
-    void *p = gc_malloc(size);
+    SchObject *p = gc_malloc(sizeof(SchObject));
     Header *h = HEADER(p);
     h->tag = t;
     h->immutable = false;
@@ -274,9 +274,10 @@ void *obj_new(size_t size, ValueTag t)
 
 Value value_of_string(const char *s)
 {
-    String *str = obj_new(sizeof(String), TAG_STRING);
+    SchObject *o = obj_new(TAG_STRING);
+    String *str = STRING(o);
     str->body = xstrdup(s);
-    return (Value) str;
+    return (Value) o;
 }
 
 static void expect_cfunc_arity(int64_t actual)
@@ -317,7 +318,9 @@ static Value apply_cfunc_3(Value env, Value f, Value args)
 static Value cfunc_new(ValueTag tag, const char *name, void *cfunc, int64_t arity)
 {
     expect_cfunc_arity(arity);
-    CFunc *f = obj_new(sizeof(CFunc), tag);
+    SchObject *o = obj_new(tag);
+    CFunc *f = &o->cfunc;
+    f->name = xstrdup(name);
     f->proc.arity = arity;
     f->name = xstrdup(name);
     f->cfunc = cfunc;
@@ -340,7 +343,7 @@ static Value cfunc_new(ValueTag tag, const char *name, void *cfunc, int64_t arit
     default:
         bug("invalid arity: %"PRId64, arity);
     }
-    return (Value) f;
+    return (Value) o;
 }
 
 static Value value_of_cfunc(const char *name, void *cfunc, int64_t arity)
@@ -375,13 +378,15 @@ static Value apply_closure(UNUSED Value env, Value proc, Value args)
 
 static Value value_of_closure(Value env, Value params, Value body)
 {
-    Closure *f = obj_new(sizeof(Closure), TAG_CLOSURE);
-    f->proc.arity = (params == Qnil || value_is_pair(params)) ? length(params) : -1;
+    SchObject *o = obj_new(TAG_CLOSURE);
+    bool headp = (params == Qnil || value_is_pair(params));
+    Closure *f = &o->closure;
+    f->proc.arity = headp ? length(params) : -1;
     f->proc.apply = apply_closure;
     f->env = env;
     f->params = params;
     f->body = body;
-    return (Value) f;
+    return (Value) o;
 }
 
 // and `cons` is well-known name than "value_of_pair"
@@ -408,9 +413,10 @@ static Value runtime_error(const char *fmt, ...)
     vsnprintf(errmsg, sizeof(errmsg), fmt, ap);
     va_end(ap);
 
-    Error *e = obj_new(sizeof(Error), TAG_ERROR);
+    SchObject *o = obj_new(TAG_ERROR);
+    Error *e = &o->error;
     e->call_stack = Qnil;
-    return (Value) e;
+    return (Value) o;
 }
 
 const char *error_message(void)
@@ -502,22 +508,24 @@ static Value append2(Value l1, Value l2)
 
 static Value env_new(const char *name)
 {
-    Env *e = obj_new(sizeof(Env), TAG_ENV);
+    SchObject *o = obj_new(TAG_ENV);
+    Env *e = ENV(o);
     e->name = name == NULL ? NULL : xstrdup(name);
     e->table = table_new();
     e->parent = Qfalse;
-    return (Value) e;
+    return (Value) o;
 }
 
 static Value env_dup(const char *name, const Value orig)
 {
     if (ENV(orig)->parent != Qfalse)
         bug("duplication of chained environment not permitted");
-    Env *e = obj_new(sizeof(Env), TAG_ENV);
+    SchObject *o = obj_new(TAG_ENV);
+    Env *e = ENV(o);
     e->name = name == NULL ? xstrdup(ENV(orig)->name)/*copy*/ : xstrdup(name);
     e->table = table_dup(ENV(orig)->table);
     e->parent = Qfalse;
-    return (Value) e;
+    return (Value) o;
 }
 
 static Value env_inherit(Value parent)
@@ -1575,10 +1583,10 @@ static Value proc_pair_p(UNUSED Value env, Value o)
 
 Value cons(Value car, Value cdr)
 {
-    Pair *p = obj_new(sizeof(Pair), TAG_PAIR);
-    p->car = car;
-    p->cdr = cdr;
-    return (Value) p;
+    SchObject *o = obj_new(TAG_PAIR);
+    o->pair.car = car;
+    o->pair.cdr = cdr;
+    return (Value) o;
 }
 
 inline Value car(Value v)
@@ -1930,13 +1938,14 @@ static Value apply_continuation(UNUSED Value env, Value f, Value args)
 
 static Value value_of_continuation(void)
 {
-    Continuation *c = obj_new(sizeof(Continuation), TAG_CONTINUATION);
+    SchObject *o = obj_new(TAG_CONTINUATION);
+    Continuation *c = &o->continuation;
     c->proc.arity = 1; // by spec
     c->proc.apply = apply_continuation;
     c->sp = c->stack = NULL;
     c->stack_len = 0;
     c->retval = Qfalse;
-    return (Value) c;
+    return (Value) o;
 }
 
 [[gnu::noinline]]
