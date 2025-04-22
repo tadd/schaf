@@ -84,7 +84,7 @@ size_t gc_stack_get_size(uintptr_t *sp)
 
 static bool enough_free_space(void)
 {
-    static const size_t minreq = sizeof(Continuation); // maybe the largest
+    static const size_t minreq = sizeof(Continuation) * 2; // maybe the largest
     Heap *heap = heaps[heaps_length-1];
     return (heap->size - heap->used) >= minreq;
 }
