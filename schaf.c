@@ -285,9 +285,9 @@ inline Value value_of_symbol(const char *s)
     return (Value) (sym << FLAG_NBIT_SYM | FLAG_SYM);
 }
 
-void *obj_new(size_t size, ValueTag t)
+SchObject *obj_new(ValueTag t)
 {
-    void *p = gc_malloc(size);
+    SchObject *p = gc_malloc(sizeof(SchObject));
     Header *h = HEADER(p);
     h->tag = t;
     h->immutable = false;
@@ -296,9 +296,9 @@ void *obj_new(size_t size, ValueTag t)
 
 static Value value_of_string_moved(char *s)
 {
-    String *str = obj_new(sizeof(String), TAG_STRING);
-    str->body = s; // move ownership and use as is
-    return (Value) str;
+    SchObject *o = obj_new(TAG_STRING);
+    STRING(o) = s; // move ownership and use as is
+    return (Value) o;
 }
 
 Value value_of_string(const char *s)
@@ -342,7 +342,8 @@ static Value apply_cfunc_3(Value env, Value f, Value args)
 static Value cfunc_new(ValueTag tag, const char *name, void *cfunc, int64_t arity)
 {
     expect_cfunc_arity(arity);
-    CFunc *f = obj_new(sizeof(CFunc), tag);
+    SchObject *o = obj_new(tag);
+    CFunc *f = CFUNC(o);
     f->proc.arity = arity;
     f->name = xstrdup(name);
     f->cfunc = cfunc;
@@ -365,7 +366,7 @@ static Value cfunc_new(ValueTag tag, const char *name, void *cfunc, int64_t arit
     default:
         bug("invalid arity: %"PRId64, arity);
     }
-    return (Value) f;
+    return (Value) o;
 }
 
 static Value value_of_cfunc(const char *name, void *cfunc, int64_t arity)
@@ -387,9 +388,10 @@ static Value value_of_cfunc_closure(const char *name, void *cfunc,
                                     int64_t arity, Value data)
 {
     expect_cfunc_arity(arity);
-    CFuncClosure *cc = obj_new(sizeof(CFuncClosure), TAG_CFUNC_CLOSURE);
+    SchObject *o = obj_new(TAG_CFUNC_CLOSURE);
+    CFuncClosure *cc = CFUNC_CLOSURE(o);
     cc->data = data;
-    CFunc *f = CFUNC(cc);
+    CFunc *f = CFUNC(o);
     f->proc.arity = arity;
     f->name = xstrdup(name);
     f->cfunc = cfunc;
@@ -400,7 +402,7 @@ static Value value_of_cfunc_closure(const char *name, void *cfunc,
     default:
         bug("invalid arity: %"PRId64, arity);
     }
-    return (Value) cc;
+    return (Value) o;
 }
 
 static Value eval_body(Value env, Value body);
@@ -425,13 +427,15 @@ static Value apply_closure(UNUSED Value env, Value proc, Value args)
 
 static Value value_of_closure(Value env, Value params, Value body)
 {
-    Closure *f = obj_new(sizeof(Closure), TAG_CLOSURE);
-    f->proc.arity = (params == Qnil || value_is_pair(params)) ? length(params) : -1;
+    SchObject *o = obj_new(TAG_CLOSURE);
+    bool headp = (params == Qnil || value_is_pair(params));
+    Closure *f = CLOSURE(o);
+    f->proc.arity = headp ? length(params) : -1;
     f->proc.apply = apply_closure;
     f->env = env;
     f->params = params;
     f->body = body;
-    return (Value) f;
+    return (Value) o;
 }
 
 // and `cons` is well-known name than "value_of_pair"
@@ -458,9 +462,9 @@ static Value runtime_error(const char *fmt, ...)
     vsnprintf(errmsg, sizeof(errmsg), fmt, ap);
     va_end(ap);
 
-    Error *e = obj_new(sizeof(Error), TAG_ERROR);
-    e->call_stack = scary_new(sizeof(StackFrame *));
-    return (Value) e;
+    SchObject *o = obj_new(TAG_ERROR);
+    ERROR(o) = scary_new(sizeof(StackFrame *));
+    return (Value) o;
 }
 
 const char *sch_error_message(void)
@@ -543,24 +547,26 @@ static Value expect_arity(int64_t expected, Value args)
 
 static Value env_new(const char *name)
 {
-    Env *e = obj_new(sizeof(Env), TAG_ENV);
+    SchObject *o = obj_new(TAG_ENV);
+    Env *e = ENV(o);
     e->name = name == NULL ? NULL : xstrdup(name);
     e->table = table_new();
     e->parent = Qfalse;
-    return (Value) e;
+    return (Value) o;
 }
 
 static Value env_dup(const char *name, const Value orig)
 {
     if (ENV(orig)->parent != Qfalse)
         bug("duplication of chained environment not permitted");
-    Env *e = obj_new(sizeof(Env), TAG_ENV);
+    SchObject *o = obj_new(TAG_ENV);
+    Env *e = ENV(o);
     if (name == NULL)
         name = ENV(orig)->name; // copy it
     e->name = xstrdup(name);
     e->table = table_dup(ENV(orig)->table);
     e->parent = Qfalse;
-    return (Value) e;
+    return (Value) o;
 }
 
 static Value env_inherit(Value parent)
@@ -1627,10 +1633,11 @@ static Value proc_pair_p(UNUSED Value env, Value o)
 
 Value cons(Value car, Value cdr)
 {
-    Pair *p = obj_new(sizeof(Pair), TAG_PAIR);
+    SchObject *o = obj_new(TAG_PAIR);
+    Pair *p = PAIR(o);
     p->car = car;
     p->cdr = cdr;
-    return (Value) p;
+    return (Value) o;
 }
 
 inline Value car(Value v)
@@ -1925,9 +1932,9 @@ static Value proc_string_append(UNUSED Value env, Value args)
 // 6.3.6. Vectors
 Value vector_new(void)
 {
-    Vector *v = obj_new(sizeof(Vector), TAG_VECTOR);
-    v->body = scary_new(sizeof(Value));
-    return (Value) v;
+    SchObject *o = obj_new(TAG_VECTOR);
+    VECTOR(o) = scary_new(sizeof(Value));
+    return (Value) o;
 }
 
 Value vector_push(Value v, Value e)
@@ -2092,13 +2099,14 @@ static Value apply_continuation(UNUSED Value env, Value f, Value args)
 
 static Value value_of_continuation(int64_t n)
 {
-    Continuation *c = obj_new(sizeof(Continuation), TAG_CONTINUATION);
+    SchObject *o = obj_new(TAG_CONTINUATION);
+    Continuation *c = CONTINUATION(o);
     c->proc.arity = n; // call/cc: 1, call-with-values: -1
     c->proc.apply = apply_continuation;
     c->sp = c->stack = NULL;
     c->stack_len = 0;
     c->retval = Qfalse;
-    return (Value) c;
+    return (Value) o;
 }
 
 [[gnu::noinline]]
@@ -2280,12 +2288,13 @@ static Value proc_output_port_p(UNUSED Value env, Value port)
 
 static Value value_of_port(FILE *fp, bool output)
 {
-    Port *p = obj_new(sizeof(Port), TAG_PORT);
+    SchObject *o = obj_new(TAG_PORT);
+    Port *p = PORT(o);
     p->fp = fp;
     p->output = output;
     p->string = NULL;
     p->string_size = 0;
-    return (Value) p;
+    return (Value) o;
 }
 
 static Value get_current_input_port(void)
@@ -2382,7 +2391,7 @@ static Value proc_close_port(UNUSED Value env, Value port)
 static Value value_of_eof(void)
 {
     // an empty object
-    return (Value) obj_new(sizeof(Header), TAG_EOF);
+    return (Value) obj_new(TAG_EOF);
 }
 
 static Value get_eof_object(void)
@@ -2619,7 +2628,8 @@ static Value proc_read_string(UNUSED Value env, Value args)
 
 static Value value_of_string_port(void)
 {
-    Port *p = obj_new(sizeof(Port), TAG_PORT);
+    SchObject *o = obj_new(TAG_PORT);
+    Port *p = PORT(o);
     p->output = true;
     p->string = (void *) 1U; // dummy
     p->string_size = 0;
@@ -2628,7 +2638,7 @@ static Value value_of_string_port(void)
     if (stream == NULL)
         return runtime_error("open_memstream failed: %s", strerror(errno));
     p->fp = stream;
-    return (Value) p;
+    return (Value) o;
 }
 
 static Value proc_open_output_string(UNUSED Value env)
