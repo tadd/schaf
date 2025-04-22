@@ -312,7 +312,7 @@ static const char *token_stringify(Token t)
     case TOK_TYPE_IDENT:
         return value_to_string(t.value);
     case TOK_TYPE_STRING:
-        snprintf(buf, sizeof(buf), "\"%s\"", STRING(t.value)->body);
+        snprintf(buf, sizeof(buf), "\"%s\"", STRING(t.value));
         break;
     case TOK_TYPE_CONST:
         return t.value == Qtrue ? "#t" : "#f";
@@ -338,10 +338,10 @@ static Value parse_dotted_pair(Parser *p, Value l, Value last)
 
 static Value located_list1(Value sym, int64_t pos)
 {
-    LocatedPair *p = obj_new(sizeof(LocatedPair), TAG_PAIR); // imitate ordinal pairs
+    SchObject *p = obj_new(TAG_PAIR); // imitate ordinal pairs
     PAIR(p)->car = sym;
     PAIR(p)->cdr = Qnil;
-    p->pos = pos;
+    p->lpair.pos = pos;
     return (Value) p;
 }
 
