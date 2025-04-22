@@ -44,7 +44,6 @@ typedef struct {
 } Header;
 
 typedef struct {
-    Header header; // common
     Value car, cdr;
 } Pair;
 
@@ -54,12 +53,10 @@ typedef struct {
 } LocatedPair;
 
 typedef struct {
-    Header header;
     char *body;
 } String;
 
 typedef struct {
-    Header header;
     int64_t arity;
     Value (*apply)(Value env, Value proc, Value args);
 } Procedure;
@@ -93,7 +90,6 @@ typedef struct {
 } Continuation;
 
 typedef struct {
-    Header header;
     FILE *in;
     char *filename;
     Value newline_pos; // list of pos | int
@@ -123,20 +119,40 @@ typedef struct {
     Value call_stack; // list of '(func-name . location)
 } Error;
 
-#define HEADER(v) ((Header *) v)
+typedef struct {
+    Header header; // common
+    union {
+        String string;
+        Pair pair;
+        LocatedPair lpair;
+        Procedure proc;
+        CFunc cfunc;
+        Closure closure;
+        Continuation continuation;
+        Vector vector;
+        Parser parser;
+        Env env;
+        Port port;
+        Error error;
+    };
+} SchObject;
+
+#define OBJ(v) ((SchObject *) v)
+#define HEADER(v) (&OBJ(v)->header)
 #define VALUE_TAG(v) (HEADER(v)->tag)
 
-#define PAIR(v) ((Pair *) v)
-#define LOCATED_PAIR(v) ((LocatedPair *) v)
-#define STRING(v) ((String *) v)
-#define PROCEDURE(v) ((Procedure *) v)
-#define CFUNC(v) ((CFunc *) v)
-#define CLOSURE(v) ((Closure *) v)
-#define CONTINUATION(v) ((Continuation *) v)
-#define VECTOR(v) ((Vector *) v)
-#define ENV(v) ((Env *) v)
-#define PORT(v) ((Port *) v)
-#define ERROR(v) ((Error *) v)
+#define PAIR(v) (&OBJ(v)->pair)
+#define LOCATED_PAIR(v) (&OBJ(v)->lpair)
+#define STRING(v) (&OBJ(v)->string)
+#define PROCEDURE(v) (&OBJ(v)->proc)
+#define CFUNC(v) (&OBJ(v)->cfunc)
+#define CLOSURE(v) (&OBJ(v)->closure)
+#define CONTINUATION(v) (&OBJ(v)->continuation)
+#define VECTOR(v) (&OBJ(v)->vector)
+#define PARSER(v) (&OBJ(v)->parser)
+#define ENV(v) (&OBJ(v)->env)
+#define PORT(v) (&OBJ(v)->port)
+#define ERROR(v) (&OBJ(v)->error)
 
 #pragma GCC visibility push(hidden) // also affects Clang
 
@@ -147,7 +163,7 @@ Value parse_datum(FILE *in, const char *filename);
 void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col);
 [[gnu::noreturn]] void raise_error(jmp_buf buf, const char *fmt, ...);
 Value reverse(Value l);
-void *obj_new(size_t size, ValueTag t);
+SchObject *obj_new(ValueTag t);
 
 void gc_init(uintptr_t *base_sp);
 void gc_fin(void);
@@ -187,11 +203,12 @@ static inline Value list1(Value x)
 
 static Value cons_const(Value car, Value cdr)
 {
-    Pair *p = obj_new(sizeof(Pair), TAG_PAIR);
+    SchObject *o = obj_new(TAG_PAIR);
+    HEADER(o)->immutable = true;
+    Pair *p = PAIR(o);
     p->car = car;
     p->cdr = cdr;
-    HEADER(p)->immutable = true;
-    return (Value) p;
+    return (Value) o;
 }
 
 static inline Value list1_const(Value x)
@@ -204,9 +221,9 @@ static inline Value list2_const(Value x, Value y)
     return cons_const(x, list1_const(y));
 }
 
-#define DUMMY_PAIR() ((Value) &(Pair) { \
+#define DUMMY_PAIR() ((Value) &(SchObject) { \
             .header = { .tag = TAG_PAIR, .immutable = false }, \
-            .car = Qundef, .cdr = Qnil \
+            .pair = { .car = Qundef, .cdr = Qnil } \
         })
 
 #endif // INTERN_H
