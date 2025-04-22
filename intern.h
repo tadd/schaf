@@ -21,7 +21,6 @@ typedef enum {
 } ValueTag;
 
 typedef struct {
-    ValueTag tag; // common
     Value car, cdr;
 } Pair;
 
@@ -31,12 +30,10 @@ typedef struct {
 } LocatedPair;
 
 typedef struct {
-    ValueTag tag;
     char *body;
 } String;
 
 typedef struct {
-    ValueTag tag;
     int64_t arity;
 } Procedure;
 
@@ -90,7 +87,6 @@ typedef struct {
 } Token;
 
 typedef struct {
-    ValueTag tag;
     FILE *in;
     const char *filename;
     Token prev_token;
@@ -98,25 +94,41 @@ typedef struct {
 } Parser;
 
 typedef struct {
-    ValueTag tag;
     Value parent;
     Table *table;
 } Env;
 
 typedef struct {
-    ValueTag tag;
     Value call_stack; // list of '(func-name . location)
 } Error;
 
-#define PAIR(v) ((Pair *) v)
-#define LOCATED_PAIR(v) ((LocatedPair *) v)
-#define STRING(v) ((String *) v)
-#define PROCEDURE(v) ((Procedure *) v)
-#define CFUNC(v) ((CFunc *) v)
-#define CLOSURE(v) ((Closure *) v)
-#define CONTINUATION(v) ((Continuation *) v)
-#define ENV(v) ((Env *) v)
-#define ERROR(v) ((Error *) v)
+typedef struct {
+    ValueTag tag; // common
+    union {
+        String string;
+        Pair pair;
+        LocatedPair lpair;
+        Procedure proc;
+        CFunc cfunc;
+        Closure closure;
+        Continuation continuation;
+        Parser parser;
+        Env env;
+        Error error;
+    };
+} SchObject;
+
+#define OBJ(v) ((SchObject *) v)
+#define PAIR(v) (&OBJ(v)->pair)
+#define LOCATED_PAIR(v) (&OBJ(v)->lpair)
+#define STRING(v) (&OBJ(v)->string)
+#define PROCEDURE(v) (&OBJ(v)->proc)
+#define CFUNC(v) (&OBJ(v)->cfunc)
+#define CLOSURE(v) (&OBJ(v)->closure)
+#define CONTINUATION(v) (&OBJ(v)->continuation)
+#define PARSER(v) (&OBJ(v)->parser)
+#define ENV(v) (&OBJ(v)->env)
+#define ERROR(v) (&OBJ(v)->error)
 
 #pragma GCC visibility push(hidden) // also affects Clang
 
@@ -126,7 +138,7 @@ Value iparse(FILE *in, const char *filename);
 void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col);
 [[gnu::noreturn]] void raise_error(jmp_buf buf, const char *fmt, ...);
 Value reverse(Value l);
-void *obj_new(size_t size, ValueTag t);
+SchObject *obj_new(ValueTag t);
 
 void gc_init(uintptr_t *base_sp);
 void gc_fin(void);
@@ -146,6 +158,6 @@ static inline Value list2(Value x, Value y)
     return cons(x, list1(y));
 }
 
-#define DUMMY_PAIR() ((Value) &(Pair) { .tag = TAG_PAIR, .car = Qundef, .cdr = Qnil })
+#define DUMMY_PAIR() ((Value) &(SchObject) { .tag = TAG_PAIR, .pair = { .car = Qundef, .cdr = Qnil } })
 
 #endif // INTERN_H
