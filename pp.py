@@ -195,7 +195,7 @@ PP()
 
 PRINTERS = [ValuePrinter, EnvPrinter, ProcedurePrinter,
             CFuncPrinter, ClosurePrinter, ContinuationPrinter,
-            TablePrinter, ErrorPrinter]
+            TablePrinter]
 def schaf_pp(val):
     ty = Type.unqualified(val.type)
     g = (pr(val) for pr in PRINTERS if pr.TYPE == ty)
