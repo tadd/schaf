@@ -18,7 +18,12 @@ typedef enum {
 } ValueTag;
 
 typedef struct {
-    ValueTag tag; // common
+    ValueTag tag;
+    bool living; // used in GC
+} Header;
+
+typedef struct {
+    Header header; // common
     Value car, cdr;
 } Pair;
 
@@ -28,12 +33,12 @@ typedef struct {
 } LocatedPair;
 
 typedef struct {
-    ValueTag tag;
+    Header header;
     char *body;
 } String;
 
 typedef struct {
-    ValueTag tag;
+    Header header;
     int64_t arity;
 } Procedure;
 
@@ -61,7 +66,7 @@ typedef struct {
 } Continuation;
 
 typedef struct {
-    ValueTag tag;
+    Header header;
     char *name;
     void *obj;
     void (*mark)(void *p);
@@ -105,6 +110,7 @@ static inline Value list2(Value x, Value y)
     return cons(x, list1(y));
 }
 
-#define DUMMY_PAIR() ((Value) &(Pair) { .tag = TAG_PAIR, .car = Qundef, .cdr = Qnil })
+#define DUMMY_PAIR() ((Value) &(Pair) { .header = { .tag = TAG_PAIR, .living = false }, \
+                                        .car = Qundef, .cdr = Qnil })
 
 #endif // INTERN_H
