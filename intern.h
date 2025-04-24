@@ -21,6 +21,11 @@ typedef enum {
 } ValueTag;
 
 typedef struct {
+    ValueTag tag;
+    bool living; // used in GC
+} Header;
+
+typedef struct {
     Value car, cdr;
 } Pair;
 
@@ -99,7 +104,7 @@ typedef struct {
 } Error;
 
 typedef struct {
-    ValueTag tag; // common
+    Header header; // common
     union {
         char *string;
         Pair pair;
@@ -113,8 +118,10 @@ typedef struct {
     };
 } SchObject;
 
+
 #define OBJ(v) ((SchObject *) v)
-#define VALUE_TAG(v) (OBJ(v)->tag)
+#define HEADER(v) (&OBJ(v)->header)
+#define VALUE_TAG(v) (HEADER(v)->tag)
 
 #define PAIR(v) (&OBJ(v)->pair)
 #define LOCATED_PAIR(v) (&OBJ(v)->lpair)
@@ -155,6 +162,7 @@ static inline Value list2(Value x, Value y)
     return cons(x, list1(y));
 }
 
-#define DUMMY_PAIR() ((Value) &(SchObject) { .tag = TAG_PAIR, .pair = { .car = Qundef, .cdr = Qnil } })
+#define DUMMY_PAIR() ((Value) &(SchObject) { .header = { .tag = TAG_PAIR, .living = false }, \
+                                             .pair = { .car = Qundef, .cdr = Qnil } })
 
 #endif // INTERN_H
