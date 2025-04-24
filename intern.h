@@ -41,6 +41,7 @@ typedef enum {
 typedef struct {
     ValueTag tag;
     bool immutable;
+    bool living; // used in GC
 } Header;
 
 typedef struct {
@@ -223,7 +224,7 @@ static inline Value list2_const(Value x, Value y)
 }
 
 #define DUMMY_PAIR() ((Value) &(SchObject) { \
-            .header = { .tag = TAG_PAIR, .immutable = false }, \
+            .header = { .tag = TAG_PAIR, .immutable = false, .living = false }, \
             .pair = { .car = Qundef, .cdr = Qnil } \
         })
 
