@@ -118,8 +118,6 @@ static inline bool value_is_procedure(Value v)
     case TAG_PAIR:
     case TAG_USER_OBJ:
         return false;
-    case TAG_CHUNK:
-        break;
     }
     UNREACHABLE();
 }
@@ -160,8 +158,6 @@ Type value_type_of(Value v)
         return TYPE_PROC;
     case TAG_USER_OBJ:
         return TYPE_USER_OBJ;
-    case TAG_CHUNK:
-        break;
     }
     UNREACHABLE();
 }

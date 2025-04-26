@@ -7,7 +7,6 @@
 #include "utils.h"
 
 typedef enum {
-    TAG_CHUNK,  // not allocated
     TAG_PAIR,
     TAG_STRING,
     TAG_CFUNC,
