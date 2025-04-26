@@ -52,8 +52,8 @@ typedef struct {
 typedef struct {
     Procedure proc;
     uintptr_t *sp;
-    void *shelter;
-    size_t shelter_len;
+    void *stack;
+    size_t stack_len;
     Value call_stack;
     jmp_buf state;
     Value retval;

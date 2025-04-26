@@ -464,7 +464,7 @@ ATTR(noreturn) ATTR(noinline)
 static void jump(Continuation *cont)
 {
     call_stack = cont->call_stack;
-    memcpy(cont->sp, cont->shelter, cont->shelter_len);
+    memcpy(cont->sp, cont->stack, cont->stack_len);
     longjmp(cont->state, 1);
 }
 
@@ -1768,8 +1768,8 @@ static Value value_of_continuation(void)
 {
     Continuation *c = obj_new(sizeof(Continuation), TAG_CONTINUATION);
     c->proc.arity = 1; // by spec
-    c->sp = c->shelter = NULL;
-    c->shelter_len = 0;
+    c->sp = c->stack = NULL;
+    c->stack_len = 0;
     c->call_stack = Qnil;
     c->retval = Qfalse;
     return (Value) c;
@@ -1781,9 +1781,9 @@ static bool continuation_set(Value c)
     GET_SP(sp); // must be the first!
     Continuation *cont = CONTINUATION(c);
     cont->sp = sp;
-    cont->shelter_len = gc_stack_get_size(sp);
-    cont->shelter = xmalloc(cont->shelter_len);
-    memcpy(cont->shelter, sp, cont->shelter_len);
+    cont->stack_len = gc_stack_get_size(sp);
+    cont->stack = xmalloc(cont->stack_len);
+    memcpy(cont->stack, sp, cont->stack_len);
     cont->call_stack = call_stack;
     return setjmp(cont->state) != 0;
 }
