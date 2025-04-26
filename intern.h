@@ -33,15 +33,18 @@ typedef enum {
     TAG_ENV,
     TAG_PORT,
     // internal use only
+    TAG_CHUNK,  // not allocated
     TAG_PARSER,
     TAG_ERROR,
     TAG_LAST = TAG_ERROR
 } ValueTag;
 
-typedef struct {
+typedef struct Header {
     ValueTag tag;
     bool immutable;
     bool living; // used in GC
+    size_t size;
+    struct Header *next;
 } Header;
 
 typedef struct {
@@ -165,13 +168,14 @@ void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col
 [[gnu::noreturn]] void raise_error(jmp_buf buf, const char *fmt, ...);
 Value reverse(Value l);
 SchObject *obj_new(ValueTag t);
+bool value_is_immediate(Value v);
 
 void gc_init(uintptr_t *base_sp);
 void gc_fin(void);
 
 void gc_add_root(const Value *r);
 size_t gc_stack_get_size(uintptr_t *sp);
-ATTR_XMALLOC void *gc_malloc(size_t size);
+ATTR_XMALLOC Header *gc_malloc(size_t size);
 
 bool value_is_null(Value v);
 bool value_is_int(Value v);
@@ -227,5 +231,6 @@ static inline Value list2_const(Value x, Value y)
             .header = { .tag = TAG_PAIR, .immutable = false, .living = false }, \
             .pair = { .car = Qundef, .cdr = Qnil } \
         })
+#define GET_SP(p) uintptr_t v##p = 0, *p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
 
 #endif // INTERN_H
