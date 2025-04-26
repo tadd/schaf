@@ -4,6 +4,7 @@
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -108,8 +109,9 @@ static inline bool value_is_procedure(Value v)
     case TAG_ENV:
     case TAG_PORT:
         return false;
+    case TAG_CHUNK:
     case TAG_ERROR:
-        break;
+        break; // internal objects
     }
     UNREACHABLE();
 }
@@ -159,8 +161,9 @@ Type value_type_of(Value v)
         return TYPE_ENV;
     case TAG_PORT:
         return TYPE_PORT;
+    case TAG_CHUNK:
     case TAG_ERROR:
-        break;
+        break; // internal objects
     }
     UNREACHABLE();
 }
@@ -273,12 +276,12 @@ inline Value value_of_symbol(const char *s)
 
 SchObject *obj_new(ValueTag t)
 {
-    SchObject *p = gc_malloc(sizeof(SchObject));
-    Header *h = HEADER(p);
+    Header *h = gc_malloc(sizeof(SchObject));
     h->tag = t;
     h->immutable = false;
     h->living = false;
-    return p;
+    h->next = NULL;
+    return (SchObject *) h;
 }
 
 static Value value_of_string_move(char *s)
@@ -506,6 +509,7 @@ static Value expect_arity(int64_t expected, Value args)
                          expected, actual);
 }
 
+// value_of_env()
 static Value env_new(const char *name)
 {
     SchObject *o = obj_new(TAG_ENV);
@@ -1979,8 +1983,6 @@ static void jump(Continuation *cont)
     longjmp(cont->exstate->regs, 1);
 }
 
-#define GET_SP(p) uintptr_t v##p = 0, *p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
-
 [[gnu::noreturn, gnu::noinline]]
 static Value apply_continuation(UNUSED Value env, Value f, Value args)
 {
@@ -2373,19 +2375,8 @@ static void free_symbol_names(void)
     scary_free(symbol_names);
 }
 
-static void env_free(Value ve)
-{
-    Env *e = ENV(ve);
-    free(e->name);
-    table_free(e->table);
-}
-
 int sch_fin(void)
 {
-    env_free(env_null);
-    env_free(env_r5rs);
-    env_free(env_default);
-    env_free(env_toplevel);
     free_source_data();
     free_symbol_names();
     gc_fin();
