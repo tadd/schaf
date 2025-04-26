@@ -14,15 +14,18 @@ typedef enum {
     TAG_CLOSURE,
     TAG_CONTINUATION,
     // internal use only
+    TAG_CHUNK,  // not allocated
     TAG_ENV,
     TAG_PARSER,
     TAG_ERROR,
     TAG_LAST = TAG_ERROR
 } ValueTag;
 
-typedef struct {
+typedef struct Header {
     ValueTag tag;
+    size_t size;
     bool living; // used in GC
+    struct Header *next;
 } Header;
 
 typedef struct {
@@ -143,6 +146,7 @@ void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col
 [[gnu::noreturn]] void raise_error(jmp_buf buf, const char *fmt, ...);
 Value reverse(Value l);
 SchObject *obj_new(ValueTag t);
+bool value_is_immediate(Value v);
 
 void gc_init(uintptr_t *base_sp);
 void gc_fin(void);
@@ -164,5 +168,6 @@ static inline Value list2(Value x, Value y)
 
 #define DUMMY_PAIR() ((Value) &(SchObject) { .header = { .tag = TAG_PAIR, .living = false }, \
                                              .pair = { .car = Qundef, .cdr = Qnil } })
+#define GET_SP(p) uintptr_t v##p = 0, *p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
 
 #endif // INTERN_H
