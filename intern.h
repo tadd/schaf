@@ -7,6 +7,7 @@
 #include "utils.h"
 
 typedef enum {
+    TAG_CHUNK,  // not allocated
     TAG_PAIR,
     TAG_STRING,
     TAG_CFUNC,
@@ -17,8 +18,10 @@ typedef enum {
     TAG_LAST = TAG_USER_OBJ
 } ValueTag;
 
-typedef struct {
+typedef struct Header {
     ValueTag tag;
+    size_t size;
+    struct Header *next;
     bool living; // used in GC
 } Header;
 
@@ -73,7 +76,8 @@ typedef struct {
     void (*free)(void *p);
 } UserObject;
 
-#define VALUE_TAG(v) (*(ValueTag*)(v))
+#define HEADER(v) ((Header*)(v))
+#define VALUE_TAG(v) (HEADER(v)->tag)
 
 #define PAIR(v) ((Pair *) v)
 #define LOCATED_PAIR(v) ((LocatedPair *) v)
@@ -93,6 +97,7 @@ void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col
 ATTR(noreturn) void raise_error(jmp_buf buf, const char *fmt, ...);
 Value reverse(Value l);
 void *obj_new(size_t size, ValueTag t);
+bool value_is_immediate(Value v);
 
 void gc_init(uintptr_t *base_sp);
 void gc_fin(void);
@@ -100,7 +105,9 @@ void gc_fin(void);
 void gc_add_root(const Value *r);
 void gc_add_root_env(Table **env);
 size_t gc_stack_get_size(uintptr_t *sp);
-ATTR_XMALLOC void *gc_malloc(size_t size);
+ATTR_XMALLOC Header *gc_malloc(size_t size);
+void env_mark(void *env);
+void env_free(void *env);
 
 #pragma GCC visibility pop
 
