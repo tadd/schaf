@@ -4,6 +4,7 @@
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -90,9 +91,10 @@ inline bool value_is_symbol(Value v)
     return (v & FLAG_MASK_SYM) == FLAG_SYM;
 }
 
-static bool value_is_immediate(Value v)
+bool in_heap_range(uintptr_t v);
+bool value_is_immediate(Value v)
 {
-    return v & FLAG_MASK;
+    return (v & FLAG_MASK) || v == 0 || v < 0x1000 || !in_heap_range(v);
 }
 
 static inline bool value_tag_is(Value v, ValueTag expected)
@@ -124,8 +126,9 @@ static inline bool value_is_procedure(Value v)
     case TAG_ENV:
         return false;
     case TAG_PARSER:
+    case TAG_CHUNK:
     case TAG_ERROR:
-        break;
+        break; // internal objects
     }
     UNREACHABLE();
 }
@@ -173,8 +176,9 @@ Type value_type_of(Value v)
     case TAG_ENV:
         return TYPE_ENV;
     case TAG_PARSER:
+    case TAG_CHUNK:
     case TAG_ERROR:
-        break;
+        break; // internal objects
     }
     UNREACHABLE();
 }
@@ -270,11 +274,12 @@ inline Value value_of_symbol(const char *s)
 
 SchObject *obj_new(ValueTag t)
 {
-    SchObject *p = gc_malloc(sizeof(SchObject));
-    Header *h = HEADER(p);
+    Header *h = gc_malloc(sizeof(SchObject));
     h->tag = t;
     h->immutable = false;
-    return p;
+    h->living = false;
+    h->next = NULL;
+    return (SchObject *) h;
 }
 
 Value value_of_string(const char *s)
@@ -517,6 +522,7 @@ static Value append2(Value l1, Value l2)
     return ret;
 }
 
+// value_of_env()
 static Value env_new(const char *name)
 {
     SchObject *o = obj_new(TAG_ENV);
@@ -539,7 +545,7 @@ static Value env_dup(const char *name, const Value orig)
     return (Value) o;
 }
 
-static Value env_inherit(Value parent)
+static Value env_inherit(const Value parent)
 {
     Value e = env_new("tmp");
     ENV(e)->parent = parent;
@@ -1931,8 +1937,6 @@ static void jump(Continuation *cont)
     longjmp(cont->exstate->regs, 1);
 }
 
-#define GET_SP(p) uintptr_t v##p = 0, *p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
-
 [[gnu::noreturn, gnu::noinline]]
 static Value apply_continuation(UNUSED Value env, Value f, Value args)
 {
@@ -2157,6 +2161,7 @@ static Value proc_schaf_environment(UNUSED Value env)
 
 int sch_fin(void)
 {
+    // table_free(ENV(toplevel_environment)->table);
     gc_fin();
     return exit_status;
 }
