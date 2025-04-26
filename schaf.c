@@ -3,6 +3,7 @@
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -86,9 +87,10 @@ inline bool value_is_symbol(Value v)
     return (v & FLAG_MASK_SYM) == FLAG_SYM;
 }
 
-static bool value_is_immediate(Value v)
+bool in_heap_range(uintptr_t v);
+bool value_is_immediate(Value v)
 {
-    return v & FLAG_MASK;
+    return (v & FLAG_MASK) || v == 0 || v < 0x1000 || !in_heap_range(v);
 }
 
 static inline bool value_tag_is(Value v, ValueTag expected)
@@ -116,7 +118,8 @@ static inline bool value_is_procedure(Value v)
     case TAG_USER_OBJ:
         return false;
     case TAG_ENV:
-        break;
+    case TAG_CHUNK:
+        break; // internal objects
     }
     UNREACHABLE();
 }
@@ -155,10 +158,11 @@ Type value_type_of(Value v)
     case TAG_CLOSURE:
     case TAG_CONTINUATION:
         return TYPE_PROC;
-    case TAG_ENV:
-        break;
     case TAG_USER_OBJ:
         return TYPE_USER_OBJ;
+    case TAG_ENV:
+    case TAG_CHUNK:
+        break; // internal objects
     }
     UNREACHABLE();
 }
@@ -256,9 +260,11 @@ inline Value value_of_symbol(const char *s)
 
 void *obj_new(size_t size, ValueTag t)
 {
-    void *p = gc_malloc(size);
-    VALUE_TAG(p) = t;
-    return p;
+    Header *h = gc_malloc(size);
+    h->tag = t;
+    h->living = false;
+    h->next = NULL;
+    return h;
 }
 
 Value value_of_string(const char *s)
@@ -470,6 +476,7 @@ static Value append2(Value l1, Value l2)
     return ret;
 }
 
+// value_of_env()
 static Value env_new(void)
 {
     Env *e = obj_new(sizeof(Env), TAG_ENV);
@@ -478,7 +485,7 @@ static Value env_new(void)
     return (Value) e;
 }
 
-static Value env_inherit(Value parent)
+static Value env_inherit(const Value parent)
 {
     Value e = env_new();
     ENV(e)->parent = parent;
@@ -1889,8 +1896,10 @@ static void fdisplay(FILE* f, Value v)
     case TYPE_UNDEF:
         fprintf(f, "<undef>");
         break;
-    case TYPE_USER_OBJ:
-        UNREACHABLE();
+    case TYPE_USER_OBJ: {
+        UserObject *o = USER_OBJ(v);
+        fprintf(f, "<user:%s (%p)>", o->name, o->obj);
+    }
     }
 }
 
@@ -1981,7 +1990,7 @@ static Value syn_defined_p(Value env, Value name)
 
 int sch_fin(void)
 {
-    // table_free(toplevel_environment);
+    table_free(ENV(toplevel_environment)->table);
     gc_fin();
     return exit_status;
 }

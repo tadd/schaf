@@ -14,13 +14,16 @@ typedef enum {
     TAG_CLOSURE,
     TAG_CONTINUATION,
     // internal use
+    TAG_CHUNK,  // not allocated
     TAG_ENV,
     TAG_USER_OBJ,
     TAG_LAST = TAG_USER_OBJ
 } ValueTag;
 
-typedef struct {
+typedef struct Header {
     ValueTag tag;
+    size_t size;
+    struct Header *next;
     bool living; // used in GC
 } Header;
 
@@ -88,6 +91,7 @@ typedef struct {
     void (*free)(void *p);
 } UserObject;
 
+#define HEADER(v) ((Header*)(v))
 #define VALUE_TAG(v) (*(ValueTag *)(v))
 
 #define PAIR(v) ((Pair *) v)
@@ -109,13 +113,14 @@ void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col
 [[gnu::noreturn]] void raise_error(jmp_buf buf, const char *fmt, ...);
 Value reverse(Value l);
 void *obj_new(size_t size, ValueTag t);
+bool value_is_immediate(Value v);
 
 void gc_init(uintptr_t *base_sp);
 void gc_fin(void);
 
 void gc_add_root(const Value *r);
 size_t gc_stack_get_size(uintptr_t *sp);
-ATTR_XMALLOC void *gc_malloc(size_t size);
+ATTR_XMALLOC Header *gc_malloc(size_t size);
 
 #pragma GCC visibility pop
 
