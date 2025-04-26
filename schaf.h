@@ -7,6 +7,7 @@
 typedef uintptr_t SchValue;
 
 typedef enum : int {
+    GC_STRATEGY_MARK_SWEEP,
     GC_STRATEGY_EPSILON,
 } SchGCStrategy;
 
