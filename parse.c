@@ -19,7 +19,7 @@ typedef enum {
     TOK_TYPE_SPLICE,
     TOK_TYPE_INT,
     TOK_TYPE_DOT,
-    TOK_TYPE_STR,
+    TOK_TYPE_STRING,
     TOK_TYPE_IDENT,
     TOK_TYPE_CONST,
     TOK_TYPE_EOF
@@ -47,9 +47,9 @@ static inline Token TOK_INT(int64_t i)
 {
     return TOK_V(INT, value_of_int(i));
 }
-static inline Token TOK_STR(const char *s)
+static inline Token TOK_STRING(const char *s)
 {
-    return TOK_V(STR, value_of_string(s));
+    return TOK_V(STRING, value_of_string(s));
 }
 static inline Token TOK_IDENT(const char *s)
 {
@@ -164,7 +164,7 @@ static Token lex_string(Parser *p)
             parse_error(p, "string literal", "too long: \"%s...\"", pbuf);
     }
     *pbuf = '\0';
-    return TOK_STR(buf);
+    return TOK_STRING(buf);
 }
 
 static Token lex_constant(Parser *p)
@@ -311,7 +311,7 @@ static const char *token_stringify(Token t)
         break;
     case TOK_TYPE_IDENT:
         return value_to_string(t.value);
-    case TOK_TYPE_STR:
+    case TOK_TYPE_STRING:
         snprintf(buf, sizeof(buf), "\"%s\"", STRING(t.value)->body);
         break;
     case TOK_TYPE_CONST:
@@ -396,7 +396,7 @@ static Value parse_expr(Parser *p)
         return parse_quoted(p, SYM_UNQUOTE_SPLICING);
     case TOK_TYPE_DOT:
         parse_error(p, "expression", "'.'");
-    case TOK_TYPE_STR:
+    case TOK_TYPE_STRING:
     case TOK_TYPE_INT:
     case TOK_TYPE_CONST:
     case TOK_TYPE_IDENT:
