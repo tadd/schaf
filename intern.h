@@ -31,7 +31,7 @@ typedef struct {
 
 typedef struct {
     ValueTag tag;
-    char body[];
+    char *body;
 } String;
 
 typedef struct {
