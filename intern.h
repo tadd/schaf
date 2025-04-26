@@ -34,7 +34,7 @@ typedef struct {
 
 typedef struct {
     Header header;
-    char body[];
+    char *body;
 } String;
 
 typedef struct {
@@ -67,10 +67,10 @@ typedef struct {
 
 typedef struct {
     Header header;
+    char *name;
     void *obj;
     void (*mark)(void *p);
     void (*free)(void *p);
-    char name[];
 } UserObject;
 
 #define VALUE_TAG(v) (*(ValueTag*)(v))
