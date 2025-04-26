@@ -47,6 +47,7 @@ typedef enum {
     TAG_EOF,
     // internal use only
     TAG_ERROR,
+    TAG_CHUNK,  // not allocated
     TAG_LAST = TAG_ERROR
 } ValueTag;
 
@@ -54,6 +55,7 @@ typedef struct {
     ValueTag tag;
     bool immutable;
     bool living; // used in GC
+    size_t size;
 } Header;
 
 typedef struct {
@@ -96,8 +98,8 @@ typedef struct {
 } Closure;
 
 typedef struct {
-    uintptr_t *sp;
-    void *stack;
+    uintptr_t *volatile sp;
+    void *volatile stack;
     size_t stack_len;
     jmp_buf regs;
 } ExecutionState;
@@ -160,6 +162,7 @@ typedef struct {
 #define HEADER(v) (&OBJ(v)->header)
 #define VALUE_TAG(v) (HEADER(v)->tag)
 
+#define HEADER_NEXT(v) (OBJ(v)->next)
 #define PAIR(v) (&OBJ(v)->pair)
 #define LOCATED_PAIR(v) (&OBJ(v)->lpair)
 #define ESTRING(v) (OBJ(v)->estring)
@@ -253,5 +256,6 @@ static inline Value list2_const(Value x, Value y)
             .header = { .tag = TAG_PAIR, .immutable = false, .living = false }, \
             .pair = { .car = Qundef, .cdr = Qnil } \
         })
+#define GET_SP(p) uintptr_t v##p = 0, *volatile p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
 
 #endif // INTERN_H

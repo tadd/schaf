@@ -81,7 +81,7 @@ static void usage(FILE *out)
     usage_opt(out, "-p", "Print last expression before exit.");
     usage_opt(out, "-P", "Only parse and print syntax list without evaluation.");
     usage_opt(out, "-s", "Print heap statistics before/after GC.");
-    usage_opt(out, "--gc=<algorithm>", "Specify GC algorithm from: epsilon.");
+    usage_opt(out, "--gc=<algorithm>", "Specify GC algorithm from: mark-sweep, epsilon.");
     usage_opt(out, "-S, --gc-stress", "Put stress on GC.");
     usage_opt(out, "-T", "Print consumed CPU time at exit.");
     usage_opt(out, "-h, --help", "Print this help.");
@@ -109,8 +109,17 @@ typedef struct {
 
 static SchGCAlgorithm get_gc_algorithm(const char *s)
 {
-    if (strcmp(s, "epsilon") == 0)
-        return GC_ALGORITHM_EPSILON;
+    static const struct {
+        const char *name;
+        SchGCAlgorithm algorithm;
+    } algos[] = {
+        { "mark-sweep", GC_ALGORITHM_MARK_SWEEP },
+        { "epsilon", GC_ALGORITHM_EPSILON },
+    };
+    for (size_t i = 0; i < sizeof(algos) / sizeof(*algos); i++) {
+        if (strcmp(s, algos[i].name) == 0)
+            return algos[i].algorithm;
+    }
     return 0;
 }
 
@@ -143,7 +152,7 @@ static SchOption parse_opt(int argc, char *const *argv)
     };
     SchOption o = {
         .init_heap_size_mib = 0.0,
-        .gc_algorithm = -1,
+        .gc_algorithm = 0,
     };
     OptLongerData data = { 0 };
     int opt;
@@ -276,6 +285,8 @@ int main(int argc, char **argv)
     sch_set_gc_print_stat(o.heap_stat);
     if (o.init_heap_size_mib > 0.0)
         sch_set_gc_init_size(o.init_heap_size_mib);
+    if (o.gc_algorithm > 0)
+        sch_set_gc_algorithm(o.gc_algorithm);
 
     SCH_INIT();
     if (o.interacitve)

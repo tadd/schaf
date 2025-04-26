@@ -7,7 +7,8 @@
 typedef uintptr_t SchValue;
 
 typedef enum {
-    GC_ALGORITHM_EPSILON = 1
+    GC_ALGORITHM_MARK_SWEEP = 1,
+    GC_ALGORITHM_EPSILON
 } SchGCAlgorithm;
 
 extern const SchValue SCH_NULL, SCH_UNDEF, SCH_FALSE, SCH_TRUE;
