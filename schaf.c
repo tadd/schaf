@@ -124,8 +124,9 @@ static inline bool value_is_procedure(Value v)
     case TAG_PORT:
     case TAG_EOF:
         return false;
+    case TAG_CHUNK:
     case TAG_ERROR:
-        break;
+        break; // internal objects
     }
     bug_invalid_tag(VALUE_TAG(v));
 }
@@ -180,7 +181,8 @@ Type sch_value_type_of(Value v)
     case TAG_EOF:
         return TYPE_EOF;
     case TAG_ERROR:
-        break;
+    case TAG_CHUNK:
+        break; // internal objects
     }
     bug_invalid_tag(VALUE_TAG(v));
 }
@@ -300,12 +302,11 @@ inline Value sch_symbol_new(const char *s)
 
 SchObject *obj_new(ValueTag t)
 {
-    SchObject *p = gc_malloc(sizeof(SchObject));
-    Header *h = HEADER(p);
+    Header *h = gc_malloc(sizeof(SchObject));
     h->tag = t;
     h->immutable = false;
     h->living = false;
-    return p;
+    return (SchObject *) h;
 }
 
 static Value string_in_heap(char *str) // moved
@@ -638,6 +639,7 @@ static Value expect_arity_3(Value args)
     return arity_error("", 3, length(args));
 }
 
+// value_of_env()
 [[gnu::nonnull(1)]]
 static Value env_new(const char *name)
 {
@@ -2180,8 +2182,6 @@ static void jump(Continuation *cont)
     longjmp(cont->exstate->regs, 1);
 }
 
-#define GET_SP(p) uintptr_t v##p = 0, *volatile p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
-
 [[gnu::noinline]]
 static Value apply_continuation(UNUSED Value env, Value f, Value args)
 {
@@ -2838,18 +2838,8 @@ static void free_symbol_names(void)
     scary_free(symbol_names);
 }
 
-static void env_free(Value ve)
-{
-    Env *e = ENV(ve);
-    table_free(e->table);
-}
-
 int sch_fin(void)
 {
-    env_free(env_null);
-    env_free(env_r5rs);
-    env_free(env_default);
-    env_free(env_toplevel);
     free_source_data();
     free_symbol_names();
     gc_fin();
