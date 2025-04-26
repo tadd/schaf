@@ -1,5 +1,5 @@
 CC = gcc
-OPTFLAGS = -O0 -ggdb3
+OPTFLAGS = -O0 -ggdb3 #-DDEBUG
 CFLAGS = -std=gnu17 -Wall -Wextra -I. $(OPTFLAGS) $(XCFLAGS)
 LIBS = -lm
 ANALYZER = -fanalyzer
