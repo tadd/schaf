@@ -3,6 +3,7 @@
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -63,6 +64,8 @@ static const int64_t CFUNCARG_MAX = 3;
 // Environment: list of Frames
 // Frame: Table of 'symbol => <value>
 static Table *toplevel_environment;
+static bool marking = false;
+static Set *marked_env;
 static Value symbol_names = Qnil; // ("name0" "name1" ...)
 Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
     SYM_RARROW;
@@ -86,9 +89,10 @@ inline bool value_is_symbol(Value v)
     return (v & FLAG_MASK_SYM) == FLAG_SYM;
 }
 
-static bool value_is_immediate(Value v)
+bool in_heap_range(uintptr_t v);
+bool value_is_immediate(Value v)
 {
-    return v & FLAG_MASK;
+    return (v & FLAG_MASK) || v == 0 || v < 0x1000 || !in_heap_range(v);
 }
 
 static inline bool value_tag_is(Value v, ValueTag expected)
@@ -115,6 +119,8 @@ static inline bool value_is_procedure(Value v)
     case TAG_PAIR:
     case TAG_USER_OBJ:
         return false;
+    case TAG_CHUNK:
+        break;
     }
     UNREACHABLE();
 }
@@ -155,6 +161,8 @@ Type value_type_of(Value v)
         return TYPE_PROC;
     case TAG_USER_OBJ:
         return TYPE_USER_OBJ;
+    case TAG_CHUNK:
+        break;
     }
     UNREACHABLE();
 }
@@ -252,9 +260,11 @@ inline Value value_of_symbol(const char *s)
 
 void *obj_new(size_t size, ValueTag t)
 {
-    void *p = gc_malloc(size);
-    VALUE_TAG(p) = t;
-    return p;
+    Header *h = gc_malloc(size);
+    h->tag = t;
+    h->living = false;
+    h->next = NULL;
+    return h;
 }
 
 Value value_of_string(const char *s)
@@ -1851,8 +1861,10 @@ static void fdisplay(FILE* f, Value v)
     case TYPE_UNDEF:
         fprintf(f, "<undef>");
         break;
-    case TYPE_USER_OBJ:
-        UNREACHABLE();
+    case TYPE_USER_OBJ: {
+        UserObject *o = USER_OBJ(v);
+        fprintf(f, "<user:%s (%p)>", o->name, o->obj);
+    }
     }
 }
 
@@ -1961,6 +1973,31 @@ int sch_exit_status(void)
     }
 CXRS(DEF_CXR_BUILTIN)
 
+static void env_mark_each(const Table *env, uint64_t key, uint64_t val, ATTR(unused) void *data)
+{
+    uint64_t i = (uint64_t) env;
+    set_add(marked_env, i);
+    sch_gc_mark(key);
+    sch_gc_mark(val);
+}
+
+void env_mark(void *env)
+{
+    if (!marking) {
+        set_free(marked_env);
+        marked_env = set_new();
+        marking = true;
+    }
+    table_foreach(env, env_mark_each, NULL);
+}
+
+void env_free(void *env)
+{
+    marking = false;
+    if (!set_include_p(marked_env, (uint64_t) env))
+        table_free(env);
+}
+
 void sch_init(uintptr_t *sp)
 {
     gc_init(sp);
@@ -1980,7 +2017,7 @@ void sch_init(uintptr_t *sp)
     DEF_SYMBOL(RARROW, "=>");
 
     toplevel_environment = table_new();
-    sch_register_user_obj("environment", NULL, NULL, toplevel_environment);
+    sch_register_user_obj("environment", env_mark, env_free, toplevel_environment);
     Table *e = toplevel_environment;
 
     // 4. Expressions
