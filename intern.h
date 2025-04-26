@@ -7,6 +7,7 @@
 #include "utils.h"
 
 typedef enum {
+    TAG_CHUNK,  // not allocated
     TAG_PAIR,
     TAG_STRING,
     TAG_CFUNC,
@@ -17,8 +18,10 @@ typedef enum {
     TAG_LAST = TAG_USER_OBJ
 } ValueTag;
 
-typedef struct {
+typedef struct Header {
     ValueTag tag;
+    size_t size;
+    struct Header *next;
     bool living; // used in GC
 } Header;
 
@@ -73,7 +76,8 @@ typedef struct {
     void (*free)(void *p);
 } UserObject;
 
-#define VALUE_TAG(v) (*(ValueTag*)(v))
+#define HEADER(v) ((Header*)(v))
+#define VALUE_TAG(v) (HEADER(v)->tag)
 
 #define PAIR(v) ((Pair *) v)
 #define LOCATED_PAIR(v) ((LocatedPair *) v)
@@ -91,6 +95,7 @@ ATTR_HIDDEN void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, 
 ATTR_HIDDEN ATTR(noreturn) void raise_error(jmp_buf buf, const char *fmt, ...);
 ATTR_HIDDEN Value reverse(Value l);
 ATTR_HIDDEN void *obj_new(size_t size, ValueTag t);
+ATTR_HIDDEN bool value_is_immediate(Value v);
 
 ATTR_HIDDEN void gc_init(uintptr_t *base_sp);
 ATTR_HIDDEN void gc_fin(void);
@@ -99,6 +104,9 @@ ATTR_HIDDEN void gc_add_root(const Value *r);
 ATTR_HIDDEN void gc_add_root_env(Table **env);
 ATTR_HIDDEN size_t gc_stack_get_size(uintptr_t *sp);
 ATTR_HIDDEN ATTR_XMALLOC void *gc_malloc(size_t size);
+ATTR_HIDDEN ATTR_XMALLOC void *gc_calloc(size_t nmem, size_t memsize);
+ATTR_HIDDEN void env_mark(void *env);
+ATTR_HIDDEN void env_free(void *env);
 
 static inline Value list1(Value x)
 {
