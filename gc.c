@@ -109,12 +109,12 @@ void sch_gc_mark(UNUSED Value v)
 
 static Value user_obj_new(const char *typename, GCFunction mark, GCFunction ffree, void *p)
 {
-    size_t len = strlen(typename) + 1;
-    UserObject *o = obj_new(sizeof(UserObject) + len, TAG_USER_OBJ);
+    UserObject *o = obj_new(sizeof(UserObject), TAG_USER_OBJ);
+    o->name = xmalloc(strlen(typename) + 1);
+    strcpy(o->name, typename);
+    o->obj = p;
     o->mark = mark;
     o->free = ffree;
-    o->obj = p;
-    strcpy(o->name, typename);
     return (Value) o;
 }
 
