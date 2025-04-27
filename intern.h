@@ -16,12 +16,12 @@ typedef enum {
     TAG_LAST = TAG_CONTINUATION
 } ValueTag;
 
-typedef struct Pair {
+typedef struct {
     ValueTag tag; // common
     Value car, cdr;
 } Pair;
 
-typedef struct LocatedPair {
+typedef struct {
     Pair pair;   // inherit
     int64_t pos; // value from ftell(3)
 } LocatedPair;
