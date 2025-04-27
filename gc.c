@@ -41,7 +41,7 @@ static Heap *heaps[64];
 static size_t heaps_length;
 static uint8_t *heaps_low, *heaps_high;
 
-static Header *free_list;
+static Chunk *free_list;
 
 static uintptr_t *stack_base;
 static const Value *root[ROOT_SIZE];
@@ -75,8 +75,8 @@ static Heap *heap_new(size_t size)
     Heap *h = xcalloc(1, sizeof(Heap));
     h->size = size;
     h->body = xcalloc(1, size);
-    Header *hd = (Header *) h->body;
-    hd->size = size - sizeof(Header);
+    Chunk *hd = (Chunk *) h->body;
+    hd->size = size - sizeof(Chunk);
     return h;
 }
 
@@ -97,7 +97,7 @@ void gc_init(uintptr_t *sp)
     heaps_low = heaps[0]->body;
     heaps_high = heaps_low + heaps[0]->size;
 
-    Header *h = (Header *) heaps_low;
+    Chunk *h = (Chunk *) heaps_low;
     h->next = NULL;
     free_list = h;
 
@@ -107,12 +107,12 @@ void gc_init(uintptr_t *sp)
 
 // Allocation
 
-static void *allocate_from_chunk(Header *prev, Header *curr, size_t size)
+static void *allocate_from_chunk(Chunk *prev, Chunk *curr, size_t size)
 {
-    size_t hsize = sizeof(Header) + size;
-    Header *next = curr->next;
+    size_t hsize = sizeof(Chunk) + size;
+    Chunk *next = curr->next;
     if (curr->size > hsize) {
-        Header *rest = (Header *)((uint8_t *) curr + hsize);
+        Chunk *rest = (Chunk *)((uint8_t *) curr + hsize);
         rest->size = curr->size - hsize;
         rest->next = next;
         next = rest;
@@ -129,8 +129,8 @@ static void *allocate_from_chunk(Header *prev, Header *curr, size_t size)
 static void *allocate(size_t size)
 {
     size = align(size);
-    size_t hsize = sizeof(Header) + size;
-    for (Header *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = curr->next) {
+    size_t hsize = sizeof(Chunk) + size;
+    for (Chunk *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = curr->next) {
         if (curr->size >= hsize) // First-fit
             return allocate_from_chunk(prev, curr, size);
     }
@@ -298,7 +298,7 @@ static void mark(void)
 // Dump for debug
 
 ATTR(unused)
-static bool chunk_header_equal(Header *a, Header *b)
+static bool chunk_header_equal(Chunk *a, Chunk *b)
 {
     return a->size == b->size;
 }
@@ -310,9 +310,9 @@ static void heap_dump_single(const Heap *heap)
     fprintf(stderr, "begin: %p..%p\n", p, endp);
     size_t offset;
     bool ellipsis = false;
-    for (Header *h, *prev = NULL; p < endp; p += offset, prev = h) {
-        h = HEADER(p);
-        offset = sizeof(Header) + h->size;
+    for (Chunk *h, *prev = NULL; p < endp; p += offset, prev = h) {
+        h = CHUNK(p);
+        offset = sizeof(Chunk) + h->size;
         if (prev != NULL && chunk_header_equal(h, prev)) {
             if (!ellipsis) {
                 fprintf(stderr, "  [..]\n");
@@ -343,8 +343,8 @@ static void heap_stat(HeapStat *stat)
         stat->size += heap->size;
         size_t offset;
         for (uint8_t *p = heap->body, *endp = p + heap->size; p < endp; p += offset) {
-            Header *h = HEADER(p);
-            offset = sizeof(Header) + h->size;
+            Chunk *h = CHUNK(p);
+            offset = sizeof(Chunk) + h->size;
             size_t j = h->size - 1;
             if (j > TABMAX)
                 j = TABMAX;
@@ -387,7 +387,7 @@ static void heap_print_stat(const char *header)
 
 // Freeing
 
-static void add_to_free_list(Header *h)
+static void add_to_free_list(Chunk *h)
 {
     h->next = free_list; // prepend
     free_list = h;
@@ -447,7 +447,7 @@ static void free_val(Value v)
     }
 }
 
-static bool adjoining_p(const Header *prev, const Header *curr)
+static bool adjoining_p(const Chunk *prev, const Chunk *curr)
 {
     if (prev == NULL)
         return false;
@@ -455,14 +455,14 @@ static bool adjoining_p(const Header *prev, const Header *curr)
     return prevnext == curr;
 }
 
-static Header *free_chunk(Header *prev, Header *curr)
+static Chunk *free_chunk(Chunk *prev, Chunk *curr)
 {
     Value val = (Value) (curr + 1);
     if (in_heap_val(val))
         free_val(val);
     if (adjoining_p(prev, curr)) {
         debug("here");
-        size_t hsize = sizeof(Header) + curr->size;
+        size_t hsize = sizeof(Chunk) + curr->size;
         memset(curr, 0, hsize); // for ease of debug
         prev->size += hsize;
         return prev;
@@ -476,19 +476,18 @@ static void sweep_heap(Heap *heap)
 {
     uint8_t *p = heap->body, *endp = p + heap->size;
     size_t offset;
-    for (Header *h, *prev = NULL; p < endp; p += offset, prev = h) {
-        h = HEADER(p);
-        offset = sizeof(Header) + h->size;
-        if (h->tag == TAG_CHUNK)
+    for (Chunk *ch, *prev = NULL; p < endp; p += offset, prev = ch) {
+        offset = sizeof(Chunk) + ch->size;
+        if (ch->tag == TAG_CHUNK)
             continue;
-        Value v = (Value) (h + 1);
-        Header *h = HEADER(v);
+        Header *h = HEADER(p);
         if (h->living) {
             h->living = false;
             continue;
         }
-        h = free_chunk(prev, h);
-        offset = sizeof(Header) + h->size;
+        ch->tag = TAG_CHUNK;
+        ch = free_chunk(prev, ch);
+        offset = sizeof(Chunk) + h->size;
     }
 }
 
@@ -508,7 +507,7 @@ static void add_heap(void)
         heaps_low = beg;
     if (heaps_high < end)
         heaps_high = end;
-    Header *h = (Header *) last->body;
+    Chunk *h = (Chunk *) last->body;
     h->next = free_list;
     free_list = h;
 }

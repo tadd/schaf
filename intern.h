@@ -18,10 +18,15 @@ typedef enum {
     TAG_LAST = TAG_USER_OBJ
 } ValueTag;
 
+typedef struct Chunk {
+    ValueTag tag;
+    size_t size;
+    struct Chunk *next;
+} Chunk;
+
 typedef struct Header {
     ValueTag tag;
     size_t size;
-    struct Header *next;
     bool living; // used in GC
 } Header;
 
@@ -76,6 +81,7 @@ typedef struct {
     void (*free)(void *p);
 } UserObject;
 
+#define CHUNK(v) ((Chunk*)(v))
 #define HEADER(v) ((Header*)(v))
 #define VALUE_TAG(v) (HEADER(v)->tag)
 
