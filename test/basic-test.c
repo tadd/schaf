@@ -309,7 +309,7 @@ Test(table, inherit_nested) {
     table_free(t);
 }
 
-void tabforeach(uint64_t k, uint64_t v, void *data)
+void tabforeach(const Table *t ATTR(unused), uint64_t k, uint64_t v, void *data)
 {
     uint64_t *x = data;
     *x *= k * v;
