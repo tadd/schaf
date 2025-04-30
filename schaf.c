@@ -565,12 +565,12 @@ static void call_stack_pop(void)
 
 static Value eval_apply(Table *env, Value l)
 {
-    call_stack_push(l);
     Value symproc = car(l), args = cdr(l);
     Value proc = eval(env, symproc);
     expect_type("eval", TYPE_PROC, proc);
     if (!value_tag_is(proc, TAG_SYNTAX))
         args = map_eval(env, args);
+    call_stack_push(l);
     Value ret = apply(env, proc, args);
     call_stack_pop();
     return ret;
