@@ -221,9 +221,11 @@ bool table_set(Table *t, uint64_t key, uint64_t value)
 
 void table_foreach(const Table *t, TableForeachFunc f, void *data)
 {
-    for (size_t i = 0; i < t->body_size; i++) {
-        for (const List *l = t->body[i]; l != NULL; l = l->next) {
-            (*f)(l->key, l->value, data);
+    for (const Table *p = t; p != NULL; p = p->parent) {
+        for (size_t i = 0; i < t->body_size; i++) {
+            for (const List *l = t->body[i]; l != NULL; l = l->next) {
+                (*f)(p, l->key, l->value, data);
+            }
         }
     }
 }
