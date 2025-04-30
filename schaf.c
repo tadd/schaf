@@ -873,27 +873,23 @@ static Value syn_case(Table *env, Value args)
 //PTR
 static Value syn_and(Table *env, Value args)
 {
-    if (args == Qnil)
-        return Qtrue;
-    Value p = args;
-    for (Value next; (next = cdr(p)) != Qnil; p = next) {
-        if (eval(env, car(p)) == Qfalse)
-            return Qfalse;
+    Value last = Qtrue;
+    for (Value p = args; p != Qnil; p = cdr(p)) {
+        if ((last = eval(env, car(p))) == Qfalse)
+            break;
     }
-    return eval(env, car(p));
+    return last;
 }
 
 //PTR
 static Value syn_or(Table *env, Value args)
 {
-    if (args == Qnil)
-        return Qfalse;
-    Value p = args;
-    for (Value next, v; (next = cdr(p)) != Qnil; p = next) {
-        if ((v = eval(env, car(p))) != Qfalse)
-            return v;
+    Value last = Qfalse;
+    for (Value p = args; p != Qnil; p = cdr(p)) {
+        if ((last = eval(env, car(p))) != Qfalse)
+            break;
     }
-    return eval(env, car(p));
+    return last;
 }
 
 // 4.2.2. Binding constructs
@@ -1644,9 +1640,9 @@ static Value proc_member(UNUSED Table *env, Value obj, Value list)
 static Value assq(Value key, Value l)
 {
     for (Value p = l; p != Qnil; p = cdr(p)) {
-        Value entry = car(p);
-        if (value_is_pair(entry) && car(entry) == key)
-            return entry;
+        Value e = car(p);
+        if (value_is_pair(e) && car(e) == key)
+            return e;
     }
     return Qfalse;
 }
@@ -1660,9 +1656,9 @@ static Value proc_assq(UNUSED Table *env, Value obj, Value alist)
 static Value assoc(Value key, Value l)
 {
     for (Value p = l; p != Qnil; p = cdr(p)) {
-        Value entry = car(p);
-        if (value_is_pair(entry) && equal(car(entry), key))
-            return entry;
+        Value e = car(p);
+        if (value_is_pair(e) && equal(car(e), key))
+            return e;
     }
     return Qfalse;
 }
