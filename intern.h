@@ -39,6 +39,7 @@ typedef struct {
 typedef Value (*cfunc_t)(/*ANYARGS*/);
 typedef struct {
     Procedure proc;
+    char *name;
     cfunc_t cfunc;
 } CFunc;
 
