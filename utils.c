@@ -53,9 +53,9 @@ static List *list_new(uint64_t key, uint64_t value, List *next)
 
 static void list_free(List *l)
 {
-    for (List *next; l != NULL; l = next) {
-        next = l->next;
-        free(l);
+    for (List *p = l, *next; p != NULL; p = next) {
+        next = p->next;
+        free(p);
     }
 }
 
@@ -100,10 +100,10 @@ void table_free(Table *t)
     free(t);
 }
 
-static size_t list_length(List *l)
+static size_t list_length(const List *l)
 {
     size_t len = 0;
-    for (; l != NULL; l = l->next)
+    for (const List *p = l; p != NULL; p = p->next)
         len++;
     return len;
 }
@@ -142,9 +142,9 @@ static inline bool table_too_many_elements(const Table *t)
 static List *list_reverse(List *l)
 {
     List *prev = NULL;
-    for (List *next; l != NULL; prev = l, l = next) {
-        next = l->next;
-        l->next = prev;
+    for (List *p = l, *next; p != NULL; prev = p, p = next) {
+        next = p->next;
+        p->next = prev;
     }
     return prev;
 }
@@ -156,12 +156,11 @@ static void table_resize(Table *t)
     t->body_size *= TABLE_RESIZE_FACTOR;
     t->body = xcalloc(t->body_size, sizeof(List *)); // set NULL
     for (size_t i = 0; i < old_body_size; i++) {
-        List *l = old_body[i];
-        for (List *next; l != NULL; l = next) {
-            next = l->next;
-            uint64_t j = body_index(t, l->key);
-            l->next = t->body[j];
-            t->body[j] = l;
+        for (List *p = old_body[i], *next; p != NULL; p = next) {
+            next = p->next;
+            uint64_t j = body_index(t, p->key);
+            p->next = t->body[j];
+            t->body[j] = p;
         }
     }
     free(old_body);
@@ -182,9 +181,9 @@ Table *table_put(Table *t, uint64_t key, uint64_t value)
     return t;
 }
 
-static List *find1(const List *p, uint64_t key)
+static List *find1(const List *l, uint64_t key)
 {
-    for (; p != NULL; p = p->next) {
+    for (const List *p = l; p != NULL; p = p->next) {
         if (p->key == key) // direct
             return (List *) p;
     }
@@ -194,9 +193,9 @@ static List *find1(const List *p, uint64_t key)
 // chained!
 static List *find(const Table *t, uint64_t key)
 {
-    for (; t != NULL; t = t->parent) {
-        uint64_t i = body_index(t, key);
-        List *found = find1(t->body[i], key);
+    for (const Table *p = t; p != NULL; p = p->parent) {
+        uint64_t i = body_index(p, key);
+        List *found = find1(p->body[i], key);
         if (found != NULL)
             return found;
     }
