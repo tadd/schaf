@@ -20,6 +20,7 @@
 ATTR(noreturn) ATTR(format(printf, 1, 2)) void error(const char *fmt, ...);
 ATTR_XMALLOC void *xmalloc(size_t size);
 ATTR_XMALLOC void *xcalloc(size_t nmem, size_t memsize);
+ATTR_XMALLOC char *xstrdup(const char *s);
 
 #define debug(fmt, ...) fprintf(stderr, fmt "\n" __VA_OPT__(,) __VA_ARGS__);
 
