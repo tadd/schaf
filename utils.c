@@ -124,7 +124,9 @@ void table_dump(const Table *t)
 
 static inline uint64_t table_hash(uint64_t x)
 {
-    return x; // id; do nothing
+    x ^= x << 7;
+    x ^= x >> 9;
+    return x; // xorshift64-based
 }
 
 static inline uint64_t body_index(const Table *t, uint64_t key)
