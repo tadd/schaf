@@ -192,6 +192,14 @@ Test(schaf, runtime_error_line_column) {
 "(f)");
 }
 
+Test(schaf, runtime_error_funcs) {
+    expect_runtime_error(
+"unbound variable: f\n"
+"\t<inline>:1:9 in <toplevel>"
+,
+"(print (f))");
+}
+
 Test(schaf, div0) {
     expect_runtime_error("divided by zero", "(/ 42 0)");
 }
