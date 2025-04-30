@@ -25,7 +25,7 @@ ATTR_XMALLOC char *xstrdup(const char *s);
 #define debug(fmt, ...) fprintf(stderr, fmt "\n" __VA_OPT__(,) __VA_ARGS__);
 
 typedef struct Table Table;
-typedef void (*TableForeachFunc)(uint64_t key, uint64_t val, void *data);
+typedef void (*TableForeachFunc)(const Table *env, uint64_t key, uint64_t val, void *data);
 typedef Table Set;
 typedef void (*SetForeachFunc)(uint64_t val, void *data);
 
