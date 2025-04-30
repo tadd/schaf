@@ -1201,7 +1201,7 @@ static Value proc_equal(UNUSED Table *env, Value x, Value y)
 }
 
 // 6.2.5. Numerical operations
-static int64_t value_get_int(const char *header, Value v)
+static int64_t get_int(const char *header, Value v)
 {
     expect_type(header, TYPE_INT, v);
     return value_to_int(v);
@@ -1216,9 +1216,9 @@ static Value proc_numeq(UNUSED Table *env, Value args)
 {
     expect_arity_min("=", 2, args);
 
-    int64_t x = value_get_int("=", car(args));
+    int64_t x = get_int("=", car(args));
     args = cdr(args);
-    while (value_get_int("=", car(args)) == x) {
+    while (get_int("=", car(args)) == x) {
         if ((args = cdr(args)) == Qnil)
             return Qtrue;
     }
@@ -1229,9 +1229,9 @@ static Value proc_lt(UNUSED Table *env, Value args)
 {
     expect_arity_min("<", 2, args);
 
-    int64_t x = value_get_int("<", car(args));
+    int64_t x = get_int("<", car(args));
     for (int64_t y; (args = cdr(args)) != Qnil; x = y) {
-        y = value_get_int("<", car(args));
+        y = get_int("<", car(args));
         if (x >= y)
             return Qfalse;
     }
@@ -1242,9 +1242,9 @@ static Value proc_gt(UNUSED Table *env, Value args)
 {
     expect_arity_min(">", 2, args);
 
-    int64_t x = value_get_int(">", car(args));
+    int64_t x = get_int(">", car(args));
     for (int64_t y; (args = cdr(args)) != Qnil; x = y) {
-        y = value_get_int(">", car(args));
+        y = get_int(">", car(args));
         if (x <= y)
             return Qfalse;
     }
@@ -1255,9 +1255,9 @@ static Value proc_le(UNUSED Table *env, Value args)
 {
     expect_arity_min("<=", 2, args);
 
-    int64_t x = value_get_int("<=", car(args));
+    int64_t x = get_int("<=", car(args));
     for (int64_t y; (args = cdr(args)) != Qnil; x = y) {
-        y = value_get_int("<=", car(args));
+        y = get_int("<=", car(args));
         if (x > y)
             return Qfalse;
     }
@@ -1268,9 +1268,9 @@ static Value proc_ge(UNUSED Table *env, Value args)
 {
     expect_arity_min(">=", 2, args);
 
-    int64_t x = value_get_int(">=", car(args));
+    int64_t x = get_int(">=", car(args));
     for (int64_t y; (args = cdr(args)) != Qnil; x = y) {
-        y = value_get_int(">=", car(args));
+        y = get_int(">=", car(args));
         if (x < y)
             return Qfalse;
     }
@@ -1305,9 +1305,9 @@ static Value proc_even_p(UNUSED Table *env, Value obj)
 static Value proc_max(UNUSED Table *env, Value args)
 {
     expect_arity_min("max", 1, args);
-    int64_t max = value_get_int("max", car(args));
+    int64_t max = get_int("max", car(args));
     for (Value p = cdr(args); p != Qnil; p = cdr(p)) {
-        int64_t x = value_get_int("max", car(p));
+        int64_t x = get_int("max", car(p));
         if (max < x)
             max = x;
     }
@@ -1317,9 +1317,9 @@ static Value proc_max(UNUSED Table *env, Value args)
 static Value proc_min(UNUSED Table *env, Value args)
 {
     expect_arity_min("min", 1, args);
-    int64_t min = value_get_int("min", car(args));
+    int64_t min = get_int("min", car(args));
     for (Value p = cdr(args); p != Qnil; p = cdr(p)) {
-        int64_t x = value_get_int("min", car(p));
+        int64_t x = get_int("min", car(p));
         if (min > x)
             min = x;
     }
@@ -1330,7 +1330,7 @@ static Value proc_add(UNUSED Table *env, Value args)
 {
     int64_t y = 0;
     for (; args != Qnil; args = cdr(args))
-        y += value_get_int("+", car(args));
+        y += get_int("+", car(args));
     return value_of_int(y);
 }
 
@@ -1338,11 +1338,11 @@ static Value proc_sub(UNUSED Table *env, Value args)
 {
     expect_arity_min("-", 1, args);
 
-    int64_t y = value_get_int("-", car(args));
+    int64_t y = get_int("-", car(args));
     if ((args = cdr(args)) == Qnil)
         return value_of_int(-y);
     for (; args != Qnil; args = cdr(args))
-        y -= value_get_int("-", car(args));
+        y -= get_int("-", car(args));
     return value_of_int(y);
 }
 
@@ -1350,7 +1350,7 @@ static Value proc_mul(UNUSED Table *env, Value args)
 {
     int64_t y = 1;
     for (; args != Qnil; args = cdr(args))
-        y *= value_get_int("*", car(args));
+        y *= get_int("*", car(args));
     return value_of_int(y);
 }
 
@@ -1358,11 +1358,11 @@ static Value proc_div(UNUSED Table *env, Value args)
 {
     expect_arity_min("/", 1, args);
 
-    int64_t y = value_get_int("/", car(args));
+    int64_t y = get_int("/", car(args));
     if ((args = cdr(args)) == Qnil)
        return value_of_int(1 / y);
     for (; args != Qnil; args = cdr(args)) {
-        int64_t x = value_get_int("/", car(args));
+        int64_t x = get_int("/", car(args));
         if (x == 0)
             runtime_error("/: divided by zero");
         y /= x;
@@ -1372,16 +1372,16 @@ static Value proc_div(UNUSED Table *env, Value args)
 
 static Value proc_abs(UNUSED Table *env, Value x)
 {
-    int64_t n = value_get_int("abs", x);
+    int64_t n = get_int("abs", x);
     return value_of_int(n < 0 ? -n : n);
 }
 
 static Value proc_quotient(UNUSED Table *env, Value x, Value y)
 {
-    int64_t b = value_get_int("quotient", y);
+    int64_t b = get_int("quotient", y);
     if (b == 0)
         runtime_error("quotient: divided by zero");
-    int64_t a = value_get_int("quotient", x);
+    int64_t a = get_int("quotient", x);
     int64_t c = a / b;
     return value_of_int(c);
 }
@@ -1389,20 +1389,20 @@ static Value proc_quotient(UNUSED Table *env, Value x, Value y)
 
 static Value proc_remainder(UNUSED Table *env, Value x, Value y)
 {
-    int64_t b = value_get_int("remainder", y);
+    int64_t b = get_int("remainder", y);
     if (b == 0)
         runtime_error("remainder: divided by zero");
-    int64_t a = value_get_int("remainder", x);
+    int64_t a = get_int("remainder", x);
     int64_t c = a % b;
     return value_of_int(c);
 }
 
 static Value proc_modulo(UNUSED Table *env, Value x, Value y)
 {
-    int64_t b = value_get_int("modulo", y);
+    int64_t b = get_int("modulo", y);
     if (b == 0)
         runtime_error("modulo: divided by zero");
-    int64_t a = value_get_int("modulo", x);
+    int64_t a = get_int("modulo", x);
     int64_t c = a % b;
     if ((a < 0 && b > 0) || (a > 0 && b < 0))
         c += b;
@@ -1426,12 +1426,12 @@ static int64_t expt(int64_t x, int64_t y)
 
 static int64_t vexpt(Value x, Value y)
 {
-    int64_t b = value_get_int("expt", y);
+    int64_t b = get_int("expt", y);
     if (b < 0)
         runtime_error("expt", "cannot power %d which negative", b);
     if (b == 0)
         return 1;
-    int64_t a = value_get_int("expt", x);
+    int64_t a = get_int("expt", x);
     if (a == 0)
         return 0;
     return expt(a, b);
@@ -1580,7 +1580,7 @@ static Value proc_reverse(UNUSED Table *env, Value list)
 static Value list_tail(const char *func, Value list, Value k)
 {
     expect_list_head(func, list);
-    int64_t n = value_get_int(func, k);
+    int64_t n = get_int(func, k);
     if (n < 0)
         runtime_error("%s: 2nd element needs to be non-negative: "PRId64, n);
     Value p = list;
