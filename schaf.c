@@ -359,11 +359,6 @@ static void expect_type_or(Type e1, Type e2, Value v)
                   value_type_to_string(t));
 }
 
-static void expect_list_head(Value v)
-{
-    expect_type_or(TYPE_NULL, TYPE_PAIR, v);
-}
-
 static void expect_arity_range(int64_t min, int64_t max, Value args)
 {
     int64_t actual = length(args);
@@ -375,7 +370,11 @@ static void expect_arity_range(int64_t min, int64_t max, Value args)
 
 static void expect_arity_min(int64_t min, Value args)
 {
-    expect_arity_range(min, -1, args);
+    int64_t actual = length(args);
+    if (min <= actual)
+        return;
+    runtime_error("wrong number of arguments: expected >= %"PRId64" but got %"PRId64,
+                  min, actual);
 }
 
 static void expect_arity(int64_t expected, Value args)
@@ -863,6 +862,11 @@ static Value syn_cond(Table *env, Value clauses)
         }
     }
     return Qnil;
+}
+
+static void expect_list_head(Value v)
+{
+    expect_type_or(TYPE_NULL, TYPE_PAIR, v);
 }
 
 static Value memq(Value key, Value l);
