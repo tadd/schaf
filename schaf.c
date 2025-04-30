@@ -1969,6 +1969,7 @@ void env_mark(void *env)
     if (!marking) {
         set_free(marked_env);
         marked_env = set_new();
+        set_add(marked_env, (uint64_t) marked_env);
         marking = true;
     }
     table_foreach(env, env_mark_each, NULL);
