@@ -531,12 +531,10 @@ static Value eval(Table *env, Value v);
 
 static Value eval_body(Table *env, Value body)
 {
-    if (body == Qnil)
-        return Qnil;
-    Value p = body;
-    for (Value next; (next = cdr(p)) != Qnil; p = next)
-        eval(env, car(p));
-    return eval(env, car(p));
+    Value last = Qnil;
+    for (Value p = body; p != Qnil; p = cdr(p))
+        last = eval(env, car(p));
+    return last;
 }
 
 static Value eval_body_tmpenv(Table *env, Value body)
@@ -1161,14 +1159,9 @@ static Value syn_define(Table *env, Value args)
 }
 
 // 6.1. Equivalence predicates
-static inline bool eq(Value x, Value y)
-{
-    return x == y;
-}
-
 static Value proc_eq(UNUSED Table *env, Value x, Value y)
 {
-    return OF_BOOL(eq(x, y));
+    return OF_BOOL(x == y);
 }
 
 static bool equal(Value x, Value y)
@@ -1217,12 +1210,11 @@ static Value proc_numeq(UNUSED Table *env, Value args)
     expect_arity_min("=", 2, args);
 
     int64_t x = get_int("=", car(args));
-    args = cdr(args);
-    while (get_int("=", car(args)) == x) {
-        if ((args = cdr(args)) == Qnil)
-            return Qtrue;
+    for (Value p = args; (p = cdr(p)) != Qnil; ) {
+        if (get_int("=", car(p)) != x)
+            return Qfalse;
     }
-    return Qfalse;
+    return Qtrue;
 }
 
 static Value proc_lt(UNUSED Table *env, Value args)
@@ -1613,7 +1605,7 @@ static Value memq(Value key, Value l)
 {
     for (Value p = l; p != Qnil; p = cdr(p)) {
         Value e = car(p);
-        if (eq(e, key))
+        if (e == key)
             return p;
     }
     return Qfalse;
