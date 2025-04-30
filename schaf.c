@@ -733,7 +733,7 @@ static FILE *open_loadable(const char *path)
 
     FILE *in = fopen(rpath, "r");
     if (in == NULL)
-        error("load: can't open file: %s", path);
+        return NULL;
     load_basedir = dirname(rpath);
     return in;
 }
@@ -741,6 +741,8 @@ static FILE *open_loadable(const char *path)
 Value load(const char *path)
 {
     FILE *in = open_loadable(path);
+    if (in == NULL)
+        error("can't open file: %s", path);
     Value retval = iload(in, path);
     fclose(in);
     return retval;
@@ -750,6 +752,8 @@ static Value load_inner(const char *path)
 {
     const char *basedir_saved = load_basedir;
     FILE *in = open_loadable(path);
+    if (in == NULL)
+        runtime_error("load: can't open file: %s", path);
     Value retval = iload_inner(in, path);
     fclose(in);
     load_basedir = basedir_saved;
