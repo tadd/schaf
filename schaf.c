@@ -1601,7 +1601,10 @@ static Value proc_list_tail(UNUSED Table *env, Value list, Value k)
 
 static Value proc_list_ref(UNUSED Table *env, Value list, Value k)
 {
-    return car(list_tail("list-ref", list, k));
+    Value tail = list_tail("list-ref", list, k);
+    if (tail == Qnil)
+        runtime_error("list-ref: list is not longer than %"PRId64, value_to_int(k));
+    return car(tail);
 }
 
 static Value memq(Value key, Value l)
