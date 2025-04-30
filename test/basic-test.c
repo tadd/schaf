@@ -43,7 +43,7 @@
 #define expect_error(pattern, v) do { \
         expect_int_eq(Qundef, v); \
         char *m = strstr(error_message(), pattern); \
-        cr_expect_not_null(m, "expected \"%s\" includes \"%s\"", \
+        cr_expect_not_null(m, "actual string:\n\"%s\"\ndid not include:\n\"%s\"", \
                            error_message(), pattern); \
     } while (0)
 
