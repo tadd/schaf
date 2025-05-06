@@ -133,16 +133,16 @@
       (expect = (f) 42))))
 
 (describe "lambda and envs 2" (lambda ()
-  (let* ((f (lambda () (_defined? x)))
-         (x 0))
-    (expect-f (f)))
-  (let* ((x 0)
-         (f (lambda () (_defined? x))))
+  (let ((x #f))
+    (let* ((f (lambda () x))
+           (x #t))
+      (expect-f (f)))
+    (let* ((x #t)
+           (f (lambda () x)))
     (expect-t (f)))
-  (let* ((x #t)
-         (f (lambda () (_defined? x))))
-    (expect-t (f)))))
-
+    (let* ((x #t)
+           (f (lambda () x)))
+      (expect-t (f))))))
 
 ;; 4.1.5. Conditionals
 (describe "if" (lambda ()
@@ -311,7 +311,6 @@
     (expect equal? `(,x ,y) '(42 10)))))
 
 (describe "letrec" (lambda ()
-  (expect = 42 (letrec () 42)) ;; accepts () for bindings
   (define retval
     (letrec ((myeven?
               (lambda (n)
@@ -324,6 +323,7 @@
                     #f
                     (myeven? (- n 1))))))
       (myeven? 88)))
+  (expect = 42 (letrec () 42)) ;; accepts () for bindings
   (expect-t retval)))
 
 ;; 4.2.3. Sequencing
@@ -913,8 +913,8 @@
   (expect equal? (member (list 'a) '(b (a) c)) '((a) c))))
 
 (describe "assq" (lambda ()
-  (expect equal? (assq 'a ()) #f)
   (define e '((a 1) (b 2) (c 3)))
+  (expect equal? (assq 'a ()) #f)
   (expect equal? (assq 'a e)
                  '(a 1))
   (expect equal? (assq 'b e)
@@ -938,8 +938,8 @@
                  '(5 7))))
 
 (describe "assoc" (lambda ()
-  (expect equal? (assoc 'a ()) #f)
   (define e '((a 1) (b 2) (c 3)))
+  (expect equal? (assoc 'a ()) #f)
   (expect equal? (assoc 'a e)
                  '(a 1))
   (expect equal? (assoc 'b e)

@@ -1,6 +1,7 @@
 (define tests '())
 (define n-failure 0)
 (define n-success 0)
+(define test-name #f)
 
 (define (describe name f)
   (set! tests `((,name . ,f) . ,tests)))
