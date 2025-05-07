@@ -12,6 +12,9 @@
 #include <libgen.h>
 #include <limits.h>
 #include <unistd.h>
+#ifdef __SANITIZE_ADDRESS__
+#include <sanitizer/asan_interface.h>
+#endif
 
 #include "schaf.h"
 #include "intern.h"
@@ -1780,6 +1783,9 @@ static bool continuation_set(Value c)
     cont->sp = sp;
     cont->stack_len = gc_stack_get_size(sp);
     cont->stack = xmalloc(cont->stack_len);
+#ifdef __SANITIZE_ADDRESS__
+    ASAN_UNPOISON_MEMORY_REGION(sp, cont->stack_len);
+#endif
     memcpy(cont->stack, sp, cont->stack_len);
     cont->call_stack = call_stack;
     return setjmp(cont->state) != 0;
