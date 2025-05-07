@@ -1934,6 +1934,7 @@ static Value syn_defined_p(Table *env, Value name)
 int sch_fin(void)
 {
     gc_fin();
+    table_free(toplevel_environment);
     return exit_status;
 }
 
