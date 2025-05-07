@@ -763,6 +763,54 @@ static void dump_stack_trace(StackFrame **call_stack)
 
 static void fdisplay(FILE* f, Value v);
 
+static bool eval_keywords_1(Value list, Value sym, bool inner)
+{
+    if (sym == SYM_UNQUOTE || sym == SYM_UNQUOTE_SPLICING)
+        return inner;
+    if (sym == SYM_QUASIQUOTE) {
+        if (inner)
+            return true;
+        inner = true;
+    }
+    Value v = env_get(env_null, sym);
+    if (value_is_procedure(v))
+        PAIR(list)->car = v; // embed TAG_SYNTAX value directly
+    return inner;
+}
+
+static bool proper_p(Value head)
+{
+    if (!value_is_pair(head))
+        return false;
+    Value next = cdr(head);
+    return next == Qnil || value_is_pair(next);
+}
+
+static void eval_keywords_in_list(Value list, bool inner)
+{
+    Value v = car(list), p = list;
+    if (value_is_symbol(v)) {
+        inner = eval_keywords_1(list, v, inner);
+        p = cdr(p);
+    }
+    for (Value v; p != Qnil; p = cdr(p)) {
+        if (!value_is_pair(p))
+            return;
+        v = car(p);
+        if (proper_p(v))
+            eval_keywords_in_list(v, inner);
+    }
+}
+
+static void eval_keywords(Value list)
+{
+    for (Value p = list, v; p != Qnil; p = cdr(p)) {
+        v = car(p);
+        if (proper_p(v))
+            eval_keywords_in_list(v, false);
+    }
+}
+
 static Value iload(FILE *in, const char *filename)
 {
     Source *src = iparse(in, filename);
