@@ -1,5 +1,7 @@
 (load "./lib.scm")
 
+(define local? #t) ;; tweak me when to use other implementations
+
 (describe "parsing comments" (lambda ()
   (expect = 1 1 ; foo
                )
@@ -629,13 +631,14 @@
   (noexpect zero? 99999)
   (noexpect zero? -99999)
 
-  (noexpect zero? 'a)
-  (noexpect zero? '())
-  (noexpect zero? '(1))
-  (noexpect zero? "1")
-  (noexpect zero? #t)
-  (noexpect zero? #f)
-  (noexpect zero? zero?)))
+  (if local? (begin
+    (noexpect zero? 'a)
+    (noexpect zero? '())
+    (noexpect zero? '(1))
+    (noexpect zero? "1")
+    (noexpect zero? #t)
+    (noexpect zero? #f)
+    (noexpect zero? zero?)))))
 
 (describe "positive?" (lambda ()
   (expect positive? 1)
@@ -645,13 +648,14 @@
   (noexpect positive? -1)
   (noexpect positive? -99999)
 
-  (noexpect positive? 'a)
-  (noexpect positive? '())
-  (noexpect positive? '(1))
-  (noexpect positive? "1")
-  (noexpect positive? #t)
-  (noexpect positive? #f)
-  (noexpect positive? positive?)))
+  (if local? (begin
+    (noexpect positive? 'a)
+    (noexpect positive? '())
+    (noexpect positive? '(1))
+    (noexpect positive? "1")
+    (noexpect positive? #t)
+    (noexpect positive? #f)
+    (noexpect positive? positive?)))))
 
 (describe "negative?" (lambda ()
   (expect negative? -1)
@@ -661,13 +665,14 @@
   (noexpect negative? 1)
   (noexpect negative? 1000000)
 
-  (noexpect negative? 'a)
-  (noexpect negative? '())
-  (noexpect negative? '(1))
-  (noexpect negative? "1")
-  (noexpect negative? #t)
-  (noexpect negative? #f)
-  (noexpect negative? negative?)))
+  (if local? (begin
+    (noexpect negative? 'a)
+    (noexpect negative? '())
+    (noexpect negative? '(1))
+    (noexpect negative? "1")
+    (noexpect negative? #t)
+    (noexpect negative? #f)
+    (noexpect negative? negative?)))))
 
 (describe "odd?" (lambda ()
   (expect odd? 1)
@@ -684,13 +689,14 @@
   (noexpect odd? -2)
   (noexpect odd? -100000)
 
-  (noexpect odd? 'a)
-  (noexpect odd? '())
-  (noexpect odd? '(1))
-  (noexpect odd? "1")
-  (noexpect odd? #t)
-  (noexpect odd? #f)
-  (noexpect odd? odd?)))
+  (if local? (begin
+    (noexpect odd? 'a)
+    (noexpect odd? '())
+    (noexpect odd? '(1))
+    (noexpect odd? "1")
+    (noexpect odd? #t)
+    (noexpect odd? #f)
+    (noexpect odd? odd?)))))
 
 (describe "even?" (lambda ()
   (expect even? 0)
@@ -707,13 +713,14 @@
   (noexpect even? -1)
   (noexpect even? -99999)
 
-  (noexpect even? 'a)
-  (noexpect even? '())
-  (noexpect even? '(1))
-  (noexpect even? "1")
-  (noexpect even? #t)
-  (noexpect even? #f)
-  (noexpect even? even?)))
+  (if local? (begin
+    (noexpect even? 'a)
+    (noexpect even? '())
+    (noexpect even? '(1))
+    (noexpect even? "1")
+    (noexpect even? #t)
+    (noexpect even? #f)
+    (noexpect even? even?)))))
 
 (describe "max" (lambda ()
   (expect equal? (max 0) 0)
@@ -1199,22 +1206,23 @@
 ;; End of tests from Kawa
 
 ;; Local Extensions
-(describe "_cputime" (lambda ()
-  (let ((t (_cputime)))
-    (expect number? t)
-    (expect > t 0))))
+(if local? (begin
+  (describe "_cputime" (lambda ()
+    (let ((t (_cputime)))
+      (expect number? t)
+      (expect > t 0))))
 
-(describe "_defined?" (lambda ()
-  (define a 10)
-  (define (f) (_defined? a))
-  (define (f2) (_defined? b))
-  (let ((g (lambda () (_defined? a)))
-        (g2 (lambda () (_defined? b))))
-    (expect-t (_defined? a))
-    (expect-f (_defined? b))
-    (expect-t (f))
-    (expect-f (f2))
-    (expect-t (g))
-    (expect-f (g2)))))
+  (describe "_defined?" (lambda ()
+    (define a 10)
+    (define (f) (_defined? a))
+    (define (f2) (_defined? b))
+    (let ((g (lambda () (_defined? a)))
+          (g2 (lambda () (_defined? b))))
+      (expect-t (_defined? a))
+      (expect-f (_defined? b))
+      (expect-t (f))
+      (expect-f (f2))
+      (expect-t (g))
+      (expect-f (g2)))))))
 
 (test-run)
