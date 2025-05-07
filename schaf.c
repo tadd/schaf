@@ -66,7 +66,7 @@ static const int64_t CFUNCARG_MAX = 3;
 
 // Environment: list of Frames
 // Frame: Table of 'symbol => <value>
-static Table *toplevel_environment;
+static Table *toplevel_environment, *syntax_values;
 static Value symbol_names = Qnil; // ("name0" "name1" ...)
 Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
     SYM_RARROW;
@@ -570,7 +570,11 @@ static Value eval_apply(Table *env, Value l)
 {
     call_stack_push(l);
     Value symproc = car(l), args = cdr(l);
-    Value proc = eval(env, symproc);
+    Value proc = symproc;
+    if (value_is_symbol(symproc))
+        proc = eval(env, symproc);
+    // else
+    //     debug("got it");
     expect_type("eval", TYPE_PROC, proc);
     if (!value_tag_is(proc, TAG_SYNTAX))
         args = map_eval(env, args);
@@ -690,12 +694,61 @@ static void call_stack_check_consistency(void)
     fprintf(stderr, "\n");
 }
 
+static bool eval_keywords_1(Value list, Value sym, bool inner)
+{
+    if (sym == SYM_UNQUOTE || sym == SYM_UNQUOTE_SPLICING)
+        return inner;
+    if (sym == SYM_QUASIQUOTE) {
+        if (inner)
+            return true;
+        inner = true;
+    }
+    Value v = env_get(syntax_values, sym);
+    if (value_is_procedure(v))
+        PAIR(list)->car = v; // embed TAG_SYNTAX value directly
+    return inner;
+}
+
+static bool proper_p(Value head)
+{
+    if (!value_is_pair(head))
+        return false;
+    Value next = cdr(head);
+    return next == Qnil || value_is_pair(next);
+}
+
+static void eval_keywords_in_list(Value list, bool inner)
+{
+    Value v = car(list), p = list;
+    if (value_is_symbol(v)) {
+        inner = eval_keywords_1(list, v, inner);
+        p = cdr(p);
+    }
+    for (Value v; p != Qnil; p = cdr(p)) {
+        if (!value_is_pair(p))
+            return;
+        v = car(p);
+        if (proper_p(v))
+            eval_keywords_in_list(v, inner);
+    }
+}
+
+static void eval_keywords(Value list)
+{
+    for (Value p = list, v; p != Qnil; p = cdr(p)) {
+        v = car(p);
+        if (proper_p(v))
+            eval_keywords_in_list(v, false);
+    }
+}
+
 static Value iload(FILE *in, const char *filename)
 {
     Value ast = iparse(in, filename), l = cadr(ast);
     if (l == Qundef)
         return Qundef;
     source_data = cons(ast, source_data);
+    eval_keywords(l);
     if (setjmp(jmp_runtime_error) != 0) {
         dump_stack_trace();
         return Qundef;
@@ -711,9 +764,10 @@ static Value iload(FILE *in, const char *filename)
 static Value iload_inner(FILE *in, const char *path)
 {
     Value ast = iparse(in, path), l = cadr(ast);
-    source_data = cons(ast, source_data);
     if (l == Qundef)
         return Qundef;
+    source_data = cons(ast, source_data);
+    eval_keywords(l);
     return eval_body(toplevel_environment, l);
 }
 
@@ -1935,6 +1989,7 @@ int sch_fin(void)
 {
     gc_fin();
     table_free(toplevel_environment);
+    table_free(syntax_values);
     return exit_status;
 }
 
@@ -1966,37 +2021,38 @@ void sch_init(uintptr_t *sp)
     DEF_SYMBOL(RARROW, "=>");
 
     toplevel_environment = table_new();
-    Table *e = toplevel_environment;
+    syntax_values = table_new();
+    Table *e = toplevel_environment, *s = syntax_values;
 
     // 4. Expressions
 
     // 4.1. Primitive expression types
     // 4.1.2. Literal expressions
-    define_syntax(e, "quote", syn_quote, 1);
+    define_syntax(s, "quote", syn_quote, 1);
     // 4.1.4. Procedures
-    define_syntax(e, "lambda", syn_lambda, -1);
+    define_syntax(s, "lambda", syn_lambda, -1);
     // 4.1.5. Conditionals
-    define_syntax(e, "if", syn_if, -1);
+    define_syntax(s, "if", syn_if, -1);
     // 4.1.6. Assignments
-    define_syntax(e, "set!", syn_set, 2);
+    define_syntax(s, "set!", syn_set, 2);
     // 4.2. Derived expression types
     // 4.2.1. Conditionals
-    define_syntax(e, "cond", syn_cond, -1);
-    define_syntax(e, "case", syn_case, -1);
-    define_syntax(e, "and", syn_and, -1);
-    define_syntax(e, "or", syn_or, -1);
+    define_syntax(s, "cond", syn_cond, -1);
+    define_syntax(s, "case", syn_case, -1);
+    define_syntax(s, "and", syn_and, -1);
+    define_syntax(s, "or", syn_or, -1);
     // 4.2.2. Binding constructs
-    define_syntax(e, "let", syn_let, -1); // with named let in 4.2.4.
-    define_syntax(e, "let*", syn_let_star, -1);
-    define_syntax(e, "letrec", syn_letrec, -1);
+    define_syntax(s, "let", syn_let, -1); // with named let in 4.2.4.
+    define_syntax(s, "let*", syn_let_star, -1);
+    define_syntax(s, "letrec", syn_letrec, -1);
     // 4.2.3. Sequencing
-    define_syntax(e, "begin", syn_begin, -1);
+    define_syntax(s, "begin", syn_begin, -1);
     // 4.2.4. Iteration
-    define_syntax(e, "do", syn_do, -1);
+    define_syntax(s, "do", syn_do, -1);
     // 4.2.6. Quasiquotation
-    define_syntax(e, "quasiquote", syn_quasiquote, 1);
-    define_syntax(e, "unquote", syn_unquote, 1);
-    define_syntax(e, "unquote-splicing", syn_unquote_splicing, 1);
+    define_syntax(s, "quasiquote", syn_quasiquote, 1);
+    define_syntax(s, "unquote", syn_unquote, 1);
+    define_syntax(s, "unquote-splicing", syn_unquote_splicing, 1);
     // 4.3. Macros
     // 4.3.2. Pattern language
     //- syntax-rules
@@ -2004,7 +2060,7 @@ void sch_init(uintptr_t *sp)
     // 5. Program structure
 
     // 5.2. Definitions
-    define_syntax(e, "define", syn_define, -1);
+    define_syntax(s, "define", syn_define, -1);
     // 5.3. Syntax definitions
     //- define-syntax
 
@@ -2101,5 +2157,5 @@ void sch_init(uintptr_t *sp)
     // Local Extensions
     define_procedure(e, "print", proc_print, -1); // like Gauche
     define_procedure(e, "_cputime", proc_cputime, 0);
-    define_syntax(e, "_defined?", syn_defined_p, 1);
+    define_syntax(s, "_defined?", syn_defined_p, 1);
 }
