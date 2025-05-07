@@ -693,9 +693,9 @@ static void call_stack_check_consistency(void)
 static Value iload(FILE *in, const char *filename)
 {
     Value ast = iparse(in, filename), l = cadr(ast);
-    source_data = cons(ast, source_data);
     if (l == Qundef)
         return Qundef;
+    source_data = cons(ast, source_data);
     if (setjmp(jmp_runtime_error) != 0) {
         dump_stack_trace();
         return Qundef;
