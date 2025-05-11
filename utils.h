@@ -9,7 +9,6 @@
 #define ATTR(x) __attribute__((x))
 #define UNREACHABLE() error("unreachable"), __builtin_unreachable()
 #define ATTR_XMALLOC ATTR(malloc) ATTR(used) ATTR(returns_nonnull)
-#define ATTR_HIDDEN ATTR(visibility("hidden"))
 
 ATTR(noreturn) ATTR(format(printf, 1, 2)) void error(const char *fmt, ...);
 ATTR_XMALLOC void *xmalloc(size_t size);
