@@ -324,6 +324,29 @@ Test(table, foreach) {
     table_free(t);
 }
 
+void table_dump(const Table *t);
+
+Test(table, dup) {
+    Table *t = table_new();
+    table_put(t, 2, 3);
+    table_put(t, 5, 7);
+    table_put(t, 11, 13);
+
+    cr_assert(eq(llong, 3, table_get(t, 2)));
+    cr_assert(eq(llong, 7, table_get(t, 5)));
+    cr_assert(eq(llong, 13, table_get(t, 11)));
+
+    Table *dup = table_dup(t);
+    cr_assert(eq(llong, 3, table_get(dup, 2)));
+    cr_assert(eq(llong, 7, table_get(dup, 5)));
+    cr_assert(eq(llong, 13, table_get(dup, 11)));
+
+    cr_assert(eq(llong, 3, table_get(t, 2)));
+    cr_assert(eq(llong, 7, table_get(t, 5)));
+    cr_assert(eq(llong, 13, table_get(t, 11)));
+    table_free(t);
+}
+
 Test(set, add_include_delete) {
     Set *t = set_new();
 

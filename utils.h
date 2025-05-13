@@ -24,6 +24,7 @@ typedef void (*SetForeachFunc)(uint64_t val, void *data);
 extern const uint64_t TABLE_NOT_FOUND;
 Table *table_new(void);
 Table *table_inherit(const Table *t);
+Table *table_dup(const Table *t);
 void table_free(Table *t);
 Table *table_put(Table *t, uint64_t key, uint64_t val); // `val` can't be TABLE_NOT_FOUND
 bool table_set(Table *t, uint64_t key, uint64_t val); // set if found
