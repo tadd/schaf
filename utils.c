@@ -51,6 +51,18 @@ static List *list_new(uint64_t key, uint64_t value, List *next)
     return l;
 }
 
+static List *list_dup(const List *orig)
+{
+    List head = { .key = 0, .value = 0, .next = NULL };
+    const List *p = orig;
+    for (List *q = &head, *e; p != NULL; p = p->next, q = e) {
+        e = xmalloc(sizeof(List));
+        *e = *p;
+        q->next = e;
+    }
+    return head.next;
+}
+
 static void list_free(List *l)
 {
     for (List *p = l, *next; p != NULL; p = next) {
@@ -88,6 +100,16 @@ Table *table_inherit(const Table *p)
 Table *table_new(void)
 {
     return table_inherit(NULL);
+}
+
+Table *table_dup(const Table *orig)
+{
+    Table *t = xmalloc(sizeof(Table));
+    *t = *orig;
+    t->body = xcalloc(t->body_size, sizeof(List *));
+    for (size_t i = 0; i < t->body_size; i++)
+        t->body[i] = list_dup(orig->body[i]);
+    return t;
 }
 
 void table_free(Table *t)
