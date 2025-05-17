@@ -106,8 +106,6 @@ void gc_add_root(const Value *r);
 void gc_add_root_env(Table **env);
 size_t gc_stack_get_size(uintptr_t *sp);
 ATTR_XMALLOC Header *gc_malloc(size_t size);
-void env_mark(void *env);
-void env_free(void *env);
 
 #pragma GCC visibility pop
 

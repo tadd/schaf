@@ -227,7 +227,6 @@ static void mark_val(Value v)
     }
     case TAG_CLOSURE: {
         Closure *p = CLOSURE(v);
-        env_mark(p->env);
         mark_val(p->params);
         mark_val(p->body);
         return;
@@ -412,7 +411,7 @@ static void free_val(Value v)
         return;
     switch (VALUE_TAG(v)) {
     case TAG_CLOSURE:
-        env_free(CLOSURE(v)->env);
+        table_free(CLOSURE(v)->env);
         return;
     case TAG_CONTINUATION:
         free(CONTINUATION(v)->stack);
