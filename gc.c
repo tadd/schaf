@@ -8,20 +8,26 @@
 #include "intern.h"
 #include "utils.h"
 
-typedef struct {
-    size_t size, used;
-    uint8_t *body;
-} Heap;
-
 enum {
     MiB = 1024 * 1024,
     HEAP_RATIO = 2,
 };
 
+typedef struct {
+    size_t size, used;
+    uint8_t *body;
+} HeapSlot;
+
+typedef struct {
+    size_t size;
+    // 64 is enough large, it can use up the entire 64-bit memory space
+    // (= (fold + 0 (map (cut expt 2 <>) (iota 64))) (- (expt 2 64) 1)) ;;=> #t
+    HeapSlot *slot[64];
+} Heap;
+
 static size_t init_size = 1 * MiB;
-// 64 is enough large, it can use up the entire 64-bit memory space
-static Heap *heaps[64];
-static size_t heaps_length;
+static Heap heap;
+
 static uintptr_t *stack_base;
 
 static bool stress;
@@ -41,9 +47,9 @@ static inline size_t align(size_t size)
     return (size + 7U) / 8U * 8U;
 }
 
-static Heap *heap_new(size_t size)
+static HeapSlot *heap_slot_new(size_t size)
 {
-    Heap *h = xcalloc(1, sizeof(Heap));
+    HeapSlot *h = xcalloc(1, sizeof(HeapSlot));
     h->size = size;
     h->used = 0;
     h->body = xcalloc(1, size);
@@ -52,9 +58,9 @@ static Heap *heap_new(size_t size)
 
 void gc_fin(void)
 {
-    for (size_t i = 0; i < heaps_length; i++) {
-        free(heaps[i]->body);
-        free(heaps[i]);
+    for (size_t i = 0; i < heap.size; i++) {
+        free(heap.slot[i]->body);
+        free(heap.slot[i]);
     }
 }
 
@@ -62,18 +68,17 @@ void gc_init(uintptr_t *sp)
 {
     stack_base = sp;
     init_size = align(init_size);
-    heaps[0] = heap_new(init_size);
-    heaps_length = 1;
+    heap.slot[0] = heap_slot_new(init_size);
+    heap.size = 1;
 }
 
 static void *allocate(size_t size)
 {
-    size = align(size);
-    Heap *heap = heaps[heaps_length-1]; // use the last heap only
-    if (heap->used + size > heap->size)
+    HeapSlot *last = heap.slot[heap.size-1]; // use the last slot only
+    if (last->used + size > last->size)
         return NULL;
-    uint8_t *ret = heap->body + heap->used;
-    heap->used += size;
+    uint8_t *ret = last->body + last->used;
+    last->used += size;
     return ret;
 }
 
@@ -85,14 +90,14 @@ size_t gc_stack_get_size(uintptr_t *sp)
 static bool enough_free_space(void)
 {
     static const size_t minreq = sizeof(Continuation); // maybe the largest
-    Heap *heap = heaps[heaps_length-1];
-    return (heap->size - heap->used) >= minreq;
+    HeapSlot *last = heap.slot[heap.size-1];
+    return (last->size - last->used) >= minreq;
 }
 
 static void increase_heaps(void)
 {
-    Heap *heap = heaps[heaps_length-1];
-    heaps[heaps_length++] = heap_new(heap->size * HEAP_RATIO);
+    HeapSlot *last = heap.slot[heap.size-1];
+    heap.slot[heap.size++] = heap_slot_new(last->size * HEAP_RATIO);
 }
 
 static void gc(void)
@@ -105,7 +110,7 @@ static void gc(void)
 static double heaps_size(void)
 {
     // Sum of a geometric sequence
-    return init_size * (pow(HEAP_RATIO, heaps_length) - 1)
+    return init_size * (pow(HEAP_RATIO, heap.size) - 1)
         / (HEAP_RATIO - 1);
 }
 
@@ -113,6 +118,7 @@ void *gc_malloc(size_t size)
 {
     if (stress)
         gc();
+    size = align(size);
     void *p = allocate(size);
     if (!stress && p == NULL) {
         gc();
