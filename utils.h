@@ -6,6 +6,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifdef __SANITIZE_ADDRESS__
+#include <sanitizer/asan_interface.h>
+#define UNPOISON(p, n) ASAN_UNPOISON_MEMORY_REGION(p, n)
+#else
+#define UNPOISON(p, n) //nothing
+#endif
+
 #define ATTR(x) __attribute__((x))
 #define UNREACHABLE() error("unreachable"), __builtin_unreachable()
 #define ATTR_XMALLOC ATTR(malloc) ATTR(used) ATTR(returns_nonnull)

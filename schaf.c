@@ -12,9 +12,6 @@
 #include <libgen.h>
 #include <limits.h>
 #include <unistd.h>
-#ifdef __SANITIZE_ADDRESS__
-#include <sanitizer/asan_interface.h>
-#endif
 
 #include "schaf.h"
 #include "intern.h"
@@ -471,7 +468,7 @@ static void jump(Continuation *cont)
     longjmp(cont->state, 1);
 }
 
-#define GET_SP(p) uintptr_t v##p = 0, *p = &v##p
+#define GET_SP(p) uintptr_t v##p = 0, *p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
 
 ATTR(noreturn) ATTR(noinline)
 static void apply_continuation(Value f, Value args)
@@ -1783,9 +1780,7 @@ static bool continuation_set(Value c)
     cont->sp = sp;
     cont->stack_len = gc_stack_get_size(sp);
     cont->stack = xmalloc(cont->stack_len);
-#ifdef __SANITIZE_ADDRESS__
-    ASAN_UNPOISON_MEMORY_REGION(sp, cont->stack_len);
-#endif
+    UNPOISON(sp, cont->stack_len);
     memcpy(cont->stack, sp, cont->stack_len);
     cont->call_stack = call_stack;
     return setjmp(cont->state) != 0;
