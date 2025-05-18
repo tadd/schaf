@@ -64,9 +64,9 @@
   (exit (zero? n-failure)))
 
 (define (test-run-single pair)
-  (let ((test-name (car pair))
-        (func (cdr pair)))
-      (func)))
+  (set! test-name (car pair))
+  (let ((func (cdr pair)))
+    (func)))
 
 (define (test-summarize)
   (display* "Test summary: "
