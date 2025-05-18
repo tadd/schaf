@@ -42,4 +42,4 @@
       (prints "long lived tree of depth " max-depth
               "	 check: " (check long-lived-tree)))))
 
-(main 9)
+(main 10)
