@@ -412,7 +412,7 @@ static void free_val(Value v)
         return;
     switch (VALUE_TAG(v)) {
     case TAG_CLOSURE:
-        env_free(CLOSURE(v)->env);
+        table_free(CLOSURE(v)->env);
         return;
     case TAG_CONTINUATION:
         free(CONTINUATION(v)->stack);

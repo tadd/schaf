@@ -328,9 +328,42 @@ Test(table, foreach) {
     table_free(t);
 }
 
-void table_dump(const Table *t);
+typedef struct List {
+    uint64_t key, value;
+    struct List *next;
+} List;
+
+struct Table {
+    const Table *parent;
+    size_t size, body_size;
+    List **body;
+};
+
+static bool list_eq(const List *x, const List *y)
+{
+    const List *p, *q;
+    for (p = x, q = y; p != NULL; p = p->next, q = q->next) {
+        if (p->key != q->key || p->value != q->value)
+            return false;
+    }
+    return q == NULL;
+}
+
+static bool table_eq(const Table *x, const Table *y)
+{
+    if (x->parent != y->parent ||
+        x->size != y->size ||
+        x->body_size != y->body_size)
+        return false;
+    for (size_t i = 0; i < x->body_size; i++) {
+        if (!list_eq(x->body[i], y->body[i]))
+            return false;
+    }
+    return true;
+}
 
 Test(table, dup) {
+    uint64_t N = TABLE_NOT_FOUND;
     Table *t = table_new();
     table_put(t, 2, 3);
     table_put(t, 5, 7);
@@ -341,6 +374,8 @@ Test(table, dup) {
     cr_assert(eq(llong, 13, table_get(t, 11)));
 
     Table *dup = table_dup(t);
+    cr_assert(table_eq(t, dup));
+
     cr_assert(eq(llong, 3, table_get(dup, 2)));
     cr_assert(eq(llong, 7, table_get(dup, 5)));
     cr_assert(eq(llong, 13, table_get(dup, 11)));
@@ -348,6 +383,11 @@ Test(table, dup) {
     cr_assert(eq(llong, 3, table_get(t, 2)));
     cr_assert(eq(llong, 7, table_get(t, 5)));
     cr_assert(eq(llong, 13, table_get(t, 11)));
+
+    table_put(dup, 17, 19);
+    cr_assert(eq(llong, 19, table_get(dup, 17)));
+    cr_assert(eq(llong, N, table_get(t, 17)));
+    cr_assert(not(table_eq(t, dup)));
 
     table_free(dup);
     table_free(t);

@@ -64,8 +64,6 @@ static const int64_t CFUNCARG_MAX = 3;
 // Environment: list of Frames
 // Frame: Table of 'symbol => <value>
 static Table *toplevel_environment;
-static bool marking = false;
-static Set *marked_env;
 static Value symbol_names = Qnil; // ("name0" "name1" ...)
 Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
     SYM_RARROW;
@@ -458,6 +456,13 @@ static Value env_get(const Table *env, Value sym)
 
 static Value eval_body(Table *env, Value body);
 
+static Value eval_body_tmpenv(Table *env, Value body)
+{
+    Value v = eval_body(env, body);
+    table_free(env);
+    return v;
+}
+
 //PTR
 static Value apply_closure(Value proc, Value args)
 {
@@ -471,7 +476,7 @@ static Value apply_closure(Value proc, Value args)
         for (Value pa = args, pp = params; pa != Qnil; pa = cdr(pa), pp = cdr(pp))
             env_put(clenv, car(pp), car(pa));
     }
-    return eval_body(clenv, cl->body);
+    return eval_body(clenv, cl->body);//eval_body_tmpenv()?
 }
 
 ATTR(noreturn) ATTR(noinline)
@@ -950,6 +955,8 @@ static Value let_star(Table *env, Value bindings, Value body)
 {
     expect_list_head("let*", bindings);
     Table *letenv = env;
+    Table *envs[16] = { NULL, }; // XXX
+    size_t nenvs = 0;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
         expect_type("let*", TYPE_PAIR, b);
@@ -957,11 +964,14 @@ static Value let_star(Table *env, Value bindings, Value body)
             runtime_error("let*: malformed binding in let: %s", stringify(b));
         Value ident = car(b), expr = cadr(b);
         expect_type("let*", TYPE_SYMBOL, ident);
-        letenv = table_inherit(letenv);
+        envs[nenvs++] = letenv = table_inherit(letenv);
         Value val = eval(letenv, expr);
         env_put(letenv, ident, val);
     }
-    return eval_body(letenv, body);
+    Value v = eval_body(letenv, body);
+    for (ssize_t i = nenvs - 1; i >= 0; i--)
+        table_free(envs[i]);
+    return v;
 }
 
 //PTR
@@ -989,7 +999,7 @@ static Value syn_letrec(Table *env, Value args)
         Value val = eval(letenv, cadr(b));
         env_put(letenv, ident, val);
     }
-    return eval_body(letenv, body);
+    return eval_body_tmpenv(letenv, body);
 }
 
 // 4.2.3. Sequencing
@@ -1030,9 +1040,11 @@ static Value syn_do(Table *env, Value args)
             iset(doenv, var, val);
         }
     }
-    if (exprs == Qnil)
+    if (exprs == Qnil) {
+        table_free(doenv);
         return Qnil;
-    return eval_body(doenv, exprs);
+    }
+    return eval_body_tmpenv(doenv, exprs);
 }
 
 // 4.2.6. Quasiquotation
@@ -1960,27 +1972,14 @@ CXRS(DEF_CXR_BUILTIN)
 
 static void env_mark_each(const Table *env, uint64_t key, uint64_t val, ATTR(unused) void *data)
 {
-    uint64_t i = (uint64_t) env;
-    set_add(marked_env, i);
+    (void) env;
     sch_gc_mark(key);
     sch_gc_mark(val);
 }
 
 void env_mark(void *env)
 {
-    if (!marking) {
-        set_free(marked_env);
-        marked_env = set_new();
-        marking = true;
-    }
     table_foreach(env, env_mark_each, NULL);
-}
-
-void env_free(void *env)
-{
-    marking = false;
-    if (!set_include_p(marked_env, (uint64_t) env))
-        table_free(env);
 }
 
 void sch_init(uintptr_t *sp)
@@ -2002,7 +2001,7 @@ void sch_init(uintptr_t *sp)
     DEF_SYMBOL(RARROW, "=>");
 
     toplevel_environment = table_new();
-    sch_register_user_obj("environment", env_mark, env_free, toplevel_environment);
+    sch_register_user_obj("environment", env_mark, NULL, toplevel_environment);
     Table *e = toplevel_environment;
 
     // 4. Expressions
