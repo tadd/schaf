@@ -73,7 +73,11 @@ static void test_sch_init(void)
 {
     SCH_INIT(); // XXX
 }
-TestSuite(schaf, .init = test_sch_init);
+static void test_sch_fin(void)
+{
+    sch_fin();
+}
+TestSuite(schaf, .init = test_sch_init, .fini = test_sch_fin);
 
 static Value parse_expr_string(const char *in)
 {
