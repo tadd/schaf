@@ -250,7 +250,9 @@ void set_free(Set *s)
 
 Set *set_add(Set *s, uint64_t val)
 {
-    return table_put(s, val, true);
+    if (table_get(s, val) == TABLE_NOT_FOUND)
+        table_put(s, val, true);
+    return s;
 }
 
 bool set_include_p(const Set *s, uint64_t val)
