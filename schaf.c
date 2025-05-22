@@ -65,7 +65,7 @@ static const int64_t CFUNCARG_MAX = 3;
 // Frame: Table of 'symbol => <value>
 static Table *toplevel_environment;
 static bool marking = false;
-static Set *marked_env;
+static Set *marked_env, *all_env;
 static Value symbol_names = Qnil; // ("name0" "name1" ...)
 Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
     SYM_RARROW;
@@ -442,6 +442,20 @@ static Value append2(Value l1, Value l2)
     return ret;
 }
 
+static Table *env_new(void)
+{
+    Table *e = table_new();
+    set_add(all_env, (uint64_t) e);
+    return e;
+}
+
+static Table *env_inherit(const Table *parent)
+{
+    Table *e = table_inherit(parent);
+    set_add(all_env, (uint64_t) e);
+    return e;
+}
+
 static Table *env_put(Table *env, Value sym, Value val)
 {
     return table_put(env, value_to_symbol(sym), val);
@@ -467,7 +481,7 @@ static Value apply_closure(Value proc, Value args)
 {
     Closure *cl = CLOSURE(proc);
     int64_t arity = cl->proc.arity;
-    Table *clenv = table_inherit(cl->env);
+    Table *clenv = env_inherit(cl->env);
     Value params = cl->params;
     if (arity == -1)
         env_put(clenv, params, args);
@@ -921,7 +935,7 @@ static Value let(Table *env, Value var, Value bindings, Value body)
         Value proc = value_of_closure(env, params, body);
         return apply_closure(proc, args);
     }
-    Table *letenv = table_inherit(env);
+    Table *letenv = env_inherit(env);
     Value proc = value_of_closure(letenv, params, body);
     env_put(letenv, var, proc); // affects as proc->env
     Value ret = apply_closure(proc, args);
@@ -976,7 +990,7 @@ static Value syn_letrec(Table *env, Value args)
     expect_list_head(bindings);
     expect_type(TYPE_PAIR, body);
 
-    Table *letenv = table_inherit(env);
+    Table *letenv = env_inherit(env);
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
         expect_type(TYPE_PAIR, b);
@@ -1938,6 +1952,8 @@ int sch_fin(void)
 {
     gc_fin();
     table_free(toplevel_environment);
+    set_free(marked_env);
+    set_free(all_env);
     return exit_status;
 }
 
@@ -1972,11 +1988,20 @@ void env_mark(void *env)
     table_foreach(env, env_mark_each, NULL);
 }
 
-void env_free(void *env)
+static void env_free_each(ATTR(unused) const Table *env, uint64_t key,
+                          ATTR(unused) uint64_t val, ATTR(unused) void *data)
 {
+    table_free((Table *) key);
+}
+
+void env_free(ATTR(unused) void *env)
+{
+    if (!marking)
+        return;
     marking = false;
-    if (!set_include_p(marked_env, (uint64_t) env))
-        table_free(env);
+    Set *diff = set_sub(all_env, marked_env);
+    table_foreach(diff, env_free_each, NULL);
+    set_free(diff);
 }
 
 void sch_init(uintptr_t *sp)
@@ -1997,7 +2022,8 @@ void sch_init(uintptr_t *sp)
     DEF_SYMBOL(UNQUOTE_SPLICING, "unquote-splicing");
     DEF_SYMBOL(RARROW, "=>");
 
-    toplevel_environment = table_new();
+    all_env = set_new();
+    toplevel_environment = env_new();
     sch_register_user_obj("environment", env_mark, env_free, toplevel_environment);
     Table *e = toplevel_environment;
 
