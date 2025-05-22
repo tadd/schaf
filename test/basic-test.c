@@ -349,3 +349,23 @@ Test(set, add_include_delete) {
 
     set_free(t);
 }
+
+Test(set, sub) {
+    Set *a = set_new();
+    set_add(a, 1);
+    set_add(a, 2);
+    set_add(a, 3);
+
+    Set *b = set_new();
+    set_add(b, 2);
+
+    Set *c = set_sub(a, b);
+
+    cr_assert(set_include_p(c, 1));
+    cr_assert(not(set_include_p(c, 2)));
+    cr_assert(set_include_p(c, 3));
+
+    set_free(c);
+    set_free(b);
+    set_free(a);
+}

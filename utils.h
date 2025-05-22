@@ -42,5 +42,6 @@ Set *set_new(void);
 void set_free(Set *s);
 Set *set_add(Set *s, uint64_t val);
 bool set_include_p(const Set *s, uint64_t val);
+Set *set_sub(const Set *x, const Set *y);
 
 #endif
