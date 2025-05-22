@@ -67,11 +67,11 @@ static inline size_t align(size_t size)
 
 static void init_chunk(Header *h, size_t size)
 {
+    memset(h, 0, size); // for ease of debug
     h->tag = TAG_CHUNK;
     h->size = size;
     h->living = false; // XXX
     h->next = NULL;
-    // memset(h+1, 0, size - sizeof(Header));
 }
 
 static HeapSlot *heap_slot_new(size_t size)
@@ -408,13 +408,9 @@ static void unregister_user_obj(UserObject *o)
 
 static void free_val(Value v)
 {
-    return;
     if (value_is_immediate(v))
         return;
     switch (VALUE_TAG(v)) {
-    case TAG_CLOSURE:
-        env_free(CLOSURE(v)->env);
-        return;
     case TAG_CONTINUATION:
         free(CONTINUATION(v)->stack);
         return;
@@ -430,6 +426,7 @@ static void free_val(Value v)
         free(STRING(v)->body);
         STRING(v)->body = NULL; // XXX
         return;
+    case TAG_CLOSURE:
     case TAG_PAIR:
     case TAG_CFUNC:
     case TAG_SYNTAX:
@@ -456,10 +453,9 @@ static void free_chunk(Header *prev, Header *curr)
     if (adjoining_p(prev, curr)) {
         // debug("here");
         prev->size += curr->size;
-        // memset(curr, 0, curr->size); // for ease of debug
+        memset(curr, 0, sizeof(Header)); // for debug
         return;
     }
-    // memset(curr + 1, 0, curr->size - sizeof(Header)); // ditto
     add_to_free_list(curr);
 }
 
@@ -544,7 +540,7 @@ Header *gc_malloc(size_t size)
     }
     if (p == NULL)
         error("unreachable: heap (~%zu MiB) exhausted", heap_size() / MiB);
-    // for ease of debug
-    // memset((uint8_t *) p + sizeof(Header), 0, size - sizeof(Header));
+    // for debug
+    memset((uint8_t *) p + sizeof(Header), 0, size - sizeof(Header));
     return p;
 }
