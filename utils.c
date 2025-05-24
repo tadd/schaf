@@ -35,7 +35,7 @@ void *xcalloc(size_t nmem, size_t memsize)
     return p;
 }
 
-ATTR_XMALLOC char *xstrdup(const char *s)
+char *xstrdup(const char *s)
 {
     char *dup = xmalloc(strlen(s) + 1);
     return strcpy(dup, s);
@@ -210,26 +210,26 @@ static List *find(const Table *t, uint64_t key)
 
 uint64_t table_get(const Table *t, uint64_t key)
 {
-    const List *l = find(t, key);
-    return l == NULL ? TABLE_NOT_FOUND : l->value;
+    const List *p = find(t, key);
+    return p == NULL ? TABLE_NOT_FOUND : p->value;
 }
 
 bool table_set(Table *t, uint64_t key, uint64_t value)
 {
     if (value == TABLE_NOT_FOUND)
         error("%s: got invalid value == TABLE_NOT_FOUND", __func__);
-    List *l = find(t, key);
-    if (l == NULL)
+    List *p = find(t, key);
+    if (p == NULL)
         return false; // not found; do nothing
-    l->value = value; // overwrite!
+    p->value = value; // overwrite!
     return true;
 }
 
 void table_foreach(const Table *t, TableForeachFunc f, void *data)
 {
     for (size_t i = 0; i < t->body_size; i++) {
-        for (const List *l = t->body[i]; l != NULL; l = l->next) {
-            (*f)(l->key, l->value, data);
+        for (const List *p = t->body[i]; p != NULL; p = p->next) {
+            (*f)(p->key, p->value, data);
         }
     }
 }
