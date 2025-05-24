@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -114,11 +115,23 @@ static size_t list_length(const List *l)
     return len;
 }
 
-ATTR(unused)
+
+static double stdev_length(List **body, size_t n, double avr)
+{
+    double s = 0.0;
+    for (size_t i = 0; i < n; i++) {
+        double d = list_length(body[i]) - avr;
+        s += d * d;
+    }
+    return sqrt(s / n);
+}
+
 void table_dump(const Table *t)
 {
-    fprintf(stderr, "size: %zu, body_size: %zu, ratio: %f\n",
-            t->size, t->body_size, (double) t->size / t->body_size);
+    double ratio = (double) t->size / t->body_size;
+    double stdev = stdev_length(t->body, t->body_size, ratio);
+    fprintf(stderr, "size: %zu, body_size: %zu, ratio: %f, stdev: %f\n",
+            t->size, t->body_size, ratio, stdev);
     for (size_t i = 0; i < t->body_size; i++) {
         size_t len = list_length(t->body[i]);
         fprintf(stderr, "%2zu ", len);
