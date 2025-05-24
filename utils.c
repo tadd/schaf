@@ -35,6 +35,12 @@ void *xcalloc(size_t nmem, size_t memsize)
     return p;
 }
 
+ATTR_XMALLOC char *xstrdup(const char *s)
+{
+    char *dup = xmalloc(strlen(s) + 1);
+    return strcpy(dup, s);
+}
+
 // List
 
 typedef struct List {
