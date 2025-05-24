@@ -64,7 +64,8 @@ static const int64_t CFUNCARG_MAX = 3;
 // Environment: list of Frames
 // Frame: Table of 'symbol => <value>
 static Table *toplevel_environment;
-static Value symbol_names = Qnil; // ("name0" "name1" ...)
+static Table *name_to_symbol, *symbol_to_name;
+static uint64_t symbol_latest = 0;
 Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
     SYM_RARROW;
 static const char *load_basedir = NULL;
@@ -192,23 +193,12 @@ inline Symbol value_to_symbol(Value v)
     return (Symbol) v >> FLAG_NBIT_SYM;
 }
 
-static const char *name_nth(Value list, int64_t n)
-{
-    for (int64_t i = 0; i < n; i++) {
-        list = cdr(list);
-        if (list == Qnil)
-            return NULL;
-    }
-    Value name = car(list);
-    return STRING(name)->body;
-}
-
 static const char *unintern(Symbol sym)
 {
-    const char *name = name_nth(symbol_names, (int64_t) sym);
-    if (name == NULL) // fatal; every known symbols should have a name
+    uint64_t name = table_get(symbol_to_name, (uint64_t) sym);
+    if (name == TABLE_NOT_FOUND) // fatal; every known symbols should have a name
         error("symbol %lu not found", sym);
-    return name;
+    return (char *) name;
 }
 
 inline const char *value_to_string(Value v)
@@ -228,22 +218,15 @@ inline Value value_of_int(int64_t i)
 
 static Symbol intern(const char *name)
 {
-    Value last = Qnil;
-    int64_t i = 0;
     // find
-    for (Value p = symbol_names; p != Qnil; last = p, p = cdr(p)) {
-        Value v = car(p);
-        if (strcmp(STRING(v)->body, name) == 0)
-            return i;
-        i++;
+    uint64_t i = table_get(name_to_symbol, (uint64_t) name);
+    if (i == TABLE_NOT_FOUND) {
+        // or put
+        i = symbol_latest++;
+        char *dup = xstrdup(name);
+        table_put(name_to_symbol, (uint64_t) dup, i);
+        table_put(symbol_to_name, i, (uint64_t) dup);
     }
-    // or put at `i`
-    Value s = value_of_string(name);
-    Value next = list1(s);
-    if (last == Qnil)
-        symbol_names = next;
-    else
-        PAIR(last)->cdr = next;
     return i;
 }
 
@@ -2054,6 +2037,8 @@ int sch_fin(void)
 {
     gc_fin();
     table_free(toplevel_environment);
+    table_free(symbol_to_name);
+    table_free(name_to_symbol);
     return exit_status;
 }
 
@@ -2076,6 +2061,9 @@ void sch_init(uintptr_t *sp)
 
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
+
+    name_to_symbol = table_new_str();
+    symbol_to_name = table_new();
 #define DEF_SYMBOL(var, name) SYM_##var = value_of_symbol(name)
     DEF_SYMBOL(ELSE, "else");
     DEF_SYMBOL(QUOTE, "quote");
