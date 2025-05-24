@@ -391,11 +391,9 @@ static Value apply_cfunc(Table *env, Value proc, Value args)
     Value a[CFUNCARG_MAX];
     CFunc *cf = CFUNC(proc);
     int64_t n = cf->proc.arity;
-    Value arg = args;
-    for (int i = 0; i < n; i++) {
-        a[i] = car(arg);
-        arg = cdr(arg);
-    }
+    Value p = args;
+    for (int i = 0; i < n; i++, p = cdr(p))
+        a[i] = car(p);
     cfunc_t f = cf->cfunc;
     curr_cfunc_name = cf->name;
 #if defined(__clang__) && __clang_major__ >= 15
@@ -967,7 +965,7 @@ static Value let_star(Table *env, Value bindings, Value body)
         if (length(b) != 2)
             runtime_error("malformed binding in let: %s", stringify(b));
         Value ident = car(b), expr = cadr(b);
-        expect_type( TYPE_SYMBOL, ident);
+        expect_type(TYPE_SYMBOL, ident);
         letenv = table_inherit(letenv);
         Value val = eval(letenv, expr);
         env_put(letenv, ident, val);
