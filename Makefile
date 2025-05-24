@@ -44,7 +44,7 @@ gc.o: intern.h schaf.h utils.h
 libscary.o: libscary.h
 main.o: schaf.h utils.h
 parse.o: intern.h schaf.h utils.h
-schaf.o: intern.h schaf.h utils.h
+schaf.o: intern.h libscary.h schaf.h utils.h
 utils.o: utils.h
 
 .PHONY: all clean analyze sanitize microbench

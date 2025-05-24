@@ -14,8 +14,9 @@
 #include <limits.h>
 #include <unistd.h>
 
-#include "schaf.h"
 #include "intern.h"
+#include "libscary.h"
+#include "schaf.h"
 #include "utils.h"
 
 //
@@ -54,7 +55,7 @@ static const int64_t CFUNCARG_MAX = 3;
 // Environment: list of Frames
 // Frame: Table of 'symbol => <value>
 static Value env_toplevel, env_default, env_r5rs, env_null;
-static Value symbol_names = Qnil; // ("name0" "name1" ...)
+static char **symbol_names; // ("name0" "name1" ...)
 Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
     SYM_RARROW;
 static const char *load_basedir = NULL;
@@ -218,22 +219,12 @@ inline static Symbol value_to_symbol(Value v)
     return (Symbol) v >> FLAG_NBIT_SYM;
 }
 
-static const char *name_nth(Value list, int64_t n)
-{
-    Value p = list;
-    for (int64_t i = 0; i < n; i++) {
-        if ((p = cdr(p)) == Qnil)
-            return NULL;
-    }
-    return STRING(car(p))->body;
-}
-
 static const char *unintern(Symbol sym)
 {
-    const char *name = name_nth(symbol_names, (int64_t) sym);
-    if (name == NULL) // fatal; every known symbols should have a name
+    size_t len = scary_length(symbol_names);
+    if (sym >= len) // fatal; every known symbols should have a name
         bug("symbol %lu not found", sym);
-    return name;
+    return symbol_names[sym];
 }
 
 inline const char *value_to_string(Value v)
@@ -264,22 +255,15 @@ inline Value value_of_int(int64_t i)
 
 static Symbol intern(const char *name)
 {
-    Value last = Qnil;
-    int64_t i = 0;
+    uint64_t i;
+    size_t len = scary_length(symbol_names);
     // find
-    for (Value p = symbol_names; p != Qnil; last = p, p = cdr(p)) {
-        Value v = car(p);
-        if (strcmp(STRING(v)->body, name) == 0)
+    for (i = 0; i < len; i++) {
+        if (strcmp(symbol_names[i], name) == 0)
             return i;
-        i++;
     }
     // or put at `i`
-    Value s = value_of_string(name);
-    Value next = list1(s);
-    if (last == Qnil)
-        symbol_names = next;
-    else
-        PAIR(last)->cdr = next;
+    scary_push(&symbol_names, xstrdup(name));
     return i;
 }
 
@@ -2374,8 +2358,9 @@ static void free_source_data(void)
 
 static void free_symbol_names(void)
 {
-    for (Value p = symbol_names; p != Qnil; p = cdr(p))
-        free(STRING(car(p))->body);
+    for (size_t i = 0, len = scary_length(symbol_names); i < len; i++)
+        free(symbol_names[i]);
+    scary_free(symbol_names);
 }
 
 static void env_free(Value ve)
@@ -2402,6 +2387,7 @@ void sch_init(uintptr_t *sp)
 
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
+    symbol_names = scary_new(sizeof(char *));
 #define DEF_SYMBOL(var, name) SYM_##var = value_of_symbol(name)
     DEF_SYMBOL(ELSE, "else");
     DEF_SYMBOL(QUOTE, "quote");
