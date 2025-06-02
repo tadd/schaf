@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <inttypes.h>
 #include <math.h>
 #include <setjmp.h>
@@ -2020,14 +2021,23 @@ void sch_init(uintptr_t *sp)
 
     // 6. Standard procedures
 
+#define arity(f) _Generic((f), \
+    Value (*)(Table *): 0, \
+    Value (*)(Table *, Value): 1, \
+    Value (*)(Table *, Value, Value): 2, \
+    Value (*)(Table *, Value, Value, Value): 3, \
+    default: abort()/*invalid!*/)
+
+#define def(e, name, f) define_procedure(e, name, f, arity(f))
     // 6.1. Equivalence predicates
-    define_procedure(e, "eqv?", proc_eq, 2); // alias
+    def(e, "eqv?", proc_eq); // alias
     define_procedure(e, "eq?", proc_eq, 2);
     define_procedure(e, "equal?", proc_equal, 2);
     // 6.2. Numbers
     // 6.2.5. Numerical operations
     define_procedure(e, "number?", proc_integer_p, 1); // alias
     define_procedure(e, "integer?", proc_integer_p, 1);
+    // define_procedure(e, "integer?", proc_integer_p, 1);
     define_procedure(e, "=", proc_numeq, -1);
     define_procedure(e, "<", proc_lt, -1);
     define_procedure(e, ">", proc_gt, -1);
