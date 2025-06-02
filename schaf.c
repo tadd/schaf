@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <inttypes.h>
 #include <math.h>
 #include <setjmp.h>
@@ -55,7 +56,9 @@ const Value Qfalse = 0b00100U;
 const Value Qtrue  = 0b01100U;
 const Value Qundef = 0b10100U; // may be an error or something
 
-static const int64_t CFUNCARG_MAX = 3;
+enum {
+    CFUNCARG_MAX = 3,
+};
 
 //
 // Runtime-locals (aka global variables)
@@ -265,21 +268,21 @@ static void expect_cfunc_arity(int64_t actual)
 {
     if (actual <= CFUNCARG_MAX)
         return;
-    error("arity too large: expected ..%"PRId64" but got %"PRId64,
+    error("arity too large: expected ..%d but got %"PRId64,
           CFUNCARG_MAX, actual);
 }
 
-static Value value_of_cfunc(const char *name, cfunc_t cfunc, int64_t arity)
+static Value value_of_cfunc(const char *name, void *cfunc, int64_t arity)
 {
     expect_cfunc_arity(arity);
     CFunc *f = obj_new(sizeof(CFunc), TAG_CFUNC);
     f->name = xstrdup(name);
     f->proc.arity = arity;
-    f->cfunc = cfunc;
+    f->f = cfunc;
     return (Value) f;
 }
 
-static Value value_of_syntax(const char *name, cfunc_t cfunc, int64_t arity)
+static Value value_of_syntax(const char *name, void *cfunc, int64_t arity)
 {
     Value sp = value_of_cfunc(name, cfunc, arity);
     VALUE_TAG(sp) = TAG_SYNTAX;
@@ -394,29 +397,21 @@ static Value apply_cfunc(Table *env, Value proc, Value args)
     Value p = args;
     for (int i = 0; i < n; i++, p = cdr(p))
         a[i] = car(p);
-    cfunc_t f = cf->cfunc;
     curr_cfunc_name = cf->name;
-#if defined(__clang__) && __clang_major__ >= 15
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-non-prototype"
-#endif
     switch (n) {
     case -1:
-        return (*f)(env, args);
+        return cf->f1(env, args);
     case 0:
-        return (*f)(env);
+        return cf->f0(env);
     case 1:
-        return (*f)(env, a[0]);
+        return cf->f1(env, a[0]);
     case 2:
-        return (*f)(env, a[0], a[1]);
+        return cf->f2(env, a[0], a[1]);
     case 3:
-        return (*f)(env, a[0], a[1], a[2]);
+        return cf->f3(env, a[0], a[1], a[2]);
     default:
         error("arity too large: %"PRId64, n);
     }
-#if defined(__clang__) && __clang_major__ >= 15
-#pragma clang diagnostic pop
-#endif
 }
 
 static Value append2(Value l1, Value l2)
@@ -514,12 +509,12 @@ static Value apply(Table *env, Value proc, Value args)
 }
 
 // Note: Do not mistake this for "(define-syntax ...)" which related to macros
-static void define_syntax(Table *env, const char *name, cfunc_t cfunc, int64_t arity)
+static void define_syntax_n(Table *env, const char *name, void *cfunc, int64_t arity)
 {
     env_put(env, value_of_symbol(name), value_of_syntax(name, cfunc, arity));
 }
 
-static void define_procedure(Table *env, const char *name, cfunc_t cfunc, int64_t arity)
+static void define_procedure_n(Table *env, const char *name, void *cfunc, int64_t arity)
 {
     env_put(env, value_of_symbol(name), value_of_cfunc(name, cfunc, arity));
 }
@@ -1950,6 +1945,23 @@ int sch_exit_status(void)
     }
 CXRS(DEF_CXR_BUILTIN)
 
+#define ARITY(f) _Generic((f), \
+    Value (*)(Table *): 0, \
+    Value (*)(Table *, Value): 1, \
+    Value (*)(Table *, Value, Value): 2, \
+    Value (*)(Table *, Value, Value, Value): 3, \
+    default: -1)
+#define DEFINE_XANY(def, e, name, f, cond, n) do { \
+        static_assert(ARITY(f) cond, "invalid type function"); \
+        def(e, name, f, n); \
+    } while (0)
+#define DEFINE_ANY(def, e, name, f) DEFINE_XANY(def, e, name, f, >= 0, ARITY(f))
+#define DEFINE_ANY_V(def, e, name, f) DEFINE_XANY(def, e, name, f, == 1, -1)
+#define define_syntax(e, name, f) DEFINE_ANY(define_syntax_n, e, name, f)
+#define define_syntax_v(e, name, f) DEFINE_ANY_V(define_syntax_n, e, name, f)
+#define define_procedure(e, name, f) DEFINE_ANY(define_procedure_n, e, name, f)
+#define define_procedure_v(e, name, f) DEFINE_ANY_V(define_procedure_n, e, name, f)
+
 void sch_init(uintptr_t *sp)
 {
     gc_init(sp);
@@ -1971,31 +1983,31 @@ void sch_init(uintptr_t *sp)
 
     // 4.1. Primitive expression types
     // 4.1.2. Literal expressions
-    define_syntax(e, "quote", syn_quote, 1);
+    define_syntax(e, "quote", syn_quote);
     // 4.1.4. Procedures
-    define_syntax(e, "lambda", syn_lambda, -1);
+    define_syntax_v(e, "lambda", syn_lambda);
     // 4.1.5. Conditionals
-    define_syntax(e, "if", syn_if, -1);
+    define_syntax_v(e, "if", syn_if);
     // 4.1.6. Assignments
-    define_syntax(e, "set!", syn_set, 2);
+    define_syntax(e, "set!", syn_set);
     // 4.2. Derived expression types
     // 4.2.1. Conditionals
-    define_syntax(e, "cond", syn_cond, -1);
-    define_syntax(e, "case", syn_case, -1);
-    define_syntax(e, "and", syn_and, -1);
-    define_syntax(e, "or", syn_or, -1);
+    define_syntax_v(e, "cond", syn_cond);
+    define_syntax_v(e, "case", syn_case);
+    define_syntax_v(e, "and", syn_and);
+    define_syntax_v(e, "or", syn_or);
     // 4.2.2. Binding constructs
-    define_syntax(e, "let", syn_let, -1); // with named let in 4.2.4.
-    define_syntax(e, "let*", syn_let_star, -1);
-    define_syntax(e, "letrec", syn_letrec, -1);
+    define_syntax_v(e, "let", syn_let); // with named let in 4.2.4.
+    define_syntax_v(e, "let*", syn_let_star);
+    define_syntax_v(e, "letrec", syn_letrec);
     // 4.2.3. Sequencing
-    define_syntax(e, "begin", syn_begin, -1);
+    define_syntax_v(e, "begin", syn_begin);
     // 4.2.4. Iteration
-    define_syntax(e, "do", syn_do, -1);
+    define_syntax_v(e, "do", syn_do);
     // 4.2.6. Quasiquotation
-    define_syntax(e, "quasiquote", syn_quasiquote, 1);
-    define_syntax(e, "unquote", syn_unquote, 1);
-    define_syntax(e, "unquote-splicing", syn_unquote_splicing, 1);
+    define_syntax(e, "quasiquote", syn_quasiquote);
+    define_syntax(e, "unquote", syn_unquote);
+    define_syntax(e, "unquote-splicing", syn_unquote_splicing);
     // 4.3. Macros
     // 4.3.2. Pattern language
     //- syntax-rules
@@ -2003,81 +2015,81 @@ void sch_init(uintptr_t *sp)
     // 5. Program structure
 
     // 5.2. Definitions
-    define_syntax(e, "define", syn_define, -1);
+    define_syntax_v(e, "define", syn_define);
     // 5.3. Syntax definitions
     //- define-syntax
 
     // 6. Standard procedures
 
     // 6.1. Equivalence predicates
-    define_procedure(e, "eqv?", proc_eq, 2); // alias
-    define_procedure(e, "eq?", proc_eq, 2);
-    define_procedure(e, "equal?", proc_equal, 2);
+    define_procedure(e, "eqv?", proc_eq); // alias
+    define_procedure(e, "eq?", proc_eq);
+    define_procedure(e, "equal?", proc_equal);
     // 6.2. Numbers
     // 6.2.5. Numerical operations
-    define_procedure(e, "number?", proc_integer_p, 1); // alias
-    define_procedure(e, "integer?", proc_integer_p, 1);
-    define_procedure(e, "=", proc_numeq, -1);
-    define_procedure(e, "<", proc_lt, -1);
-    define_procedure(e, ">", proc_gt, -1);
-    define_procedure(e, "<=", proc_le, -1);
-    define_procedure(e, ">=", proc_ge, -1);
-    define_procedure(e, "zero?", proc_zero_p, 1);
-    define_procedure(e, "positive?", proc_positive_p, 1);
-    define_procedure(e, "negative?", proc_negative_p, 1);
-    define_procedure(e, "odd?", proc_odd_p, 1);
-    define_procedure(e, "even?", proc_even_p, 1);
-    define_procedure(e, "max", proc_max, -1);
-    define_procedure(e, "min", proc_min, -1);
-    define_procedure(e, "+", proc_add, -1);
-    define_procedure(e, "*", proc_mul, -1);
-    define_procedure(e, "-", proc_sub, -1);
-    define_procedure(e, "/", proc_div, -1);
-    define_procedure(e, "abs", proc_abs, 1);
-    define_procedure(e, "quotient", proc_quotient, 2);
-    define_procedure(e, "remainder", proc_remainder, 2);
-    define_procedure(e, "modulo", proc_modulo, 2);
-    define_procedure(e, "expt", proc_expt, 2);
+    define_procedure(e, "number?", proc_integer_p); // alias
+    define_procedure(e, "integer?", proc_integer_p);
+    define_procedure_v(e, "=", proc_numeq);
+    define_procedure_v(e, "<", proc_lt);
+    define_procedure_v(e, ">", proc_gt);
+    define_procedure_v(e, "<=", proc_le);
+    define_procedure_v(e, ">=", proc_ge);
+    define_procedure(e, "zero?", proc_zero_p);
+    define_procedure(e, "positive?", proc_positive_p);
+    define_procedure(e, "negative?", proc_negative_p);
+    define_procedure(e, "odd?", proc_odd_p);
+    define_procedure(e, "even?", proc_even_p);
+    define_procedure_v(e, "max", proc_max);
+    define_procedure_v(e, "min", proc_min);
+    define_procedure_v(e, "+", proc_add);
+    define_procedure_v(e, "*", proc_mul);
+    define_procedure_v(e, "-", proc_sub);
+    define_procedure_v(e, "/", proc_div);
+    define_procedure(e, "abs", proc_abs);
+    define_procedure(e, "quotient", proc_quotient);
+    define_procedure(e, "remainder", proc_remainder);
+    define_procedure(e, "modulo", proc_modulo);
+    define_procedure(e, "expt", proc_expt);
     // 6.3. Other data types
     // 6.3.1. Booleans
-    define_procedure(e, "not", proc_not, 1);
-    define_procedure(e, "boolean?", proc_boolean_p, 1);
+    define_procedure(e, "not", proc_not);
+    define_procedure(e, "boolean?", proc_boolean_p);
     // 6.3.2. Pairs and lists
-    define_procedure(e, "pair?", proc_pair_p, 1);
-    define_procedure(e, "cons", proc_cons, 2);
-    define_procedure(e, "car", proc_car, 1);
-    define_procedure(e, "cdr", proc_cdr, 1);
-#define DEFUN_CXR(x, y) define_procedure(e, "c" #x #y "r", proc_c##x##y##r, 1)
+    define_procedure(e, "pair?", proc_pair_p);
+    define_procedure(e, "cons", proc_cons);
+    define_procedure(e, "car", proc_car);
+    define_procedure(e, "cdr", proc_cdr);
+#define DEFUN_CXR(x, y) define_procedure(e, "c" #x #y "r", proc_c##x##y##r)
     CXRS(DEFUN_CXR); // defines 28 procedures
     //- set-car!
     //- set-cdr!
-    define_procedure(e, "null?", proc_null_p, 1);
-    define_procedure(e, "list?", proc_list_p, 1);
-    define_procedure(e, "list", proc_list, -1);
-    define_procedure(e, "length", proc_length, 1);
-    define_procedure(e, "append", proc_append, -1);
-    define_procedure(e, "reverse", proc_reverse, 1);
-    define_procedure(e, "list-tail", proc_list_tail, 2);
-    define_procedure(e, "list-ref", proc_list_ref, 2);
-    define_procedure(e, "memq", proc_memq, 2);
-    define_procedure(e, "memv", proc_memq, 2); // alias
-    define_procedure(e, "member", proc_member, 2);
-    define_procedure(e, "assq", proc_assq, 2);
-    define_procedure(e, "assv", proc_assq, 2); // alias
-    define_procedure(e, "assoc", proc_assoc, 2); // alias
+    define_procedure(e, "null?", proc_null_p);
+    define_procedure(e, "list?", proc_list_p);
+    define_procedure_v(e, "list", proc_list);
+    define_procedure(e, "length", proc_length);
+    define_procedure_v(e, "append", proc_append);
+    define_procedure(e, "reverse", proc_reverse);
+    define_procedure(e, "list-tail", proc_list_tail);
+    define_procedure(e, "list-ref", proc_list_ref);
+    define_procedure(e, "memq", proc_memq);
+    define_procedure(e, "memv", proc_memq); // alias
+    define_procedure(e, "member", proc_member);
+    define_procedure(e, "assq", proc_assq);
+    define_procedure(e, "assv", proc_assq); // alias
+    define_procedure(e, "assoc", proc_assoc); // alias
     // 6.3.3. Symbols
-    define_procedure(e, "symbol?", proc_symbol_p, 1);
+    define_procedure(e, "symbol?", proc_symbol_p);
     // 6.3.5. Strings
-    define_procedure(e, "string?", proc_string_p, 1);
-    define_procedure(e, "string-length", proc_string_length, 1);
-    define_procedure(e, "string=?", proc_string_eq, 2);
+    define_procedure(e, "string?", proc_string_p);
+    define_procedure(e, "string-length", proc_string_length);
+    define_procedure(e, "string=?", proc_string_eq);
     // 6.4. Control features
-    define_procedure(e, "procedure?", proc_procedure_p, 1);
-    define_procedure(e, "apply", proc_apply, -1);
-    define_procedure(e, "map", proc_map, -1);
-    define_procedure(e, "for-each", proc_for_each, -1);
-    define_procedure(e, "call/cc", proc_callcc, 1); // alias
-    define_procedure(e, "call-with-current-continuation", proc_callcc, 1);
+    define_procedure(e, "procedure?", proc_procedure_p);
+    define_procedure_v(e, "apply", proc_apply);
+    define_procedure_v(e, "map", proc_map);
+    define_procedure_v(e, "for-each", proc_for_each);
+    define_procedure(e, "call/cc", proc_callcc); // alias
+    define_procedure(e, "call-with-current-continuation", proc_callcc);
     //- values
     //- call-with-values
     //- dynamic-wind
@@ -2089,16 +2101,16 @@ void sch_init(uintptr_t *sp)
     // 6.6.2. Input
     //- read
     // 6.6.3. Output
-    define_procedure(e, "display", proc_display, 1);
-    define_procedure(e, "newline", proc_newline, 0);
+    define_procedure(e, "display", proc_display);
+    define_procedure(e, "newline", proc_newline);
     // 6.6.4. System interface
-    define_procedure(e, "load", proc_load, 1);
+    define_procedure(e, "load", proc_load);
 
     // Extensions from R7RS (scheme process-context)
-    define_procedure(e, "exit", proc_exit, -1);
+    define_procedure_v(e, "exit", proc_exit);
 
     // Local Extensions
-    define_procedure(e, "print", proc_print, -1); // like Gauche
-    define_procedure(e, "_cputime", proc_cputime, 0);
-    define_syntax(e, "_defined?", syn_defined_p, 1);
+    define_procedure_v(e, "print", proc_print); // like Gauche
+    define_procedure(e, "_cputime", proc_cputime);
+    define_syntax(e, "_defined?", syn_defined_p);
 }
