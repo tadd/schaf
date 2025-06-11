@@ -1879,7 +1879,7 @@ static Value proc_display(UNUSED Table *env, Value obj)
     return obj;
 }
 
-static Value proc_newline(void)
+static Value proc_newline(UNUSED Table *env)
 {
     puts("");
     return Qnil;
@@ -1925,7 +1925,7 @@ static Value proc_print(UNUSED Table *env, Value l)
     return obj;
 }
 
-static Value proc_cputime(void) // in micro sec
+static Value proc_cputime(UNUSED Table *env) // in micro sec
 {
     static const int64_t MICRO = 1000*1000;
     struct timespec t;
