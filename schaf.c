@@ -564,20 +564,9 @@ static Value map_eval(Table *env, Value l)
     return cdr(mapped);
 }
 
-static void call_stack_push(Value l)
-{
-    call_stack = cons(l, call_stack);
-}
-
-static void call_stack_pop(void)
-{
-    expect_type(TYPE_PAIR, call_stack);
-    call_stack = cdr(call_stack);
-}
-
 static Value eval_apply(Table *env, Value l)
 {
-    call_stack_push(l);
+    call_stack = cons(l, call_stack); // push
     Value symproc = car(l), args = cdr(l);
     Value proc = eval(env, symproc);
     expect_type(TYPE_PROC, proc);
@@ -587,7 +576,7 @@ static Value eval_apply(Table *env, Value l)
     curr_cfunc_name = NULL;
     Value ret = apply(env, proc, args);
     curr_cfunc_name = prev_name;
-    call_stack_pop();
+    call_stack = cdr(call_stack); // pop
     return ret;
 }
 
