@@ -362,7 +362,7 @@ static void expect_type_or(Type e1, Type e2, Value v)
 static void expect_arity_range(int64_t min, int64_t max, Value args)
 {
     int64_t actual = length(args);
-    if (min <= actual && (max == -1 || actual <= max))
+    if (min <= actual && actual <= max)
         return;
     runtime_error("wrong number of arguments: expected %"PRId64"..%"PRId64" but got %"PRId64,
                   min, max, actual);
