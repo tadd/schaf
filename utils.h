@@ -14,7 +14,9 @@
 #endif
 
 #define ATTR(x) __attribute__((x))
-#define UNREACHABLE() error("unreachable"), __builtin_unreachable()
+#define UNREACHABLE() \
+    error("%s:%d: %s: unreachable", __FILE__, __LINE__, __func__), \
+    __builtin_unreachable()
 #define ATTR_XMALLOC ATTR(malloc) ATTR(used) ATTR(returns_nonnull)
 
 ATTR(noreturn) ATTR(format(printf, 1, 2)) void error(const char *fmt, ...);
