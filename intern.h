@@ -36,11 +36,16 @@ typedef struct {
     int64_t arity;
 } Procedure;
 
-typedef Value (*cfunc_t)(/*ANYARGS*/);
 typedef struct {
     Procedure proc;
     char *name;
-    cfunc_t cfunc;
+    union {
+        void *cfunc;
+        Value (*f0)(Table *);
+        Value (*f1)(Table *, Value);
+        Value (*f2)(Table *, Value, Value);
+        Value (*f3)(Table *, Value, Value, Value);
+    };
 } CFunc;
 
 typedef struct {

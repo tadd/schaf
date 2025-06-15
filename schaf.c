@@ -269,7 +269,7 @@ static void expect_cfunc_arity(int64_t actual)
           CFUNCARG_MAX, actual);
 }
 
-static Value value_of_cfunc(const char *name, cfunc_t cfunc, int64_t arity)
+static Value value_of_cfunc(const char *name, void *cfunc, int64_t arity)
 {
     expect_cfunc_arity(arity);
     CFunc *f = obj_new(sizeof(CFunc), TAG_CFUNC);
@@ -279,7 +279,7 @@ static Value value_of_cfunc(const char *name, cfunc_t cfunc, int64_t arity)
     return (Value) f;
 }
 
-static Value value_of_syntax(const char *name, cfunc_t cfunc, int64_t arity)
+static Value value_of_syntax(const char *name, void *cfunc, int64_t arity)
 {
     Value sp = value_of_cfunc(name, cfunc, arity);
     VALUE_TAG(sp) = TAG_SYNTAX;
@@ -394,29 +394,21 @@ static Value apply_cfunc(Table *env, Value proc, Value args)
     Value p = args;
     for (int i = 0; i < n; i++, p = cdr(p))
         a[i] = car(p);
-    cfunc_t f = cf->cfunc;
     curr_cfunc_name = cf->name;
-#if defined(__clang__) && __clang_major__ >= 15
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-non-prototype"
-#endif
     switch (n) {
     case -1:
-        return (*f)(env, args);
+        return cf->f1(env, args);
     case 0:
-        return (*f)(env);
+        return cf->f0(env);
     case 1:
-        return (*f)(env, a[0]);
+        return cf->f1(env, a[0]);
     case 2:
-        return (*f)(env, a[0], a[1]);
+        return cf->f2(env, a[0], a[1]);
     case 3:
-        return (*f)(env, a[0], a[1], a[2]);
+        return cf->f3(env, a[0], a[1], a[2]);
     default:
         error("arity too large: %"PRId64, n);
     }
-#if defined(__clang__) && __clang_major__ >= 15
-#pragma clang diagnostic pop
-#endif
 }
 
 static Value append2(Value l1, Value l2)
@@ -514,12 +506,12 @@ static Value apply(Table *env, Value proc, Value args)
 }
 
 // Note: Do not mistake this for "(define-syntax ...)" which related to macros
-static void define_syntax(Table *env, const char *name, cfunc_t cfunc, int64_t arity)
+static void define_syntax(Table *env, const char *name, void *cfunc, int64_t arity)
 {
     env_put(env, value_of_symbol(name), value_of_syntax(name, cfunc, arity));
 }
 
-static void define_procedure(Table *env, const char *name, cfunc_t cfunc, int64_t arity)
+static void define_procedure(Table *env, const char *name, void *cfunc, int64_t arity)
 {
     env_put(env, value_of_symbol(name), value_of_cfunc(name, cfunc, arity));
 }
