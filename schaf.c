@@ -388,6 +388,9 @@ static void expect_arity(int64_t expected, Value args)
 
 static Value apply_cfunc(Table *env, Value proc, Value args)
 {
+    const void *funcalls[] = {
+        &&callm1, &&call0, &&call1, &&call2, &&call3,
+    };
     Value a[CFUNCARG_MAX];
     CFunc *cf = CFUNC(proc);
     int64_t n = cf->proc.arity;
@@ -395,20 +398,19 @@ static Value apply_cfunc(Table *env, Value proc, Value args)
     for (int i = 0; i < n; i++, p = cdr(p))
         a[i] = car(p);
     curr_cfunc_name = cf->name;
-    switch (n) {
-    case -1:
-        return cf->f1(env, args);
-    case 0:
-        return cf->f0(env);
-    case 1:
-        return cf->f1(env, a[0]);
-    case 2:
-        return cf->f2(env, a[0], a[1]);
-    case 3:
-        return cf->f3(env, a[0], a[1], a[2]);
-    default:
-        error("arity too large: %"PRId64, n);
-    }
+    if (n < -1 || n > 3)
+        error("invalid arity: %"PRId64, n);
+    goto *funcalls[n+1];
+ callm1:
+    return cf->f1(env, args);
+ call0:
+    return cf->f0(env);
+ call1:
+    return cf->f1(env, a[0]);
+ call2:
+    return cf->f2(env, a[0], a[1]);
+ call3:
+    return cf->f3(env, a[0], a[1], a[2]);
 }
 
 static Value append2(Value l1, Value l2)
