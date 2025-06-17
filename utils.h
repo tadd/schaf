@@ -13,20 +13,21 @@
 #define UNPOISON(p, n) //nothing
 #endif
 
+#define debug(fmt, ...) fprintf(stderr, fmt "\n" __VA_OPT__(,) __VA_ARGS__);
+#define bug(fmt, ...) \
+    error("[BUG] %s:%d: %s: " fmt, \
+          __FILE__, __LINE__, __func__ __VA_OPT__(,) __VA_ARGS__)
+
 #define LIKELY(x) __builtin_expect((x), 1)
 #define UNLIKELY(x) __builtin_expect((x), 0)
 #define UNUSED [[maybe_unused]]
-#define UNREACHABLE() \
-    error("%s:%d: %s: unreachable", __FILE__, __LINE__, __func__), \
-    __builtin_unreachable()
+#define UNREACHABLE() bug("unreachable"), __builtin_unreachable()
 #define ATTR_XMALLOC [[nodiscard]] [[gnu::malloc]] [[gnu::returns_nonnull]]
 
 [[gnu::noreturn]] [[gnu::format(printf, 1, 2)]] void error(const char *fmt, ...);
 ATTR_XMALLOC void *xmalloc(size_t size);
 ATTR_XMALLOC void *xcalloc(size_t nmem, size_t memsize);
 ATTR_XMALLOC char *xstrdup(const char *s);
-
-#define debug(fmt, ...) fprintf(stderr, fmt "\n" __VA_OPT__(,) __VA_ARGS__);
 
 typedef struct Table Table;
 typedef void (*TableForeachFunc)(uint64_t key, uint64_t val, void *data);

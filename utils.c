@@ -191,7 +191,7 @@ static void table_resize(Table *t)
 Table *table_put(Table *t, uint64_t key, uint64_t value)
 {
     if (value == TABLE_NOT_FOUND)
-        error("%s: got invalid value == TABLE_NOT_FOUND", __func__);
+        bug("got invalid value == TABLE_NOT_FOUND");
     if (table_too_many_elements(t))
         table_resize(t);
     uint64_t i = body_index(t, key);
@@ -230,7 +230,7 @@ uint64_t table_get(const Table *t, uint64_t key)
 bool table_set(Table *t, uint64_t key, uint64_t value)
 {
     if (value == TABLE_NOT_FOUND)
-        error("%s: got invalid value == TABLE_NOT_FOUND", __func__);
+        bug("got invalid value == TABLE_NOT_FOUND");
     List *p = find(t, key);
     if (p == NULL)
         return false; // not found; do nothing

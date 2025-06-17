@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <inttypes.h>
 #include <math.h>
 #include <setjmp.h>
@@ -207,7 +208,7 @@ static const char *unintern(Symbol sym)
 {
     const char *name = name_nth(symbol_names, (int64_t) sym);
     if (name == NULL) // fatal; every known symbols should have a name
-        error("symbol %lu not found", sym);
+        bug("symbol %lu not found", sym);
     return name;
 }
 
@@ -272,8 +273,8 @@ static void expect_cfunc_arity(int64_t actual)
 {
     if (actual <= CFUNCARG_MAX)
         return;
-    error("arity too large: expected ..%"PRId64" but got %"PRId64,
-          CFUNCARG_MAX, actual);
+    bug("arity too large: expected ..%"PRId64" but got %"PRId64,
+        CFUNCARG_MAX, actual);
 }
 
 static Value apply_cfunc_v(Table *env, CFunc *f, Value args)
@@ -333,7 +334,7 @@ static Value value_of_cfunc(const char *name, void *cfunc, int64_t arity)
         f->applier = apply_cfunc_3;
         break;
     default:
-        error("invalid arity: %"PRId64, arity);
+        bug("invalid arity: %"PRId64, arity);
     }
     return (Value) f;
 }
@@ -360,9 +361,6 @@ static Value value_of_closure(Table *env, Value params, Value body)
 //
 // Errors
 //
-
-#define error(fmt, ...) \
-    error("%s:%d of %s: " fmt, __FILE__, __LINE__, __func__ __VA_OPT__(,) __VA_ARGS__)
 
 static jmp_buf jmp_exit;
 static uint8_t exit_status; // to be portable
@@ -821,7 +819,7 @@ Value load(const char *path)
 {
     FILE *in = open_loadable(path);
     if (in == NULL)
-        error("can't open file: %s", path);
+        error("load: can't open file: %s", path);
     Value retval = iload(in, path);
     fclose(in);
     return retval;
@@ -1970,9 +1968,12 @@ char *stringify(Value v)
 {
     char *s;
     size_t size;
+    errno = 0;
     FILE *stream = open_memstream(&s, &size);
-    if (stream == NULL)
-        error("open_memstream() failed");
+    if (stream == NULL) {
+        perror(NULL);
+        exit(2);
+    }
     fdisplay(stream, v);
     fclose(stream);
     return s;

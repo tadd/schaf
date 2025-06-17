@@ -23,17 +23,10 @@ static void usage(FILE *out)
     exit(out == stdout ? 0 : 2);
 }
 
-[[gnu::format(printf, 1, 2)]]
-static void opt_error(const char *fmt, ...)
-{
-    va_list ap;
-    va_start(ap, fmt);
-    fprintf(stderr, "error: ");
-    vfprintf(stderr, fmt, ap);
-    fprintf(stderr, "\n");
-    va_end(ap);
-    usage(stderr);
-}
+#define opt_error(fmt, ...) do { \
+        fprintf(stderr, "error: " fmt "\n" __VA_OPT__(,) __VA_ARGS__); \
+        usage(stderr); \
+    } while (0)
 
 typedef struct {
     const char *path;
@@ -51,7 +44,7 @@ static double parse_posnum(const char *s)
     char *ep;
     double val = strtod(s, &ep);
     if (val <= 0 || ep[0] != '\0')
-        error("invalid positive number '%s'", s);
+        opt_error("invalid positive number '%s'", s);
     return val;
 }
 
@@ -153,7 +146,7 @@ int main(int argc, char **argv)
     else
         v = o.script ? eval_string(o.script) : load(o.path);
     if (v == Qundef)
-        error("%s", error_message());
+        error("%s", error_message()); // runtime error occurred
     if (o.print) {
         display(v);
         printf("\n");
