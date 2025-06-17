@@ -452,8 +452,8 @@ Value iparse(FILE *in, const char *filename)
 Value parse(const char *path)
 {
     FILE *in = fopen(path, "r");
-    if (in == NULL)
-        error("parse: can't open file: %s", path);
+    if (in == NULL)// 起こり得る、Schemeの文脈にはまだ巻き戻れない？
+        error("parse: can't open file: %s", path); // ↑トップのファイルか、内部loadかによる
     Value ast = iparse(in, path);
     fclose(in);
     return car(cdr(ast));

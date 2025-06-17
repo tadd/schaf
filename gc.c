@@ -142,7 +142,7 @@ void *gc_malloc(size_t size)
         gc();
         p = allocate(size);
     }
-    if (p == NULL)
+    if (p == NULL) // 起こり得るがどうしようもない、Schemeの文脈には巻き戻る必要がない??
         error("out of memory; heap (~%zu MiB) exhausted",
               heaps_size() / MiB);
     return p;

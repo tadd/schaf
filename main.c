@@ -123,7 +123,7 @@ static void print_vmhwm(void)
     static const char *const path = "/proc/self/status",
         *const pat = "VmHWM";
     FILE *status = fopen(path, "r");
-    if (status == NULL)
+    if (status == NULL)  // 起こり得るがどうしようもない、Schemeの文脈には巻き戻れない
         error("cannot open file %s", path);
     char buf[BUFSIZ];
     bool printed = false;
@@ -135,7 +135,7 @@ static void print_vmhwm(void)
         }
     }
     fclose(status);
-    if (!printed)
+    if (!printed) // 環境依存だがそれを捌けないのはバグ、Schemeの文脈には巻き戻れない
         error("memory usage not printed");
 }
 
@@ -152,7 +152,7 @@ int main(int argc, char **argv)
         v = o.script ? parse_string(o.script) : parse(o.path);
     else
         v = o.script ? eval_string(o.script) : load(o.path);
-    if (v == Qundef)
+    if (v == Qundef) // これはバグ
         error("%s", error_message());
     if (o.print) {
         display(v);

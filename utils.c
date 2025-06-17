@@ -23,7 +23,7 @@ void error(const char *fmt, ...)
 void *xmalloc(size_t size)
 {
     void *p = malloc(size);
-    if (p == NULL)
+    if (p == NULL) // 起こり得るがどうしようもない、Schemeの文脈には巻き戻る必要がない??
         error("malloc(%zu) failed", size);
     return p;
 }
@@ -31,7 +31,7 @@ void *xmalloc(size_t size)
 void *xcalloc(size_t nmem, size_t memsize)
 {
     void *p = calloc(nmem, memsize);
-    if (p == NULL)
+    if (p == NULL) // 起こり得るがどうしようもない、Schemeの文脈には巻き戻る必要がない??
         error("calloc(%zu, %zu) failed", nmem, memsize);
     return p;
 }
@@ -190,7 +190,7 @@ static void table_resize(Table *t)
 // `value` can't be TABLE_NOT_FOUND
 Table *table_put(Table *t, uint64_t key, uint64_t value)
 {
-    if (value == TABLE_NOT_FOUND)
+    if (value == TABLE_NOT_FOUND)// 処理系としてはバグだが、ライブラリとして見たらどうしようもない
         error("%s: got invalid value == TABLE_NOT_FOUND", __func__);
     if (table_too_many_elements(t))
         table_resize(t);
@@ -229,7 +229,7 @@ uint64_t table_get(const Table *t, uint64_t key)
 
 bool table_set(Table *t, uint64_t key, uint64_t value)
 {
-    if (value == TABLE_NOT_FOUND)
+    if (value == TABLE_NOT_FOUND)// 処理系としてはバグだが、ライブラリとして見たらどうしようもない
         error("%s: got invalid value == TABLE_NOT_FOUND", __func__);
     List *p = find(t, key);
     if (p == NULL)
