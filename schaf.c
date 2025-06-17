@@ -70,6 +70,9 @@ Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
 static const char *load_basedir = NULL;
 static Value source_data = Qnil; // (a)list of AST: (filename syntax_list newline_positions)
 // newline_positions: list of pos | int
+#define internal_error(fmt, ...) \
+    error("[BUG] %s:%d of %s: " fmt, \
+          __FILE__, __LINE__, __func__ __VA_OPT__(,) __VA_ARGS__)
 
 //
 // value_is_*: Type Checks
@@ -207,7 +210,7 @@ static const char *unintern(Symbol sym)
 {
     const char *name = name_nth(symbol_names, (int64_t) sym);
     if (name == NULL) // fatal; every known symbols should have a name
-        error("symbol %lu not found", sym);
+        internal_error("symbol %lu not found", sym);
     return name;
 }
 
@@ -272,8 +275,8 @@ static void expect_cfunc_arity(int64_t actual)
 {
     if (actual <= CFUNCARG_MAX)
         return;
-    error("arity too large: expected ..%"PRId64" but got %"PRId64,
-          CFUNCARG_MAX, actual);
+    internal_error("arity too large: expected ..%"PRId64" but got %"PRId64,
+                   CFUNCARG_MAX, actual);
 }
 
 static Value apply_cfunc_v(Table *env, CFunc *f, Value args)
@@ -821,7 +824,7 @@ Value load(const char *path)
 {
     FILE *in = open_loadable(path);
     if (in == NULL)
-        error("can't open file: %s", path);
+        runtime_error("can't open file: %s", path);
     Value retval = iload(in, path);
     fclose(in);
     return retval;

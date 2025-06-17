@@ -51,7 +51,7 @@ static double parse_posnum(const char *s)
     char *ep;
     double val = strtod(s, &ep);
     if (val <= 0 || ep[0] != '\0')
-        error("invalid positive number '%s'", s);
+        opt_error("invalid positive number '%s'", s);
     return val;
 }
 
