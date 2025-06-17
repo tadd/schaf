@@ -96,6 +96,10 @@ void gc_fin(void);
 size_t gc_stack_get_size(uintptr_t *sp);
 ATTR_XMALLOC void *gc_malloc(size_t size);
 
+#define internal_error(fmt, ...) \
+    error("[BUG] %s:%d: %s: " fmt, \
+          __FILE__, __LINE__, __func__ __VA_OPT__(,) __VA_ARGS__)
+
 #pragma GCC visibility pop
 
 static inline Value list1(Value x)

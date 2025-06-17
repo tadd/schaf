@@ -70,9 +70,6 @@ Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
 static const char *load_basedir = NULL;
 static Value source_data = Qnil; // (a)list of AST: (filename syntax_list newline_positions)
 // newline_positions: list of pos | int
-#define internal_error(fmt, ...) \
-    error("[BUG] %s:%d of %s: " fmt, \
-          __FILE__, __LINE__, __func__ __VA_OPT__(,) __VA_ARGS__)
 
 //
 // value_is_*: Type Checks
@@ -823,8 +820,8 @@ static FILE *open_loadable(const char *path)
 Value load(const char *path)
 {
     FILE *in = open_loadable(path);
-    if (in == NULL)
-        runtime_error("can't open file: %s", path);
+    if (in == NULL)// 起こり得るがどうしようもない、Schemeの文脈はない
+        error("can't open file: %s", path);
     Value retval = iload(in, path);
     fclose(in);
     return retval;

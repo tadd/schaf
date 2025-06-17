@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "schaf.h"
+#include "intern.h"
 #include "utils.h"
 
 [[gnu::noreturn]]
@@ -23,17 +24,10 @@ static void usage(FILE *out)
     exit(out == stdout ? 0 : 2);
 }
 
-[[gnu::format(printf, 1, 2)]]
-static void opt_error(const char *fmt, ...)
-{
-    va_list ap;
-    va_start(ap, fmt);
-    fprintf(stderr, "error: ");
-    vfprintf(stderr, fmt, ap);
-    fprintf(stderr, "\n");
-    va_end(ap);
-    usage(stderr);
-}
+#define opt_error(fmt, ...) do { \
+        fprintf(stderr, "error: " fmt "\n" __VA_OPT__(,) __VA_ARGS__); \
+        usage(stderr); \
+    } while (0)
 
 typedef struct {
     const char *path;
@@ -135,8 +129,8 @@ static void print_vmhwm(void)
         }
     }
     fclose(status);
-    if (!printed) // 環境依存だがそれを捌けないのはバグ、Schemeの文脈には巻き戻れない
-        error("memory usage not printed");
+    if (!printed)
+        internal_error("memory usage not printed");
 }
 
 int main(int argc, char **argv)
@@ -152,8 +146,8 @@ int main(int argc, char **argv)
         v = o.script ? parse_string(o.script) : parse(o.path);
     else
         v = o.script ? eval_string(o.script) : load(o.path);
-    if (v == Qundef) // これはバグ
-        error("%s", error_message());
+    if (v == Qundef)
+        internal_error("%s", error_message());
     if (o.print) {
         display(v);
         printf("\n");
