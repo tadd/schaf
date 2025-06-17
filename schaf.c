@@ -1845,7 +1845,7 @@ char *stringify(Value v)
     char *s;
     size_t size;
     FILE *stream = open_memstream(&s, &size);
-    if (stream == NULL)
+    if (stream == NULL) // 起こり得るがどうしようもない、Schemeの文脈には巻き戻る必要がない？
         error("open_memstream() failed");
     fdisplay(stream, v);
     fclose(stream);
