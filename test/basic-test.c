@@ -192,6 +192,26 @@ Test(schaf, runtime_error_line_column) {
 "(f)");
 }
 
+Test(schaf, runtime_error_frames) {
+    expect_runtime_error(
+"-: type expected integer but got procedure\n"
+"\t<inline>:1:14 in 'f'\n"
+"\t<inline>:2:2 in <toplevel>"
+,
+"(define (f) (- -))\n"
+"(f)");
+}
+
+Test(schaf, runtime_error_frames2) {
+    expect_runtime_error(
+"unbound variable: g\n"
+"\t<inline>:1:14 in 'f'\n"
+"\t<inline>:2:2 in <toplevel>"
+,
+"(define (f) (map g '()))\n"
+"(f)");
+}
+
 Test(schaf, div0) {
     expect_runtime_error("divided by zero", "(/ 42 0)");
 }

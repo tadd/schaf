@@ -13,7 +13,8 @@ typedef enum {
     TAG_SYNTAX, // almost a C Function
     TAG_CLOSURE,
     TAG_CONTINUATION,
-    TAG_LAST = TAG_CONTINUATION
+    TAG_ERROR, // internal use only
+    TAG_LAST = TAG_ERROR
 } ValueTag;
 
 typedef struct {
@@ -61,10 +62,14 @@ typedef struct {
     uintptr_t *sp;
     void *stack;
     size_t stack_len;
-    Value call_stack;
     jmp_buf state;
     Value retval;
 } Continuation;
+
+typedef struct {
+    ValueTag tag;
+    Value call_stack; // list of '(func-name . location)
+} Error;
 
 #define PAIR(v) ((Pair *) v)
 #define LOCATED_PAIR(v) ((LocatedPair *) v)
@@ -73,6 +78,7 @@ typedef struct {
 #define CFUNC(v) ((CFunc *) v)
 #define CLOSURE(v) ((Closure *) v)
 #define CONTINUATION(v) ((Continuation *) v)
+#define ERROR(v) ((Error *) v)
 
 #pragma GCC visibility push(hidden) // also affects Clang
 

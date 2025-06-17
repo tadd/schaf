@@ -13,6 +13,8 @@
 #define UNPOISON(p, n) //nothing
 #endif
 
+#define LIKELY(x) __builtin_expect((x), 1)
+#define UNLIKELY(x) __builtin_expect((x), 0)
 #define UNUSED [[maybe_unused]]
 #define UNREACHABLE() \
     error("%s:%d: %s: unreachable", __FILE__, __LINE__, __func__), \
