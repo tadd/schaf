@@ -72,6 +72,9 @@ static Value call_stack = Qnil; // list of pairs
 static const char *curr_cfunc_name;
 static Value source_data = Qnil; // (a)list of AST: (filename syntax_list newline_positions)
 // newline_positions: list of pos | int
+#define internal_error(fmt, ...) \
+    error("[BUG] %s:%d of %s: " fmt, \
+          __FILE__, __LINE__, __func__ __VA_OPT__(,) __VA_ARGS__)
 
 //
 // value_is_*: Type Checks
@@ -200,7 +203,7 @@ static const char *unintern(Symbol sym)
 {
     const char *name = name_nth(symbol_names, (int64_t) sym);
     if (name == NULL) // fatal; every known symbols should have a name
-        error("symbol %lu not found", sym);
+        internal_error("symbol %lu not found", sym);
     return name;
 }
 
@@ -265,8 +268,8 @@ static void expect_cfunc_arity(int64_t actual)
 {
     if (actual <= CFUNCARG_MAX)
         return;
-    error("arity too large: expected ..%"PRId64" but got %"PRId64,
-          CFUNCARG_MAX, actual);
+    internal_error("arity too large: expected ..%"PRId64" but got %"PRId64,
+                   CFUNCARG_MAX, actual);
 }
 
 static Value value_of_cfunc(const char *name, void *cfunc, int64_t arity)
@@ -407,7 +410,7 @@ static Value apply_cfunc(Table *env, Value proc, Value args)
     case 3:
         return cf->f3(env, a[0], a[1], a[2]);
     default:
-        error("arity too large: %"PRId64, n);
+        internal_error("invalid arity: %"PRId64, n);
     }
 }
 
@@ -736,7 +739,7 @@ Value load(const char *path)
 {
     FILE *in = open_loadable(path);
     if (in == NULL)
-        error("can't open file: %s", path);
+        runtime_error("can't open file: %s", path);
     Value retval = iload(in, path);
     fclose(in);
     return retval;
@@ -747,7 +750,7 @@ static Value load_inner(const char *path)
     const char *basedir_saved = load_basedir;
     FILE *in = open_loadable(path);
     if (in == NULL)
-        runtime_error("load: can't open file: %s", path);
+        runtime_error("can't open file: %s", path);
     Value retval = iload_inner(in, path);
     fclose(in);
     load_basedir = basedir_saved;
