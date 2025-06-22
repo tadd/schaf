@@ -320,7 +320,7 @@ void raise_error(jmp_buf buf, const char *fmt, ...)
 }
 
 ATTR(noreturn)
-void runtime_error(const char *fmt, ...)
+static void runtime_error(const char *fmt, ...)
 {
     size_t nprep = 0;
     if (curr_cfunc_name != NULL) {
