@@ -348,27 +348,27 @@ static Value located_list1(Value sym, int64_t pos)
 
 static Value parse_list(Parser *p)
 {
-    Value l = DUMMY_PAIR(), last = l;
-    int64_t pos = ftell(p->in);
+    Value ret = DUMMY_PAIR(), last = ret;
     for (;;) {
+        int64_t pos = ftell(p->in);
         Token t = lex(p);
         if (t.type == TOK_TYPE_RPAREN)
             break;
         if (t.type == TOK_TYPE_EOF)
             parse_error(p, "')'", "'%s'", token_stringify(t));
         if (t.type == TOK_TYPE_DOT)
-            return parse_dotted_pair(p, cdr(l), last);
+            return parse_dotted_pair(p, cdr(ret), last);
         unlex(p, t);
         Value e = parse_expr(p);
-        bool first = (l == last);
         Value l;
-        if (first && value_is_symbol(e))
-            l = located_list1(e, pos);
+        int64_t offset = last == ret ? 0 : 1; // the first char is already read at parse_expr
+        if (value_is_symbol(e))
+            l = located_list1(e, pos + offset);
         else
             l = list1_const(e);
         last = PAIR(last)->cdr = l;
     }
-    return cdr(l);
+    return cdr(ret);
 }
 
 static Value parse_quoted(Parser *p, Value sym)
