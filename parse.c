@@ -359,9 +359,8 @@ static Value parse_list(Parser *p)
             return parse_dotted_pair(p, cdr(l), last);
         unlex(p, t);
         Value e = parse_expr(p);
-        bool first = (l == last);
         Value l;
-        if (first && value_is_symbol(e))
+        if (value_is_symbol(e))
             l = located_list1(e, pos);
         else
             l = list1(e);
