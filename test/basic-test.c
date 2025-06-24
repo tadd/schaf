@@ -220,19 +220,65 @@ Test(schaf, runtime_error_frames) {
 Test(schaf, runtime_error_frames2) {
     expect_runtime_error(
 "unbound variable: g\n"
-"\t<inline>:1:14 in 'f'\n"
+"\t<inline>:1:18 in 'f'\n"
 "\t<inline>:2:2 in <toplevel>"
 ,
 "(define (f) (map g '()))\n"
 "(f)");
 }
 
+#define expect_unbound_var_error(col, s) \
+    expect_runtime_error( \
+    "unbound variable: x\n" \
+    "\t<inline>:1:" #col " in <toplevel>", s)
+
 Test(schaf, runtime_error_funcs) {
+    expect_unbound_var_error(9, "(print (x))");
+}
+
+Test(schaf, runtime_error_symbol) {
     expect_runtime_error(
-"unbound variable: f\n"
-"\t<inline>:1:9 in <toplevel>"
+"unbound variable: h\n"
+"\t<inline>:2:13 in 'g'\n"
+"\t<inline>:1:14 in 'f'\n"
+"\t<inline>:3:2 in <toplevel>"
 ,
-"(print (f))");
+"(define (f) (g))\n"
+"(define (g) h)\n"
+"(f)");
+}
+
+Test(schaf, runtime_error_symbol2) {
+    expect_unbound_var_error(4, "(+ x)");
+    expect_unbound_var_error(2, "(x)");
+    expect_unbound_var_error(11, "(define y x)");
+    expect_runtime_error(
+"unbound variable: x\n"
+"\t<inline>:1:16 in 'f'\n"
+"\t<inline>:2:2 in <toplevel>"
+,
+"(define (f) (+ x))\n"
+"(f)");
+}
+
+Test(schaf, runtime_error_syntaxes) {
+    expect_unbound_var_error(5, "(if x 1)");
+    expect_unbound_var_error(7, "(if 1 x)");
+    expect_unbound_var_error(10, "(if #f 1 x)");
+    expect_unbound_var_error(8, "(cond (x 1))");
+    expect_unbound_var_error(7, "(case x (else 1))");
+    expect_unbound_var_error(6, "(and x)");
+    expect_unbound_var_error(5, "(or x)");
+    expect_unbound_var_error(11, "(let* ((y x)) y)");
+    expect_unbound_var_error(13, "(letrec ((y x)) y)");
+    expect_unbound_var_error(9, "(do ((y x)) (1 y))");
+    expect_unbound_var_error(14, "(do ((y 1)) (x 1))");
+}
+
+Test(schaf, runtime_error_syntaxes_known_bugs, .disabled = true) {
+    expect_unbound_var_error(4, "(pair? `(,x))");
+    expect_unbound_var_error(10, "(let ((y x)) y)");
+    expect_unbound_var_error(11, "(do ((y 1 x)) (#f 1))");
 }
 
 Test(schaf, div0) {

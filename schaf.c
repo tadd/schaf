@@ -315,6 +315,51 @@ static Value apply_cfunc_3(Value env, Value f, Value args)
     return CFUNC(f)->f3(env, a0, a1, a2);
 }
 
+static Value fill_nth_error(Value v, Value args)
+{
+    if (LIKELY(!is_error(v)))
+        return v;
+    Value stack = ERROR(v)->call_stack;
+    if (!value_is_int(stack))
+        return v;
+    int64_t n = value_to_int(stack);
+    Value loc = args;
+    for (int64_t i = 1; i < n; i++)
+        loc = cdr(loc);
+    ERROR(v)->call_stack = list1(cons(Qtrue, loc)); // #t marks "skip me"
+    return v;
+}
+
+static Value apply_syntax_v(Value env, Value f, Value args)
+{
+    Value ret = apply_cfunc_v(env, f, args);
+    return fill_nth_error(ret, args);
+}
+
+static Value apply_syntax_0(Value env, Value f, Value args)
+{
+    Value ret = apply_cfunc_0(env, f, args);
+    return fill_nth_error(ret, args);
+}
+
+static Value apply_syntax_1(Value env, Value f, Value args)
+{
+    Value ret = apply_cfunc_1(env, f, args);
+    return fill_nth_error(ret, args);
+}
+
+static Value apply_syntax_2(Value env, Value f, Value args)
+{
+    Value ret = apply_cfunc_2(env, f, args);
+    return fill_nth_error(ret, args);
+}
+
+static Value apply_syntax_3(Value env, Value f, Value args)
+{
+    Value ret = apply_cfunc_3(env, f, args);
+    return fill_nth_error(ret, args);
+}
+
 static Value cfunc_new(ValueTag tag, const char *name, void *cfunc, int64_t arity)
 {
     expect_cfunc_arity(arity);
@@ -324,19 +369,19 @@ static Value cfunc_new(ValueTag tag, const char *name, void *cfunc, int64_t arit
     f->cfunc = cfunc;
     switch (arity) {
     case -1:
-        f->proc.apply = apply_cfunc_v;
+        f->proc.apply = tag == TAG_CFUNC ? apply_cfunc_v : apply_syntax_v;
         break;
     case 0:
-        f->proc.apply = apply_cfunc_0;
+        f->proc.apply = tag == TAG_CFUNC ? apply_cfunc_0 : apply_syntax_0;
         break;
     case 1:
-        f->proc.apply = apply_cfunc_1;
+        f->proc.apply = tag == TAG_CFUNC ? apply_cfunc_1 : apply_syntax_1;
         break;
     case 2:
-        f->proc.apply = apply_cfunc_2;
+        f->proc.apply = tag == TAG_CFUNC ? apply_cfunc_2 : apply_syntax_2;
         break;
     case 3:
-        f->proc.apply = apply_cfunc_3;
+        f->proc.apply = tag == TAG_CFUNC ? apply_cfunc_3 : apply_syntax_3;
         break;
     default:
         bug("invalid arity: %"PRId64, arity);
@@ -432,6 +477,20 @@ const char *error_message(void)
             ERROR(v)->call_stack = list1(cons(Qfalse, l)); \
         return v; \
     }
+#define CHECK_ERROR_LOCATED_SKIPPED(v, l)  do { \
+        if (UNLIKELY(is_error(v))) { \
+            if (ERROR(v)->call_stack == Qnil) \
+                ERROR(v)->call_stack = list1(cons(Qtrue, l)); \
+            return v; \
+        } \
+    } while (0)
+#define CHECK_ERROR_NTH(v, n)  do { \
+        if (UNLIKELY(is_error(v))) { \
+            if (ERROR(v)->call_stack == Qnil) \
+                ERROR(v)->call_stack = value_of_int(n); \
+            return v; \
+        } \
+    } while (0)
 #define EXPECT(f, ...) CHECK_ERROR(expect_##f(__VA_ARGS__))
 
 static Value expect_type(Type expected, Value v)
@@ -594,7 +653,7 @@ static Value eval_body(Value env, Value body)
     Value last = Qnil;
     for (Value p = body; p != Qnil; p = cdr(p)) {
         last = eval(env, car(p));
-        CHECK_ERROR(last);
+        CHECK_ERROR_LOCATED(last, p);
     }
     return last;
 }
@@ -604,15 +663,25 @@ static Value map_eval(Value env, Value l)
     Value mapped = DUMMY_PAIR();
     for (Value last = mapped, p = l, v; p != Qnil; p = cdr(p)) {
         v = eval(env, car(p));
-        CHECK_ERROR(v);
+        CHECK_ERROR_LOCATED(v, p);
         last = PAIR(last)->cdr = list1(v);
     }
     return cdr(mapped);
 }
 
+static bool should_ignore(const Error *e)
+{
+    Value call_stack = e->call_stack;
+    if (call_stack == Qnil)
+        return false;
+    return caar(call_stack) == Qtrue; // skip me
+}
+
 static Value push_stack_frame(Value ve, const char *name, Value loc)
 {
     Error *e = ERROR(ve);
+    if (should_ignore(e))
+        return ve; // as is
     Value str = name == NULL ? Qfalse : value_of_string(name);
     Value data = cons(str, loc);
     e->call_stack = cons(data, e->call_stack);
@@ -733,7 +802,7 @@ static void dump_frame(Value data, Value callers)
 
 static void prepend_cfunc_name(Value v)
 {
-    if (v == Qfalse)
+    if (!value_is_string(v))
         return;
     const char *s = STRING(v)->body;
     size_t len = strlen(s) + 2;// strlen(": ")
@@ -860,13 +929,18 @@ static Value syn_if(Value env, Value args)
 
     Value cond = car(args), then = cadr(args);
     Value v = eval(env, cond);
-    CHECK_ERROR(v);
-    if (v != Qfalse)
-        return eval(env, then);
+    CHECK_ERROR_LOCATED_SKIPPED(v, args);
+    if (v != Qfalse) {
+        v = eval(env, then);
+        CHECK_ERROR_LOCATED_SKIPPED(v, cdr(args));
+        return v;
+    }
     Value els = cddr(args);
     if (els == Qnil)
         return Qnil;
-    return eval(env, car(els));
+    v = eval(env, car(els));
+    CHECK_ERROR_LOCATED_SKIPPED(v, els);
+    return v;
 }
 
 // 4.1.6. Assignments
@@ -892,7 +966,7 @@ static Value cond_eval_recipient(Value env, Value test, Value recipients)
 {
     EXPECT(type, TYPE_PAIR, recipients);
     Value recipient = eval(env, car(recipients)), rest = cdr(recipients);
-    CHECK_ERROR(recipient);
+    CHECK_ERROR_LOCATED_SKIPPED(recipient, recipients);
     EXPECT(type, TYPE_PROC, recipient);
     if (rest != Qnil)
         return runtime_error("only one expression expected after =>");
@@ -912,7 +986,7 @@ static Value syn_cond(Value env, Value clauses)
         if (test == SYM_ELSE)
             return eval_body(env, exprs);
         Value t = eval(env, test);
-        CHECK_ERROR(t);
+        CHECK_ERROR_LOCATED_SKIPPED(t, clause);
         if (t != Qfalse) {
             if (exprs == Qnil)
                 return t;
@@ -937,7 +1011,7 @@ static Value syn_case(Value env, Value args)
 {
     EXPECT(arity_min, 2, args);
     Value key = eval(env, car(args)), clauses = cdr(args);
-    CHECK_ERROR(key);
+    CHECK_ERROR_LOCATED_SKIPPED(key, args);
     EXPECT(list_head, clauses);
 
     for (Value p = clauses; p != Qnil; p = cdr(p)) {
@@ -958,7 +1032,7 @@ static Value syn_and(Value env, Value args)
     for (Value p = args; p != Qnil; p = cdr(p)) {
         if ((last = eval(env, car(p))) == Qfalse)
             break;
-        CHECK_ERROR(last);
+        CHECK_ERROR_LOCATED_SKIPPED(last, p);
     }
     return last;
 }
@@ -968,8 +1042,10 @@ static Value syn_or(Value env, Value args)
 {
     Value last = Qfalse;
     for (Value p = args; p != Qnil; p = cdr(p)) {
-        if ((last = eval(env, car(p))) != Qfalse) // include errors
+        if ((last = eval(env, car(p))) != Qfalse) { // include errors
+            CHECK_ERROR_LOCATED_SKIPPED(last, p);
             break;
+        }
     }
     return last;
 }
@@ -1034,7 +1110,7 @@ static Value let_star(Value env, Value bindings, Value body)
         EXPECT(type, TYPE_SYMBOL, ident);
         letenv = env_inherit(letenv);
         Value val = eval(letenv, expr);
-        CHECK_ERROR(val);
+        CHECK_ERROR_LOCATED_SKIPPED(val, cdr(b));
         env_put(letenv, ident, val);
     }
     return eval_body(letenv, body);
@@ -1063,6 +1139,7 @@ static Value syn_letrec(Value env, Value args)
         Value ident = car(b);
         EXPECT(type, TYPE_SYMBOL, ident);
         Value val = eval(letenv, cadr(b));
+        CHECK_ERROR_LOCATED_SKIPPED(val, cdr(b));
         env_put(letenv, ident, val);
     }
     return eval_body(letenv, body);
@@ -1094,7 +1171,7 @@ static Value syn_do(Value env, Value args)
         if (step != Qnil)
             steps = cons(cons(var, car(step)), steps);
         v = eval(env, init);
-        CHECK_ERROR(v);
+        CHECK_ERROR_LOCATED_SKIPPED(v, cdr(b));
         env_put(doenv, var, v); // in the original env
     }
     Value test = car(tests), exprs = cdr(tests);
@@ -1111,7 +1188,7 @@ static Value syn_do(Value env, Value args)
             iset(doenv, var, val);
         }
     }
-    CHECK_ERROR(v);
+    CHECK_ERROR_LOCATED_SKIPPED(v, tests);
     return eval_body(doenv, exprs);
 }
 
@@ -1128,11 +1205,13 @@ static Value qq(Value env, Value datum, int64_t depth)
     if (a == SYM_QUASIQUOTE) {
         EXPECT(type, TYPE_PAIR, d);
         Value v = qq(env, car(d), depth + 1);
+        CHECK_ERROR(v);
         return list2_const(a, v);
     }
     if (a == SYM_UNQUOTE || a == SYM_UNQUOTE_SPLICING) {
         EXPECT(type, TYPE_PAIR, d);
         Value v = qq(env, car(d), depth - 1);
+        CHECK_ERROR(v);
         return depth == 1 ? v : list2_const(a, v);
     }
     return qq_list(env, datum, depth);
@@ -1169,12 +1248,15 @@ static Value qq_list(Value env, Value datum, int64_t depth)
         bool is_simple = !value_is_pair(p);
         if (is_simple || is_quoted_terminal(p)) {
             EXPECT(type, TYPE_PAIR, cdr(ret));
-            PAIR(last)->cdr = is_simple ? p : qq(env, p, depth);
+            Value v = is_simple ? p : qq(env, p, depth);
+            CHECK_ERROR(v);
+            PAIR(last)->cdr = v;
             break;
         }
         Value elem = car(p);
         bool spliced = (value_is_pair(elem) && car(elem) == SYM_UNQUOTE_SPLICING);
         Value v = qq(env, elem, depth);
+        CHECK_ERROR_LOCATED_SKIPPED(v, p);// XXX
         if (!spliced)
             last = PAIR(last)->cdr = list1_const(v);
         else if (v != Qnil)
@@ -1224,12 +1306,14 @@ static Value syn_define(Value env, Value args)
 {
     if (args == Qnil)
         return runtime_error("wrong number of arguments: expected 1+");
-    Value head = car(args);
+    Value head = car(args), v;
     Type t = value_type_of(head);
     switch (t) {
     case TYPE_SYMBOL:
         EXPECT(arity, 2, args);
-        return define_variable(env, head, cadr(args));
+        v = define_variable(env, head, cadr(args));
+        CHECK_ERROR_NTH(v, 2);
+        return v;
     case TYPE_PAIR:
         return define_proc_internal(env, head, cdr(args));
     case TYPE_NULL:
