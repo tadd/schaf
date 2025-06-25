@@ -1782,12 +1782,8 @@ static Value proc_for_each(Table *env, Value args)
 
     Value proc = car(args);
     expect_type(TYPE_PROC, proc);
-    Value lists = cdr(args);
-    Value cars, cdrs;
-    while (cars_cdrs(lists, &cars, &cdrs)) {
+    for (Value ls = cdr(args), cars, cdrs; cars_cdrs(ls, &cars, &cdrs); ls = cdrs)
         apply(env, proc, cars);
-        lists = cdrs;
-    }
     return Qnil;
 }
 
