@@ -14,6 +14,7 @@
 #endif
 
 #define ATTR(x) __attribute__((x))
+#define UNUSED ATTR(unused)
 #define UNREACHABLE() \
     error("%s:%d: %s: unreachable", __FILE__, __LINE__, __func__), \
     __builtin_unreachable()
@@ -37,6 +38,6 @@ Table *table_put(Table *t, uint64_t key, uint64_t val); // `val` can't be TABLE_
 bool table_set(Table *t, uint64_t key, uint64_t val); // set if found
 uint64_t table_get(const Table *t, uint64_t key);
 void table_foreach(const Table *t, TableForeachFunc f, void *data);
-ATTR(unused) void table_dump(const Table *t); // for debug
+void table_dump(const Table *t) UNUSED; // for debug
 
 #endif

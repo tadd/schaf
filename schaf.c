@@ -274,7 +274,7 @@ static Value apply_cfunc_v(Table *env, CFunc *f, Value args)
     return f->f1(env, args);
 }
 
-static Value apply_cfunc_0(Table *env, CFunc *f, ATTR(unused) Value args)
+static Value apply_cfunc_0(Table *env, CFunc *f, UNUSED Value args)
 {
     return f->f0(env);
 }
@@ -793,7 +793,6 @@ static Value load_inner(const char *path)
 // Built-in Procedures / Syntax
 //
 
-#define UNUSED ATTR(unused)
 // 4.1. Primitive expression types
 // 4.1.2. Literal expressions
 static Value syn_quote(UNUSED Table *env, Value datum)
