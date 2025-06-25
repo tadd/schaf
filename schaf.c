@@ -558,6 +558,7 @@ static Value map_eval(Table *env, Value l)
 
 static Value eval_apply(Table *env, Value l)
 {
+    Value orig_stack = call_stack;
     call_stack = cons(l, call_stack); // push
     Value symproc = car(l), args = cdr(l);
     Value proc = eval(env, symproc);
@@ -568,7 +569,7 @@ static Value eval_apply(Table *env, Value l)
     curr_cfunc_name = NULL;
     Value ret = apply(env, proc, args);
     curr_cfunc_name = prev_name;
-    call_stack = cdr(call_stack); // pop
+    call_stack = orig_stack; // pop
     return ret;
 }
 
