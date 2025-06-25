@@ -36,9 +36,10 @@ typedef struct {
     int64_t arity;
 } Procedure;
 
-typedef struct {
+typedef struct CFunc {
     Procedure proc;
     char *name;
+    Value (*applier)(Table *env, struct CFunc *f, Value args);
     union {
         void *cfunc;
         Value (*f0)(Table *);

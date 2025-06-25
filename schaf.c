@@ -269,6 +269,39 @@ static void expect_cfunc_arity(int64_t actual)
           CFUNCARG_MAX, actual);
 }
 
+static Value apply_cfunc_v(Table *env, CFunc *f, Value args)
+{
+    return f->f1(env, args);
+}
+
+static Value apply_cfunc_0(Table *env, CFunc *f, ATTR(unused) Value args)
+{
+    return f->f0(env);
+}
+
+static Value apply_cfunc_1(Table *env, CFunc *f, Value args)
+{
+    Value a = car(args);
+    return f->f1(env, a);
+}
+
+static Value apply_cfunc_2(Table *env, CFunc *f, Value args)
+{
+    Value p = args, a0, a1;
+    a0 = car(p); p = cdr(p);
+    a1 = car(p);
+    return f->f2(env, a0, a1);
+}
+
+static Value apply_cfunc_3(Table *env, CFunc *f, Value args)
+{
+    Value p = args, a0, a1, a2;
+    a0 = car(p); p = cdr(p);
+    a1 = car(p); p = cdr(p);
+    a2 = car(p);
+    return f->f3(env, a0, a1, a2);
+}
+
 static Value value_of_cfunc(const char *name, void *cfunc, int64_t arity)
 {
     expect_cfunc_arity(arity);
@@ -276,6 +309,25 @@ static Value value_of_cfunc(const char *name, void *cfunc, int64_t arity)
     f->name = xstrdup(name);
     f->proc.arity = arity;
     f->cfunc = cfunc;
+    switch (arity) {
+    case -1:
+        f->applier = apply_cfunc_v;
+        break;
+    case 0:
+        f->applier = apply_cfunc_0;
+        break;
+    case 1:
+        f->applier = apply_cfunc_1;
+        break;
+    case 2:
+        f->applier = apply_cfunc_2;
+        break;
+    case 3:
+        f->applier = apply_cfunc_3;
+        break;
+    default:
+        error("invalid arity: %"PRId64, arity);
+    }
     return (Value) f;
 }
 
@@ -388,27 +440,9 @@ static void expect_arity(int64_t expected, Value args)
 
 static Value apply_cfunc(Table *env, Value proc, Value args)
 {
-    Value a[CFUNCARG_MAX];
-    CFunc *cf = CFUNC(proc);
-    int64_t n = cf->proc.arity;
-    Value p = args;
-    for (int i = 0; i < n; i++, p = cdr(p))
-        a[i] = car(p);
-    curr_cfunc_name = cf->name;
-    switch (n) {
-    case -1:
-        return cf->f1(env, args);
-    case 0:
-        return cf->f0(env);
-    case 1:
-        return cf->f1(env, a[0]);
-    case 2:
-        return cf->f2(env, a[0], a[1]);
-    case 3:
-        return cf->f3(env, a[0], a[1], a[2]);
-    default:
-        error("arity too large: %"PRId64, n);
-    }
+    CFunc *f = CFUNC(proc);
+    curr_cfunc_name = f->name;
+    return f->applier(env, f, args);
 }
 
 static Value append2(Value l1, Value l2)
