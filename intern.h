@@ -29,6 +29,7 @@ typedef enum {
     TAG_CONTINUATION,
     TAG_ENV,
     // internal use only
+    TAG_PARSER,
     TAG_ERROR,
     TAG_LAST = TAG_ERROR
 } ValueTag;
@@ -86,6 +87,34 @@ typedef struct {
     jmp_buf state;
     Value retval;
 } Continuation;
+
+typedef enum {
+    TOK_TYPE_LPAREN,
+    TOK_TYPE_RPAREN,
+    TOK_TYPE_QUOTE,
+    TOK_TYPE_GRAVE,
+    TOK_TYPE_COMMA,
+    TOK_TYPE_SPLICE,
+    TOK_TYPE_INT,
+    TOK_TYPE_DOT,
+    TOK_TYPE_STRING,
+    TOK_TYPE_IDENT,
+    TOK_TYPE_CONST,
+    TOK_TYPE_EOF
+} TokenType;
+
+typedef struct {
+    TokenType type;
+    Value value;
+} Token;
+
+typedef struct {
+    Header header;
+    FILE *in;
+    const char *filename;
+    Token prev_token;
+    Value newline_pos; // list of pos | int
+} Parser;
 
 typedef struct {
     Header header;
