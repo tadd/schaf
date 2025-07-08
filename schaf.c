@@ -659,7 +659,7 @@ static Value push_stack_frame(Value ve, const char *name, Value loc)
 
 static Value apply(Value env, Value proc, Value args)
 {
-    EXPECT(arity, PROCEDURE(proc)->arity, args);
+    EXPECT(arity, PROCEDURE(proc)->arity, args); // not only C functions
     return PROCEDURE(proc)->apply(env, proc, args);
 }
 
@@ -2077,8 +2077,8 @@ static Value proc_for_each(Value env, Value args)
 [[gnu::noreturn, gnu::noinline]]
 static void jump(Continuation *cont)
 {
-    memcpy(cont->sp, cont->stack, cont->stack_len);
-    longjmp(cont->state, 1);
+    memcpy(cont->exstate->sp, cont->exstate->stack, cont->exstate->stack_len);
+    longjmp(cont->exstate->regs, 1);
 }
 
 #define GET_SP(p) uintptr_t v##p = 0, *p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
@@ -2089,12 +2089,21 @@ static Value apply_continuation(UNUSED Value env, Value f, Value args)
     GET_SP(sp);
     Continuation *cont = CONTINUATION(f);
     cont->retval = PROCEDURE(f)->arity == 1 ? car(args) : args;
-    int64_t d = sp - cont->sp;
+    int64_t d = sp - cont->exstate->sp;
     if (d < 1)
         d = 1;
     volatile uintptr_t pad[d];
     pad[0] = pad[d-1] = 0; // avoid unused
     jump(cont);
+}
+
+static ExecutionState *execstate_new(void)
+{
+    ExecutionState *s = xmalloc(sizeof(ExecutionState));
+    s->sp = NULL;
+    s->stack = NULL;
+    s->stack_len = 0;
+    return s;
 }
 
 static Value value_of_continuation(int64_t n)
@@ -2103,9 +2112,8 @@ static Value value_of_continuation(int64_t n)
     Continuation *c = CONTINUATION(o);
     c->proc.arity = n; // call/cc: 1, call-with-values: -1
     c->proc.apply = apply_continuation;
-    c->sp = c->stack = NULL;
-    c->stack_len = 0;
     c->retval = Qfalse;
+    c->exstate = execstate_new();
     return (Value) o;
 }
 
@@ -2114,12 +2122,12 @@ static bool continuation_set(Value c)
 {
     GET_SP(sp); // must be the first!
     Continuation *cont = CONTINUATION(c);
-    cont->sp = sp;
-    cont->stack_len = gc_stack_get_size(sp);
-    cont->stack = xmalloc(cont->stack_len);
-    UNPOISON(sp, cont->stack_len);
-    memcpy(cont->stack, sp, cont->stack_len);
-    return setjmp(cont->state) != 0;
+    cont->exstate->sp = sp;
+    cont->exstate->stack_len = gc_stack_get_size(sp);
+    cont->exstate->stack = xmalloc(cont->exstate->stack_len);
+    UNPOISON(sp, cont->exstate->stack_len);
+    memcpy(cont->exstate->stack, sp, cont->exstate->stack_len);
+    return setjmp(cont->exstate->regs) != 0;
 }
 
 // shared with dynamic-wind
@@ -2490,9 +2498,8 @@ static const char *file_to_name(const FILE *fp)
         NULL;
 }
 
-static void display_port(FILE *f, const Port *p)
+static void display_port(FILE *f, const FILE *fp)
 {
-    FILE *fp = p->fp;
     const char *name = file_to_name(fp);
     if (name != NULL)
         fprintf(f, "<port: %s>", name);
@@ -2538,7 +2545,7 @@ static void fdisplay_rec(FILE* f, Value v, Value record)
         fprintf(f, "<environment: %s>", ENV(v)->name);
         break;
     case TYPE_PORT:
-        display_port(f, PORT(v));
+        display_port(f, PORT(v)->fp);
         break;
     case TYPE_EOF:
         fprintf(f, "<eof>");
