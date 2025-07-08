@@ -146,8 +146,8 @@ Table *table_new(void)
 {
     Table *t = xmalloc(sizeof(Table));
     t->size = 0;
-    t->body_size = TABLE_INIT_SIZE;
-    t->body = xcalloc(TABLE_INIT_SIZE, sizeof(List *)); // set NULL
+    t->body_size = 0;
+    t->body = NULL;
     return t;
 }
 
@@ -242,7 +242,10 @@ Table *table_put(Table *t, uint64_t key, uint64_t value)
 {
     if (value == TABLE_NOT_FOUND)
         bug("got invalid value == TABLE_NOT_FOUND");
-    if (table_too_many_elements(t))
+    if (t->body_size == 0) {
+        t->body_size = TABLE_INIT_SIZE;
+        t->body = xcalloc(TABLE_INIT_SIZE, sizeof(List *)); // set NULL
+    } else if (table_too_many_elements(t))
         table_resize(t);
     uint64_t i = body_index(t, key);
     t->body[i] = list_new(key, value, t->body[i]); // prepend even if the same key exists
@@ -262,6 +265,8 @@ static List *find(const Table *t, uint64_t key)
 
 uint64_t table_get(const Table *t, uint64_t key)
 {
+    if (t->body_size == 0)
+        return TABLE_NOT_FOUND;
     const List *p = find(t, key);
     return p == NULL ? TABLE_NOT_FOUND : p->value;
 }
@@ -270,6 +275,8 @@ bool table_set(Table *t, uint64_t key, uint64_t value)
 {
     if (value == TABLE_NOT_FOUND)
         bug("got invalid value == TABLE_NOT_FOUND");
+    if (t->body_size == 0)
+        return false;
     List *p = find(t, key);
     if (p == NULL)
         return false; // not found; do nothing
