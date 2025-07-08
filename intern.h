@@ -9,6 +9,7 @@
 typedef enum {
     TAG_PAIR,
     TAG_STRING,
+    TAG_ESTRING,
     TAG_CFUNC,
     TAG_SYNTAX, // almost a C Function
     TAG_CLOSURE,
@@ -63,10 +64,15 @@ typedef struct {
     Value call_stack; // list of '(func-name . location)
 } Error;
 
+enum {
+    EMBED_LEN = sizeof(Continuation), // maybe the largest
+};
+
 typedef struct {
     ValueTag tag; // common
     union {
         char *string;
+        char estring[EMBED_LEN];
         Pair pair;
         LocatedPair lpair;
         CFunc cfunc;
@@ -79,7 +85,7 @@ typedef struct {
 #define OBJ(v) ((SchObject *) v)
 #define PAIR(v) (&OBJ(v)->pair)
 #define LOCATED_PAIR(v) (&OBJ(v)->lpair)
-#define STRING(v) (OBJ(v)->string)
+#define STRING(v) (LIKELY(OBJ(v)->tag == TAG_ESTRING) ? OBJ(v)->estring : OBJ(v)->string)
 #define PROC_ARITY(v) (OBJ(v)->cfunc.arity)
 #define CFUNC(v) (&OBJ(v)->cfunc)
 #define CLOSURE(v) (&OBJ(v)->closure)
