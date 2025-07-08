@@ -103,7 +103,10 @@ static inline bool value_tag_is(Value v, ValueTag expected)
 
 inline bool value_is_string(Value v)
 {
-    return value_tag_is(v, TAG_STRING);
+    if (value_is_immediate(v))
+        return false;
+    const int tag = VALUE_TAG(v);
+    return tag == TAG_ESTRING || tag == TAG_STRING;
 }
 
 static inline bool value_is_procedure(Value v)
@@ -117,6 +120,7 @@ static inline bool value_is_procedure(Value v)
     case TAG_CONTINUATION:
         return true;
     case TAG_STRING:
+    case TAG_ESTRING:
     case TAG_PAIR:
     case TAG_ENV:
     case TAG_PORT:
@@ -159,6 +163,7 @@ Type value_type_of(Value v)
         return immediate_type_of(v);
     switch (VALUE_TAG(v)) {
     case TAG_STRING:
+    case TAG_ESTRING:
         return TYPE_STRING;
     case TAG_PAIR:
         return TYPE_PAIR;
@@ -289,9 +294,15 @@ SchObject *obj_new(ValueTag t)
 
 Value value_of_string(const char *s)
 {
-    SchObject *o = obj_new(TAG_STRING);
-    char **str = &STRING(o);
-    *str = xstrdup(s);
+    SchObject *o;
+    size_t len = strlen(s);
+    if (LIKELY(len < EMBED_LEN)) {
+        o = obj_new(TAG_ESTRING);
+        strcpy(o->estring, s);
+    } else {
+        o = obj_new(TAG_STRING);
+        o->string = xstrdup(s);
+    }
     return (Value) o;
 }
 

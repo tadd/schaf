@@ -24,6 +24,7 @@ typedef enum {
 typedef enum {
     TAG_PAIR,
     TAG_STRING,
+    TAG_ESTRING,
     TAG_CFUNC,
     TAG_SYNTAX, // almost a C Function
     TAG_CLOSURE,
@@ -130,10 +131,15 @@ typedef struct {
     Value call_stack; // list of '(func-name . location)
 } Error;
 
+enum {
+    EMBED_LEN = sizeof(Continuation), // maybe the largest
+};
+
 typedef struct {
     Header header; // common
     union {
         char *string;
+        char estring[EMBED_LEN];
         Pair pair;
         LocatedPair lpair;
         Procedure proc;
@@ -153,7 +159,7 @@ typedef struct {
 
 #define PAIR(v) (&OBJ(v)->pair)
 #define LOCATED_PAIR(v) (&OBJ(v)->lpair)
-#define STRING(v) (OBJ(v)->string)
+#define STRING(v) (LIKELY(VALUE_TAG(v) == TAG_ESTRING) ? OBJ(v)->estring : OBJ(v)->string)
 #define PROCEDURE(v) (&OBJ(v)->proc)
 #define CFUNC(v) (&OBJ(v)->cfunc)
 #define CLOSURE(v) (&OBJ(v)->closure)
