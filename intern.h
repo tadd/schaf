@@ -51,10 +51,6 @@ typedef struct {
 } LocatedPair;
 
 typedef struct {
-    char *body;
-} String;
-
-typedef struct {
     int64_t arity;
     Value (*apply)(Value env, Value proc, Value args);
 } Procedure;
@@ -79,12 +75,16 @@ typedef struct {
 } Closure;
 
 typedef struct {
-    Procedure proc;
-    uintptr_t *sp;
     void *stack;
     size_t stack_len;
-    jmp_buf state;
+    jmp_buf regs;
+} ExecutionState;
+
+typedef struct {
+    Procedure proc;
+    uintptr_t *sp;
     Value retval;
+    ExecutionState *exstate;
 } Continuation;
 
 typedef enum {
@@ -110,7 +110,7 @@ typedef struct {
 typedef struct {
     FILE *in;
     const char *filename;
-    Token prev_token;
+    Token *prev_token;
     Value newline_pos; // list of pos | int
 } Parser;
 
@@ -133,7 +133,7 @@ typedef struct {
 typedef struct {
     Header header; // common
     union {
-        String string;
+        char *string;
         Pair pair;
         LocatedPair lpair;
         Procedure proc;
@@ -153,7 +153,7 @@ typedef struct {
 
 #define PAIR(v) (&OBJ(v)->pair)
 #define LOCATED_PAIR(v) (&OBJ(v)->lpair)
-#define STRING(v) (&OBJ(v)->string)
+#define STRING(v) (OBJ(v)->string)
 #define PROCEDURE(v) (&OBJ(v)->proc)
 #define CFUNC(v) (&OBJ(v)->cfunc)
 #define CLOSURE(v) (&OBJ(v)->closure)
