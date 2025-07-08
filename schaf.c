@@ -214,7 +214,7 @@ static const char *name_nth(Value list, int64_t n)
         if ((p = cdr(p)) == Qnil)
             return NULL;
     }
-    return STRING(car(p))->body;
+    return STRING(car(p));
 }
 
 static const char *unintern(Symbol sym)
@@ -229,7 +229,7 @@ inline const char *value_to_string(Value v)
 {
     if (value_is_symbol(v))
         return unintern(value_to_symbol(v));
-    return STRING(v)->body;
+    return STRING(v);
 }
 
 // define caar, cadr, ... cddddr, 28 procedures, at once
@@ -258,7 +258,7 @@ static Symbol intern(const char *name)
     // find
     for (Value p = symbol_names; p != Qnil; last = p, p = cdr(p)) {
         Value v = car(p);
-        if (strcmp(STRING(v)->body, name) == 0)
+        if (strcmp(STRING(v), name) == 0)
             return i;
         i++;
     }
@@ -290,8 +290,7 @@ SchObject *obj_new(ValueTag t)
 static Value value_of_string_move(char *s)
 {
     SchObject *o = obj_new(TAG_STRING);
-    String *str = STRING(o);
-    str->body = s; // move ownership and use as is
+    STRING(o) = s; // move ownership and use as is
     return (Value) o;
 }
 
@@ -624,7 +623,7 @@ static Value push_stack_frame(Value ve, const char *name, Value loc)
 
 static Value apply(Value env, Value proc, Value args)
 {
-    EXPECT(arity, PROCEDURE(proc)->arity, args);
+    EXPECT(arity, PROCEDURE(proc)->arity, args); // not only C functions
     return PROCEDURE(proc)->apply(env, proc, args);
 }
 
@@ -688,7 +687,7 @@ static void dump_line_column(Value filename, int64_t pos)
     Value newline_pos = caddr(data);
     pos_to_line_col(pos, newline_pos, &line, &col);
     append_error_message("\n\t%s:%"PRId64":%"PRId64" in ",
-                         STRING(filename)->body, line, col);
+                         STRING(filename), line, col);
 }
 
 static bool find_pair(Value tree, Value pair)
@@ -746,7 +745,7 @@ static void prepend_cfunc_name(Value v)
 {
     if (v == Qfalse)
         return;
-    const char *s = STRING(v)->body;
+    const char *s = STRING(v);
     size_t len = strlen(s) + 2;// strlen(": ")
     char tmp[sizeof(errmsg) - len];
     snprintf(tmp, sizeof(tmp), "%s", errmsg);
@@ -1310,7 +1309,7 @@ static bool equal(Value x, Value y)
         return equal(car(x), car(y)) &&
                equal(cdr(x), cdr(y));
     case TYPE_STRING:
-        return (strcmp(STRING(x)->body, STRING(y)->body) == 0);
+        return (strcmp(STRING(x), STRING(y)) == 0);
     case TYPE_VECTOR:
         return vector_equal(VECTOR(x), VECTOR(y));
     case TYPE_SYMBOL:
@@ -1833,13 +1832,13 @@ static Value proc_string_p(UNUSED Value env, Value obj)
 static Value proc_string_length(UNUSED Value env, Value s)
 {
     EXPECT(type, TYPE_STRING, s);
-    return value_of_int(strlen(STRING(s)->body));
+    return value_of_int(strlen(STRING(s)));
 }
 
 static Value proc_string_eq(UNUSED Value env, Value s1, Value s2)
 {
     EXPECT(type_twin, TYPE_STRING, s1, s2);
-    return OF_BOOL(strcmp(STRING(s1)->body, STRING(s2)->body) == 0);
+    return OF_BOOL(strcmp(STRING(s1), STRING(s2)) == 0);
 }
 
 static Value proc_string_append(UNUSED Value env, Value args)
@@ -1849,12 +1848,12 @@ static Value proc_string_append(UNUSED Value env, Value args)
     for (Value p = args, v; p != Qnil; p = cdr(p)) {
         v = car(p);
         EXPECT(type, TYPE_STRING, v);
-        len += strlen(STRING(v)->body);
+        len += strlen(STRING(v));
     }
     char *s = xmalloc(len + 1);
     s[0] = '\0';
     for (Value p = args; p != Qnil; p = cdr(p))
-        strcat(s, STRING(car(p))->body);
+        strcat(s, STRING(car(p)));
     return value_of_string_move(s);
 }
 
@@ -1988,8 +1987,8 @@ static Value proc_for_each(Value env, Value args)
 [[gnu::noreturn, gnu::noinline]]
 static void jump(Continuation *cont)
 {
-    memcpy(cont->sp, cont->stack, cont->stack_len);
-    longjmp(cont->state, 1);
+    memcpy(cont->sp, cont->exstate->stack, cont->exstate->stack_len);
+    longjmp(cont->exstate->regs, 1);
 }
 
 #define GET_SP(p) uintptr_t v##p = 0, *p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
@@ -2008,15 +2007,23 @@ static Value apply_continuation(UNUSED Value env, Value f, Value args)
     jump(cont);
 }
 
+static ExecutionState *execstate_new(void)
+{
+    ExecutionState *s = xmalloc(sizeof(ExecutionState));
+    s->stack = NULL;
+    s->stack_len = 0;
+    return s;
+}
+
 static Value value_of_continuation(int64_t n)
 {
     SchObject *o = obj_new(TAG_CONTINUATION);
     Continuation *c = &o->continuation;
     c->proc.arity = n; // call/cc: 1, call-with-values: -1
     c->proc.apply = apply_continuation;
-    c->sp = c->stack = NULL;
-    c->stack_len = 0;
     c->retval = Qfalse;
+    c->sp = NULL;
+    c->exstate = execstate_new();
     return (Value) o;
 }
 
@@ -2026,11 +2033,11 @@ static bool continuation_set(Value c)
     GET_SP(sp); // must be the first!
     Continuation *cont = CONTINUATION(c);
     cont->sp = sp;
-    cont->stack_len = gc_stack_get_size(sp);
-    cont->stack = xmalloc(cont->stack_len);
-    UNPOISON(sp, cont->stack_len);
-    memcpy(cont->stack, sp, cont->stack_len);
-    return setjmp(cont->state) != 0;
+    cont->exstate->stack_len = gc_stack_get_size(sp);
+    cont->exstate->stack = xmalloc(cont->exstate->stack_len);
+    UNPOISON(sp, cont->exstate->stack_len);
+    memcpy(cont->exstate->stack, sp, cont->exstate->stack_len);
+    return setjmp(cont->exstate->regs) != 0;
 }
 
 static Value proc_callcc(Value env, Value proc)
@@ -2139,7 +2146,7 @@ static Value proc_current_output_port(UNUSED Value env)
 static Value proc_open_input_file(UNUSED Value env, Value vpath)
 {
     EXPECT(type, TYPE_STRING, vpath);
-    const char *path = STRING(vpath)->body;
+    const char *path = STRING(vpath);
     FILE *fp = fopen(path, "r");
     if (fp == NULL)
         return runtime_error("cannot open file: %s", path);
@@ -2290,7 +2297,7 @@ static Value proc_load(UNUSED Value env, Value path)
 {
     EXPECT(type, TYPE_STRING, path);
     // Current spec: path is always relative
-    return load_inner(STRING(path)->body);
+    return load_inner(STRING(path));
 }
 
 // Extensions from R7RS (scheme process-context)
@@ -2350,14 +2357,14 @@ static void free_source_data(void)
 {
     for (Value p = source_data; p != Qnil; p = cdr(p)) {
         Value l = car(p);
-        free(STRING(car(l))->body);
+        free(STRING(car(l)));
     }
 }
 
 static void free_symbol_names(void)
 {
     for (Value p = symbol_names; p != Qnil; p = cdr(p))
-        free(STRING(car(p))->body);
+        free(STRING(car(p)));
 }
 
 static void env_free(Value ve)
