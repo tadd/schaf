@@ -62,10 +62,6 @@ typedef struct {
 } LocatedPair;
 
 typedef struct {
-    char *body;
-} String;
-
-typedef struct {
     int64_t arity;
     Value (*apply)(Value env, Value proc, Value args);
 } Procedure;
@@ -95,17 +91,17 @@ typedef struct {
 } Closure;
 
 typedef struct {
-    Procedure proc;
     uintptr_t *sp;
     void *stack;
     size_t stack_len;
-    jmp_buf state;
-    Value retval;
-} Continuation;
+    jmp_buf regs;
+} ExecutionState;
 
 typedef struct {
-    Value *body;// use scary
-} Vector;
+    Procedure proc;
+    Value retval;
+    ExecutionState *exstate;
+} Continuation;
 
 typedef struct {
     char *name;
@@ -126,13 +122,9 @@ typedef struct {
 } StackFrame;
 
 typedef struct {
-    StackFrame **call_stack;
-} Error;
-
-typedef struct {
     Header header; // common
     union {
-        String string;
+        char *string;
         Pair pair;
         LocatedPair lpair;
         Procedure proc;
@@ -140,10 +132,10 @@ typedef struct {
         Closure closure;
         Continuation continuation;
         CFuncClosure cfunc_closure;
-        Vector vector;
+        Value *vector;// use scary
         Env env;
         Port port;
-        Error error;
+        StackFrame **error;// ditto
     };
 } SchObject;
 
@@ -153,16 +145,16 @@ typedef struct {
 
 #define PAIR(v) (&OBJ(v)->pair)
 #define LOCATED_PAIR(v) (&OBJ(v)->lpair)
-#define STRING(v) ((&OBJ(v)->string)->body)
+#define STRING(v) (OBJ(v)->string)
 #define PROCEDURE(v) (&OBJ(v)->proc)
 #define CFUNC(v) (&OBJ(v)->cfunc)
 #define CLOSURE(v) (&OBJ(v)->closure)
 #define CONTINUATION(v) (&OBJ(v)->continuation)
 #define CFUNC_CLOSURE(v) (&OBJ(v)->cfunc_closure)
-#define VECTOR(v) ((&OBJ(v)->vector)->body)
+#define VECTOR(v) (OBJ(v)->vector)
 #define ENV(v) (&OBJ(v)->env)
 #define PORT(v) (&OBJ(v)->port)
-#define ERROR(v) ((&OBJ(v)->error)->call_stack)
+#define ERROR(v) (OBJ(v)->error)
 
 typedef struct {
     char *filename;
