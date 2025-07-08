@@ -114,6 +114,7 @@ static inline bool value_is_procedure(Value v)
     case TAG_PAIR:
         return false;
     case TAG_ENV:
+    case TAG_PARSER:
     case TAG_ERROR:
         break;
     }
@@ -160,6 +161,7 @@ Type value_type_of(Value v)
     case TAG_CONTINUATION:
         return TYPE_PROC;
     case TAG_ENV:
+    case TAG_PARSER:
     case TAG_ERROR:
         break;
     }
