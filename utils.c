@@ -36,6 +36,14 @@ void *xcalloc(size_t nmem, size_t memsize)
     return p;
 }
 
+void *xrealloc(void *p, size_t size)
+{
+    void *q = realloc(p, size);
+    if (p == NULL)
+        error("realloc(%zu) failed", size);
+    return q;
+}
+
 char *xstrdup(const char *s)
 {
     char *dup = xmalloc(strlen(s) + 1);
@@ -171,9 +179,11 @@ static List *list_reverse(List *l)
 static void table_resize(Table *t)
 {
     const size_t old_body_size = t->body_size;
-    List **old_body = t->body;
+    List **old_body = xmalloc(t->body_size * sizeof(List *));
+    memcpy(old_body, t->body, t->body_size * sizeof(List *));
     t->body_size *= TABLE_RESIZE_FACTOR;
-    t->body = xcalloc(t->body_size, sizeof(List *)); // set NULL
+    t->body = xrealloc(t->body, t->body_size * sizeof(List *));
+    memset(t->body, 0, t->body_size * sizeof(List *));
     for (size_t i = 0; i < old_body_size; i++) {
         for (List *p = old_body[i], *next; p != NULL; p = next) {
             next = p->next;
