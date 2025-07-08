@@ -216,9 +216,9 @@ static Token lex_ident(Parser *p, int init)
 
 static Token lex(Parser *p)
 {
-    if (p->prev_token.type != TOK_TYPE_EOF)  {
-        Token t = p->prev_token;
-        p->prev_token = TOK_EOF;
+    if (p->prev_token->type != TOK_TYPE_EOF)  {
+        Token t = *p->prev_token;
+        *p->prev_token = TOK_EOF;
         return t;
     }
     skip_token_atmosphere(p);
@@ -257,7 +257,7 @@ static Token lex(Parser *p)
 
 static void unlex(Parser *p, Token t)
 {
-    p->prev_token = t;
+    *p->prev_token = t;
 }
 
 static const char *token_stringify(Token t)
@@ -285,7 +285,7 @@ static const char *token_stringify(Token t)
     case TOK_TYPE_IDENT:
         return value_to_string(t.value);
     case TOK_TYPE_STRING:
-        snprintf(buf, sizeof(buf), "\"%s\"", STRING(t.value)->body);
+        snprintf(buf, sizeof(buf), "\"%s\"", STRING(t.value));
         break;
     case TOK_TYPE_CONST:
         return t.value == Qtrue ? "#t" : "#f";
@@ -387,7 +387,8 @@ static Parser *parser_new(FILE *in, const char *filename)
     Parser *p = PARSER(o);
     p->in = in;
     p->filename = filename;
-    p->prev_token = TOK_EOF; // we use this since we never postpone EOF things
+    p->prev_token = xmalloc(sizeof(Token));
+    *p->prev_token = TOK_EOF; // we use this since we never postpone EOF things
     p->newline_pos = Qnil;
     return p;
 }

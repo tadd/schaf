@@ -34,16 +34,8 @@ typedef struct {
     int64_t pos; // value from ftell(3)
 } LocatedPair;
 
-typedef struct {
-    char *body;
-} String;
-
-typedef struct {
-    int64_t arity;
-} Procedure;
-
 typedef struct CFunc {
-    Procedure proc;
+    int64_t arity;
     char *name;
     Value (*applier)(Value env, struct CFunc *f, Value args);
     union {
@@ -56,19 +48,23 @@ typedef struct CFunc {
 } CFunc;
 
 typedef struct {
-    Procedure proc;
+    int64_t arity;
     Value env;
     Value params;
     Value body;
 } Closure;
 
 typedef struct {
-    Procedure proc;
-    uintptr_t *sp;
     void *stack;
     size_t stack_len;
-    jmp_buf state;
+    jmp_buf regs;
+} ExecutionState;
+
+typedef struct {
+    int64_t arity;
+    uintptr_t *sp;
     Value retval;
+    ExecutionState *exstate;
 } Continuation;
 
 typedef enum {
@@ -94,7 +90,7 @@ typedef struct {
 typedef struct {
     FILE *in;
     const char *filename;
-    Token prev_token;
+    Token *prev_token;
     Value newline_pos; // list of pos | int
 } Parser;
 
@@ -111,10 +107,9 @@ typedef struct {
 typedef struct {
     Header header; // common
     union {
-        String string;
+        char *string;
         Pair pair;
         LocatedPair lpair;
-        Procedure proc;
         CFunc cfunc;
         Closure closure;
         Continuation continuation;
@@ -130,8 +125,8 @@ typedef struct {
 
 #define PAIR(v) (&OBJ(v)->pair)
 #define LOCATED_PAIR(v) (&OBJ(v)->lpair)
-#define STRING(v) (&OBJ(v)->string)
-#define PROCEDURE(v) (&OBJ(v)->proc)
+#define STRING(v) (OBJ(v)->string)
+#define PROC_ARITY(v) (OBJ(v)->cfunc.arity)
 #define CFUNC(v) (&OBJ(v)->cfunc)
 #define CLOSURE(v) (&OBJ(v)->closure)
 #define CONTINUATION(v) (&OBJ(v)->continuation)
