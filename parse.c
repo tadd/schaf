@@ -10,26 +10,6 @@
 
 static jmp_buf jmp_parse_error;
 
-typedef enum {
-    TOK_TYPE_LPAREN,
-    TOK_TYPE_RPAREN,
-    TOK_TYPE_QUOTE,
-    TOK_TYPE_GRAVE,
-    TOK_TYPE_COMMA,
-    TOK_TYPE_SPLICE,
-    TOK_TYPE_INT,
-    TOK_TYPE_DOT,
-    TOK_TYPE_STRING,
-    TOK_TYPE_IDENT,
-    TOK_TYPE_CONST,
-    TOK_TYPE_EOF
-} TokenType;
-
-typedef struct {
-    TokenType type;
-    Value value;
-} Token;
-
 // singletons
 #define DEF_TOKEN(name) static const Token TOK_##name = { .type = TOK_TYPE_##name }
 DEF_TOKEN(LPAREN);
@@ -59,13 +39,6 @@ static inline Token TOK_CONST(Value c)
 {
     return TOK_V(CONST, c);
 }
-
-typedef struct {
-    FILE *in;
-    const char *filename;
-    Token prev_token;
-    Value newline_pos; // list of pos | int
-} Parser;
 
 void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col)
 {
@@ -410,7 +383,7 @@ static Value parse_expr(Parser *p)
 
 static Parser *parser_new(FILE *in, const char *filename)
 {
-    Parser *p = xmalloc(sizeof(Parser));
+    Parser *p = obj_new(sizeof(Parser), TAG_PARSER);
     p->in = in;
     p->filename = filename;
     p->prev_token = TOK_EOF; // we use this since we never postpone EOF things
@@ -446,7 +419,7 @@ Value iparse(FILE *in, const char *filename)
         ast = parse_program(p); // success
     else
         ast = ast_new(p, Qundef); // got an error
-    free(p);
+    // free(p);
     return ast;
 }
 

@@ -9,6 +9,7 @@ def cfuncall(name, *args):
     return func(*args)
 
 class MyPrinter:
+    TYPE = None # dummy
     COLORS = {
         'green': 32,
         'blue': 34,
@@ -51,6 +52,9 @@ class MyPrinter:
     def format_members(self, *keys, pretty=True):
         s = [f'{self.param(k)} = {self.format_single(self.val[k], pretty)}' for k in keys]
         return ', '.join(s)
+
+    def to_string(self):
+        return self.format_members(*[f.name for f in self.TYPE.fields()])
 
 class ProcedurePrinter(MyPrinter):
     TYPE = lookup_type('Procedure')
@@ -97,9 +101,6 @@ class ContinuationPrinter(ProcedurePrinter):
 class TablePrinter(MyPrinter):
     TYPE = lookup_type('Table')
 
-    def to_string(self):
-        return self.format_members(*self.TYPE.fields())
-
 class EnvPrinter(MyPrinter):
     TYPE = lookup_type('Env')
 
@@ -110,6 +111,12 @@ class EnvPrinter(MyPrinter):
         t = self.format_members('parent')
         return f'{s}, {t}'
 
+class ParserPrinter(MyPrinter):
+    TYPE = lookup_type('Parser')
+
+    def to_string(self):
+        return self.format_members('in', 'filename', 'prev_token', 'newline_pos')
+
 class ValuePrinter(MyPrinter):
     TYPE = lookup_type('Value')
     TAG_TO_TYPE = {
@@ -118,12 +125,14 @@ class ValuePrinter(MyPrinter):
         'closure': 'Closure',
         'continuation': 'Continuation',
         'env': 'Env',
+        'parser': 'Parser',
         None: None
     }
     HIGHLIGHT = {
         'immediate': 'blue',
         'expr': 'green',
     }
+    INTERNAL_TAG = ['env', 'parser']
 
     @property
     def is_immediate(self):
@@ -150,7 +159,7 @@ class ValuePrinter(MyPrinter):
 
     @property
     def is_internal(self):
-        return not self.is_immediate and self.tag_name == 'env'
+        return not self.is_immediate and (self.tag_name in self.INTERNAL_TAG)
 
     @property
     def is_proc(self):
@@ -162,7 +171,6 @@ class ValuePrinter(MyPrinter):
     def addr(self):
         hex = f'{int(self.val):#x}'
         return self.highlight(hex, 'immediate')
-
 
     def to_string(self):
         addr, ty = (self.addr, self.type_name)
@@ -185,7 +193,7 @@ PP()
 
 PRINTERS = [ValuePrinter, EnvPrinter, ProcedurePrinter,
             CFuncPrinter, ClosurePrinter, ContinuationPrinter,
-            TablePrinter]
+            TablePrinter, ParserPrinter]
 def schaf_pp(val):
     ty = Type.unqualified(val.type)
     g = (pr(val) for pr in PRINTERS if pr.TYPE == ty)
