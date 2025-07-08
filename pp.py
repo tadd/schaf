@@ -110,12 +110,6 @@ class EnvPrinter(MyPrinter):
         t = self.format_members('parent')
         return f'{s}, {t}'
 
-class ErrorPrinter(MyPrinter):
-    TYPE = lookup_type('Error')
-
-    def to_string(self):
-        return self.format_members('call_stack')
-
 class ValuePrinter(MyPrinter):
     TYPE = lookup_type('Value')
     TAG_TO_TYPE = {
@@ -191,7 +185,7 @@ PP()
 
 PRINTERS = [ValuePrinter, EnvPrinter, ProcedurePrinter,
             CFuncPrinter, ClosurePrinter, ContinuationPrinter,
-            TablePrinter, ErrorPrinter]
+            TablePrinter]
 def schaf_pp(val):
     ty = Type.unqualified(val.type)
     g = (pr(val) for pr in PRINTERS if pr.TYPE == ty)
