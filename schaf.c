@@ -112,8 +112,9 @@ static inline bool value_is_procedure(Value v)
         return true;
     case TAG_STRING:
     case TAG_PAIR:
-    case TAG_ERROR:
         return false;
+    case TAG_ERROR:
+        break;
     }
     UNREACHABLE();
 }
