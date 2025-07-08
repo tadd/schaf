@@ -800,10 +800,13 @@ Value eval_string(const char *in)
 static FILE *open_loadable(const char *path)
 {
     static char rpath[PATH_MAX];
-    char joined[PATH_MAX], *p;
-    snprintf(joined, sizeof(joined), "%s/%s", load_basedir, path);
-    p = realpath(joined, rpath);
-    if (p == NULL)
+    char joined[PATH_MAX];
+    const char *p = path;
+    if (path[0] != '/') {
+        snprintf(joined, sizeof(joined), "%s/%s", load_basedir, path);
+        p = joined;
+    }
+    if (realpath(p, rpath) == NULL)
         return NULL;
 
     FILE *in = fopen(rpath, "r");
