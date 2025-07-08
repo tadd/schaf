@@ -228,7 +228,7 @@ inline const char *value_to_string(Value v)
 {
     if (value_is_symbol(v))
         return unintern(value_to_symbol(v));
-    return STRING(v)->body;
+    return STRING(v);
 }
 
 // define caar, cadr, ... cddddr, 28 procedures, at once
@@ -282,8 +282,7 @@ SchObject *obj_new(ValueTag t)
 static Value value_of_string_move(char *s)
 {
     SchObject *o = obj_new(TAG_STRING);
-    String *str = STRING(o);
-    str->body = s; // move ownership and use as is
+    STRING(o) = s; // move ownership and use as is
     return (Value) o;
 }
 
@@ -423,8 +422,7 @@ static Value runtime_error(const char *fmt, ...)
     va_end(ap);
 
     SchObject *o = obj_new(TAG_ERROR);
-    Error *e = &o->error;
-    e->call_stack = scary_new(sizeof(StackFrame *));
+    ERROR(o) = scary_new(sizeof(StackFrame *));
     return (Value) o;
 }
 
@@ -445,7 +443,7 @@ const char *error_message(void)
 #define CHECK_ERROR_LOCATED(v, l) do { \
         Value V = (v); \
         if (UNLIKELY(is_error(V))) { \
-            if (scary_length(ERROR(V)->call_stack) == 0) \
+            if (scary_length(ERROR(V)) == 0) \
                 push_stack_frame(V, NULL, (l)); \
             return V; \
         } \
@@ -613,15 +611,14 @@ static StackFrame *stack_frame_new(const char *name, Value loc)
 
 static Value push_stack_frame(Value ve, const char *name, Value loc)
 {
-    Error *e = ERROR(ve);
     StackFrame *f = stack_frame_new(name, loc);
-    scary_push((void ***) &e->call_stack, (void *) f);
+    scary_push((void ***) &ERROR(ve), (void *) f);
     return ve;
 }
 
 static Value apply(Value env, Value proc, Value args)
 {
-    EXPECT(arity, PROCEDURE(proc)->arity, args);
+    EXPECT(arity, PROCEDURE(proc)->arity, args); // not only C functions
     return PROCEDURE(proc)->apply(env, proc, args);
 }
 
@@ -785,7 +782,7 @@ static Value iload(FILE *in, const char *filename)
         return value_of_int(exit_status);
     Value ret = eval_body(env_toplevel, src->ast);
     if (is_error(ret)) {
-        dump_stack_trace(ERROR(ret)->call_stack);
+        dump_stack_trace(ERROR(ret));
         return Qundef;
     }
     return ret;
@@ -1289,13 +1286,13 @@ static Value proc_eq(UNUSED Value env, Value x, Value y)
 
 static bool equal(Value x, Value y);
 
-static bool vector_equal(const Vector *x, const Vector *y)
+static bool vector_equal(const Value *x, const Value *y)
 {
-    size_t len = scary_length(x->body);
-    if (len != scary_length(y->body))
+    size_t len = scary_length(x);
+    if (len != scary_length(y))
         return false;
     for (size_t i = 0; i < len; i++) {
-        if (!equal(x->body[i], y->body[i]))
+        if (!equal(x[i], y[i]))
             return false;
     }
     return true;
@@ -1313,7 +1310,7 @@ static bool equal(Value x, Value y)
         return equal(car(x), car(y)) &&
                equal(cdr(x), cdr(y));
     case TYPE_STRING:
-        return (strcmp(STRING(x)->body, STRING(y)->body) == 0);
+        return (strcmp(STRING(x), STRING(y)) == 0);
     case TYPE_VECTOR:
         return vector_equal(VECTOR(x), VECTOR(y));
     case TYPE_SYMBOL:
@@ -1836,13 +1833,13 @@ static Value proc_string_p(UNUSED Value env, Value obj)
 static Value proc_string_length(UNUSED Value env, Value s)
 {
     EXPECT(type, TYPE_STRING, s);
-    return value_of_int(strlen(STRING(s)->body));
+    return value_of_int(strlen(STRING(s)));
 }
 
 static Value proc_string_eq(UNUSED Value env, Value s1, Value s2)
 {
     EXPECT(type_twin, TYPE_STRING, s1, s2);
-    return OF_BOOL(strcmp(STRING(s1)->body, STRING(s2)->body) == 0);
+    return OF_BOOL(strcmp(STRING(s1), STRING(s2)) == 0);
 }
 
 static Value proc_string_append(UNUSED Value env, Value args)
@@ -1852,12 +1849,12 @@ static Value proc_string_append(UNUSED Value env, Value args)
     for (Value p = args, v; p != Qnil; p = cdr(p)) {
         v = car(p);
         EXPECT(type, TYPE_STRING, v);
-        len += strlen(STRING(v)->body);
+        len += strlen(STRING(v));
     }
     char *s = xmalloc(len + 1);
     s[0] = '\0';
     for (Value p = args; p != Qnil; p = cdr(p))
-        strcat(s, STRING(car(p))->body);
+        strcat(s, STRING(car(p)));
     return value_of_string_move(s);
 }
 
@@ -1865,14 +1862,13 @@ static Value proc_string_append(UNUSED Value env, Value args)
 Value vector_new(void)
 {
     SchObject *o = obj_new(TAG_VECTOR);
-    Vector *v = VECTOR(o);
-    v->body = scary_new(sizeof(Value));
+    VECTOR(o) = scary_new(sizeof(Value));
     return (Value) o;
 }
 
 Value vector_push(Value v, Value e)
 {
-    scary_push(&VECTOR(v)->body, e);
+    scary_push(&VECTOR(v), e);
     return v;
 }
 
@@ -1895,10 +1891,10 @@ static Value proc_vector_ref(UNUSED Value env, Value o, Value k)
     int64_t i = get_int(k);
     if (i < 0)
         return runtime_error("invalid index: negative integer %"PRId64, i);
-    Vector *v = VECTOR(o);
-    if ((size_t) i >= scary_length(v->body))
+    Value *v = VECTOR(o);
+    if ((size_t) i >= scary_length(v))
         return Qfalse;
-    return v->body[i];
+    return v[i];
 }
 
 // 6.4. Control features
@@ -1983,8 +1979,8 @@ static Value proc_for_each(Value env, Value args)
 [[gnu::noreturn, gnu::noinline]]
 static void jump(Continuation *cont)
 {
-    memcpy(cont->sp, cont->stack, cont->stack_len);
-    longjmp(cont->state, 1);
+    memcpy(cont->sp, cont->exstate->stack, cont->exstate->stack_len);
+    longjmp(cont->exstate->regs, 1);
 }
 
 #define GET_SP(p) uintptr_t v##p = 0, *p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
@@ -2003,15 +1999,23 @@ static Value apply_continuation(UNUSED Value env, Value f, Value args)
     jump(cont);
 }
 
+static ExecutionState *execstate_new(void)
+{
+    ExecutionState *s = xmalloc(sizeof(ExecutionState));
+    s->stack = NULL;
+    s->stack_len = 0;
+    return s;
+}
+
 static Value value_of_continuation(int64_t n)
 {
     SchObject *o = obj_new(TAG_CONTINUATION);
     Continuation *c = &o->continuation;
     c->proc.arity = n; // call/cc: 1, call-with-values: -1
     c->proc.apply = apply_continuation;
-    c->sp = c->stack = NULL;
-    c->stack_len = 0;
     c->retval = Qfalse;
+    c->sp = NULL;
+    c->exstate = execstate_new();
     return (Value) o;
 }
 
@@ -2021,11 +2025,11 @@ static bool continuation_set(Value c)
     GET_SP(sp); // must be the first!
     Continuation *cont = CONTINUATION(c);
     cont->sp = sp;
-    cont->stack_len = gc_stack_get_size(sp);
-    cont->stack = xmalloc(cont->stack_len);
-    UNPOISON(sp, cont->stack_len);
-    memcpy(cont->stack, sp, cont->stack_len);
-    return setjmp(cont->state) != 0;
+    cont->exstate->stack_len = gc_stack_get_size(sp);
+    cont->exstate->stack = xmalloc(cont->exstate->stack_len);
+    UNPOISON(sp, cont->exstate->stack_len);
+    memcpy(cont->exstate->stack, sp, cont->exstate->stack_len);
+    return setjmp(cont->exstate->regs) != 0;
 }
 
 static Value proc_callcc(Value env, Value proc)
@@ -2100,8 +2104,7 @@ static Value proc_port_p(UNUSED Value env, Value port)
 static Value value_of_port(FILE *fp)
 {
     SchObject *o = obj_new(TAG_PORT);
-    Port *p = PORT(o);
-    p->fp = fp;
+    PORT(o) = fp;
     return (Value) o;
 }
 
@@ -2134,25 +2137,25 @@ static Value proc_current_output_port(UNUSED Value env)
 static Value proc_open_input_file(UNUSED Value env, Value vpath)
 {
     EXPECT(type, TYPE_STRING, vpath);
-    const char *path = STRING(vpath)->body;
+    const char *path = STRING(vpath);
     FILE *fp = fopen(path, "r");
     if (fp == NULL)
         return runtime_error("cannot open file: %s", path);
     return value_of_port(fp);
 }
 
-static void close_port(Port *p)
+static void close_port(FILE **pfp)
 {
-    if (p->fp == NULL)
+    if (*pfp == NULL)
         return;
-    fclose(p->fp);
-    p->fp = NULL; // guarantee safety
+    fclose(*pfp);
+    *pfp = NULL; // guarantee safety
 }
 
 static Value proc_close_port(UNUSED Value env, Value port)
 {
     EXPECT(type, TYPE_PORT, port);
-    close_port(PORT(port));
+    close_port(&PORT(port));
     return Qfalse;
 }
 
@@ -2176,7 +2179,7 @@ static Value proc_read(UNUSED Value env, Value args)
         port = car(args);
         EXPECT(type, TYPE_PORT, port);
     }
-    return iread(PORT(port)->fp);
+    return iread(PORT(port));
 }
 
 // 6.6.3. Output
@@ -2197,11 +2200,11 @@ static void display_list(FILE *f, Value l)
     fprintf(f, ")");
 }
 
-static void display_vector(FILE *f, const Vector *v)
+static void display_vector(FILE *f, const Value *v)
 {
     fprintf(f, "#(");
-    for (int64_t i = 0, len = scary_length(v->body); i < len; i++) {
-        Value e = v->body[i];
+    for (int64_t i = 0, len = scary_length(v); i < len; i++) {
+        Value e = v[i];
         fdisplay(f, e);
         if (i + 1 == len)
             break;
@@ -2218,9 +2221,8 @@ static const char *file_to_name(const FILE *fp)
         NULL;
 }
 
-static void display_port(FILE *f, const Port *p)
+static void display_port(FILE *f, const FILE *fp)
 {
-    FILE *fp = p->fp;
     const char *name = file_to_name(fp);
     if (name != NULL)
         fprintf(f, "<port: %s>", name);
@@ -2302,7 +2304,7 @@ static Value proc_load(UNUSED Value env, Value path)
 {
     EXPECT(type, TYPE_STRING, path);
     // Current spec: path is always relative
-    return load_inner(STRING(path)->body);
+    return load_inner(STRING(path));
 }
 
 // Extensions from R7RS (scheme process-context)
