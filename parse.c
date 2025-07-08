@@ -61,13 +61,6 @@ static inline Token TOK_CONST(Value c)
     return TOK_V(CONST, c);
 }
 
-typedef struct {
-    FILE *in;
-    char *filename;
-    Value newline_pos; // list of pos | int
-    jmp_buf jmp_error;
-} Parser;
-
 void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col)
 {
     int64_t nline = 0, last = 0;
@@ -424,14 +417,14 @@ static Value parse_expr(Parser *p)
 
 static Parser *parser_new(FILE *in, const char *filename)
 {
-    Parser *p = xmalloc(sizeof(Parser));
+    Parser *p = obj_new(sizeof(Parser), TAG_PARSER);
     p->in = in;
     p->filename = xstrdup(filename);
     p->newline_pos = Qnil;
     return p;
 }
 
-static void parser_free(Parser *p)
+UNUSED static void parser_free(Parser *p)
 {
     if (p == NULL)
         return;
@@ -467,7 +460,7 @@ Value iparse(FILE *in, const char *filename)
         ast = parse_program(p); // success
     else
         ast = Qundef; // got an error
-    parser_free(p);
+    // parser_free(p);
     return ast;
 }
 
@@ -479,7 +472,7 @@ Value parse_datum(FILE *in, const char *filename)
         datum = parse_expr(p);
     else
         datum = Qundef;
-    parser_free(p);
+    // parser_free(p);
     return datum;
 }
 

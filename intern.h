@@ -33,6 +33,7 @@ typedef enum {
     TAG_ENV,
     TAG_PORT,
     // internal use only
+    TAG_PARSER,
     TAG_ERROR,
     TAG_LAST = TAG_ERROR
 } ValueTag;
@@ -90,6 +91,14 @@ typedef struct {
     jmp_buf state;
     Value retval;
 } Continuation;
+
+typedef struct {
+    Header header;
+    FILE *in;
+    char *filename;
+    Value newline_pos; // list of pos | int
+    jmp_buf jmp_error;
+} Parser;
 
 typedef struct {
     Header header;
