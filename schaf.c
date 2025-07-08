@@ -204,7 +204,7 @@ static const char *name_nth(Value list, int64_t n)
             return NULL;
     }
     Value name = car(list);
-    return STRING(name)->body;
+    return STRING(name);
 }
 
 static const char *unintern(Symbol sym)
@@ -219,7 +219,7 @@ inline const char *value_to_string(Value v)
 {
     if (value_is_symbol(v))
         return unintern(value_to_symbol(v));
-    return STRING(v)->body;
+    return STRING(v);
 }
 
 // value_of_*: Convert external plain C data to internal
@@ -237,7 +237,7 @@ static Symbol intern(const char *name)
     // find
     for (Value p = symbol_names; p != Qnil; last = p, p = cdr(p)) {
         Value v = car(p);
-        if (strcmp(STRING(v)->body, name) == 0)
+        if (strcmp(STRING(v), name) == 0)
             return i;
         i++;
     }
@@ -267,8 +267,8 @@ SchObject *obj_new(ValueTag t)
 Value value_of_string(const char *s)
 {
     SchObject *o = obj_new(TAG_STRING);
-    String *str = STRING(o);
-    str->body = xstrdup(s);
+    char **str = &STRING(o);
+    *str = xstrdup(s);
     return (Value) o;
 }
 
@@ -319,7 +319,7 @@ static Value value_of_cfunc(const char *name, void *cfunc, int64_t arity)
     SchObject *o = obj_new(TAG_CFUNC);
     CFunc *f = &o->cfunc;
     f->name = xstrdup(name);
-    f->proc.arity = arity;
+    f->arity = arity;
     f->cfunc = cfunc;
     switch (arity) {
     case -1:
@@ -355,7 +355,7 @@ static Value value_of_closure(Value env, Value params, Value body)
     SchObject *o = obj_new(TAG_CLOSURE);
     bool headp = (params == Qnil || value_is_pair(params));
     Closure *f = &o->closure;
-    f->proc.arity = headp ? length(params) : -1;
+    f->arity = headp ? length(params) : -1;
     f->env = env;
     f->params = params;
     f->body = body;
@@ -546,7 +546,7 @@ static Value eval_body(Value env, Value body);
 static Value apply_closure(Value proc, Value args)
 {
     Closure *cl = CLOSURE(proc);
-    int64_t arity = cl->proc.arity;
+    int64_t arity = cl->arity;
     Value clenv = env_inherit(cl->env);
     Value params = cl->params;
     if (arity == -1)
@@ -561,8 +561,8 @@ static Value apply_closure(Value proc, Value args)
 [[gnu::noreturn]] [[gnu::noinline]]
 static void jump(Continuation *cont)
 {
-    memcpy(cont->sp, cont->stack, cont->stack_len);
-    longjmp(cont->state, 1);
+    memcpy(cont->sp, cont->exstate->stack, cont->exstate->stack_len);
+    longjmp(cont->exstate->regs, 1);
 }
 
 #define GET_SP(p) uintptr_t v##p = 0, *p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
@@ -584,7 +584,7 @@ static void apply_continuation(Value f, Value args)
 // expects proc and args have been evaluated if necessary
 static Value apply(Value env, Value proc, Value args)
 {
-    EXPECT(arity, PROCEDURE(proc)->arity, args);
+    EXPECT(arity, PROC_ARITY(proc), args);
     switch (VALUE_TAG(proc)) {
     case TAG_SYNTAX:
     case TAG_CFUNC:
@@ -772,7 +772,7 @@ static void prepend_cfunc_name(Value v)
 {
     if (v == Qfalse)
         return;
-    const char *s = STRING(v)->body;
+    const char *s = STRING(v);
     size_t len = strlen(s) + 2;// strlen(": ")
     char tmp[sizeof(errmsg) - len];
     snprintf(tmp, sizeof(tmp), "%s", errmsg);
@@ -1299,7 +1299,7 @@ static bool equal(Value x, Value y)
         return equal(car(x), car(y)) &&
                equal(cdr(x), cdr(y));
     case TYPE_STRING:
-        return (strcmp(STRING(x)->body, STRING(y)->body) == 0);
+        return (strcmp(STRING(x), STRING(y)) == 0);
     case TYPE_SYMBOL:
     case TYPE_NULL:
     case TYPE_BOOL:
@@ -1858,13 +1858,13 @@ static Value proc_string_p(UNUSED Value env, Value obj)
 static Value proc_string_length(UNUSED Value env, Value s)
 {
     EXPECT(type, TYPE_STRING, s);
-    return value_of_int(strlen(STRING(s)->body));
+    return value_of_int(strlen(STRING(s)));
 }
 
 static Value proc_string_eq(UNUSED Value env, Value s1, Value s2)
 {
     EXPECT(type_twin, TYPE_STRING, s1, s2);
-    return OF_BOOL(strcmp(STRING(s1)->body, STRING(s2)->body) == 0);
+    return OF_BOOL(strcmp(STRING(s1), STRING(s2)) == 0);
 }
 
 // 6.4. Control features
@@ -1944,14 +1944,22 @@ static Value proc_for_each(Value env, Value args)
     return Qnil;
 }
 
+static ExecutionState *execstate_new(void)
+{
+    ExecutionState *s = xmalloc(sizeof(ExecutionState));
+    s->stack = NULL;
+    s->stack_len = 0;
+    return s;
+}
+
 static Value value_of_continuation(void)
 {
     SchObject *o = obj_new(TAG_CONTINUATION);
     Continuation *c = &o->continuation;
-    c->proc.arity = 1; // by spec
-    c->sp = c->stack = NULL;
-    c->stack_len = 0;
+    c->arity = 1; // by spec
     c->retval = Qfalse;
+    c->sp = NULL;
+    c->exstate = execstate_new();
     return (Value) o;
 }
 
@@ -1961,11 +1969,11 @@ static bool continuation_set(Value c)
     GET_SP(sp); // must be the first!
     Continuation *cont = CONTINUATION(c);
     cont->sp = sp;
-    cont->stack_len = gc_stack_get_size(sp);
-    cont->stack = xmalloc(cont->stack_len);
-    UNPOISON(sp, cont->stack_len);
-    memcpy(cont->stack, sp, cont->stack_len);
-    return setjmp(cont->state) != 0;
+    cont->exstate->stack_len = gc_stack_get_size(sp);
+    cont->exstate->stack = xmalloc(cont->exstate->stack_len);
+    UNPOISON(sp, cont->exstate->stack_len);
+    memcpy(cont->exstate->stack, sp, cont->exstate->stack_len);
+    return setjmp(cont->exstate->regs) != 0;
 }
 
 static Value proc_callcc(Value env, Value proc)
