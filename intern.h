@@ -114,6 +114,8 @@ typedef struct {
 } SchObject;
 
 #define OBJ(v) ((SchObject *) v)
+#define VALUE_TAG(v) (OBJ(v)->tag)
+
 #define PAIR(v) (&OBJ(v)->pair)
 #define LOCATED_PAIR(v) (&OBJ(v)->lpair)
 #define STRING(v) (OBJ(v)->string)
@@ -139,7 +141,6 @@ void gc_init(uintptr_t *base_sp);
 void gc_fin(void);
 
 size_t gc_stack_get_size(uintptr_t *sp);
-ATTR_XMALLOC void *gc_malloc(size_t size);
 
 #pragma GCC visibility pop
 
