@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -132,11 +133,10 @@ static size_t heaps_size(void)
     return stat.size;
 }
 
-void *gc_malloc(size_t size)
+static void *gc_malloc(size_t size)
 {
     if (stress)
         gc();
-    size = align(size);
     void *p = allocate(size);
     if (!stress && p == NULL) {
         gc();
@@ -145,5 +145,13 @@ void *gc_malloc(size_t size)
     if (p == NULL)
         error("out of memory; heap (~%zu MiB) exhausted",
               heaps_size() / MiB);
+    return p;
+}
+
+SchObject *obj_new(ValueTag t)
+{
+    static_assert(sizeof(SchObject) % 8U == 0, "SchObject not aligned");
+    SchObject *p = gc_malloc(sizeof(SchObject));
+    VALUE_TAG(p) = t;
     return p;
 }

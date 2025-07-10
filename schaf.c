@@ -32,7 +32,6 @@ static const char *TYPE_NAMES[] = {
     [TYPE_PROC] = "procedure",
 };
 
-#define VALUE_TAG(v) (*(ValueTag*)(v))
 #define OF_BOOL(v) ((v) ? Qtrue : Qfalse)
 
 // Value (uintptr_t):
@@ -255,13 +254,6 @@ inline Value value_of_symbol(const char *s)
 {
     Symbol sym = intern(s);
     return (Value) (sym << FLAG_NBIT_SYM | FLAG_SYM);
-}
-
-SchObject *obj_new(ValueTag t)
-{
-    SchObject *p = gc_malloc(sizeof(SchObject));
-    VALUE_TAG(p) = t;
-    return p;
 }
 
 Value value_of_string(const char *s)
