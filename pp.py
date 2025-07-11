@@ -88,6 +88,12 @@ class ContinuationPrinter(ProcedurePrinter):
              k in self.child_fields()]
         return f'{sup}, {", ".join(l)}'
 
+class EnvPrinter(MyPrinter):
+    TYPE = lookup_type('Env')
+
+    def to_string(self):
+        return 'E'
+
 class ValuePrinter(MyPrinter):
     TYPE = lookup_type('Value')
     TAG_TO_TYPE = {
@@ -105,7 +111,9 @@ class ValuePrinter(MyPrinter):
         return self.deref_as('ValueTag').format_string()[4:].lower()
 
     def type_name(self):
-        if self.isproc():
+        if self.is_internal():
+            return 'env'
+        if self.is_proc():
             return self.TAG_TO_TYPE[self.tag_name()]
         return cfuncall('value_to_type_name', self.val).string().title()
 
@@ -116,7 +124,15 @@ class ValuePrinter(MyPrinter):
     def proc_string(self, ty):
         return f'{{{self.pp(self.deref_as(ty))}}}'
 
-    def isproc(self):
+    def is_internal(self):
+        b = Type.unqualified(self.val.type) == EnvPrinter.TYPE
+        print(f'isint: {b}')
+        # return Type.unqualified(self.val.type) == EnvPrinter.TYPE
+        return b
+
+    def is_proc(self):
+        if self.is_internal():
+            return False
         return cfuncall('value_is_procedure', self.val)
 
     def addr(self):
@@ -125,8 +141,14 @@ class ValuePrinter(MyPrinter):
 
     def to_string(self):
         addr, ty = (self.addr(), self.type_name())
-        val = self.proc_string(ty) if self.isproc() else self.stringify()
+        if self.is_internal():
+            val = self.stringify()
+        elif self.is_proc():
+            val = self.proc_string(ty)
+        else:
+            val = self.stringify()
         return f'{addr} {ty}: {val}'
+
 
 class PP (Command):
     def __init__(self):
@@ -139,7 +161,7 @@ class PP (Command):
         print(s)
 PP()
 
-PRINTERS = [ValuePrinter, ProcedurePrinter,
+PRINTERS = [ValuePrinter, EnvPrinter, ProcedurePrinter,
             CFuncPrinter, ClosurePrinter, ContinuationPrinter]
 def schaf_pp(val):
     ty = Type.unqualified(val.type)
