@@ -791,7 +791,10 @@
   (expect = (expt 1 0) 1)
   (expect = (expt -1 0) 1)
   (expect = (expt 0 1) 0)
-  (expect = (expt 0 0) 1)))
+  (expect = (expt 0 0) 1)
+  (expect = (expt 2 15) 32768)
+  (expect = (expt 2 16) 65536)
+  (expect = (expt 2 24) 16777216)))
 
 ;; 6.3. Other data types
 ;; 6.3.1. Booleans
