@@ -1,8 +1,11 @@
-from gdb import Command, COMMAND_DATA, Type, \
+from gdb import Command, COMMAND_DATA, Type, Symbol, \
     block_for_pc, lookup_symbol, lookup_type, parse_and_eval
 
 def cfuncall(name, *args):
-    func = lookup_symbol(name)[0].value()
+    sym = lookup_symbol(name)[0]
+    if not sym:
+        raise
+    func = sym.value()
     return func(*args)
 
 class MyPrinter:
@@ -45,7 +48,7 @@ class MyPrinter:
     def param(self, s):
         return self.highlight(s, 'param')
 
-    def format(self, *keys, pretty=True):
+    def format_members(self, *keys, pretty=True):
         s = [f'{self.param(k)} = {self.format_single(self.val[k], pretty)}' for k in keys]
         return ', '.join(s)
 
@@ -56,17 +59,20 @@ class ProcedurePrinter(MyPrinter):
         return [f.name for f in self.TYPE.fields() if f.name != 'proc']
 
     def to_string(self):
-        return self.format('arity')
+        return self.format_members('arity')
 
 class CFuncPrinter(ProcedurePrinter):
     TYPE = lookup_type('CFunc')
 
-    def format_cfunction(self, val):
-        return block_for_pc(val).function.value().format_string()
+    def format(self):
+        b = block_for_pc(self.val['cfunc'])
+        if not b or not b.function:
+            return None
+        return b.function.value().format_string()
 
     def to_string(self):
         sup = self.pp_val_as(super().TYPE)
-        s = self.format_cfunction(self.val['cfunc'])
+        s = self.format()
         return f'{sup}, {self.param("cfunc")} = {s}'
 
 class ClosurePrinter(ProcedurePrinter):
@@ -74,7 +80,7 @@ class ClosurePrinter(ProcedurePrinter):
 
     def to_string(self):
         sup = self.pp_val_as(super().TYPE)
-        s = self.format(*self.child_fields())
+        s = self.format_members(*self.child_fields())
         return f'{sup}, {s}'
 
 class ContinuationPrinter(ProcedurePrinter):
@@ -101,12 +107,14 @@ class ValuePrinter(MyPrinter):
         'expr': 'green',
     }
 
+    @property
     def tag_name(self):
         return self.deref_as('ValueTag').format_string()[4:].lower()
 
+    @property
     def type_name(self):
-        if self.isproc():
-            return self.TAG_TO_TYPE[self.tag_name()]
+        if self.is_proc:
+            return self.TAG_TO_TYPE[self.tag_name]
         return cfuncall('value_to_type_name', self.val).string().title()
 
     def stringify(self):
@@ -116,24 +124,26 @@ class ValuePrinter(MyPrinter):
     def proc_string(self, ty):
         return f'{{{self.pp(self.deref_as(ty))}}}'
 
-    def isproc(self):
+    @property
+    def is_proc(self):
         return cfuncall('value_is_procedure', self.val)
 
+    @property
     def addr(self):
         hex = f'{int(self.val):#x}'
         return self.highlight(hex, 'immediate')
 
     def to_string(self):
-        addr, ty = (self.addr(), self.type_name())
-        val = self.proc_string(ty) if self.isproc() else self.stringify()
+        addr, ty = (self.addr, self.type_name)
+        val = self.proc_string(ty) if self.is_proc else self.stringify()
         return f'{addr} {ty}: {val}'
 
 class PP (Command):
     def __init__(self):
         super().__init__('pp', COMMAND_DATA)
 
-    def invoke(self, arg, from_tty):
-        val = parse_and_eval(arg)
+    def invoke(self, argument, from_tty):
+        val = parse_and_eval(argument)
         pp = schaf_pp(val)
         s = pp.to_string() if pp else str(val)
         print(s)
