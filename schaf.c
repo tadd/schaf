@@ -1864,13 +1864,13 @@ static Value proc_map(Table *env, Value args)
     Value proc = car(args);
     EXPECT(type, TYPE_PROC, proc);
     Value ls = cdr(args);
-    Value ret = DUMMY_PAIR(), err = Qfalse;
-    for (Value last = ret, cars, cdrs, v; cars_cdrs(ls, &cars, &cdrs, &err); ls = cdrs) {
+    Value ret = DUMMY_PAIR(), e = Qfalse;
+    for (Value last = ret, cars, cdrs, v; cars_cdrs(ls, &cars, &cdrs, &e); ls = cdrs) {
         v = apply(env, proc, cars);
         CHECK_ERROR(v);
         last = PAIR(last)->cdr = list1(v);
     }
-    CHECK_ERROR_TRUTHY(err);
+    CHECK_ERROR_TRUTHY(e);
     return cdr(ret);
 }
 
