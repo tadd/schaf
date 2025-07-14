@@ -151,33 +151,28 @@ static inline bool table_too_many_elements(const Table *t)
     return t->size > t->body_size * TABLE_TOO_MANY_FACTOR;
 }
 
-static List *list_reverse(List *l)
-{
-    List *prev = NULL;
-    for (List *p = l, *next; p != NULL; prev = p, p = next) {
-        next = p->next;
-        p->next = prev;
-    }
-    return prev;
-}
-
 static void table_resize(Table *t)
 {
     const size_t old_body_size = t->body_size;
     List **old_body = t->body;
     t->body_size *= TABLE_RESIZE_FACTOR;
-    t->body = xcalloc(t->body_size, sizeof(List *)); // set NULL
-    for (size_t i = 0; i < old_body_size; i++) {
+    t->body = xmalloc(t->body_size * sizeof(List *));
+    List dummies[t->body_size], *lasts[t->body_size];
+    for (size_t i = 0; i < t->body_size; i++) {
+        dummies[i].next = NULL;
+        t->body[i] = lasts[i] = &dummies[i];
+    }
+    for (size_t i = 0, j; i < old_body_size; i++) {
         for (List *p = old_body[i], *next; p != NULL; p = next) {
             next = p->next;
-            uint64_t j = body_index(t, p->key);
-            p->next = t->body[j];
-            t->body[j] = p;
+            j = body_index(t, p->key);
+            p->next = NULL;
+            lasts[j] = lasts[j]->next = p;
         }
     }
     free(old_body);
     for (size_t i = 0; i < t->body_size; i++)
-        t->body[i] = list_reverse(t->body[i]);
+        t->body[i] = t->body[i]->next; // ensure not to use dummies
 }
 
 // `value` can't be TABLE_NOT_FOUND
