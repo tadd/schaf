@@ -20,6 +20,7 @@ typedef enum {
 typedef struct {
     ValueTag tag; // common
     Value car, cdr;
+    bool immutable;
 } Pair;
 
 typedef struct {
@@ -103,9 +104,23 @@ static inline Value list1(Value x)
     return cons(x, Qnil);
 }
 
-static inline Value list2(Value x, Value y)
+static Value cons_const(Value car, Value cdr)
 {
-    return cons(x, list1(y));
+    Pair *p = obj_new(sizeof(Pair), TAG_PAIR);
+    p->car = car;
+    p->cdr = cdr;
+    p->immutable = true;
+    return (Value) p;
+}
+
+static inline Value list1_const(Value x)
+{
+    return cons_const(x, Qnil);
+}
+
+static inline Value list2_const(Value x, Value y)
+{
+    return cons_const(x, list1_const(y));
 }
 
 #define DUMMY_PAIR() ((Value) &(Pair) { .tag = TAG_PAIR, .car = Qundef, .cdr = Qnil })

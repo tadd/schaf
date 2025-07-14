@@ -1140,12 +1140,12 @@ static Value qq(Table *env, Value datum, int64_t depth)
     if (a == SYM_QUASIQUOTE) {
         EXPECT(type, TYPE_PAIR, d);
         Value v = qq(env, car(d), depth + 1);
-        return list2(a, v);
+        return list2_const(a, v);
     }
     if (a == SYM_UNQUOTE || a == SYM_UNQUOTE_SPLICING) {
         EXPECT(type, TYPE_PAIR, d);
         Value v = qq(env, car(d), depth - 1);
-        return depth == 1 ? v : list2(a, v);
+        return depth == 1 ? v : list2_const(a, v);
     }
     return qq_list(env, datum, depth);
 }
@@ -1188,7 +1188,7 @@ static Value qq_list(Table *env, Value datum, int64_t depth)
         bool spliced = (value_is_pair(elem) && car(elem) == SYM_UNQUOTE_SPLICING);
         Value v = qq(env, elem, depth);
         if (!spliced)
-            last = PAIR(last)->cdr = list1(v);
+            last = PAIR(last)->cdr = list1_const(v);
         else if (v != Qnil)
             last = splicer(last, v);
     }
@@ -1576,6 +1576,7 @@ Value cons(Value car, Value cdr)
     Pair *p = obj_new(sizeof(Pair), TAG_PAIR);
     p->car = car;
     p->cdr = cdr;
+    p->immutable = false;
     return (Value) p;
 }
 
@@ -1604,6 +1605,22 @@ static Value proc_cdr(UNUSED Table *env, Value pair)
 {
     EXPECT(type, TYPE_PAIR, pair);
     return cdr(pair);
+}
+
+static Value proc_set_car(UNUSED Table *env, Value pair, Value obj)
+{
+    if (PAIR(pair)->immutable)
+        return runtime_error("cannot modify immutable pair");
+    PAIR(pair)->car = obj;
+    return pair;
+}
+
+static Value proc_set_cdr(UNUSED Table *env, Value pair, Value obj)
+{
+    if (PAIR(pair)->immutable)
+        return runtime_error("cannot modify immutable pair");
+    PAIR(pair)->cdr = obj;
+    return pair;
 }
 
 bool value_is_null(Value v)
@@ -2170,8 +2187,8 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "cdr", proc_cdr, 1);
 #define DEFUN_CXR(x, y) define_procedure(e, "c" #x #y "r", proc_c##x##y##r, 1)
     CXRS(DEFUN_CXR); // defines 28 procedures
-    //- set-car!
-    //- set-cdr!
+    define_procedure(e, "set-car!", proc_set_car, 2);
+    define_procedure(e, "set-cdr!", proc_set_cdr, 2);
     define_procedure(e, "null?", proc_null_p, 1);
     define_procedure(e, "list?", proc_list_p, 1);
     define_procedure(e, "list", proc_list, -1);

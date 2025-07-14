@@ -341,6 +341,7 @@ static Value located_list1(Value sym, int64_t pos)
     LocatedPair *p = obj_new(sizeof(LocatedPair), TAG_PAIR); // imitate ordinal pairs
     PAIR(p)->car = sym;
     PAIR(p)->cdr = Qnil;
+    PAIR(p)->immutable = true;
     p->pos = pos;
     return (Value) p;
 }
@@ -364,7 +365,7 @@ static Value parse_list(Parser *p)
         if (first && value_is_symbol(e))
             l = located_list1(e, pos);
         else
-            l = list1(e);
+            l = list1_const(e);
         last = PAIR(last)->cdr = l;
     }
     return cdr(l);
@@ -375,7 +376,7 @@ static Value parse_quoted(Parser *p, Value sym)
     Value e = parse_expr(p);
     if (e == Qundef)
         parse_error(p, "expression", "'EOF'");
-    return list2(sym, e);
+    return list2_const(sym, e);
 }
 
 static Value parse_expr(Parser *p)
@@ -417,16 +418,16 @@ static Parser *parser_new(FILE *in, const char *filename)
     return p;
 }
 
-static inline Value list3(Value x, Value y, Value z)
+static inline Value list3_const(Value x, Value y, Value z)
 {
-    return cons(x, list2(y, z));
+    return cons_const(x, list2_const(y, z));
 }
 
 // AST: (filename syntax_list newline_positions)
 static Value ast_new(Parser *p, Value syntax_list)
 {
     Value filename = value_of_symbol(p->filename);
-    return list3(filename, syntax_list, reverse(p->newline_pos));
+    return list3_const(filename, syntax_list, reverse(p->newline_pos));
 }
 
 static Value parse_program(Parser *p)

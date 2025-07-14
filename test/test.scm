@@ -840,6 +840,18 @@
   (expect equal? (caddr l) 3)
   (expect equal? (cadddr l) 4)))
 
+(describe "set-car!" (lambda ()
+  (define l (list 'not-a-constant-list))
+  (define m '(constant-list))
+  (set-car! l 3)
+  (expect equal? l '(3))))
+
+(describe "set-cdr!" (lambda ()
+  (define l (list 'not-a-constant-list))
+  (define m '(constant-list))
+  (set-cdr! l '(3))
+  (expect equal? l '(not-a-constant-list 3))))
+
 (describe "null?" (lambda ()
   (expect null? '())
   (expect null? (list))
