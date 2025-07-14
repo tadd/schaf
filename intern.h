@@ -77,6 +77,8 @@ typedef struct {
 } Error;
 
 #define HEADER(v) ((Header *) v)
+#define VALUE_TAG(v) (HEADER(v)->tag)
+
 #define PAIR(v) ((Pair *) v)
 #define LOCATED_PAIR(v) ((LocatedPair *) v)
 #define STRING(v) ((String *) v)

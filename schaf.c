@@ -33,7 +33,6 @@ static const char *TYPE_NAMES[] = {
     [TYPE_PROC] = "procedure",
 };
 
-#define VALUE_TAG(v) (*(ValueTag*)(v))
 #define OF_BOOL(v) ((v) ? Qtrue : Qfalse)
 
 // Value (uintptr_t):
