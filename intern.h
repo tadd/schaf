@@ -18,9 +18,13 @@ typedef enum {
 } ValueTag;
 
 typedef struct {
-    ValueTag tag; // common
-    Value car, cdr;
+    ValueTag tag;
     bool immutable;
+} Header;
+
+typedef struct {
+    Header header; // common
+    Value car, cdr;
 } Pair;
 
 typedef struct {
@@ -29,12 +33,12 @@ typedef struct {
 } LocatedPair;
 
 typedef struct {
-    ValueTag tag;
+    Header header;
     char body[];
 } String;
 
 typedef struct {
-    ValueTag tag;
+    Header header;
     int64_t arity;
 } Procedure;
 
@@ -68,10 +72,11 @@ typedef struct {
 } Continuation;
 
 typedef struct {
-    ValueTag tag;
+    Header header;
     Value call_stack; // list of '(func-name . location)
 } Error;
 
+#define HEADER(v) ((Header *) v)
 #define PAIR(v) ((Pair *) v)
 #define LOCATED_PAIR(v) ((LocatedPair *) v)
 #define STRING(v) ((String *) v)
@@ -109,7 +114,7 @@ static Value cons_const(Value car, Value cdr)
     Pair *p = obj_new(sizeof(Pair), TAG_PAIR);
     p->car = car;
     p->cdr = cdr;
-    p->immutable = true;
+    HEADER(p)->immutable = true;
     return (Value) p;
 }
 
@@ -123,6 +128,7 @@ static inline Value list2_const(Value x, Value y)
     return cons_const(x, list1_const(y));
 }
 
-#define DUMMY_PAIR() ((Value) &(Pair) { .tag = TAG_PAIR, .car = Qundef, .cdr = Qnil })
+#define DUMMY_PAIR() ((Value) &(Pair) { .header = { .tag = TAG_PAIR }, \
+                                        .car = Qundef, .cdr = Qnil })
 
 #endif // INTERN_H

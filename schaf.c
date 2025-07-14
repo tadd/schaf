@@ -257,7 +257,9 @@ inline Value value_of_symbol(const char *s)
 void *obj_new(size_t size, ValueTag t)
 {
     void *p = gc_malloc(size);
-    VALUE_TAG(p) = t;
+    Header *h = HEADER(p);
+    h->tag = t;
+    h->immutable = false;
     return p;
 }
 
@@ -1576,7 +1578,6 @@ Value cons(Value car, Value cdr)
     Pair *p = obj_new(sizeof(Pair), TAG_PAIR);
     p->car = car;
     p->cdr = cdr;
-    p->immutable = false;
     return (Value) p;
 }
 
@@ -1609,7 +1610,7 @@ static Value proc_cdr(UNUSED Table *env, Value pair)
 
 static Value proc_set_car(UNUSED Table *env, Value pair, Value obj)
 {
-    if (PAIR(pair)->immutable)
+    if (HEADER(pair)->immutable)
         return runtime_error("cannot modify immutable pair");
     PAIR(pair)->car = obj;
     return pair;
@@ -1617,7 +1618,7 @@ static Value proc_set_car(UNUSED Table *env, Value pair, Value obj)
 
 static Value proc_set_cdr(UNUSED Table *env, Value pair, Value obj)
 {
-    if (PAIR(pair)->immutable)
+    if (HEADER(pair)->immutable)
         return runtime_error("cannot modify immutable pair");
     PAIR(pair)->cdr = obj;
     return pair;
