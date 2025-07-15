@@ -2,6 +2,7 @@
 #define INTERN_H
 
 #include <setjmp.h>
+#include <stdint.h>
 
 #include "schaf.h"
 #include "utils.h"
@@ -20,8 +21,8 @@ typedef enum {
 } ValueTag;
 
 typedef struct {
-    ValueTag tag;
-    bool immutable;
+    uint8_t tag;
+    uint8_t immutable;
 } Header;
 
 typedef struct {
@@ -41,7 +42,7 @@ typedef struct {
 
 typedef struct {
     Header header;
-    int64_t arity;
+    int8_t arity;
 } Procedure;
 
 typedef struct CFunc {
