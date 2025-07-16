@@ -2118,6 +2118,11 @@ static Value proc_cputime(UNUSED Value env) // in micro sec
     return value_of_int(n);
 }
 
+static Value proc_interaction_environment(UNUSED Value env)
+{
+    return env_dup("interaction", env_default); // alias of "default"
+}
+
 static Value proc_schaf_environment(UNUSED Value env)
 {
     return env_dup(NULL, env_default);
@@ -2278,6 +2283,7 @@ void sch_init(uintptr_t *sp)
     //- eval
     define_procedure(e, "scheme-report-environment", proc_scheme_report_environment, 1);
     define_procedure(e, "null-environment", proc_null_environment, 1);
+    define_procedure(e, "interaction-environment", proc_interaction_environment, 0);
     // 6.6. Input and output
     // 6.6.2. Input
     //- read
@@ -2298,5 +2304,5 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "_cputime", proc_cputime, 0);
     define_procedure(e, "schaf-environment", proc_schaf_environment, 0);
 
-    env_default = env_dup("schaf", e);
+    env_default = env_dup("default", e);
 }

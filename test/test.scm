@@ -1083,9 +1083,12 @@
 (describe "*-environment" (lambda ()
   (define r5rs-env (scheme-report-environment 5))
   (define null-env (null-environment 5))
+  (define int-env (interaction-environment))
   (expect-f (eq? r5rs-env #f))
   (expect-f (eq? null-env #f))
-  (noexpect equal? r5rs-env null-env)))
+  (expect-f (eq? int-env #f))
+  (noexpect equal? r5rs-env null-env)
+  (noexpect equal? r5rs-env int-env)))
 
 (describe "call/cc applicable in call/cc" (lambda ()
   (define (f)
