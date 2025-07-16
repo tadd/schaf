@@ -1080,6 +1080,15 @@
   (expect = (list-length '(1 2 3 4)) 4)
   (expect-f (list-length '(a b . c)))))
 
+;; (describe "values" (lambda ()
+;;   (expect = (values 1 2 3) 1)))
+
+(describe "call-with-values" (lambda ()
+  (expect eq? (call-with-values (lambda () (values 4 5))
+                                (lambda (a b) b))
+          5)
+  (expect eq? (call-with-values * -) -1)))
+
 (describe "call/cc applicable in call/cc" (lambda ()
   (define (f)
     (call/cc call/cc)

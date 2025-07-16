@@ -1951,6 +1951,18 @@ static Value proc_callcc(Value env, Value proc)
     return apply(env, proc, list1(c));
 }
 
+static Value proc_values(UNUSED Table *env, Value args)
+{
+    return args;
+}
+
+static Value proc_call_with_values(Table *env, Value producer, Value consumer)
+{
+    Value rawargs = apply(env, producer, Qnil);
+    Value args = value_is_pair(rawargs) ? rawargs : list1(rawargs);
+    return apply(env, consumer, args);
+}
+
 // 6.6.3. Output
 static void display_list(FILE *f, Value l)
 {
@@ -2232,8 +2244,8 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "for-each", proc_for_each, -1);
     define_procedure(e, "call/cc", proc_callcc, 1); // alias
     define_procedure(e, "call-with-current-continuation", proc_callcc, 1);
-    //- values
-    //- call-with-values
+    define_procedure(e, "values", proc_values, -1);
+    define_procedure(e, "call-with-values", proc_call_with_values, 2);
     //- dynamic-wind
     // 6.5. Eval
     //- eval
