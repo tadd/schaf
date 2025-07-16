@@ -63,7 +63,7 @@ static const int64_t CFUNCARG_MAX = 3;
 
 // Environment: list of Frames
 // Frame: Table of 'symbol => <value>
-static Value toplevel_environment;
+static Value env_toplevel;
 static Value symbol_names = Qnil; // ("name0" "name1" ...)
 Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
     SYM_RARROW;
@@ -500,7 +500,7 @@ static Value env_inherit(Value parent)
 {
     Value e = env_new();
     ENV(e)->parent = parent;
-    return (Value) e;
+    return e;
 }
 
 static Value env_put(Value env, Value key, Value value)
@@ -793,7 +793,7 @@ static Value iload(FILE *in, const char *filename)
     source_data = cons(ast, source_data);
     if (setjmp(jmp_exit) != 0)
         return value_of_int(exit_status);
-    Value ret = eval_body(toplevel_environment, l);
+    Value ret = eval_body(env_toplevel, l);
     if (is_error(ret)) {
         dump_stack_trace(ERROR(ret)->call_stack);
         return Qundef;
@@ -807,7 +807,7 @@ static Value iload_inner(FILE *in, const char *path)
     source_data = cons(ast, source_data);
     if (l == Qundef)
         return Qundef;
-    return eval_body(toplevel_environment, l);
+    return eval_body(env_toplevel, l);
 }
 
 Value eval_string(const char *in)
@@ -1235,7 +1235,7 @@ static Value define_variable(Value env, Value ident, Value expr)
     Value val = eval(env, expr);
     CHECK_ERROR(val);
     bool found = false;
-    if (env == toplevel_environment)
+    if (env == env_toplevel)
         found = env_set(env, ident, val);
     if (!found)
         env_put(env, ident, val); // prepend new
@@ -2086,7 +2086,6 @@ static Value syn_defined_p(Value env, Value name)
 
 int sch_fin(void)
 {
-    // table_free(toplevel_environment);
     gc_fin();
     return exit_status;
 }
@@ -2118,8 +2117,8 @@ void sch_init(uintptr_t *sp)
     DEF_SYMBOL(UNQUOTE_SPLICING, "unquote-splicing");
     DEF_SYMBOL(RARROW, "=>");
 
-    toplevel_environment = env_new();
-    Value e = toplevel_environment;
+    env_toplevel = env_new();
+    Value e = env_toplevel;
 
     // 4. Expressions
 
@@ -2252,7 +2251,7 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "exit", proc_exit, -1);
 
     // Local Extensions
+    define_syntax(e, "_defined?", syn_defined_p, 1);
     define_procedure(e, "print", proc_print, -1); // like Gauche
     define_procedure(e, "_cputime", proc_cputime, 0);
-    define_syntax(e, "_defined?", syn_defined_p, 1);
 }
