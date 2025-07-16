@@ -1080,6 +1080,13 @@
   (expect = (list-length '(1 2 3 4)) 4)
   (expect-f (list-length '(a b . c)))))
 
+(describe "*-environment" (lambda ()
+  (define r5rs-env (scheme-report-environment 5))
+  (define null-env (null-environment 5))
+  (expect-f (eq? r5rs-env #f))
+  (expect-f (eq? null-env #f))
+  (noexpect equal? r5rs-env null-env)))
+
 (describe "call/cc applicable in call/cc" (lambda ()
   (define (f)
     (call/cc call/cc)

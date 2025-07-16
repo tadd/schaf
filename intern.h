@@ -13,8 +13,8 @@ typedef enum {
     TAG_SYNTAX, // almost a C Function
     TAG_CLOSURE,
     TAG_CONTINUATION,
-    // internal use only
     TAG_ENV,
+    // internal use only
     TAG_ERROR,
     TAG_LAST = TAG_ERROR
 } ValueTag;
@@ -75,6 +75,7 @@ typedef struct {
 
 typedef struct {
     Header header;
+    char *name;
     Value parent;
     Table *table;
 } Env;

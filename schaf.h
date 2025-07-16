@@ -17,6 +17,7 @@ typedef enum {
     TYPE_PAIR,
     TYPE_STRING,
     TYPE_PROC,
+    TYPE_ENV,
 } Type;
 
 typedef uintptr_t Value;
