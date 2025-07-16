@@ -1055,6 +1055,31 @@
     (for-each (lambda (a b) (set! x (+ a b))) '(1 2) '(4))
     (expect = x 5))))
 
+(describe "call-with-current-continuation" (lambda ()
+  (define (f)
+    (call-with-current-continuation
+     (lambda (exit)
+       (for-each (lambda (x)
+                   (if (negative? x)
+                       (exit x)))
+                 '(54 0 37 -3 245 19))
+       #t)))
+  (define list-length
+    (lambda (obj)
+      (call-with-current-continuation
+       (lambda (return)
+         (letrec ((r
+                   (lambda (obj)
+                     (cond ((null? obj) 0)
+                           ((pair? obj)
+                            (+ (r (cdr obj)) 1))
+                           (else (return #f))))))
+           (r obj))))))
+
+  (expect = (f) -3)
+  (expect = (list-length '(1 2 3 4)) 4)
+  (expect-f (list-length '(a b . c)))))
+
 (describe "call/cc applicable in call/cc" (lambda ()
   (define (f)
     (call/cc call/cc)
