@@ -1270,6 +1270,12 @@
       (expect-t (f))
       (expect-f (f2))
       (expect-t (g))
-      (expect-f (g2)))))))
+      (expect-f (g2)))))
+
+  (describe "schaf-environment" (lambda ()
+    (define schaf-env (schaf-environment))
+    (define r5rs-env (scheme-report-environment 5))
+    (expect-f (eq? schaf-env #f))
+    (noexpect equal? schaf-env r5rs-env)))))
 
 (test-run)

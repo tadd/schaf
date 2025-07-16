@@ -64,7 +64,7 @@ static const int64_t CFUNCARG_MAX = 3;
 
 // Environment: list of Frames
 // Frame: Table of 'symbol => <value>
-static Value env_toplevel, env_r5rs, env_null;
+static Value env_toplevel, env_default, env_r5rs, env_null;
 static Value symbol_names = Qnil; // ("name0" "name1" ...)
 Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
     SYM_RARROW;
@@ -2088,6 +2088,13 @@ static Value proc_exit(UNUSED Value env, Value args)
 }
 
 // Local Extensions
+static Value syn_defined_p(Value env, Value name)
+{
+    if (!value_is_symbol(name))
+        return Qfalse;
+    return OF_BOOL(env_get(env, name) != Qundef);
+}
+
 static Value proc_print(UNUSED Value env, Value l)
 {
     Value obj = Qnil;
@@ -2111,11 +2118,9 @@ static Value proc_cputime(UNUSED Value env) // in micro sec
     return value_of_int(n);
 }
 
-static Value syn_defined_p(Value env, Value name)
+static Value proc_schaf_environment(UNUSED Value env)
 {
-    if (!value_is_symbol(name))
-        return Qfalse;
-    return OF_BOOL(env_get(env, name) != Qundef);
+    return env_dup(NULL, env_default);
 }
 
 int sch_fin(void)
@@ -2291,4 +2296,7 @@ void sch_init(uintptr_t *sp)
     define_syntax(e, "_defined?", syn_defined_p, 1);
     define_procedure(e, "print", proc_print, -1); // like Gauche
     define_procedure(e, "_cputime", proc_cputime, 0);
+    define_procedure(e, "schaf-environment", proc_schaf_environment, 0);
+
+    env_default = env_dup("schaf", e);
 }
