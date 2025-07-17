@@ -188,19 +188,14 @@ Table *table_put(Table *t, uint64_t key, uint64_t value)
     return t;
 }
 
-static List *find1(const List *l, uint64_t key)
-{
-    for (const List *p = l; p != NULL; p = p->next) {
-        if (p->key == key) // direct
-            return (List *) p;
-    }
-    return NULL;
-}
-
 static List *find(const Table *t, uint64_t key)
 {
     uint64_t i = body_index(t, key);
-    return find1(t->body[i], key);
+    for (List *p = t->body[i]; p != NULL; p = p->next) {
+        if (p->key == key) // direct
+            return p;
+    }
+    return NULL;
 }
 
 uint64_t table_get(const Table *t, uint64_t key)
