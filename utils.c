@@ -108,7 +108,6 @@ static size_t list_length(const List *l)
     return len;
 }
 
-
 static double stdev_length(List **body, size_t n, double avr)
 {
     double s = 0.0;
@@ -146,11 +145,6 @@ static inline uint64_t body_index(const Table *t, uint64_t key)
     return table_hash(key) & (t->body_size - 1U);
 }
 
-static inline bool table_too_many_elements(const Table *t)
-{
-    return t->size > t->body_size * TABLE_TOO_MANY_FACTOR;
-}
-
 static void table_resize(Table *t)
 {
     const size_t old_body_size = t->body_size;
@@ -173,6 +167,11 @@ static void table_resize(Table *t)
     free(old_body);
     for (size_t i = 0; i < t->body_size; i++)
         t->body[i] = t->body[i]->next; // ensure not to use dummies
+}
+
+static inline bool table_too_many_elements(const Table *t)
+{
+    return t->size > t->body_size * TABLE_TOO_MANY_FACTOR;
 }
 
 // `value` can't be TABLE_NOT_FOUND
