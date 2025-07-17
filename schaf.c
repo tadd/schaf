@@ -1729,7 +1729,7 @@ static Value list_tail(Value list, Value k)
     int64_t n = get_int(k, &e);
     CHECK_ERROR_TRUTHY(e);
     if (n < 0)
-        return runtime_error("%s: 2nd element needs to be non-negative: "PRId64, n);
+        return runtime_error("2nd element needs to be non-negative: "PRId64, n);
     Value p = list;
     int64_t i;
     for (i = 0; p != Qnil; p = cdr(p), i++) {
