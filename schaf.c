@@ -313,12 +313,18 @@ static Value apply_cfunc_3(Value env, CFunc *f, Value args)
     return f->f3(env, a0, a1, a2);
 }
 
+static Value cfunc_applier(Value env, Value proc, Value args);
+static Value syntax_applier(Value env, Value proc, Value args);
+static Value closure_applier(Value env, Value proc, Value args);
+static Value cont_applier(Value env, Value proc, Value args);
+
 static Value value_of_cfunc(const char *name, void *cfunc, int64_t arity)
 {
     expect_cfunc_arity(arity);
     CFunc *f = obj_new(sizeof(CFunc), TAG_CFUNC);
-    f->name = xstrdup(name);
     f->proc.arity = arity;
+    f->proc.applier = cfunc_applier;
+    f->name = xstrdup(name);
     f->cfunc = cfunc;
     switch (arity) {
     case -1:
@@ -344,15 +350,17 @@ static Value value_of_cfunc(const char *name, void *cfunc, int64_t arity)
 
 static Value value_of_syntax(const char *name, void *cfunc, int64_t arity)
 {
-    Value sp = value_of_cfunc(name, cfunc, arity);
-    VALUE_TAG(sp) = TAG_SYNTAX;
-    return sp;
+    Value syn = value_of_cfunc(name, cfunc, arity);
+    PROCEDURE(syn)->applier = syntax_applier;
+    VALUE_TAG(syn) = TAG_SYNTAX;
+    return syn;
 }
 
 static Value value_of_closure(Value env, Value params, Value body)
 {
     Closure *f = obj_new(sizeof(Closure), TAG_CLOSURE);
     f->proc.arity = (params == Qnil || value_is_pair(params)) ? length(params) : -1;
+    f->proc.applier = closure_applier;
     f->env = env;
     f->params = params;
     f->body = body;
@@ -641,9 +649,67 @@ static Value push_stack_frame(Value ve, const char *name, Value loc)
     Error *e = ERROR(ve);
     Value str = name == NULL ? Qfalse : value_of_string(name);
     Value data = cons(str, loc);
-    e->call_stack = cons(data, e->call_stack);
+    e->call_stack = cons(data, cdr(e->call_stack));
     return ve;
 }
+
+#define CHECK_ERROR_MARK_PUSH(v)  do { \
+        if (UNLIKELY(is_error(v))) { \
+            ERROR(v)->call_stack = cons(Qtrue, ERROR(v)->call_stack); \
+            return v; \
+        } \
+    } while (0)
+
+static Value cfunc_applier(Value env, Value proc, Value args)
+{
+    args = map_eval(env, args);
+    CHECK_ERROR(args);
+    Value ret = apply_cfunc(env, proc, args);
+    CHECK_ERROR_MARK_PUSH(ret);
+    return ret;
+}
+
+static Value syntax_applier(Value env, Value proc, Value args)
+{
+    Value ret = apply_cfunc(env, proc, args);
+    CHECK_ERROR_MARK_PUSH(ret);
+    return ret;
+}
+
+static Value closure_applier(Value env, Value proc, Value args)
+{
+    args = map_eval(env, args);
+    CHECK_ERROR(args);
+    Value ret = apply_closure(proc, args);
+    CHECK_ERROR_MARK_PUSH(ret);
+    return ret;
+}
+
+// [[gnu::noreturn]]
+static Value cont_applier(Value env, Value proc, Value args)
+{
+    args = map_eval(env, args);
+    CHECK_ERROR(args);
+    apply_continuation(proc, args);
+    return Qfalse; // fake
+}
+
+static void adjust_call_stack(Value v, Value proc, Value loc)
+{
+    Error *e = ERROR(v);
+    Value stack = e->call_stack;
+    if (stack == Qnil) // located
+        e->call_stack = list1(cons(Qfalse, loc));
+    else if (car(stack) == Qtrue) { // push
+        const char *fname = VALUE_TAG(proc) == TAG_CFUNC ?
+            CFUNC(proc)->name : NULL;
+        push_stack_frame(v, fname, loc);
+    }
+}
+#define CHECK_ERROR_APPLIED(v, p, l) do { \
+        if (UNLIKELY(is_error(v))) \
+            adjust_call_stack(v, p, l); \
+    } while (0)
 
 static Value eval_apply(Value env, Value l)
 {
@@ -651,17 +717,11 @@ static Value eval_apply(Value env, Value l)
     Value proc = eval(env, symproc);
     CHECK_ERROR_LOCATED(proc, l);
     EXPECT(type, TYPE_PROC, proc);
-    if (!value_tag_is(proc, TAG_SYNTAX)) {
-        args = map_eval(env, args);
-        CHECK_ERROR_LOCATED(args, l);
-    }
-    Value ret = apply(env, proc, args);
-    if (UNLIKELY(is_error(ret))) {
-        const char *fname = (VALUE_TAG(proc) == TAG_CFUNC) ?
-            CFUNC(proc)->name : NULL;
-        return push_stack_frame(ret, fname, l);
-    }
-    return ret;
+    Procedure *p = PROCEDURE(proc);
+    EXPECT(arity, p->arity, args);
+    Value v = p->applier(env, proc, args);
+    CHECK_ERROR_APPLIED(v, proc, l);
+    return v;
 }
 
 static Value lookup_or_error(Value env, Value v)
@@ -1921,6 +1981,7 @@ static Value value_of_continuation(void)
 {
     Continuation *c = obj_new(sizeof(Continuation), TAG_CONTINUATION);
     c->proc.arity = 1; // by spec
+    c->proc.applier = cont_applier;
     c->sp = c->stack = NULL;
     c->stack_len = 0;
     c->retval = Qfalse;
