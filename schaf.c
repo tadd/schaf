@@ -1862,6 +1862,7 @@ static Value proc_apply(Value env, Value args)
     Value proc = car(args);
     EXPECT(type, TYPE_PROC, proc);
     Value appargs = build_apply_args(cdr(args));
+    CHECK_ERROR(appargs);
     return apply(env, proc, appargs);
 }
 

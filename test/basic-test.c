@@ -267,6 +267,10 @@ Test(schaf, applicable) {
     expect_runtime_error("expected procedure", "(() 1)");
 }
 
+Test(schaf, apply_invalid) {
+    expect_runtime_error("expected null or pair", "(apply list 1)");
+}
+
 Test(schaf, map) {
     expect_runtime_error("expected pair but got integer", "(map + 1)");
     expect_runtime_error("expected pair but got integer", "(for-each + 1)");
