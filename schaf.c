@@ -39,17 +39,19 @@ static const char *TYPE_NAMES[] = {
 // Value (uintptr_t):
 //   0b.....000 Pointer (Unchangeable pattern!)
 //   0b.......1 Integer
-//   0b......10 Symbol
+//   0b.....110 Symbol
+//   0b.....010 Error
 //   0b0--00100 #f
 //   0b0--01100 #t
 //   0b0-010100 <undef>
 typedef const uintptr_t Flag;
-static Flag FLAG_NBIT_SYM = 2;
+static Flag FLAG_NBIT_SYM = 3;
 static Flag FLAG_NBIT_INT = 1;
 static Flag FLAG_MASK     = 0b111; // for 64 bit machine
-static Flag FLAG_MASK_SYM =  0b11;
+static Flag FLAG_MASK_SYM = 0b111;
 static Flag FLAG_MASK_INT =   0b1;
-static Flag FLAG_SYM      =  0b10;
+static Flag FLAG_SYM      = 0b110;
+static Flag FLAG_ERROR    = 0b010;
 static Flag FLAG_INT      =   0b1;
 const Value Qnil   = 0b11100U;
 const Value Qfalse = 0b00100U;
@@ -128,8 +130,9 @@ inline bool value_is_pair(Value v)
 
 inline static bool is_error(Value v)
 {
-    return value_tag_is(v, TAG_ERROR);
+    return (v & FLAG_MASK) == FLAG_ERROR;
 }
+
 
 static Type immediate_type_of(Value v)
 {
@@ -394,7 +397,7 @@ static Value runtime_error(const char *fmt, ...)
 
     Error *e = obj_new(sizeof(Error), TAG_ERROR);
     e->call_stack = Qnil;
-    return (Value) e;
+    return (Value) e | FLAG_ERROR;
 }
 
 const char *error_message(void)
