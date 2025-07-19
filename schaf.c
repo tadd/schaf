@@ -344,9 +344,9 @@ static Value value_of_cfunc(const char *name, void *cfunc, int64_t arity)
 
 static Value value_of_syntax(const char *name, void *cfunc, int64_t arity)
 {
-    Value sp = value_of_cfunc(name, cfunc, arity);
-    VALUE_TAG(sp) = TAG_SYNTAX;
-    return sp;
+    Value syn = value_of_cfunc(name, cfunc, arity);
+    VALUE_TAG(syn) = TAG_SYNTAX;
+    return syn;
 }
 
 static Value value_of_closure(Value env, Value params, Value body)
