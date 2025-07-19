@@ -707,8 +707,10 @@ static void adjust_call_stack(Value v, Value proc, Value loc)
     }
 }
 #define CHECK_ERROR_APPLIED(v, p, l) do { \
-        if (UNLIKELY(is_error(v))) \
+        if (UNLIKELY(is_error(v))) { \
             adjust_call_stack(v, p, l); \
+            return v; \
+        } \
     } while (0)
 
 
