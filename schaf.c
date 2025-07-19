@@ -37,24 +37,27 @@ static const char *TYPE_NAMES[] = {
 #define OF_BOOL(v) ((v) ? Qtrue : Qfalse)
 
 // Value (uintptr_t):
-//   0b.....000 Pointer (Unchangeable pattern!)
-//   0b.......1 Integer
-//   0b......10 Symbol
-//   0b0--00100 #f
-//   0b0--01100 #t
-//   0b0-010100 <undef>
+//   0b......000 Pointer (Unchangeable pattern!)
+//   0b........1 Error
+//   0b.......10 Integer
+//   0b.....1100 Symbol
+//   0b0---00100 #f
+//   0b0--010100 #t
+//   0b0-0100100 <nil>
+//   0b0-0110100 <undef>
 typedef const uintptr_t Flag;
-static Flag FLAG_NBIT_SYM = 2;
-static Flag FLAG_NBIT_INT = 1;
-static Flag FLAG_MASK     = 0b111; // for 64 bit machine
-static Flag FLAG_MASK_SYM =  0b11;
-static Flag FLAG_MASK_INT =   0b1;
-static Flag FLAG_SYM      =  0b10;
-static Flag FLAG_INT      =   0b1;
-const Value Qnil   = 0b11100U;
-const Value Qfalse = 0b00100U;
-const Value Qtrue  = 0b01100U;
-const Value Qundef = 0b10100U; // may be an error or something
+static Flag FLAG_NBIT_INT   = 2;
+static Flag FLAG_NBIT_SYM   = 4;
+static Flag FLAG_MASK     =  0b111; // for 64 bit machine
+static Flag FLAG_MASK_SYM = 0b1111;
+static Flag FLAG_MASK_INT =   0b11;
+static Flag FLAG_ERROR    =    0b1;
+static Flag FLAG_INT      =   0b10;
+static Flag FLAG_SYM      = 0b1100;
+const Value Qfalse = 0b000100U;
+const Value Qtrue  = 0b010100U;
+const Value Qnil   = 0b100100U;
+const Value Qundef = 0b110100U; // may be an error or something
 
 static const int64_t CFUNCARG_MAX = 3;
 
@@ -131,7 +134,7 @@ inline bool value_is_pair(Value v)
 
 inline static bool is_error(Value v)
 {
-    return value_tag_is(v, TAG_ERROR);
+    return v & FLAG_ERROR;
 }
 
 static Type immediate_type_of(Value v)
@@ -190,7 +193,7 @@ inline int64_t value_to_int(Value x)
     return (int64_t) x >> FLAG_NBIT_INT;
 #else
     int64_t i = x;
-    return (i - 1) / (1 << FLAG_NBIT_INT);
+    return (i - (int) FLAG_NBIT_INT) / (1 << FLAG_NBIT_INT);
 #endif
 }
 
@@ -407,7 +410,7 @@ static Value runtime_error(const char *fmt, ...)
 
     Error *e = obj_new(sizeof(Error), TAG_ERROR);
     e->call_stack = Qnil;
-    return (Value) e;
+    return (Value) e | FLAG_ERROR;
 }
 
 const char *error_message(void)
