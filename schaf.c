@@ -990,7 +990,13 @@ static Value cond_eval_recipient(Value env, Value test, Value recipients)
     EXPECT(type, TYPE_PROC, recipient);
     if (rest != Qnil)
         return runtime_error("only one expression expected after =>");
+#if 1
     return apply(env, recipient, list1(test));
+#else
+    Value v = apply2(env, recipient, list1(test));
+    CHECK_ERROR_APPLIED(v, recipient, recipients);
+    return v;
+#endif
 }
 
 //PTR
@@ -1931,7 +1937,13 @@ static Value proc_apply(Value env, Value args)
     EXPECT(type, TYPE_PROC, proc);
     Value appargs = build_apply_args(cdr(args));
     CHECK_ERROR(appargs);
+#if 1
     return apply(env, proc, appargs);
+#else
+    Value v = apply2(env, proc, appargs);
+    CHECK_ERROR_APPLIED(v, proc, args);
+    return v;
+#endif
 }
 
 static Value cars_cdrs(Value ls, Value *pcars, Value *pcdrs, Value *perr)
@@ -1963,8 +1975,13 @@ static Value proc_map(Value env, Value args)
     Value ls = cdr(args);
     Value ret = DUMMY_PAIR(), e = Qfalse;
     for (Value last = ret, cars, cdrs, v; cars_cdrs(ls, &cars, &cdrs, &e); ls = cdrs) {
+#if 1
         v = apply(env, proc, cars);
         CHECK_ERROR(v);
+#else
+        v = apply2(env, proc, cars);
+        CHECK_ERROR_APPLIED(v, proc, args);
+#endif
         last = PAIR(last)->cdr = list1(v);
     }
     CHECK_ERROR_TRUTHY(e);
@@ -1978,8 +1995,13 @@ static Value proc_for_each(Value env, Value args)
     Value proc = car(args), e = Qfalse;
     EXPECT(type, TYPE_PROC, proc);
     for (Value ls = cdr(args), cars, cdrs, v; cars_cdrs(ls, &cars, &cdrs, &e); ls = cdrs) {
+#if 1
         v = apply(env, proc, cars);
         CHECK_ERROR(v);
+#else
+        v = apply2(env, proc, cars);
+        CHECK_ERROR_APPLIED(v, proc, args);
+#endif
     }
     CHECK_ERROR_TRUTHY(e);
     return Qnil;
@@ -2015,7 +2037,13 @@ static Value proc_callcc(Value env, Value proc)
     Value c = value_of_continuation();
     if (continuation_set(c))
         return CONTINUATION(c)->retval;
+#if 1
     return apply(env, proc, list1(c));
+#else
+    Value v = apply2(env, proc, list1(c));
+    CHECK_ERROR_APPLIED(v, proc, Qnil);
+    return v;
+#endif
 }
 
 // 6.6.3. Output
