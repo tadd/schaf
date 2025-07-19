@@ -711,15 +711,21 @@ static void adjust_call_stack(Value v, Value proc, Value loc)
             adjust_call_stack(v, p, l); \
     } while (0)
 
+
+static Value apply2(Value env, Value proc, Value args)
+{
+    Procedure *p = PROCEDURE(proc);
+    EXPECT(arity, p->arity, args);
+    return p->applier(env, proc, args);
+}
+
 static Value eval_apply(Value env, Value l)
 {
     Value symproc = car(l), args = cdr(l);
     Value proc = eval(env, symproc);
     CHECK_ERROR_LOCATED(proc, l);
     EXPECT(type, TYPE_PROC, proc);
-    Procedure *p = PROCEDURE(proc);
-    EXPECT(arity, p->arity, args);
-    Value v = p->applier(env, proc, args);
+    Value v = apply2(env, proc, args);
     CHECK_ERROR_APPLIED(v, proc, l);
     return v;
 }
