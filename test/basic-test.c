@@ -331,3 +331,17 @@ Test(table, foreach) {
 
     table_free(t);
 }
+
+Test(table, dup) {
+    Table *t = table_new();
+    for (long i = 1; i < 100; i++)
+        table_put(t, i, i*17);
+    Table *u = table_dup(t);
+    table_free(t);
+
+    cr_assert(not(eq(ptr, t, u)));
+    for (long i = 1; i < 100; i++)
+        cr_assert(eq(int, i*17, table_get(u, i)));
+
+    table_free(u);
+}

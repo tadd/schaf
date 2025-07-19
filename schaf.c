@@ -31,6 +31,7 @@ static const char *TYPE_NAMES[] = {
     [TYPE_PAIR] = "pair",
     [TYPE_STRING] = "string",
     [TYPE_PROC] = "procedure",
+    [TYPE_ENV] = "environment",
 };
 
 #define OF_BOOL(v) ((v) ? Qtrue : Qfalse)
@@ -63,7 +64,7 @@ static const int64_t CFUNCARG_MAX = 3;
 
 // Environment: list of Frames
 // Frame: Table of 'symbol => <value>
-static Value env_toplevel;
+static Value env_toplevel, env_default, env_r5rs, env_null;
 static Value symbol_names = Qnil; // ("name0" "name1" ...)
 Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
     SYM_RARROW;
@@ -112,8 +113,8 @@ static inline bool value_is_procedure(Value v)
         return true;
     case TAG_STRING:
     case TAG_PAIR:
-        return false;
     case TAG_ENV:
+        return false;
     case TAG_ERROR:
         break;
     }
@@ -160,6 +161,7 @@ Type value_type_of(Value v)
     case TAG_CONTINUATION:
         return TYPE_PROC;
     case TAG_ENV:
+        return TYPE_ENV;
     case TAG_ERROR:
         break;
     }
@@ -488,17 +490,29 @@ static Value append2(Value l1, Value l2)
     return ret;
 }
 
-static Value env_new(void)
+static Value env_new(const char *name)
 {
     Env *e = obj_new(sizeof(Env), TAG_ENV);
+    e->name = name == NULL ? NULL : xstrdup(name);
     e->table = table_new();
+    e->parent = Qfalse;
+    return (Value) e;
+}
+
+static Value env_dup(const char *name, const Value orig)
+{
+    if (ENV(orig)->parent != Qfalse)
+        bug("duplication of chained environment not permitted");
+    Env *e = obj_new(sizeof(Env), TAG_ENV);
+    e->name = name == NULL ? xstrdup(ENV(orig)->name)/*copy*/ : xstrdup(name);
+    e->table = table_dup(ENV(orig)->table);
     e->parent = Qfalse;
     return (Value) e;
 }
 
 static Value env_inherit(Value parent)
 {
-    Value e = env_new();
+    Value e = env_new("tmp");
     ENV(e)->parent = parent;
     return e;
 }
@@ -1266,6 +1280,7 @@ static Value syn_define(Value env, Value args)
     case TYPE_INT:
     case TYPE_STRING:
     case TYPE_PROC:
+    case TYPE_ENV:
     case TYPE_UNDEF:
         return runtime_error("the first argument expected symbol or pair but got %s",
                              value_type_to_string(t));
@@ -1297,6 +1312,7 @@ static bool equal(Value x, Value y)
     case TYPE_BOOL:
     case TYPE_INT:
     case TYPE_PROC:
+    case TYPE_ENV:
     case TYPE_UNDEF:
         return false;
     }
@@ -1952,6 +1968,26 @@ static Value proc_callcc(Value env, Value proc)
     return apply(env, proc, list1(c));
 }
 
+static Value proc_eval(UNUSED Value genv, Value expr, Value env)
+{
+    EXPECT(type, TYPE_ENV, env);
+    return eval(env, expr);
+}
+
+static Value proc_scheme_report_environment(UNUSED Value env, Value version)
+{
+    if (!value_is_int(version) || value_to_int(version) != 5)
+        return runtime_error("only integer '5' is allowed for argument");
+    return env_dup(NULL, env_r5rs);
+}
+
+static Value proc_null_environment(UNUSED Value env, Value version)
+{
+    if (!value_is_int(version) || value_to_int(version) != 5)
+        return runtime_error("only integer '5' is allowed for argument");
+    return env_dup(NULL, env_null);
+}
+
 // 6.6.3. Output
 static void display_list(FILE *f, Value l)
 {
@@ -1991,6 +2027,9 @@ static void fdisplay(FILE* f, Value v)
         break;
     case TYPE_PROC:
         fprintf(f, "<procedure>");
+        break;
+    case TYPE_ENV:
+        fprintf(f, "<environment: %s>", ENV(v)->name);
         break;
     case TYPE_UNDEF:
         fprintf(f, "<undef>");
@@ -2055,6 +2094,13 @@ static Value proc_exit(UNUSED Value env, Value args)
 }
 
 // Local Extensions
+static Value syn_defined_p(Value env, Value name)
+{
+    if (!value_is_symbol(name))
+        return Qfalse;
+    return OF_BOOL(env_get(env, name) != Qundef);
+}
+
 static Value proc_print(UNUSED Value env, Value l)
 {
     Value obj = Qnil;
@@ -2078,11 +2124,14 @@ static Value proc_cputime(UNUSED Value env) // in micro sec
     return value_of_int(n);
 }
 
-static Value syn_defined_p(Value env, Value name)
+static Value proc_interaction_environment(UNUSED Value env)
 {
-    if (!value_is_symbol(name))
-        return Qfalse;
-    return OF_BOOL(env_get(env, name) != Qundef);
+    return env_dup("interaction", env_default); // alias of "default"
+}
+
+static Value proc_schaf_environment(UNUSED Value env)
+{
+    return env_dup(NULL, env_default);
 }
 
 int sch_fin(void)
@@ -2118,7 +2167,7 @@ void sch_init(uintptr_t *sp)
     DEF_SYMBOL(UNQUOTE_SPLICING, "unquote-splicing");
     DEF_SYMBOL(RARROW, "=>");
 
-    env_toplevel = env_new();
+    env_toplevel = env_new("default");
     Value e = env_toplevel;
 
     // 4. Expressions
@@ -2160,6 +2209,7 @@ void sch_init(uintptr_t *sp)
     define_syntax(e, "define", syn_define, -1);
     // 5.3. Syntax definitions
     //- define-syntax
+    env_null = env_dup("null", e);
 
     // 6. Standard procedures
 
@@ -2236,9 +2286,10 @@ void sch_init(uintptr_t *sp)
     //- call-with-values
     //- dynamic-wind
     // 6.5. Eval
-    //- eval
-    //- scheme-report-environment
-    //- null-environment
+    define_procedure(e, "eval", proc_eval, 2);
+    define_procedure(e, "scheme-report-environment", proc_scheme_report_environment, 1);
+    define_procedure(e, "null-environment", proc_null_environment, 1);
+    define_procedure(e, "interaction-environment", proc_interaction_environment, 0);
     // 6.6. Input and output
     // 6.6.2. Input
     //- read
@@ -2248,6 +2299,8 @@ void sch_init(uintptr_t *sp)
     // 6.6.4. System interface
     define_procedure(e, "load", proc_load, 1);
 
+    env_r5rs = env_dup("r5rs", e);
+
     // Extensions from R7RS (scheme process-context)
     define_procedure(e, "exit", proc_exit, -1);
 
@@ -2255,4 +2308,7 @@ void sch_init(uintptr_t *sp)
     define_syntax(e, "_defined?", syn_defined_p, 1);
     define_procedure(e, "print", proc_print, -1); // like Gauche
     define_procedure(e, "_cputime", proc_cputime, 0);
+    define_procedure(e, "schaf-environment", proc_schaf_environment, 0);
+
+    env_default = env_dup("default", e);
 }

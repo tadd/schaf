@@ -1080,6 +1080,22 @@
   (expect = (list-length '(1 2 3 4)) 4)
   (expect-f (list-length '(a b . c)))))
 
+(describe "eval" (lambda ()
+  (expect = (eval '(* 7 3) (scheme-report-environment 5)) 21)
+  (let ((f (eval '(lambda (f x) (f x x))
+                 (null-environment 5))))
+    (expect = (f + 10) 20))))
+
+(describe "*-environment" (lambda ()
+  (define r5rs-env (scheme-report-environment 5))
+  (define null-env (null-environment 5))
+  (define int-env (interaction-environment))
+  (expect-f (eq? r5rs-env #f))
+  (expect-f (eq? null-env #f))
+  (expect-f (eq? int-env #f))
+  (noexpect equal? r5rs-env null-env)
+  (noexpect equal? r5rs-env int-env)))
+
 (describe "call/cc applicable in call/cc" (lambda ()
   (define (f)
     (call/cc call/cc)
@@ -1263,6 +1279,18 @@
       (expect-t (f))
       (expect-f (f2))
       (expect-t (g))
-      (expect-f (g2)))))))
+      (expect-f (g2)))))
+
+  (describe "schaf-environment" (lambda ()
+    (define schaf-env (schaf-environment))
+    (define r5rs-env (scheme-report-environment 5))
+    (expect-f (eq? schaf-env #f))
+    (noexpect equal? schaf-env r5rs-env)))
+
+  (describe "eval with schaf-environment" (lambda ()
+    (expect = (eval '(* 7 3) (schaf-environment)) 21)
+    (let ((f (eval '(lambda (f x) (f x x))
+                   (schaf-environment))))
+      (expect = (f + 10) 20))))))
 
 (test-run)
