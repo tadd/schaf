@@ -398,25 +398,15 @@ const char *error_message(void)
 }
 
 // generic macro to handle errors and early-returns
-#define CHECK_ERROR(v)  do { \
-        if (UNLIKELY(is_error(v))) \
-            return v; \
-    } while (0)
-#define CHECK_ERROR_TRUTHY(v)  do { \
-        if (UNLIKELY((v) != Qfalse)) \
-            return v; \
-    } while (0)
-#define CHECK_ERROR_LOCATED(v, l)  do { \
-        if (UNLIKELY(is_error(v))) { \
-            if (ERROR(v)->call_stack == Qnil) \
-                ERROR(v)->call_stack = list1(cons(Qfalse, l)); \
-            return v; \
-        } \
-    } while (0)
-#define EXPECT(f, ...) do { \
-        Value R = expect_##f(__VA_ARGS__); \
-        CHECK_ERROR(R); \
-    } while (0)
+#define CHECK_ERROR(v) if (UNLIKELY(is_error(v))) return v
+#define CHECK_ERROR_TRUTHY(v) if (UNLIKELY((v) != Qfalse)) return v
+#define CHECK_ERROR_LOCATED(v, l) \
+    if (UNLIKELY(is_error(v))) { \
+        if (ERROR(v)->call_stack == Qnil) \
+            ERROR(v)->call_stack = list1(cons(Qfalse, l)); \
+        return v; \
+    }
+#define EXPECT(f, ...) CHECK_ERROR(expect_##f(__VA_ARGS__))
 
 static Value expect_type(Type expected, Value v)
 {
@@ -426,7 +416,14 @@ static Value expect_type(Type expected, Value v)
     return runtime_error("type expected %s but got %s",
                          value_type_to_string(expected), value_type_to_string(t));
 }
-#define expect_type_twin(t, x, y) expect_type(t, x); expect_type(t, y)
+
+static Value expect_type_twin(Type expected, Value x, Value y)
+{
+    Value v = expect_type(expected, x);
+    if (UNLIKELY(is_error(v)))
+        return v;
+    return expect_type(expected, y);
+}
 
 static Value expect_type_or(Type e1, Type e2, Value v)
 {
