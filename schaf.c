@@ -1968,6 +1968,12 @@ static Value proc_callcc(Value env, Value proc)
     return apply(env, proc, list1(c));
 }
 
+static Value proc_eval(UNUSED Value genv, Value expr, Value env)
+{
+    EXPECT(type, TYPE_ENV, env);
+    return eval(env, expr);
+}
+
 static Value proc_scheme_report_environment(UNUSED Value env, Value version)
 {
     if (!value_is_int(version) || value_to_int(version) != 5)
@@ -2280,7 +2286,7 @@ void sch_init(uintptr_t *sp)
     //- call-with-values
     //- dynamic-wind
     // 6.5. Eval
-    //- eval
+    define_procedure(e, "eval", proc_eval, 2);
     define_procedure(e, "scheme-report-environment", proc_scheme_report_environment, 1);
     define_procedure(e, "null-environment", proc_null_environment, 1);
     define_procedure(e, "interaction-environment", proc_interaction_environment, 0);
