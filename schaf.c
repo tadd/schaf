@@ -315,7 +315,11 @@ static Value apply_cfunc_3(Value env, CFunc *f, Value args)
     return f->f3(env, a0, a1, a2);
 }
 
-static Value apply_cfunc(Value env, Value proc, Value args);
+static Value apply_cfunc(Value env, Value proc, Value args)
+{
+    CFunc *f = CFUNC(proc);
+    return f->applier(env, f, args);
+}
 
 static Value cfunc_new(ValueTag tag, const char *name, void *cfunc, int64_t arity)
 {
@@ -357,7 +361,25 @@ static Value value_of_syntax(const char *name, void *cfunc, int64_t arity)
     return cfunc_new(TAG_SYNTAX, name, cfunc, arity);
 }
 
-static Value apply_closure(Value env, Value proc, Value args);
+static Value eval_body(Value env, Value body);
+static Value env_inherit(Value parent);
+static Value env_put(Value env, Value key, Value value);
+
+//PTR
+static Value apply_closure(UNUSED Value env, Value proc, Value args)
+{
+    Closure *cl = CLOSURE(proc);
+    int64_t arity = cl->proc.arity;
+    Value clenv = env_inherit(cl->env);
+    Value params = cl->params;
+    if (arity == -1)
+        env_put(clenv, params, args);
+    else {
+        for (Value pa = args, pp = params; pa != Qnil; pa = cdr(pa), pp = cdr(pp))
+            env_put(clenv, car(pp), car(pa));
+    }
+    return eval_body(clenv, cl->body);
+}
 
 static Value value_of_closure(Value env, Value params, Value body)
 {
@@ -473,12 +495,6 @@ static Value expect_arity(int64_t expected, Value args)
                          expected, actual);
 }
 
-static Value apply_cfunc(Value env, Value proc, Value args)
-{
-    CFunc *f = CFUNC(proc);
-    return f->applier(env, f, args);
-}
-
 static Value append2(Value l1, Value l2)
 {
     if (l2 == Qnil)
@@ -550,47 +566,6 @@ static Value env_get(const Value env, Value name)
             return v;
     }
     return Qundef;
-}
-
-static Value eval_body(Value env, Value body);
-
-//PTR
-static Value apply_closure(UNUSED Value env, Value proc, Value args)
-{
-    Closure *cl = CLOSURE(proc);
-    int64_t arity = cl->proc.arity;
-    Value clenv = env_inherit(cl->env);
-    Value params = cl->params;
-    if (arity == -1)
-        env_put(clenv, params, args);
-    else {
-        for (Value pa = args, pp = params; pa != Qnil; pa = cdr(pa), pp = cdr(pp))
-            env_put(clenv, car(pp), car(pa));
-    }
-    return eval_body(clenv, cl->body);
-}
-
-[[gnu::noreturn]] [[gnu::noinline]]
-static void jump(Continuation *cont)
-{
-    memcpy(cont->sp, cont->stack, cont->stack_len);
-    longjmp(cont->state, 1);
-}
-
-#define GET_SP(p) uintptr_t v##p = 0, *p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
-
-[[gnu::noreturn]] [[gnu::noinline]]
-static Value apply_continuation(UNUSED Value env, Value f, Value args)
-{
-    GET_SP(sp);
-    Continuation *cont = CONTINUATION(f);
-    cont->retval = car(args);
-    int64_t d = sp - cont->sp;
-    if (d < 1)
-        d = 1;
-    volatile uintptr_t pad[d];
-    pad[0] = pad[d-1] = 0; // avoid unused
-    jump(cont);
 }
 
 // Note: Do not mistake this for "(define-syntax ...)" which related to macros
@@ -1923,6 +1898,29 @@ static Value proc_for_each(Value env, Value args)
     }
     CHECK_ERROR_TRUTHY(e);
     return Qnil;
+}
+
+[[gnu::noreturn]] [[gnu::noinline]]
+static void jump(Continuation *cont)
+{
+    memcpy(cont->sp, cont->stack, cont->stack_len);
+    longjmp(cont->state, 1);
+}
+
+#define GET_SP(p) uintptr_t v##p = 0, *p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
+
+[[gnu::noreturn]] [[gnu::noinline]]
+static Value apply_continuation(UNUSED Value env, Value f, Value args)
+{
+    GET_SP(sp);
+    Continuation *cont = CONTINUATION(f);
+    cont->retval = car(args);
+    int64_t d = sp - cont->sp;
+    if (d < 1)
+        d = 1;
+    volatile uintptr_t pad[d];
+    pad[0] = pad[d-1] = 0; // avoid unused
+    jump(cont);
 }
 
 static Value value_of_continuation(void)
