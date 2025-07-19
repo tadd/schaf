@@ -282,43 +282,37 @@ static void expect_cfunc_arity(int64_t actual)
         CFUNCARG_MAX, actual);
 }
 
-static Value apply_cfunc_v(Value env, CFunc *f, Value args)
+static Value apply_cfunc_v(Value env, Value f, Value args)
 {
-    return f->f1(env, args);
+    return CFUNC(f)->f1(env, args);
 }
 
-static Value apply_cfunc_0(Value env, CFunc *f, UNUSED Value args)
+static Value apply_cfunc_0(Value env, Value f, UNUSED Value args)
 {
-    return f->f0(env);
+    return CFUNC(f)->f0(env);
 }
 
-static Value apply_cfunc_1(Value env, CFunc *f, Value args)
+static Value apply_cfunc_1(Value env, Value f, Value args)
 {
     Value a = car(args);
-    return f->f1(env, a);
+    return CFUNC(f)->f1(env, a);
 }
 
-static Value apply_cfunc_2(Value env, CFunc *f, Value args)
+static Value apply_cfunc_2(Value env, Value f, Value args)
 {
     Value p = args, a0, a1;
     a0 = car(p); p = cdr(p);
     a1 = car(p);
-    return f->f2(env, a0, a1);
+    return CFUNC(f)->f2(env, a0, a1);
 }
 
-static Value apply_cfunc_3(Value env, CFunc *f, Value args)
+static Value apply_cfunc_3(Value env, Value f, Value args)
 {
     Value p = args, a0, a1, a2;
     a0 = car(p); p = cdr(p);
     a1 = car(p); p = cdr(p);
     a2 = car(p);
-    return f->f3(env, a0, a1, a2);
-}
-
-static Value apply_cfunc(Value env, Value proc, Value args)
-{
-    CFunc *f = CFUNC(proc);
-    return f->applier(env, f, args);
+    return CFUNC(f)->f3(env, a0, a1, a2);
 }
 
 static Value cfunc_new(ValueTag tag, const char *name, void *cfunc, int64_t arity)
@@ -326,24 +320,23 @@ static Value cfunc_new(ValueTag tag, const char *name, void *cfunc, int64_t arit
     expect_cfunc_arity(arity);
     CFunc *f = obj_new(sizeof(CFunc), tag);
     f->proc.arity = arity;
-    f->proc.apply = apply_cfunc;
     f->name = xstrdup(name);
     f->cfunc = cfunc;
     switch (arity) {
     case -1:
-        f->applier = apply_cfunc_v;
+        f->proc.apply = apply_cfunc_v;
         break;
     case 0:
-        f->applier = apply_cfunc_0;
+        f->proc.apply = apply_cfunc_0;
         break;
     case 1:
-        f->applier = apply_cfunc_1;
+        f->proc.apply = apply_cfunc_1;
         break;
     case 2:
-        f->applier = apply_cfunc_2;
+        f->proc.apply = apply_cfunc_2;
         break;
     case 3:
-        f->applier = apply_cfunc_3;
+        f->proc.apply = apply_cfunc_3;
         break;
     default:
         bug("invalid arity: %"PRId64, arity);
