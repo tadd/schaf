@@ -313,12 +313,12 @@ static Value apply_cfunc_3(Value env, CFunc *f, Value args)
     return f->f3(env, a0, a1, a2);
 }
 
-static Value value_of_cfunc(const char *name, void *cfunc, int64_t arity)
+static Value cfunc_new(ValueTag tag, const char *name, void *cfunc, int64_t arity)
 {
     expect_cfunc_arity(arity);
-    CFunc *f = obj_new(sizeof(CFunc), TAG_CFUNC);
-    f->name = xstrdup(name);
+    CFunc *f = obj_new(sizeof(CFunc), tag);
     f->proc.arity = arity;
+    f->name = xstrdup(name);
     f->cfunc = cfunc;
     switch (arity) {
     case -1:
@@ -342,11 +342,14 @@ static Value value_of_cfunc(const char *name, void *cfunc, int64_t arity)
     return (Value) f;
 }
 
+static Value value_of_cfunc(const char *name, void *cfunc, int64_t arity)
+{
+    return cfunc_new(TAG_CFUNC, name, cfunc, arity);
+}
+
 static Value value_of_syntax(const char *name, void *cfunc, int64_t arity)
 {
-    Value syn = value_of_cfunc(name, cfunc, arity);
-    VALUE_TAG(syn) = TAG_SYNTAX;
-    return syn;
+    return cfunc_new(TAG_SYNTAX, name, cfunc, arity);
 }
 
 static Value value_of_closure(Value env, Value params, Value body)
