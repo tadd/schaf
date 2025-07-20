@@ -349,8 +349,8 @@ static Value located_list1(Value sym, int64_t pos)
 static Value parse_list(Parser *p)
 {
     Value ret = DUMMY_PAIR(), last = ret;
-    int64_t pos = ftell(p->in);
     for (;;) {
+        int64_t pos = ftell(p->in);
         Token t = lex(p);
         if (t.type == TOK_TYPE_RPAREN)
             break;
@@ -360,10 +360,10 @@ static Value parse_list(Parser *p)
             return parse_dotted_pair(p, cdr(ret), last);
         unlex(p, t);
         Value e = parse_expr(p);
-        bool first = (ret == last);
         Value l;
-        if (first && value_is_symbol(e))
-            l = located_list1(e, pos);
+        int64_t offset = last == ret ? 0 : 1; // the first char is already read at parse_expr
+        if (value_is_symbol(e))
+            l = located_list1(e, pos + offset);
         else
             l = list1_const(e);
         last = PAIR(last)->cdr = l;
@@ -408,6 +408,12 @@ static Value parse_expr(Parser *p)
     return Qundef;
 }
 
+static Value parse_expr_top(Parser *p, int64_t *ppos)
+{
+    *ppos = ftell(p->in);
+    return parse_expr(p);
+}
+
 static Parser *parser_new(FILE *in, const char *filename)
 {
     Parser *p = xmalloc(sizeof(Parser));
@@ -432,9 +438,10 @@ static Value ast_new(const Parser *p, Value syntax_list)
 
 static Value parse_program(Parser *p)
 {
+    int64_t pos;
     Value v = DUMMY_PAIR();
-    for (Value last = v, expr; (expr = parse_expr(p)) != Qundef; )
-        last = PAIR(last)->cdr = list1(expr);
+    for (Value last = v, expr; (expr = parse_expr_top(p, &pos)) != Qundef; )
+        last = PAIR(last)->cdr = located_list1(expr, pos);
     return ast_new(p, cdr(v));
 }
 
