@@ -148,7 +148,7 @@ typedef struct {
 
 typedef struct {
     const char *func_name;
-    Value loc;
+    Value loc; // maybe an Integer for resolution in caller
 } StackFrame;
 
 typedef struct {

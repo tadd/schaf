@@ -351,6 +351,9 @@ static Value push_stack_frame(Value ve, const char *name, Value loc);
                 push_stack_frame((v), NULL, (l)); \
             (v); \
         }))
+// Error happened at the n-th argument in the caller (list)
+#define EXPECT_ERROR_LOCATED_BY_CALLER(v, n) \
+    EXPECT_ERROR_LOCATED(v, sch_integer_new(n))
 
 static inline bool is_length_min_2(Value args)
 {
@@ -700,8 +703,8 @@ static void define_procedure(Value env, const char *name, void *cfunc, int64_t a
 // Evaluation
 //
 [[nodiscard]] static Value eval(Value env, Value v);
-#define eval_loc(env, v, loc) ({ \
-            Value R = eval((env), (v)); \
+#define eval_loc(env, loc) ({ \
+            vValue R = eval((env), car(loc)); \
             EXPECT_ERROR_LOCATED(R, (loc)); \
             R; \
         })
@@ -710,7 +713,7 @@ static Value eval_body(Value env, Value body)
 {
     Value last = Qfalse;
     for (Value p = body; p != Qnil; p = cdr(p))
-        last = eval_loc(env, car(p), p);
+        last = eval_loc(env, p);
     return last;
 }
 
@@ -719,8 +722,7 @@ static Value map_eval(Value env, Value l)
     Value mapped = DUMMY_PAIR();
     for (Value last = mapped, p = l, v; p != Qnil; p = cdr(p)) {
         EXPECT_WITH_OBJ(sch_value_is_pair(p), "improper list for apply", l);
-        v = eval(env, car(p));
-        EXPECT_ERROR(v);
+        v = eval_loc(env, p);
         last = PAIR(last)->cdr = list1(v);
     }
     return cdr(mapped);
@@ -734,8 +736,26 @@ static StackFrame *stack_frame_new(const char *name, Value loc)
     return f;
 }
 
+static bool frame_should_resolve(const StackFrame *f)
+{
+    return sch_value_is_integer(f->loc);
+}
+
+// Get LocatedPair of n-th argument in list
+static Value resolve_location(StackFrame *const *f, Value list)
+{
+    int64_t n = sch_integer_to_cint(f[0]->loc);
+    Value p = list; // begins with proc
+    for (int64_t i = 0; i < n; i++)
+        p = cdr(p);
+    return p;
+}
+
 static Value push_stack_frame(Value ve, const char *name, Value loc)
 {
+    StackFrame **e = ERROR(ve);
+    if (scary_length(e) > 0 && frame_should_resolve(e[0]))
+        e[0]->loc = resolve_location(e, loc);
     StackFrame *f = stack_frame_new(name, loc);
     scary_push((void ***) &ERROR(ve), (const void *) f);
     return ve;
@@ -764,8 +784,7 @@ static Value expect_proper_list(Value l)
 
 static Value eval_apply(Value env, Value l)
 {
-    Value symproc = car(l), args = cdr(l);
-    Value proc = eval_loc(env, symproc, l), pargs;
+    Value proc = eval_loc(env, l), args = cdr(l), pargs;
     if (value_tag_is(proc, TAG_SYNTAX))
         pargs = expect_proper_list(args);
     else
@@ -1067,14 +1086,12 @@ static Value syn_if(Value env, Value args)
 {
     EXPECT_ARITY_RANGE(2, 3, args);
 
-    Value cond = car(args), then = cadr(args);
-    Value v = eval_loc(env, cond, args);
+    Value v = eval_loc(env, args), then = cdr(args), els = cddr(args);
     if (v != Qfalse)
-        return eval(env, then);
-    Value els = cddr(args);
+        return eval_loc(env, then);
     if (els == Qnil)
         return Qfalse;
-    return eval(env, car(els));
+    return eval_loc(env, els);
 }
 
 // 4.1.6. Assignments
@@ -1089,8 +1106,10 @@ static Value syn_set(Value env, Value ident, Value expr)
 {
     EXPECT_TYPE(symbol, ident);
     Value v = eval(env, expr);
-    EXPECT_ERROR(v);
-    return iset(env, ident, v);
+    EXPECT_ERROR_LOCATED_BY_CALLER(v, 2);
+    Value e = iset(env, ident, v);
+    EXPECT_ERROR_LOCATED_BY_CALLER(e, 1);
+    return Qfalse;
 }
 
 // 4.2. Derived expression types
@@ -1098,7 +1117,7 @@ static Value syn_set(Value env, Value ident, Value expr)
 static Value cond_eval_recipient(Value env, Value test, Value recipients)
 {
     EXPECT_TYPE(pair, recipients);
-    Value recipient = eval_loc(env, car(recipients), recipients);
+    Value recipient = eval_loc(env, recipients);
     Value rest = cdr(recipients);
     EXPECT_TYPE(procedure, recipient);
     EXPECT(rest == Qnil, "only one expression expected after =>");
@@ -1117,7 +1136,7 @@ static Value syn_cond(Value env, Value clauses)
         Value exprs = cdr(clause);
         if (test == SYM_ELSE)
             return eval_body(env, exprs);
-        Value t = eval_loc(env, test, clause);
+        Value t = eval_loc(env, clause);
         if (t != Qfalse) {
             if (exprs == Qnil)
                 return t;
@@ -1138,7 +1157,7 @@ static Value memq(Value key, Value l);
 static Value syn_case(Value env, Value args)
 {
     EXPECT_ARITY_MIN_2(args);
-    Value key = eval_loc(env, car(args), args), clauses = cdr(args);
+    Value key = eval_loc(env, args), clauses = cdr(args);
     EXPECT_LIST_HEAD(clauses);
 
     for (Value p = clauses; p != Qnil; p = cdr(p)) {
@@ -1160,7 +1179,7 @@ static Value syn_and(Value env, Value args)
 {
     Value last = Qtrue;
     for (Value p = args; p != Qnil; p = cdr(p)) {
-        if ((last = eval_loc(env, car(p), p)) == Qfalse)
+        if ((last = eval_loc(env, p)) == Qfalse)
             break;
     }
     return last;
@@ -1171,7 +1190,7 @@ static Value syn_or(Value env, Value args)
 {
     Value last = Qfalse;
     for (Value p = args; p != Qnil; p = cdr(p)) {
-        if ((last = eval(env, car(p))) != Qfalse) // include errors
+        if ((last = eval_loc(env, p)) != Qfalse)
             break;
     }
     return last;
@@ -1198,10 +1217,10 @@ static Value let(Value env, Value var, Value bindings, Value body)
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
         EXPECT_LET_BINDING_FORM(b);
-        Value ident = car(b), expr = cadr(b);
+        Value ident = car(b), exprs = cdr(b);
         if (named)
             lparams = PAIR(lparams)->cdr = list1(ident);
-        Value val = eval_loc(env, expr, cdr(b));
+        Value val = eval_loc(env, exprs);
         env_put(localenv, ident, val);
     }
     if (named) {
@@ -1232,9 +1251,9 @@ static Value let_star(Value env, Value bindings, Value body)
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         vValue b = car(p); // workaround for clang -O2
         EXPECT_LET_BINDING_FORM(b);
-        Value ident = car(b), expr = cadr(b);
+        Value ident = car(b), exprs = cdr(b);
         localenv = env_inherit(localenv);
-        Value val = eval_loc(localenv, expr, cdr(b));
+        Value val = eval_loc(localenv, exprs);
         env_put(localenv, ident, val);
     }
     return eval_body(localenv, body);
@@ -1255,8 +1274,8 @@ static Value letrec(Value env, Value bindings, Value body)
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
         EXPECT_LET_BINDING_FORM(b);
-        Value ident = car(b);
-        Value val = eval_loc(localenv, cadr(b), cdr(b));
+        Value ident = car(b), exprs = cdr(b);
+        Value val = eval_loc(localenv, exprs);
         env_put(localenv, ident, val);
     }
     return eval_body(localenv, body);
@@ -1304,18 +1323,18 @@ static Value syn_do(Value env, Value args)
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
         EXPECT_DO_BINDING_FORM(b);
-        Value var = car(b), init = cadr(b), step = cddr(b);
+        Value var = car(b), inits = cdr(b), step = cddr(b);
         EXPECT_UNIQUE_VARNAME(vars, var);
         vars = cons(var, vars);
         if (step != Qnil) {
-            vValue datum = cons(var, car(step)); // workaround for clang -Og
+            vValue datum = cons(var, step); // workaround for clang -Og
             steps = cons(datum, steps);
         }
-        v = eval_loc(env, init, cdr(b)); // in the original env
+        v = eval_loc(env, inits); // in the original env
         env_put(localenv, var, v);
     }
-    Value test = car(tests), exprs = cdr(tests);
-    while ((v = eval_loc(localenv, test, tests)) == Qfalse) {
+    Value exprs = cdr(tests);
+    while ((v = eval_loc(localenv, tests)) == Qfalse) {
         if (body != Qnil) {
             v = eval_body(localenv, body);
             EXPECT_ERROR(v);
@@ -1323,12 +1342,10 @@ static Value syn_do(Value env, Value args)
         for (Value p = steps; p != Qnil; p = cdr(p)) {
             Value pstep = car(p);
             Value var = car(pstep), step = cdr(pstep);
-            Value val = eval_loc(localenv, step, pstep);
+            Value val = eval_loc(localenv, step);
             iset(localenv, var, val);
         }
     }
-    if (exprs == Qnil)
-        return Qfalse;
     return eval_body(localenv, exprs);
 }
 
@@ -1473,7 +1490,9 @@ static Value syn_define(Value env, Value args)
     switch (t) {
     case TYPE_SYMBOL:
         EXPECT_ARITY_2(args);
-        return define_variable(env, head, cadr(args));
+        v = define_variable(env, head, cadr(args));
+        EXPECT_ERROR_LOCATED(v, cdr(args));
+        return v;
     case TYPE_PAIR:
         v = define_proc_internal(env, head, cdr(args));
         EXPECT_ERROR_LOCATED(v, args);
@@ -2429,7 +2448,7 @@ static Value common_tail(Value x, Value y)
     return px;
 }
 
-#define EXPECT_ERROR_RETURN(v) do { if (is_error(v)) return; } while (0)
+#define EXPECT_ERROR_RETURN_VOID(v) EXPECT_ERROR_WITH_RETVAL(v, (void) 0)
 
 static void do_wind(Value new_winders)
 {
@@ -2438,7 +2457,7 @@ static void do_wind(Value new_winders)
         inner_winders = cdr(ls);
         Value f = cdar(ls);
         err = apply(Qfalse, f, Qnil);
-        EXPECT_ERROR_RETURN(err);
+        EXPECT_ERROR_RETURN_VOID(err);
     }
     Value rev = Qnil;
     for (Value p = new_winders; p != tail; p = cdr(p))
@@ -2446,7 +2465,7 @@ static void do_wind(Value new_winders)
     for (Value p = rev; p != Qnil; p = cdr(p)) {
         Value f = caar(p);
         err = apply(Qfalse, f, Qnil);
-        EXPECT_ERROR_RETURN(err);
+        EXPECT_ERROR_RETURN_VOID(err);
         inner_winders = p;
     }
 }

@@ -240,7 +240,7 @@ Test(schaf, runtime_error_frames) {
 Test(schaf, runtime_error_frames2) {
     expect_runtime_error(
 "unbound variable: g\n"
-"\t<inline>:1:14 in 'f'\n"
+"\t<inline>:1:18 in 'f'\n"
 "\t<inline>:2:2 in <toplevel>"
 ,
 "(define (f) (map g '()))\n"
@@ -257,8 +257,76 @@ Test(schaf, runtime_error_funcs) {
 }
 
 Test(schaf, runtime_error_symbol) {
+    expect_runtime_error(
+"unbound variable: h\n"
+"\t<inline>:2:13 in 'g'\n"
+"\t<inline>:1:14 in 'f'\n"
+"\t<inline>:3:2 in <toplevel>"
+,
+"(define (f) (g))\n"
+"(define (g) h)\n"
+"(f)");
+}
+
+Test(schaf, runtime_error_symbol2) {
     expect_unbound_var_error(1, "x");
     expect_unbound_var_error(2, "(x)");
+    expect_unbound_var_error(4, "(+ x)");
+}
+
+#define expect_unbound_var_error_syn(col, s, syn)   \
+    expect_runtime_error( \
+    "unbound variable: x\n" /* x: fixed variable name */  \
+    "\t<inline>:1:" #col " in '" syn "'", s)
+
+Test(schaf, runtime_error_syntax) {
+    expect_runtime_error(
+"unbound variable: x\n"
+"\t<inline>:1:16 in 'f'\n"
+"\t<inline>:2:2 in <toplevel>"
+,
+"(define (f) (+ x))\n"
+"(f)");
+    expect_unbound_var_error_syn(11, "(define y x)", "define");
+    expect_unbound_var_error_syn(23, "(define y 42) (set! y x)", "set!");
+    expect_unbound_var_error_syn(26, "(define y 42) (set! y (+ x))", "set!");
+    expect_unbound_var_error_syn( 7, "(set! x 42)", "set!");
+    expect_unbound_var_error_syn(14, "(begin (set! x 42) x)", "set!");
+    expect_unbound_var_error_syn( 5, "(if x 1)", "if");
+    expect_unbound_var_error_syn( 7, "(if 1 x)", "if");
+    expect_unbound_var_error_syn(10, "(if #f 1 x)", "if");
+    expect_unbound_var_error_syn( 8, "(cond (x 1))", "cond");
+    expect_unbound_var_error_syn(10, "(cond (1 x))", "cond");
+    expect_unbound_var_error_syn(13, "(cond (1 => x))", "cond");
+    expect_unbound_var_error_syn(13, "(cond (else x))", "cond");
+    expect_unbound_var_error_syn( 7, "(case x ((1) 2))", "case");
+    expect_unbound_var_error_syn(14, "(case 1 ((1) x))", "case");
+    expect_unbound_var_error_syn(15, "(case 1 (else x))", "case");
+    expect_unbound_var_error_syn( 6, "(and x)", "and");
+    expect_unbound_var_error_syn( 5, "(or x)", "or");
+    expect_unbound_var_error_syn(10, "(let ((y x)) y)", "let");
+    expect_unbound_var_error_syn(11, "(let* ((y x)) y)", "let*");
+    expect_unbound_var_error_syn(15, "(let* ((y 1)) x)", "let*");
+    expect_unbound_var_error_syn(13, "(letrec ((y x)) y)", "letrec");
+    expect_unbound_var_error_syn(17, "(letrec ((y 1)) x)", "letrec");
+    expect_unbound_var_error_syn( 8, "(begin x)", "begin");
+    expect_unbound_var_error_syn(10, "(begin 1 x)", "begin");
+    expect_unbound_var_error_syn( 9, "(do ((y x)) (1 y))", "do");
+    expect_unbound_var_error_syn(14, "(do ((y 1)) (x 1))", "do");
+    expect_unbound_var_error_syn(16, "(do ((y 1)) (1 x))", "do");
+    expect_unbound_var_error_syn(27, "(do ((y 1 2)) ((> y 1) 2) x)", "do");
+    expect_unbound_var_error_syn(11, "(do ((y 1 x)) ((> y 1) 2))", "do");
+    expect_unbound_var_error_syn(21, "(case 1 ((1) (and 2 x)))", "and");
+}
+
+Test(schaf, runtime_error_syntax_knownbugs, .disabled = true) {
+    expect_unbound_var_error( 4, "`(,x)");
+    expect_runtime_error(
+"unbound variable: x\n"
+"\t<inline>:1:2 in 'quasiquote'\n"
+"\t<inline>:1:1 in <toplevel>"
+,
+"`,`,x");
 }
 
 Test(schaf, div0) {
@@ -308,16 +376,6 @@ Test(schaf, map) {
 
 Test(schaf, quasiquotes) {
     expect_runtime_error("unbound variable: x", "`(,x)");
-}
-
-Test(schaf, quasiquotes_knownbugs, .disabled = true) {
-    expect_unbound_var_error(4, "`(,x)");
-    expect_runtime_error(
-"unbound variable: x\n"
-"\t<inline>:1:2 in 'quasiquote'\n"
-"\t<inline>:1:1 in <toplevel>"
-,
-"`,`,x");
 }
 
 Test(schaf, case) {
