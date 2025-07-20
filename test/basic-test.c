@@ -262,6 +262,10 @@ Test(schaf, let) {
     expect_runtime_error("but got 1", "(let ((x 42) (y 100)))");
 }
 
+Test(schaf, letrec) {
+    expect_runtime_error("unbound variable: x", "(letrec ((y x)) 1)");
+}
+
 Test(schaf, applicable) {
     expect_runtime_error("expected procedure", "(1 1)");
     expect_runtime_error("expected procedure", "(() 1)");
@@ -286,6 +290,19 @@ Test(schaf, type_name) {
     cr_assert(eq(str, "null", type_name(Qnil)));
     cr_assert(eq(str, "string", type_name(V("bar"))));
     // "procedure",
+}
+
+Test(schaf, quasiquotes) {
+    expect_runtime_error("unbound variable: x", "`(,x)");
+}
+
+Test(schaf, quasiquotes_knownbugs, .disabled = true) {
+    expect_runtime_error(
+"unbound variable: x\n"
+"\t<inline>:1:2 in 'quasiquote'\n"
+"\t<inline>:1:1 in <toplevel>"
+,
+"`,`,x");
 }
 
 Test(table, get_put) {

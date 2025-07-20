@@ -1063,6 +1063,7 @@ static Value syn_letrec(Value env, Value args)
         Value ident = car(b);
         EXPECT(type, TYPE_SYMBOL, ident);
         Value val = eval(letenv, cadr(b));
+        CHECK_ERROR(val);
         env_put(letenv, ident, val);
     }
     return eval_body(letenv, body);
@@ -1128,11 +1129,13 @@ static Value qq(Value env, Value datum, int64_t depth)
     if (a == SYM_QUASIQUOTE) {
         EXPECT(type, TYPE_PAIR, d);
         Value v = qq(env, car(d), depth + 1);
+        CHECK_ERROR(v);
         return list2_const(a, v);
     }
     if (a == SYM_UNQUOTE || a == SYM_UNQUOTE_SPLICING) {
         EXPECT(type, TYPE_PAIR, d);
         Value v = qq(env, car(d), depth - 1);
+        CHECK_ERROR(v);
         return depth == 1 ? v : list2_const(a, v);
     }
     return qq_list(env, datum, depth);
@@ -1169,12 +1172,17 @@ static Value qq_list(Value env, Value datum, int64_t depth)
         bool is_simple = !value_is_pair(p);
         if (is_simple || is_quoted_terminal(p)) {
             EXPECT(type, TYPE_PAIR, cdr(ret));
-            PAIR(last)->cdr = is_simple ? p : qq(env, p, depth);
+            if (!is_simple) {
+                p = qq(env, p, depth);
+                CHECK_ERROR(p);
+            }
+            PAIR(last)->cdr = p;
             break;
         }
         Value elem = car(p);
         bool spliced = (value_is_pair(elem) && car(elem) == SYM_UNQUOTE_SPLICING);
         Value v = qq(env, elem, depth);
+        CHECK_ERROR(v);
         if (!spliced)
             last = PAIR(last)->cdr = list1_const(v);
         else if (v != Qnil)
