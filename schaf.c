@@ -345,11 +345,21 @@ static void expect_cfunc_arity(int64_t actual)
 #define CHECK_ERROR(v) CHECK_ERROR_F(v, is_error)
 #define TRUTHY(v) ((v) != Qfalse)
 #define CHECK_ERROR_TRUTHY(v) CHECK_ERROR_F(v, TRUTHY)
-#define CHECK_ERROR_LOCATED(v, l) do { \
+#define CHECK_ERROR_LOCATED_WITH_MARK(v, m, l) do { \
         Value V = (v); \
         if (UNLIKELY(is_error(V))) { \
             if (scary_length(ERROR(V)) == 0) \
-                push_stack_frame(V, NULL, (l)); \
+                push_stack_frame(V, ((void *) m), (l)); \
+            return V; \
+        } \
+    } while (0)
+#define CHECK_ERROR_LOCATED(v, l) CHECK_ERROR_LOCATED_WITH_MARK(v, NULL, l)
+#define CHECK_ERROR_LOCATED_SYN(v, l) CHECK_ERROR_LOCATED_WITH_MARK(v, 1, l)
+#define CHECK_ERROR_MARK_SYN(v) do { \
+        Value V = (v); \
+        if (UNLIKELY(is_error(V))) { \
+            if (scary_length(ERROR(V)) > 0) \
+                ERROR(V)[0]->func_name = (void *) 1; \
             return V; \
         } \
     } while (0)
@@ -696,13 +706,14 @@ static void define_procedure(Value env, const char *name, void *cfunc, int64_t a
 // Evaluation
 //
 static Value eval(Value env, Value v);
+static Value push_stack_frame(Value ve, const char *name, Value loc);
 
 static Value eval_body(Value env, Value body)
 {
     Value last = Qfalse;
     for (Value p = body; p != Qnil; p = cdr(p)) {
         last = eval(env, car(p));
-        CHECK_ERROR(last);
+        CHECK_ERROR_LOCATED(last, p);
     }
     return last;
 }
@@ -712,7 +723,7 @@ static Value map_eval(Value env, Value l)
     Value mapped = DUMMY_PAIR();
     for (Value last = mapped, p = l, v; p != Qnil; p = cdr(p)) {
         v = eval(env, car(p));
-        CHECK_ERROR(v);
+        CHECK_ERROR_LOCATED(v, p);
         last = PAIR(last)->cdr = list1(v);
     }
     return cdr(mapped);
@@ -726,8 +737,15 @@ static StackFrame *stack_frame_new(const char *name, Value loc)
     return f;
 }
 
+static bool frame_should_skip(StackFrame *const *f)
+{
+    return scary_length(f) > 0 && f[0]->func_name == (void *) 1;
+}
+
 static Value push_stack_frame(Value ve, const char *name, Value loc)
 {
+    if (frame_should_skip(ERROR(ve)))
+        return ve; // as is
     StackFrame *f = stack_frame_new(name, loc);
     scary_push((void ***) &ERROR(ve), (const void *) f);
     return ve;
@@ -753,7 +771,7 @@ static Value eval_apply(Value env, Value l)
     CHECK_ERROR_LOCATED(proc, l);
     if (!value_tag_is(proc, TAG_SYNTAX)) {
         args = map_eval(env, args);
-        CHECK_ERROR_LOCATED(args, l);
+        CHECK_ERROR(args);
     }
     EXPECT(type, TYPE_PROC, proc);
     Value ret = apply(env, proc, args);
@@ -872,7 +890,7 @@ static void dump_frame(const StackFrame *f, const StackFrame *next)
 
 static void prepend_cfunc_name(const char *name)
 {
-    if (name == NULL)
+    if (name == NULL || ((uintptr_t) name % 8U) != 0)
         return;
     size_t len = strlen(name) + 2;// strlen(": ")
     char tmp[sizeof(errmsg) - len];
@@ -982,6 +1000,20 @@ Value sch_eval_string(const char *in)
     return v;
 }
 
+#define scary_free_with(f, a) do { \
+        for (size_t i = 0, len = scary_length(a); i < len; i++) \
+            f(a[i]); \
+        scary_free(a); \
+    } while (0)
+
+Value sch_eval_string_single(const char *in)
+{
+    scary_free_with(source_free, source_data);
+    source_data = scary_new(sizeof(Source *));
+    errmsg[0] = '\0';
+    return sch_eval_string(in);
+}
+
 static FILE *open_loadable(const char *path)
 {
     static char rpath[PATH_MAX];
@@ -1027,6 +1059,17 @@ static Value load_inner(const char *path)
 // Built-in Procedures / Syntax
 //
 
+#define eval_syn(env, exprs, loc) ({ \
+            Value R = eval(env, exprs); \
+            CHECK_ERROR_LOCATED_SYN(R, loc); \
+            R; \
+        })
+#define eval_body_syn(env, exprs) ({ \
+            Value R = eval_body(env, exprs); \
+            CHECK_ERROR_MARK_SYN(R); \
+            R; \
+        })
+
 // 4. Expressions
 // 4.1. Primitive expression types
 // 4.1.2. Literal expressions
@@ -1053,14 +1096,13 @@ static Value syn_if(Value env, Value args)
     EXPECT(arity_range, 2, 3, args);
 
     Value cond = car(args), then = cadr(args);
-    Value v = eval(env, cond);
-    CHECK_ERROR(v);
+    Value v = eval_syn(env, cond, args);
     if (v != Qfalse)
-        return eval(env, then);
+        return eval_syn(env, then, cdr(args));
     Value els = cddr(args);
     if (els == Qnil)
         return Qfalse;
-    return eval(env, car(els));
+    return eval_syn(env, car(els), els);
 }
 
 // 4.1.6. Assignments
@@ -1076,7 +1118,7 @@ static Value syn_set(Value env, Value ident, Value expr)
 {
     EXPECT(type, TYPE_SYMBOL, ident);
     Value v = eval(env, expr);
-    CHECK_ERROR(v);
+    CHECK_ERROR_MARK_SYN(v);
     return iset(env, ident, v);
 }
 
@@ -1085,8 +1127,7 @@ static Value syn_set(Value env, Value ident, Value expr)
 static Value cond_eval_recipient(Value env, Value test, Value recipients)
 {
     EXPECT(type, TYPE_PAIR, recipients);
-    Value recipient = eval(env, car(recipients)), rest = cdr(recipients);
-    CHECK_ERROR(recipient);
+    Value recipient = eval_syn(env, car(recipients), recipients), rest = cdr(recipients);
     EXPECT(type, TYPE_PROC, recipient);
     if (rest != Qnil)
         return runtime_error("only one expression expected after =>");
@@ -1104,15 +1145,14 @@ static Value syn_cond(Value env, Value clauses)
         Value test = car(clause);
         Value exprs = cdr(clause);
         if (test == SYM_ELSE)
-            return eval_body(env, exprs);
-        Value t = eval(env, test);
-        CHECK_ERROR(t);
+            return eval_body_syn(env, exprs);
+        Value t = eval_syn(env, test, clause);
         if (t != Qfalse) {
             if (exprs == Qnil)
                 return t;
             if (car(exprs) == SYM_RARROW)
                 return cond_eval_recipient(env, t, cdr(exprs));
-            return eval_body(env, exprs);
+            return eval_body_syn(env, exprs);
         }
     }
     return Qfalse;
@@ -1130,8 +1170,7 @@ static Value memq(Value key, Value l);
 static Value syn_case(Value env, Value args)
 {
     EXPECT(arity_min_2, args);
-    Value key = eval(env, car(args)), clauses = cdr(args);
-    CHECK_ERROR(key);
+    Value key = eval_syn(env, car(args), args), clauses = cdr(args);
     EXPECT(list_head, clauses);
 
     for (Value p = clauses; p != Qnil; p = cdr(p)) {
@@ -1140,10 +1179,10 @@ static Value syn_case(Value env, Value args)
         Value data = car(clause), exprs = cdr(clause);
         EXPECT(type, TYPE_PAIR, exprs);
         if (data == SYM_ELSE)
-            return eval_body(env, exprs);
+            return eval_body_syn(env, exprs);
         EXPECT(type, TYPE_PAIR, data);
         if (memq(key, data) != Qfalse)
-            return eval_body(env, exprs);
+            return eval_body_syn(env, exprs);
     }
     return Qfalse;
 }
@@ -1153,9 +1192,8 @@ static Value syn_and(Value env, Value args)
 {
     Value last = Qtrue;
     for (Value p = args; p != Qnil; p = cdr(p)) {
-        if ((last = eval(env, car(p))) == Qfalse)
+        if ((last = eval_syn(env, car(p), p)) == Qfalse)
             break;
-        CHECK_ERROR(last);
     }
     return last;
 }
@@ -1165,7 +1203,7 @@ static Value syn_or(Value env, Value args)
 {
     Value last = Qfalse;
     for (Value p = args; p != Qnil; p = cdr(p)) {
-        if ((last = eval(env, car(p))) != Qfalse) // include errors
+        if ((last = eval_syn(env, car(p), p)) != Qfalse)
             break;
     }
     return last;
@@ -1187,8 +1225,7 @@ static Value let(Value env, Value var, Value bindings, Value body)
         EXPECT(type, TYPE_SYMBOL, ident);
         if (named)
             lparams = PAIR(lparams)->cdr = list1(ident);
-        Value val = eval(env, expr);
-        CHECK_ERROR(val);
+        Value val = eval_syn(env, expr, cdr(b));
         env_put(letenv, ident, val);
     }
     if (named) {
@@ -1224,11 +1261,10 @@ static Value let_star(Value env, Value bindings, Value body)
         Value ident = car(b), expr = cadr(b);
         EXPECT(type, TYPE_SYMBOL, ident);
         letenv = env_inherit(letenv);
-        Value val = eval(letenv, expr);
-        CHECK_ERROR(val);
+        Value val = eval_syn(letenv, expr, cdr(b));
         env_put(letenv, ident, val);
     }
-    return eval_body(letenv, body);
+    return eval_body_syn(letenv, body);
 }
 
 //PTR
@@ -1253,18 +1289,17 @@ static Value syn_letrec(Value env, Value args)
         EXPECT(type, TYPE_PAIR, b);
         Value ident = car(b);
         EXPECT(type, TYPE_SYMBOL, ident);
-        Value val = eval(letenv, cadr(b));
-        CHECK_ERROR(val);
+        Value val = eval_syn(letenv, cadr(b), cdr(b));
         env_put(letenv, ident, val);
     }
-    return eval_body(letenv, body);
+    return eval_body_syn(letenv, body);
 }
 
 // 4.2.3. Sequencing
 //PTR
 static Value syn_begin(Value env, Value body)
 {
-    return eval_body(env, body);
+    return eval_body_syn(env, body);
 }
 
 // 4.2.4. Iteration
@@ -1291,29 +1326,22 @@ static Value syn_do(Value env, Value args)
             return runtime_error("duplicated variable: %s", sch_symbol_to_cstr(var));
         vars = cons(var, vars);
         if (step != Qnil)
-            steps = cons(cons(var, car(step)), steps);
-        v = eval(env, init); // in the original env
-        CHECK_ERROR(v);
+            steps = cons(cons(var, step), steps);
+        v = eval_syn(env, init, cdr(b)); // in the original env
         env_put(doenv, var, v);
     }
     Value test = car(tests), exprs = cdr(tests);
-    while ((v = eval(doenv, test)) == Qfalse) {
-        if (body != Qnil) {
-            v = eval_body(doenv, body);
-            CHECK_ERROR(v);
-        }
+    while ((v = eval_syn(doenv, test, tests)) == Qfalse) {
+        if (body != Qnil)
+            v = eval_body_syn(doenv, body);
         for (Value p = steps; p != Qnil; p = cdr(p)) {
             Value pstep = car(p);
             Value var = car(pstep), step = cdr(pstep);
-            Value val = eval(doenv, step);
-            CHECK_ERROR(val);
+            Value val = eval_syn(doenv, car(step), step);
             iset(doenv, var, val);
         }
     }
-    CHECK_ERROR(v);
-    if (exprs == Qnil)
-        return Qfalse;
-    return eval_body(doenv, exprs);
+    return eval_body_syn(doenv, exprs);
 }
 
 // 4.2.5. Delayed evaluation
@@ -1452,12 +1480,14 @@ static Value syn_define(Value env, Value args)
 {
     if (args == Qnil)
         return arity_error(">= ", 1, 0);
-    Value head = car(args);
+    Value head = car(args), v;
     Type t = sch_value_type_of(head);
     switch (t) {
     case TYPE_SYMBOL:
         EXPECT(arity_2, args);
-        return define_variable(env, head, cadr(args));
+        v = define_variable(env, head, cadr(args));
+        CHECK_ERROR_LOCATED_SYN(v, cdr(args));
+        return v;
     case TYPE_PAIR:
         return define_proc_internal(env, head, cdr(args));
     case TYPE_NULL:
@@ -2971,12 +3001,6 @@ static Value proc_p(UNUSED Value env, Value args)
 //
 // Interpreter things
 //
-
-#define scary_free_with(f, a) do { \
-        for (size_t i = 0, len = scary_length(a); i < len; i++) \
-            f(a[i]); \
-        scary_free(a); \
-    } while (0)
 
 int sch_fin(void)
 {

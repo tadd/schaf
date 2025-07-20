@@ -471,9 +471,9 @@ static Value located_list1(Value sym, int64_t pos)
 static Value parse_list(Parser *p)
 {
     Value ret = DUMMY_PAIR(), last = ret;
-    int64_t pos = ftell(p->in);
     for (;;) {
         skip_token_atmosphere(p);
+        int64_t pos = ftell(p->in);
         int c = fgetc(p->in);
         if (c == ')')
             break;
@@ -483,9 +483,8 @@ static Value parse_list(Parser *p)
             return parse_dotted_pair(p, cdr(ret), last);
         ungetc(c, p->in);
         Value e = parse_expr(p);
-        bool first = (ret == last);
         Value l;
-        if (first && sch_value_is_symbol(e))
+        if (sch_value_is_symbol(e))
             l = located_list1(e, pos);
         else
             l = list1_const(e);
@@ -552,6 +551,12 @@ static Value parse_expr(Parser *p)
     return Qundef;
 }
 
+static Value parse_expr_top(Parser *p, int64_t *ppos)
+{
+    *ppos = ftell(p->in);
+    return parse_expr(p);
+}
+
 static Parser *parser_new(FILE *in, const char *filename)
 {
     size_t len = strlen(filename);
@@ -592,9 +597,10 @@ void source_free(Source *s)
 
 static Source *parse_program(Parser *p)
 {
+    int64_t pos;
     Value v = DUMMY_PAIR();
-    for (Value last = v, expr; (expr = parse_expr(p)) != Qundef; )
-        last = PAIR(last)->cdr = list1(expr);
+    for (Value last = v, expr; (expr = parse_expr_top(p, &pos)) != Qundef; )
+        last = PAIR(last)->cdr = located_list1(expr, pos);
     return source_new(p, cdr(v));
 }
 
