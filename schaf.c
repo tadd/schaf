@@ -945,7 +945,10 @@ static Value syn_case(Value env, Value args)
         EXPECT(type, TYPE_PAIR, clause);
         Value data = car(clause), exprs = cdr(clause);
         EXPECT(type, TYPE_PAIR, exprs);
-        if (data == SYM_ELSE || memq(key, data) != Qfalse)
+        if (data == SYM_ELSE)
+            return eval_body(env, exprs);
+        EXPECT(type, TYPE_PAIR, data);
+        if (memq(key, data) != Qfalse)
             return eval_body(env, exprs);
     }
     return Qnil;

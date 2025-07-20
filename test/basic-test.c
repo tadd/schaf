@@ -305,6 +305,10 @@ Test(schaf, quasiquotes_knownbugs, .disabled = true) {
 "`,`,x");
 }
 
+Test(schaf, case) {
+    expect_runtime_error("expected pair but got integer", "(case 1 (2 3))");
+}
+
 Test(table, get_put) {
     Table *t = table_new();
     table_put(t, 1, 100);
