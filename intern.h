@@ -42,6 +42,7 @@ typedef struct {
 typedef struct {
     Header header;
     int64_t arity;
+    Value (*apply)(Value env, Value proc, Value args);
 } Procedure;
 
 typedef struct CFunc {

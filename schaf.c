@@ -282,37 +282,37 @@ static void expect_cfunc_arity(int64_t actual)
         CFUNCARG_MAX, actual);
 }
 
-static Value apply_cfunc_v(Value env, CFunc *f, Value args)
+static Value apply_cfunc_v(Value env, Value f, Value args)
 {
-    return f->f1(env, args);
+    return CFUNC(f)->f1(env, args);
 }
 
-static Value apply_cfunc_0(Value env, CFunc *f, UNUSED Value args)
+static Value apply_cfunc_0(Value env, Value f, UNUSED Value args)
 {
-    return f->f0(env);
+    return CFUNC(f)->f0(env);
 }
 
-static Value apply_cfunc_1(Value env, CFunc *f, Value args)
+static Value apply_cfunc_1(Value env, Value f, Value args)
 {
     Value a = car(args);
-    return f->f1(env, a);
+    return CFUNC(f)->f1(env, a);
 }
 
-static Value apply_cfunc_2(Value env, CFunc *f, Value args)
+static Value apply_cfunc_2(Value env, Value f, Value args)
 {
     Value p = args, a0, a1;
     a0 = car(p); p = cdr(p);
     a1 = car(p);
-    return f->f2(env, a0, a1);
+    return CFUNC(f)->f2(env, a0, a1);
 }
 
-static Value apply_cfunc_3(Value env, CFunc *f, Value args)
+static Value apply_cfunc_3(Value env, Value f, Value args)
 {
     Value p = args, a0, a1, a2;
     a0 = car(p); p = cdr(p);
     a1 = car(p); p = cdr(p);
     a2 = car(p);
-    return f->f3(env, a0, a1, a2);
+    return CFUNC(f)->f3(env, a0, a1, a2);
 }
 
 static Value cfunc_new(ValueTag tag, const char *name, void *cfunc, int64_t arity)
@@ -324,19 +324,19 @@ static Value cfunc_new(ValueTag tag, const char *name, void *cfunc, int64_t arit
     f->cfunc = cfunc;
     switch (arity) {
     case -1:
-        f->applier = apply_cfunc_v;
+        f->proc.apply = apply_cfunc_v;
         break;
     case 0:
-        f->applier = apply_cfunc_0;
+        f->proc.apply = apply_cfunc_0;
         break;
     case 1:
-        f->applier = apply_cfunc_1;
+        f->proc.apply = apply_cfunc_1;
         break;
     case 2:
-        f->applier = apply_cfunc_2;
+        f->proc.apply = apply_cfunc_2;
         break;
     case 3:
-        f->applier = apply_cfunc_3;
+        f->proc.apply = apply_cfunc_3;
         break;
     default:
         bug("invalid arity: %"PRId64, arity);
@@ -354,10 +354,31 @@ static Value value_of_syntax(const char *name, void *cfunc, int64_t arity)
     return cfunc_new(TAG_SYNTAX, name, cfunc, arity);
 }
 
+static Value eval_body(Value env, Value body);
+static Value env_inherit(Value parent);
+static Value env_put(Value env, Value key, Value value);
+
+//PTR
+static Value apply_closure(UNUSED Value env, Value proc, Value args)
+{
+    Closure *cl = CLOSURE(proc);
+    int64_t arity = cl->proc.arity;
+    Value clenv = env_inherit(cl->env);
+    Value params = cl->params;
+    if (arity == -1)
+        env_put(clenv, params, args);
+    else {
+        for (Value pa = args, pp = params; pa != Qnil; pa = cdr(pa), pp = cdr(pp))
+            env_put(clenv, car(pp), car(pa));
+    }
+    return eval_body(clenv, cl->body);
+}
+
 static Value value_of_closure(Value env, Value params, Value body)
 {
     Closure *f = obj_new(sizeof(Closure), TAG_CLOSURE);
     f->proc.arity = (params == Qnil || value_is_pair(params)) ? length(params) : -1;
+    f->proc.apply = apply_closure;
     f->env = env;
     f->params = params;
     f->body = body;
@@ -467,12 +488,6 @@ static Value expect_arity(int64_t expected, Value args)
                          expected, actual);
 }
 
-static Value apply_cfunc(Value env, Value proc, Value args)
-{
-    CFunc *f = CFUNC(proc);
-    return f->applier(env, f, args);
-}
-
 static Value append2(Value l1, Value l2)
 {
     if (l2 == Qnil)
@@ -546,64 +561,6 @@ static Value env_get(const Value env, Value name)
     return Qundef;
 }
 
-static Value eval_body(Value env, Value body);
-
-//PTR
-static Value apply_closure(Value proc, Value args)
-{
-    Closure *cl = CLOSURE(proc);
-    int64_t arity = cl->proc.arity;
-    Value clenv = env_inherit(cl->env);
-    Value params = cl->params;
-    if (arity == -1)
-        env_put(clenv, params, args);
-    else {
-        for (Value pa = args, pp = params; pa != Qnil; pa = cdr(pa), pp = cdr(pp))
-            env_put(clenv, car(pp), car(pa));
-    }
-    return eval_body(clenv, cl->body);
-}
-
-[[gnu::noreturn]] [[gnu::noinline]]
-static void jump(Continuation *cont)
-{
-    memcpy(cont->sp, cont->stack, cont->stack_len);
-    longjmp(cont->state, 1);
-}
-
-#define GET_SP(p) uintptr_t v##p = 0, *p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
-
-[[gnu::noreturn]] [[gnu::noinline]]
-static void apply_continuation(Value f, Value args)
-{
-    GET_SP(sp);
-    Continuation *cont = CONTINUATION(f);
-    cont->retval = car(args);
-    int64_t d = sp - cont->sp;
-    if (d < 1)
-        d = 1;
-    volatile uintptr_t pad[d];
-    pad[0] = pad[d-1] = 0; // avoid unused
-    jump(cont);
-}
-
-// expects proc and args have been evaluated if necessary
-static Value apply(Value env, Value proc, Value args)
-{
-    EXPECT(arity, PROCEDURE(proc)->arity, args);
-    switch (VALUE_TAG(proc)) {
-    case TAG_SYNTAX:
-    case TAG_CFUNC:
-        return apply_cfunc(env, proc, args);
-    case TAG_CLOSURE:
-        return apply_closure(proc, args);
-    case TAG_CONTINUATION:
-        apply_continuation(proc, args); // no return!
-    default:
-        UNREACHABLE();
-    }
-}
-
 // Note: Do not mistake this for "(define-syntax ...)" which related to macros
 static void define_syntax(Value env, const char *name, void *cfunc, int64_t arity)
 {
@@ -672,7 +629,7 @@ static Value eval_apply(Value env, Value l)
         args = map_eval(env, args);
         CHECK_ERROR_LOCATED(args, l);
     }
-    Value ret = apply(env, proc, args);
+    Value ret = PROCEDURE(proc)->apply(env, proc, args);
     if (UNLIKELY(is_error(ret))) {
         const char *fname = (VALUE_TAG(proc) == TAG_CFUNC) ?
             CFUNC(proc)->name : NULL;
@@ -939,7 +896,7 @@ static Value cond_eval_recipient(Value env, Value test, Value recipients)
     EXPECT(type, TYPE_PROC, recipient);
     if (rest != Qnil)
         return runtime_error("only one expression expected after =>");
-    return apply(env, recipient, list1(test));
+    return PROCEDURE(recipient)->apply(env, recipient, list1(test));
 }
 
 //PTR
@@ -1042,12 +999,12 @@ static Value let(Value env, Value var, Value bindings, Value body)
     CHECK_ERROR(args);
     if (var == Qfalse) {
         Value proc = value_of_closure(env, params, body);
-        return apply_closure(proc, args);
+        return apply_closure(Qfalse, proc, args);
     }
     Value letenv = env_inherit(env);
     Value proc = value_of_closure(letenv, params, body);
     env_put(letenv, var, proc); // affects as proc->env
-    return apply_closure(proc, args);
+    return apply_closure(Qfalse, proc, args);
 }
 
 //PTR
@@ -1882,7 +1839,7 @@ static Value proc_apply(Value env, Value args)
     EXPECT(type, TYPE_PROC, proc);
     Value appargs = build_apply_args(cdr(args));
     CHECK_ERROR(appargs);
-    return apply(env, proc, appargs);
+    return PROCEDURE(proc)->apply(env, proc, appargs);
 }
 
 static Value cars_cdrs(Value ls, Value *pcars, Value *pcdrs, Value *perr)
@@ -1914,7 +1871,7 @@ static Value proc_map(Value env, Value args)
     Value ls = cdr(args);
     Value ret = DUMMY_PAIR(), e = Qfalse;
     for (Value last = ret, cars, cdrs, v; cars_cdrs(ls, &cars, &cdrs, &e); ls = cdrs) {
-        v = apply(env, proc, cars);
+        v = PROCEDURE(proc)->apply(env, proc, cars);
         CHECK_ERROR(v);
         last = PAIR(last)->cdr = list1(v);
     }
@@ -1929,17 +1886,41 @@ static Value proc_for_each(Value env, Value args)
     Value proc = car(args), e = Qfalse;
     EXPECT(type, TYPE_PROC, proc);
     for (Value ls = cdr(args), cars, cdrs, v; cars_cdrs(ls, &cars, &cdrs, &e); ls = cdrs) {
-        v = apply(env, proc, cars);
+        v = PROCEDURE(proc)->apply(env, proc, cars);
         CHECK_ERROR(v);
     }
     CHECK_ERROR_TRUTHY(e);
     return Qnil;
 }
 
+[[gnu::noreturn]] [[gnu::noinline]]
+static void jump(Continuation *cont)
+{
+    memcpy(cont->sp, cont->stack, cont->stack_len);
+    longjmp(cont->state, 1);
+}
+
+#define GET_SP(p) uintptr_t v##p = 0, *p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
+
+[[gnu::noreturn]] [[gnu::noinline]]
+static Value apply_continuation(UNUSED Value env, Value f, Value args)
+{
+    GET_SP(sp);
+    Continuation *cont = CONTINUATION(f);
+    cont->retval = car(args);
+    int64_t d = sp - cont->sp;
+    if (d < 1)
+        d = 1;
+    volatile uintptr_t pad[d];
+    pad[0] = pad[d-1] = 0; // avoid unused
+    jump(cont);
+}
+
 static Value value_of_continuation(void)
 {
     Continuation *c = obj_new(sizeof(Continuation), TAG_CONTINUATION);
     c->proc.arity = 1; // by spec
+    c->proc.apply = apply_continuation;
     c->sp = c->stack = NULL;
     c->stack_len = 0;
     c->retval = Qfalse;
@@ -1965,7 +1946,7 @@ static Value proc_callcc(Value env, Value proc)
     Value c = value_of_continuation();
     if (continuation_set(c))
         return CONTINUATION(c)->retval;
-    return apply(env, proc, list1(c));
+    return PROCEDURE(proc)->apply(env, proc, list1(c));
 }
 
 static Value proc_eval(UNUSED Value genv, Value expr, Value env)
