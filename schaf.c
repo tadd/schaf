@@ -292,27 +292,21 @@ static Value apply_cfunc_0(Value env, Value f, UNUSED Value args)
     return CFUNC(f)->f0(env);
 }
 
+static Value cadr(Value l), caddr(Value l);
+
 static Value apply_cfunc_1(Value env, Value f, Value args)
 {
-    Value a = car(args);
-    return CFUNC(f)->f1(env, a);
+    return CFUNC(f)->f1(env, car(args));
 }
 
 static Value apply_cfunc_2(Value env, Value f, Value args)
 {
-    Value p = args, a0, a1;
-    a0 = car(p); p = cdr(p);
-    a1 = car(p);
-    return CFUNC(f)->f2(env, a0, a1);
+    return CFUNC(f)->f2(env, car(args), cadr(args));
 }
 
 static Value apply_cfunc_3(Value env, Value f, Value args)
 {
-    Value p = args, a0, a1, a2;
-    a0 = car(p); p = cdr(p);
-    a1 = car(p); p = cdr(p);
-    a2 = car(p);
-    return CFUNC(f)->f3(env, a0, a1, a2);
+    return CFUNC(f)->f3(env, car(args), cadr(args), caddr(args));
 }
 
 static Value cfunc_new(ValueTag tag, const char *name, void *cfunc, int64_t arity)
