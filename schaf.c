@@ -619,6 +619,12 @@ static Value push_stack_frame(Value ve, const char *name, Value loc)
     return ve;
 }
 
+static Value apply(Value env, Value proc, Value args)
+{
+    EXPECT(arity, PROCEDURE(proc)->arity, args);
+    return PROCEDURE(proc)->apply(env, proc, args);
+}
+
 static Value eval_apply(Value env, Value l)
 {
     Value symproc = car(l), args = cdr(l);
@@ -629,7 +635,7 @@ static Value eval_apply(Value env, Value l)
         args = map_eval(env, args);
         CHECK_ERROR_LOCATED(args, l);
     }
-    Value ret = PROCEDURE(proc)->apply(env, proc, args);
+    Value ret = apply(env, proc, args);
     if (UNLIKELY(is_error(ret))) {
         const char *fname = (VALUE_TAG(proc) == TAG_CFUNC) ?
             CFUNC(proc)->name : NULL;
@@ -896,7 +902,7 @@ static Value cond_eval_recipient(Value env, Value test, Value recipients)
     EXPECT(type, TYPE_PROC, recipient);
     if (rest != Qnil)
         return runtime_error("only one expression expected after =>");
-    return PROCEDURE(recipient)->apply(env, recipient, list1(test));
+    return apply(env, recipient, list1(test));
 }
 
 //PTR
@@ -1850,7 +1856,7 @@ static Value proc_apply(Value env, Value args)
     EXPECT(type, TYPE_PROC, proc);
     Value appargs = build_apply_args(cdr(args));
     CHECK_ERROR(appargs);
-    return PROCEDURE(proc)->apply(env, proc, appargs);
+    return apply(env, proc, appargs);
 }
 
 static Value cars_cdrs(Value ls, Value *pcars, Value *pcdrs, Value *perr)
@@ -1882,7 +1888,7 @@ static Value proc_map(Value env, Value args)
     Value ls = cdr(args);
     Value ret = DUMMY_PAIR(), e = Qfalse;
     for (Value last = ret, cars, cdrs, v; cars_cdrs(ls, &cars, &cdrs, &e); ls = cdrs) {
-        v = PROCEDURE(proc)->apply(env, proc, cars);
+        v = apply(env, proc, cars);
         CHECK_ERROR(v);
         last = PAIR(last)->cdr = list1(v);
     }
@@ -1897,7 +1903,7 @@ static Value proc_for_each(Value env, Value args)
     Value proc = car(args), e = Qfalse;
     EXPECT(type, TYPE_PROC, proc);
     for (Value ls = cdr(args), cars, cdrs, v; cars_cdrs(ls, &cars, &cdrs, &e); ls = cdrs) {
-        v = PROCEDURE(proc)->apply(env, proc, cars);
+        v = apply(env, proc, cars);
         CHECK_ERROR(v);
     }
     CHECK_ERROR_TRUTHY(e);
@@ -1957,7 +1963,7 @@ static Value proc_callcc(Value env, Value proc)
     Value c = value_of_continuation();
     if (continuation_set(c))
         return CONTINUATION(c)->retval;
-    return PROCEDURE(proc)->apply(env, proc, list1(c));
+    return apply(env, proc, list1(c));
 }
 
 static Value proc_eval(UNUSED Value genv, Value expr, Value env)
