@@ -1240,7 +1240,7 @@ static Value define_proc_internal(Value env, Value heads, Value body)
 static Value syn_define(Value env, Value args)
 {
     if (args == Qnil)
-        return runtime_error("wrong number of arguments: expected 1+");
+        return runtime_error("wrong number of arguments: expected >= 1 but got 0");
     Value head = car(args);
     Type t = value_type_of(head);
     switch (t) {
