@@ -110,6 +110,12 @@ class EnvPrinter(MyPrinter):
         t = self.format_members('parent')
         return f'{s}, {t}'
 
+class ErrorPrinter(MyPrinter):
+    TYPE = lookup_type('Error')
+
+    def to_string(self):
+        return self.format_members('call_stack')
+
 class ValuePrinter(MyPrinter):
     TYPE = lookup_type('Value')
     TAG_TO_TYPE = {
@@ -118,6 +124,7 @@ class ValuePrinter(MyPrinter):
         'closure': 'Closure',
         'continuation': 'Continuation',
         'env': 'Env',
+        'error': 'Error',
         None: None
     }
     HIGHLIGHT = {
@@ -150,7 +157,7 @@ class ValuePrinter(MyPrinter):
 
     @property
     def is_internal(self):
-        return not self.is_immediate and self.tag_name == 'env'
+        return not self.is_immediate and self.tag_name == 'error'
 
     @property
     def is_proc(self):
@@ -185,7 +192,7 @@ PP()
 
 PRINTERS = [ValuePrinter, EnvPrinter, ProcedurePrinter,
             CFuncPrinter, ClosurePrinter, ContinuationPrinter,
-            TablePrinter]
+            TablePrinter, ErrorPrinter]
 def schaf_pp(val):
     ty = Type.unqualified(val.type)
     g = (pr(val) for pr in PRINTERS if pr.TYPE == ty)
