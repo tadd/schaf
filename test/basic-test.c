@@ -4,6 +4,7 @@
 #include <criterion/criterion.h>
 #include <criterion/new/assert.h>
 
+#include "intern.h"
 #include "schaf.h"
 
 #define expect_stringify(exp, v) do { \
@@ -92,17 +93,13 @@ static Value list(Value arg, ...)
 {
     if (arg == Qundef)
         return Qnil;
-    Value vec[0x10] = { arg, }, o;
+    Value o, ret = list1(arg), last = ret;
     va_list ap;
     va_start(ap, arg);
-    ssize_t i;
-    for (i = 1; (o = va_arg(ap, Value)) != Qundef; i++)
-        vec[i] = o;
+    while ((o = va_arg(ap, Value)) != Qundef)
+        last = PAIR(last)->cdr = list1(o);
     va_end(ap);
-    Value l = Qnil;
-    while (--i >= 0)
-        l = cons(vec[i], l);
-    return l;
+    return ret;
 }
 
 Test(schaf, printing) {
