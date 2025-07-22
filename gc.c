@@ -53,9 +53,21 @@ static inline size_t align(size_t size)
     return (size + 7U) / 8U * 8U;
 }
 
+static void *assert_48bits(void *p)
+{
+#if 0
+    if ((uintptr_t) p > 0xFFFF'FFFF'FFFFUL) {
+        debug("Pointer too large: %p", p);
+        abort();
+    }
+#endif
+    return p;
+}
+
 static HeapSlot *heap_slot_new(size_t size)
 {
     HeapSlot *h = xcalloc(1, sizeof(HeapSlot));
+    assert_48bits(h);
     h->size = size;
     h->used = 0;
     h->body = xcalloc(1, size);
@@ -85,7 +97,7 @@ static void *allocate(size_t size)
         return NULL;
     uint8_t *ret = last->body + last->used;
     last->used += size;
-    return ret;
+    return assert_48bits(ret);
 }
 
 size_t gc_stack_get_size(uintptr_t *sp)

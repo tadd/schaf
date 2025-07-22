@@ -20,12 +20,11 @@ typedef enum {
 } ValueTag;
 
 typedef struct {
-    ValueTag tag;
-    bool immutable;
+    unsigned tag : 3;
+    unsigned immutable : 1;
 } Header;
 
 typedef struct {
-    Header header; // common
     Value car, cdr;
 } Pair;
 
@@ -35,12 +34,10 @@ typedef struct {
 } LocatedPair;
 
 typedef struct {
-    Header header;
     char *body;
 } String;
 
 typedef struct {
-    Header header;
     int64_t arity;
     Value (*apply)(Value env, Value proc, Value args);
 } Procedure;
@@ -74,29 +71,33 @@ typedef struct {
 } Continuation;
 
 typedef struct {
-    Header header;
     char *name;
     Value parent;
     Table *table;
 } Env;
 
 typedef struct {
-    Header header;
     Value call_stack; // list of '(func-name . location)
 } Error;
 
-#define HEADER(v) ((Header *) v)
-#define VALUE_TAG(v) (HEADER(v)->tag)
+#define HEADER(v) (((uintptr_t)(v)) >> 48U)
+#define VALUE_TAG(v) (HEADER(v) >> 1U)
+#define IMMUTABLE(v) (HEADER(v) & 1U)
 
-#define PAIR(v) ((Pair *) v)
-#define LOCATED_PAIR(v) ((LocatedPair *) v)
-#define STRING(v) ((String *) v)
-#define PROCEDURE(v) ((Procedure *) v)
-#define CFUNC(v) ((CFunc *) v)
-#define CLOSURE(v) ((Closure *) v)
-#define CONTINUATION(v) ((Continuation *) v)
-#define ENV(v) ((Env *) v)
-#define ERROR(v) ((Error *) v)
+#define PTR(v) ((void *)(((uintptr_t)(v)) & UINT64_C(0xFFFF'FFFF'FFFF)))
+#define PAIR(v) ((Pair *) PTR(v))
+#define LOCATED_PAIR(v) ((LocatedPair *) PTR(v))
+#define STRING(v) ((String *) PTR(v))
+#define PROCEDURE(v) ((Procedure *) PTR(v))
+#define CFUNC(v) ((CFunc *) PTR(v))
+#define CLOSURE(v) ((Closure *) PTR(v))
+#define CONTINUATION(v) ((Continuation *) PTR(v))
+#define ENV(v) ((Env *) PTR(v))
+#define ERROR(v) ((Error *) PTR(v))
+
+#define EMBED_TAG(t) ((uintptr_t)(t) << 49U)
+#define EMBED_IMMUTABLE(b) ((uintptr_t)(b) << 48U)
+#define EMBED_HEADER(t, b) (EMBED_TAG(t)|EMBED_IMMUTABLE(b))
 
 #pragma GCC visibility push(hidden) // also affects Clang
 
@@ -106,7 +107,7 @@ Value iparse(FILE *in, const char *filename);
 void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col);
 [[gnu::noreturn]] void raise_error(jmp_buf buf, const char *fmt, ...);
 Value reverse(Value l);
-void *obj_new(size_t size, ValueTag t);
+Value obj_new_immutable(size_t size, ValueTag t);
 
 void gc_init(uintptr_t *base_sp);
 void gc_fin(void);
@@ -123,11 +124,11 @@ static inline Value list1(Value x)
 
 static Value cons_const(Value car, Value cdr)
 {
-    Pair *p = obj_new(sizeof(Pair), TAG_PAIR);
+    Value o = obj_new_immutable(sizeof(Pair), TAG_PAIR);
+    Pair *p = PAIR(o);
     p->car = car;
     p->cdr = cdr;
-    HEADER(p)->immutable = true;
-    return (Value) p;
+    return o;
 }
 
 static inline Value list1_const(Value x)
@@ -140,7 +141,6 @@ static inline Value list2_const(Value x, Value y)
     return cons_const(x, list1_const(y));
 }
 
-#define DUMMY_PAIR() ((Value) &(Pair) { .header = { .tag = TAG_PAIR }, \
-                                        .car = Qundef, .cdr = Qnil })
+#define DUMMY_PAIR() (((Value) &(Pair) {.car = Qundef, .cdr = Qnil }) | EMBED_TAG(TAG_PAIR))
 
 #endif // INTERN_H
