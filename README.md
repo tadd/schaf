@@ -6,7 +6,7 @@ A [Scheme](https://www.scheme.org/) engine that aims[^1] for
 compliance. Also, a study or an étude for my daily hacking exercise.
 
 You'll find nothing unique or interesting here; this is just one of those plain and
-old-fashioned interpreters in C (C17 with some extensions).
+old-fashioned interpreters in C (C23 with some extensions).
 
 You can use this under the [MIT license](./LICENSE.md).
 
