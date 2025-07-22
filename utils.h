@@ -22,9 +22,9 @@
 #define UNLIKELY(x) __builtin_expect((x), 0)
 #define UNUSED [[maybe_unused]]
 #define UNREACHABLE() bug("unreachable"), __builtin_unreachable()
-#define ATTR_XMALLOC [[nodiscard]] [[gnu::malloc]] [[gnu::returns_nonnull]]
+#define ATTR_XMALLOC [[nodiscard, gnu::malloc, gnu::returns_nonnull]]
 
-[[gnu::noreturn]] [[gnu::format(printf, 1, 2)]] void error(const char *fmt, ...);
+[[gnu::noreturn, gnu::format(printf, 1, 2)]] void error(const char *fmt, ...);
 ATTR_XMALLOC void *xmalloc(size_t size);
 ATTR_XMALLOC void *xcalloc(size_t nmem, size_t memsize);
 ATTR_XMALLOC char *xstrdup(const char *s);

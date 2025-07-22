@@ -1904,7 +1904,7 @@ static Value proc_for_each(Value env, Value args)
     return Qnil;
 }
 
-[[gnu::noreturn]] [[gnu::noinline]]
+[[gnu::noreturn, gnu::noinline]]
 static void jump(Continuation *cont)
 {
     memcpy(cont->sp, cont->stack, cont->stack_len);
@@ -1913,7 +1913,7 @@ static void jump(Continuation *cont)
 
 #define GET_SP(p) uintptr_t v##p = 0, *p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
 
-[[gnu::noreturn]] [[gnu::noinline]]
+[[gnu::noreturn, gnu::noinline]]
 static Value apply_continuation(UNUSED Value env, Value f, Value args)
 {
     GET_SP(sp);
