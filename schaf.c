@@ -70,7 +70,10 @@ Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
     SYM_RARROW;
 static const char *load_basedir = NULL;
 static Value source_data = Qnil; // (a)list of AST: (filename syntax_list newline_positions)
-// newline_positions: list of pos | int
+                                 // newline_positions: list of pos | int
+static jmp_buf jmp_exit;
+static uint8_t exit_status; // should be <= 125 to be portable
+static char errmsg[BUFSIZ];
 
 //
 // value_is_*: Type Checks
@@ -383,10 +386,6 @@ static Value value_of_closure(Value env, Value params, Value body)
 //
 // Errors
 //
-
-static jmp_buf jmp_exit;
-static uint8_t exit_status; // to be portable
-static char errmsg[BUFSIZ];
 
 [[gnu::noreturn]]
 void raise_error(jmp_buf buf, const char *fmt, ...)
