@@ -96,7 +96,7 @@ typedef struct {
 #define CLOSURE(v) ((Closure *) v)
 #define CONTINUATION(v) ((Continuation *) v)
 #define ENV(v) ((Env *) v)
-#define ERROR(v) ((Error *) v)
+#define ERROR(v) ((Error *) ((v) & UINT64_C(0xFFFF'FFFF'FFFF)))
 
 #pragma GCC visibility push(hidden) // also affects Clang
 
