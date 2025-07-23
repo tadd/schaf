@@ -331,10 +331,11 @@ Test(table, get_put) {
     table_free(t);
 }
 
-static void tabforeach(uint64_t k, uint64_t v, void *data)
+static bool tabforeach(uint64_t k, uint64_t v, void *data)
 {
     uint64_t *x = data;
     *x *= k * v;
+    return false;
 }
 
 Test(table, foreach) {
@@ -349,6 +350,36 @@ Test(table, foreach) {
 
     table_free(t);
 }
+
+static bool tabforeach_break(UNUSED uint64_t k, uint64_t v, void *data)
+{
+    uint64_t *x = data;
+    if (v == 1)
+        return true;
+    ++*x;
+    return false;
+}
+
+Test(table, foreach_break) {
+    Table *t = table_new();
+    table_put(t, 2, 0);
+    table_put(t, 3, 0);
+    table_put(t, 5, 0);
+    table_put(t, 7, 0);
+    table_put(t, 11, 1);
+    table_put(t, 13, 0);
+    table_put(t, 17, 0);
+    table_put(t, 23, 0);
+    table_put(t, 27, 0);
+    table_put(t, 29, 0);
+    uint64_t l = 0;
+    table_foreach(t, tabforeach_break, &l);
+
+    cr_assert(gt(u64, 10, l));// maybe?
+
+    table_free(t);
+}
+
 
 Test(table, dup) {
     Table *t = table_new();

@@ -235,7 +235,8 @@ void table_foreach(const Table *t, TableForeachFunc f, void *data)
 {
     for (size_t i = 0; i < t->body_size; i++) {
         for (const List *p = t->body[i]; p != NULL; p = p->next) {
-            (*f)(p->key, p->value, data);
+            if ((*f)(p->key, p->value, data))
+                return;
         }
     }
 }

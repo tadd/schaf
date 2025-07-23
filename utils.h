@@ -32,7 +32,7 @@ ATTR_XMALLOC void *xcalloc(size_t nmem, size_t memsize);
 ATTR_XMALLOC char *xstrdup(const char *s);
 
 typedef struct Table Table;
-typedef void (*TableForeachFunc)(uint64_t key, uint64_t val, void *data);
+typedef bool (*TableForeachFunc)(uint64_t key, uint64_t val, void *data);
 
 extern const uint64_t TABLE_NOT_FOUND;
 Table *table_new(void);
