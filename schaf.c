@@ -773,9 +773,9 @@ static Value iload(FILE *in, const char *filename)
 static Value iload_inner(FILE *in, const char *path)
 {
     Value ast = iparse(in, path), l = cadr(ast);
-    source_data = cons(ast, source_data);
     if (l == Qundef)
         return Qundef;
+    source_data = cons(ast, source_data);
     return eval_body(env_toplevel, l);
 }
 
