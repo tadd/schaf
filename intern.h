@@ -114,6 +114,9 @@ void gc_fin(void);
 size_t gc_stack_get_size(uintptr_t *sp);
 ATTR_XMALLOC void *gc_malloc(size_t size);
 
+Value value_of_continuation(void);
+bool continuation_init(Value c);
+
 #pragma GCC visibility pop
 
 static inline Value list1(Value x)
