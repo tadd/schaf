@@ -418,36 +418,34 @@ static Parser *parser_new(FILE *in, const char *filename)
     return p;
 }
 
-static inline Value list3_const(Value x, Value y, Value z)
+// Source: filename, ast, newline_pos
+static Source *source_new(Parser *p, Value syntax_list)
 {
-    return cons_const(x, list2_const(y, z));
+    Source *src = xmalloc(sizeof(Parser));
+    src->filename = value_of_symbol(p->filename);
+    src->ast = syntax_list;
+    src->newline_pos = reverse(p->newline_pos);
+    return src;
 }
 
-// AST: (filename syntax_list newline_positions)
-static Value ast_new(const Parser *p, Value syntax_list)
-{
-    Value filename = value_of_string(p->filename);
-    return list3_const(filename, syntax_list, reverse(p->newline_pos));
-}
-
-static Value parse_program(Parser *p)
+static Source *parse_program(Parser *p)
 {
     Value v = DUMMY_PAIR();
     for (Value last = v, expr; (expr = parse_expr(p)) != Qundef; )
         last = PAIR(last)->cdr = list1(expr);
-    return ast_new(p, cdr(v));
+    return source_new(p, cdr(v));
 }
 
-Value iparse(FILE *in, const char *filename)
+Source *iparse(FILE *in, const char *filename)
 {
     Parser *p = parser_new(in, filename);
-    Value ast;
+    Source *src;
     if (setjmp(jmp_parse_error) == 0)
-        ast = parse_program(p); // success
+        src = parse_program(p); // success
     else
-        ast = Qundef; // got an error
+        src = NULL; // got an error
     free(p);
-    return ast;
+    return src;
 }
 
 Value parse(const char *path)
@@ -455,15 +453,19 @@ Value parse(const char *path)
     FILE *in = fopen(path, "r");
     if (in == NULL)
         error("parse: can't open file: %s", path);
-    Value ast = iparse(in, path);
+    Source *src = iparse(in, path);
     fclose(in);
-    return ast == Qundef ? Qundef : car(cdr(ast));
+    Value ast = src == NULL ? Qundef : src->ast;
+    free(src);
+    return ast;
 }
 
 Value parse_string(const char *in)
 {
     FILE *f = fmemopen((char *) in, strlen(in), "r");
-    Value ast = iparse(f, "<inline>");
+    Source *src = iparse(f, "<inline>");
     fclose(f);
-    return ast == Qundef ? Qundef : car(cdr(ast));
+    Value ast = src == NULL ? Qundef : src->ast;
+    free(src);
+    return ast;
 }

@@ -69,9 +69,9 @@ static Value env_toplevel, env_default, env_r5rs, env_null;
 static Value symbol_names = Qnil; // ("name0" "name1" ...)
 Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
     SYM_RARROW;
-static const char *load_basedir = NULL;
-static Value source_data = Qnil; // (a)list of AST: (filename syntax_list newline_positions)
-                                 // newline_positions: list of pos | int
+static const char *load_basedir;
+static Table *source_data; // Table: filename -> Source
+
 static jmp_buf jmp_exit;
 static uint8_t exit_status; // should be <= 125 to be portable
 static char errmsg[BUFSIZ];
@@ -653,13 +653,13 @@ static Value assoc(Value key, Value l);
 static void dump_line_column(Value filename, int64_t pos)
 {
     int64_t line, col;
-    Value data = assoc(filename, source_data);
-    if (data == Qnil) {
+    uint64_t val = table_get(source_data, filename);
+    if (val == TABLE_NOT_FOUND) {
         append_error_message("\n\t<unknown>");
         return;
     }
-    Value newline_pos = caddr(data);
-    pos_to_line_col(pos, newline_pos, &line, &col);
+    const Source *data = (Source *) val;
+    pos_to_line_col(pos, data->newline_pos, &line, &col);
     append_error_message("\n\t%s:%"PRId64":%"PRId64" in ",
                          value_to_string(filename), line, col);
 }
@@ -678,14 +678,22 @@ static bool find_pair(Value tree, Value pair)
     return false;
 }
 
+static bool find_filename_foreach(UNUSED uint64_t key, uint64_t val, void *pdata)
+{
+    Value *data = pdata, pair = data[1];
+    const Source *src = (Source *) val;
+    if (find_pair(src->ast, pair)) {
+        data[0] = key; // return filename
+        return true;
+    }
+    return false;
+}
+
 static Value find_filename(Value pair)
 {
-    for (Value p = source_data; p != Qnil; p = cdr(p)) {
-        Value tree = cadar(p);
-        if (find_pair(tree, pair))
-            return caar(p); // filename
-    }
-    return Qfalse;
+    Value data[] = { Qfalse, pair };
+    table_foreach(source_data, find_filename_foreach, data);
+    return data[0];
 }
 
 static void dump_callee_name(Value callers)
@@ -742,13 +750,13 @@ static void fdisplay(FILE* f, Value v);
 
 static Value iload(FILE *in, const char *filename)
 {
-    Value ast = iparse(in, filename);
-    if (ast == Qundef)
+    Source *src = iparse(in, filename);
+    if (src == NULL)
         return Qundef;
-    source_data = cons(ast, source_data);
+    table_put(source_data, src->filename, (uint64_t) src);
     if (setjmp(jmp_exit) != 0)
         return value_of_int(exit_status);
-    Value ret = eval_body(env_toplevel, cadr(ast));
+    Value ret = eval_body(env_toplevel, src->ast);
     if (is_error(ret)) {
         dump_stack_trace(ERROR(ret)->call_stack);
         return Qundef;
@@ -758,11 +766,11 @@ static Value iload(FILE *in, const char *filename)
 
 static Value iload_inner(FILE *in, const char *path)
 {
-    Value ast = iparse(in, path);
-    if (ast == Qundef)
+    Source *src = iparse(in, path);
+    if (src == NULL)
         return Qundef;
-    source_data = cons(ast, source_data);
-    return eval_body(env_toplevel, cadr(ast));
+    table_put(source_data, src->filename, (uint64_t) src);
+    return eval_body(env_toplevel, src->ast);
 }
 
 Value eval_string(const char *in)
@@ -2092,11 +2100,10 @@ static Value proc_close_port(UNUSED Value env, Value port)
 static Value iread(FILE *in)
 {
     Value eof = Qfalse; // temporary
-    Value ast = iparse(in, "<read>");
-    if (ast == Qundef)
+    Source *src = iparse(in, "<read>");
+    if (src == NULL)
         return eof;
-    Value data = cadr(ast);
-    return data == Qnil ? eof : car(data);
+    return src->ast == Qnil ? eof : car(src->ast);
 }
 
 static Value proc_read(UNUSED Value env, Value args)
@@ -2258,6 +2265,7 @@ static Value proc_schaf_environment(UNUSED Value env)
 
 int sch_fin(void)
 {
+    table_free(source_data);
     gc_fin();
     return exit_status;
 }
@@ -2428,4 +2436,5 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "schaf-environment", proc_schaf_environment, 0);
 
     env_default = env_dup("default", e);
+    source_data = table_new();
 }
