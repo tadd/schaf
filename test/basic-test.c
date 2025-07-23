@@ -331,7 +331,7 @@ Test(table, get_put) {
     table_free(t);
 }
 
-void tabforeach(uint64_t k, uint64_t v, void *data)
+static void tabforeach(uint64_t k, uint64_t v, void *data)
 {
     uint64_t *x = data;
     *x *= k * v;
