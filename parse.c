@@ -77,15 +77,15 @@ static inline Token TOKEN_IDENT(const char *s)
 typedef struct {
     FILE *in;
     char *filename;
-    Value *newline_pos;// [value integer]
+    int64_t *newline_pos;
     jmp_buf jmp_error;
 } Parser;
 
-void pos_to_line_col(int64_t pos, Value *newline_pos, int64_t *line, int64_t *col)
+void pos_to_line_col(int64_t pos, int64_t *newline_pos, int64_t *line, int64_t *col)
 {
     int64_t nline, last = 0, len = scary_length(newline_pos);
     for (nline = 0; nline < len; nline++) {
-        int64_t n = value_to_int(newline_pos[nline]);
+        int64_t n = newline_pos[nline];
         if (n > pos)
             break;
         last = n;
@@ -110,7 +110,7 @@ static void get_line_and_column(const Parser *p, int64_t *line, int64_t *col)
 
 static inline void put_newline_pos(Parser *p)
 {
-    Value pos = value_of_int(ftell(p->in));
+    int64_t pos = ftell(p->in);
     scary_push(&p->newline_pos, pos);
 }
 
@@ -459,26 +459,26 @@ static void parser_free(Parser *p)
     free(p);
 }
 
-static inline Value list3_const(Value x, Value y, Value z)
+// Source: filename, ast, newline_pos
+static Source *source_new(Parser *p, Value syntax_list)
 {
-    return cons_const(x, list2_const(y, z));
+    Source *src = xmalloc(sizeof(Source));
+    src->filename = xstrdup(p->filename);
+    src->ast = syntax_list;
+    src->newline_pos = scary_dup(p->newline_pos);
+    return src;
 }
 
-static Value scary_to_vector(Value *a)
+void source_free(Source *s)
 {
-    Vector *v = obj_new(sizeof(Vector), TAG_VECTOR);
-    v->body = scary_dup(a);
-    return (Value) v;
+    if (s == NULL)
+        return;
+    scary_free(s->newline_pos);
+    free(s->filename);
+    free(s);
 }
 
-// Source: (filename syntax_list newline_positions)
-static Value source_new(const Parser *p, Value syntax_list)
-{
-    Value filename = value_of_string(p->filename);
-    return list3_const(filename, syntax_list, scary_to_vector(p->newline_pos));
-}
-
-static Value parse_program(Parser *p)
+static Source *parse_program(Parser *p)
 {
     Value v = DUMMY_PAIR();
     for (Value last = v, expr; (expr = parse_expr(p)) != Qundef; )
@@ -486,22 +486,26 @@ static Value parse_program(Parser *p)
     return source_new(p, cdr(v));
 }
 
-Value iparse(FILE *in, const char *filename)
+Source *iparse(FILE *in, const char *filename)
 {
     Parser *p = parser_new(in, filename);
-    Value src;
+    Source *src;
     if (setjmp(p->jmp_error) == 0)
         src = parse_program(p); // success
     else
-        src = Qundef; // got an error
+        src = NULL; // got an error
     parser_free(p);
     return src;
 }
 
 static Value iparse_ast(FILE *in, const char *filename)
 {
-    Value src = iparse(in, filename);
-    return src == Qundef ? Qundef : car(cdr(src));
+    Source *src = iparse(in, filename);
+    if (src == NULL)
+        return Qundef;
+    Value ast = src->ast;
+    source_free(src);
+    return ast;
 }
 
 Value parse_datum(FILE *in, const char *filename)
