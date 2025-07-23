@@ -24,6 +24,8 @@
 #define UNREACHABLE() bug("unreachable"), __builtin_unreachable()
 #define ATTR_XMALLOC [[nodiscard, gnu::malloc, gnu::returns_nonnull]]
 
+#pragma GCC visibility push(hidden) // also affects Clang
+
 [[gnu::noreturn, gnu::format(printf, 1, 2)]] void error(const char *fmt, ...);
 ATTR_XMALLOC void *xmalloc(size_t size);
 ATTR_XMALLOC void *xcalloc(size_t nmem, size_t memsize);
@@ -41,5 +43,7 @@ bool table_set(Table *t, uint64_t key, uint64_t val); // set if found
 uint64_t table_get(const Table *t, uint64_t key);
 void table_foreach(const Table *t, TableForeachFunc f, void *data);
 UNUSED void table_dump(const Table *t); // for debug
+
+#pragma GCC visibility pop
 
 #endif

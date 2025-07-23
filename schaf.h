@@ -4,8 +4,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "utils.h"
-
 typedef enum {
 // immediate
     TYPE_BOOL,
@@ -51,7 +49,7 @@ int64_t length(Value list);
 Value car(Value v);
 Value cdr(Value v);
 
-ATTR_XMALLOC char *stringify(Value v);
+[[nodiscard, gnu::malloc, gnu::returns_nonnull]] char *stringify(Value v);
 void display(Value v);
 Value parse(const char *path);
 Value parse_string(const char *in);
