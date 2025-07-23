@@ -217,6 +217,12 @@ int64_t length(Value list);
 Value vector_new(void);
 Value vector_push(Value v, Value e);
 
+Value continuation_new(int64_t n);
+bool continuation_set(Value c);
+
+Value expect_arity(int64_t expected, Value args);
+bool is_error(Value v);
+
 #pragma GCC visibility pop
 
 static inline Value list1(Value x)

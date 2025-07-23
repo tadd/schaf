@@ -7,7 +7,7 @@ SANITIZER = -fsanitize=undefined #,address
 TIMEOUT = timeout 2
 TIMEOUT_LONGER = timeout 40
 
-OBJ_COMMON = gc.o libscary.o parse.o schaf.o utils.o
+OBJ_COMMON = cont.o gc.o libscary.o parse.o schaf.o utils.o
 OBJ = $(OBJ_COMMON) main.o
 
 all: schaf
@@ -46,6 +46,7 @@ main.o main.san.o: schaf.h utils.h
 parse.o parse.san.o: intern.h schaf.h utils.h
 schaf.o schaf.san.o: intern.h libscary.h schaf.h utils.h
 utils.o utils.san.o: utils.h
+cont.o cont.san.o: intern.h
 
 .PHONY: all clean analyze sanitize microbench
 
