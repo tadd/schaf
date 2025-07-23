@@ -756,13 +756,13 @@ static void fdisplay(FILE* f, Value v);
 
 static Value iload(FILE *in, const char *filename)
 {
-    Value ast = iparse(in, filename), l = cadr(ast);
-    if (l == Qundef)
+    Value ast = iparse(in, filename);
+    if (ast == Qundef)
         return Qundef;
     source_data = cons(ast, source_data);
     if (setjmp(jmp_exit) != 0)
         return value_of_int(exit_status);
-    Value ret = eval_body(env_toplevel, l);
+    Value ret = eval_body(env_toplevel, cadr(ast));
     if (is_error(ret)) {
         dump_stack_trace(ERROR(ret)->call_stack);
         return Qundef;
@@ -772,11 +772,11 @@ static Value iload(FILE *in, const char *filename)
 
 static Value iload_inner(FILE *in, const char *path)
 {
-    Value ast = iparse(in, path), l = cadr(ast);
-    if (l == Qundef)
+    Value ast = iparse(in, path);
+    if (ast == Qundef)
         return Qundef;
     source_data = cons(ast, source_data);
-    return eval_body(env_toplevel, l);
+    return eval_body(env_toplevel, cadr(ast));
 }
 
 Value eval_string(const char *in)

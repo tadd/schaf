@@ -445,7 +445,7 @@ Value iparse(FILE *in, const char *filename)
     if (setjmp(jmp_parse_error) == 0)
         ast = parse_program(p); // success
     else
-        ast = ast_new(p, Qundef); // got an error
+        ast = Qundef; // got an error
     free(p);
     return ast;
 }
@@ -457,7 +457,7 @@ Value parse(const char *path)
         error("parse: can't open file: %s", path);
     Value ast = iparse(in, path);
     fclose(in);
-    return car(cdr(ast));
+    return ast == Qundef ? Qundef : car(cdr(ast));
 }
 
 Value parse_string(const char *in)
@@ -465,5 +465,5 @@ Value parse_string(const char *in)
     FILE *f = fmemopen((char *) in, strlen(in), "r");
     Value ast = iparse(f, "<inline>");
     fclose(f);
-    return car(cdr(ast));
+    return ast == Qundef ? Qundef : car(cdr(ast));
 }
