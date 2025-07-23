@@ -40,7 +40,7 @@ microbench: schaf
 %.san.o: %.c
 	$(CC) $(CFLAGS) $(SANITIZER) -c $< -o $@
 
-gc.o: intern.h utils.h
+gc.o: intern.h schaf.h utils.h
 main.o: schaf.h utils.h
 parse.o: intern.h schaf.h utils.h
 schaf.o: intern.h schaf.h utils.h
@@ -72,4 +72,4 @@ test/basic-test-san: $(OBJ_TEST:.o=.san.o)
 
 test/basic-test.o: schaf.h utils.h
 
-.PHONY: test test-san test-c test-c-san test-scheme test-scheme-san 
+.PHONY: test test-san test-c test-c-san test-scheme test-scheme-san test-scheme-stress
