@@ -28,7 +28,6 @@ extern const Value Qnil, Qundef, Qfalse, Qtrue;
 void sch_init(uintptr_t *base);
 #define SCH_INIT() uintptr_t sch_stack_base = 0; sch_init(&sch_stack_base)
 int sch_fin(void);
-int sch_exit_status(void);
 
 bool value_is_null(Value v);
 bool value_is_int(Value v);

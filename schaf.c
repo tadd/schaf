@@ -2130,11 +2130,6 @@ int sch_fin(void)
     return exit_status;
 }
 
-int sch_exit_status(void)
-{
-    return exit_status;
-}
-
 #define DEF_CXR_BUILTIN(x, y) \
     static Value proc_c##x##y##r(UNUSED Value env, Value v) \
     { \
