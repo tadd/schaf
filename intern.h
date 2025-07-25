@@ -136,7 +136,7 @@ typedef struct {
 #define VECTOR(v) ((Vector *) v)
 #define ENV(v) ((Env *) v)
 #define PORT(v) ((Port *) v)
-#define ERROR(v) ((Error *) v)
+#define ERROR(v) ((Error *) ((v) & ~FLAG_MASK_ERROR))
 
 typedef struct {
     char *filename;
