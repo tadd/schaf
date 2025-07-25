@@ -50,7 +50,7 @@ void sch_set_gc_stress(bool b)
 
 static inline size_t align(size_t size)
 {
-    return (size + 7U) / 8U * 8U;
+    return (size + 15U) / 16U * 16U;
 }
 
 static HeapSlot *heap_slot_new(size_t size)
@@ -78,6 +78,15 @@ void gc_init(uintptr_t *sp)
     heap.size = 1;
 }
 
+static void *assert_ptr(void *p)
+{
+#if 0
+    if ((uintptr_t) p % 16U)
+        abort();
+#endif
+    return p;
+}
+
 static void *allocate(size_t size)
 {
     HeapSlot *last = heap.slot[heap.size-1]; // use the last slot only
@@ -85,7 +94,7 @@ static void *allocate(size_t size)
         return NULL;
     uint8_t *ret = last->body + last->used;
     last->used += size;
-    return ret;
+    return assert_ptr(ret);
 }
 
 size_t gc_stack_get_size(uintptr_t *sp)
