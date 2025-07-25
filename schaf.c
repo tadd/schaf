@@ -404,6 +404,21 @@ static Value value_of_closure(Value env, Value params, Value body)
 
 // and `cons` is well-known name than "value_of_pair"
 
+// tail-pair-saved list, appends in O(1)
+Value tlist_new(void)
+{
+    Value l = list1(Qundef);
+    PAIR(l)->car = l; // last pair
+    return l;
+}
+
+Value tlist_append(Value l, Value val)
+{
+    Value last = car(l);
+    PAIR(l)->car = PAIR(last)->cdr = list1(val);
+    return l;
+}
+
 //
 // Errors
 //
@@ -427,7 +442,7 @@ static Value runtime_error(const char *fmt, ...)
     va_end(ap);
 
     Error *e = obj_new(sizeof(Error), TAG_ERROR);
-    e->call_stack = Qnil;
+    e->call_stack = tlist_new();
     return (Value) e;
 }
 
@@ -450,8 +465,8 @@ const char *error_message(void)
 #define CHECK_ERROR_LOCATED(v, l) do { \
         Value V = v; \
         if (UNLIKELY(is_error(V))) { \
-            if (ERROR(V)->call_stack == Qnil) \
-                ERROR(V)->call_stack = list1(cons(Qfalse, l)); \
+            if (cdr(ERROR(V)->call_stack) == Qnil)                   \
+                tlist_append(ERROR(v)->call_stack, cons(Qfalse, l)); \
             return V; \
         } \
     } while (0)
@@ -611,7 +626,7 @@ static Value push_stack_frame(Value ve, const char *name, Value loc)
     Error *e = ERROR(ve);
     Value str = name == NULL ? Qfalse : value_of_string(name);
     Value data = cons(str, loc);
-    e->call_stack = cons(data, e->call_stack);
+    tlist_append(e->call_stack, data);
     return ve;
 }
 
@@ -750,9 +765,8 @@ static void dump_stack_trace(Value call_stack)
 {
     if (call_stack == Qnil)
         return;
-    Value ordered = reverse(call_stack);
-    prepend_cfunc_name(caar(ordered));
-    for (Value p = ordered, next; p != Qnil; p = next) {
+    prepend_cfunc_name(caar(call_stack));
+    for (Value p = call_stack, next; p != Qnil; p = next) {
         next = cdr(p);
         dump_frame(car(p), next);
     }
@@ -770,7 +784,7 @@ static Value iload(FILE *in, const char *filename)
         return value_of_int(exit_status);
     Value ret = eval_body(env_toplevel, cadr(ast));
     if (is_error(ret)) {
-        dump_stack_trace(ERROR(ret)->call_stack);
+        dump_stack_trace(cdr(ERROR(ret)->call_stack));
         return Qundef;
     }
     return ret;
@@ -1703,7 +1717,7 @@ static Value proc_append(UNUSED Value env, Value ls)
     return l;
 }
 
-Value reverse(Value l)
+static Value reverse(Value l)
 {
     Value ret = Qnil;
     for (Value p = l; p != Qnil; p = cdr(p))

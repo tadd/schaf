@@ -137,8 +137,9 @@ Value iparse(FILE *in, const char *filename);
 Value parse_datum(FILE *in, const char *filename);
 void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col);
 [[gnu::noreturn]] void raise_error(jmp_buf buf, const char *fmt, ...);
-Value reverse(Value l);
 void *obj_new(size_t size, ValueTag t);
+Value tlist_new(void);
+Value tlist_append(Value list, Value val);
 
 void gc_init(uintptr_t *base_sp);
 void gc_fin(void);
