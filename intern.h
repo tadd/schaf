@@ -174,7 +174,9 @@ static inline Value list2_const(Value x, Value y)
     return cons_const(x, list1_const(y));
 }
 
-#define DUMMY_PAIR() ((Value) &(Pair) { .header = { .tag = TAG_PAIR }, \
-                                        .car = Qundef, .cdr = Qnil })
+#define DUMMY_PAIR() ((Value) &(Pair) { \
+            .header = { .tag = TAG_PAIR }, \
+            .car = Qundef, .cdr = Qnil \
+        })
 
 #endif // INTERN_H
