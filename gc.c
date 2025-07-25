@@ -61,7 +61,7 @@ void sch_set_gc_print_stat(bool b)
 
 static inline size_t align(size_t size)
 {
-    return (size + 7U) / 8U * 8U;
+    return (size + 15U) / 16U * 16U;
 }
 
 static void init_chunk(Header *h, size_t size)
@@ -122,11 +122,18 @@ static Header *allocate_from_chunk(Header *prev, Header *curr, size_t size)
     return curr;
 }
 
+static void *assert_ptr(void *p)
+{
+    if ((uintptr_t) p % 16U)
+        abort();
+    return p;
+}
+
 static Header *allocate(size_t size)
 {
     for (Header *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = curr->next) {
         if (curr->size >= size) // First-fit
-            return allocate_from_chunk(prev, curr, size);
+            return assert_ptr(allocate_from_chunk(prev, curr, size));
     }
     return NULL;
 }
