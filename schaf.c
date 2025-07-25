@@ -50,8 +50,10 @@ static Flag FLAG_NBIT_INT = 1;
 static Flag FLAG_MASK     = 0b111; // for 64 bit machine
 static Flag FLAG_MASK_SYM =  0b11;
 static Flag FLAG_MASK_INT =   0b1;
+static Flag FLAG_MASK_ERROR = 0b1111;
 static Flag FLAG_SYM      =  0b10;
 static Flag FLAG_INT      =   0b1;
+static Flag FLAG_ERROR = 0b1000;
 const Value Qnil   = 0b11100U;
 const Value Qfalse = 0b00100U;
 const Value Qtrue  = 0b01100U;
@@ -133,7 +135,7 @@ inline bool value_is_pair(Value v)
 
 inline static bool is_error(Value v)
 {
-    return value_tag_is(v, TAG_ERROR);
+    return (v & FLAG_MASK_ERROR) == FLAG_ERROR;
 }
 
 static Type immediate_type_of(Value v)
@@ -420,7 +422,7 @@ static Value runtime_error(const char *fmt, ...)
 
     Error *e = obj_new(sizeof(Error), TAG_ERROR);
     e->call_stack = Qnil;
-    return (Value) e;
+    return ((Value) e) | FLAG_ERROR;
 }
 
 const char *error_message(void)
