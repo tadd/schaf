@@ -7,6 +7,20 @@
 #include "utils.h"
 
 typedef enum {
+// immediate
+    TYPE_BOOL,
+    TYPE_INT,
+    TYPE_SYMBOL,
+    TYPE_NULL,
+    TYPE_UNDEF,
+// boxed (tagged)
+    TYPE_PAIR,
+    TYPE_STRING,
+    TYPE_PROC,
+    TYPE_ENV,
+} Type;
+
+typedef enum {
     TAG_PAIR,
     TAG_STRING,
     TAG_CFUNC,
@@ -113,6 +127,26 @@ void gc_fin(void);
 
 size_t gc_stack_get_size(uintptr_t *sp);
 ATTR_XMALLOC void *gc_malloc(size_t size);
+
+bool value_is_null(Value v);
+bool value_is_int(Value v);
+bool value_is_symbol(Value v);
+bool value_is_string(Value v);
+bool value_is_pair(Value v);
+Type value_type_of(Value v);
+
+int64_t value_to_int(Value v);
+const char *value_to_string(Value v);
+const char *value_to_type_name(Value v);
+
+Value value_of_int(int64_t i);
+Value value_of_symbol(const char *s);
+Value value_of_string(const char *s);
+
+Value cons(Value car, Value cdr);
+Value car(Value v);
+Value cdr(Value v);
+int64_t length(Value list);
 
 #pragma GCC visibility pop
 

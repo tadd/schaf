@@ -4,20 +4,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef enum {
-// immediate
-    TYPE_BOOL,
-    TYPE_INT,
-    TYPE_SYMBOL,
-    TYPE_NULL,
-    TYPE_UNDEF,
-// boxed (tagged)
-    TYPE_PAIR,
-    TYPE_STRING,
-    TYPE_PROC,
-    TYPE_ENV,
-} Type;
-
 typedef uintptr_t Value;
 
 extern const Value Qnil, Qundef, Qfalse, Qtrue;
@@ -25,27 +11,6 @@ extern const Value Qnil, Qundef, Qfalse, Qtrue;
 void sch_init(uintptr_t *base);
 #define SCH_INIT() uintptr_t sch_stack_base = 0; sch_init(&sch_stack_base)
 int sch_fin(void);
-
-bool value_is_null(Value v);
-bool value_is_int(Value v);
-bool value_is_symbol(Value v);
-bool value_is_string(Value v);
-bool value_is_pair(Value v);
-Type value_type_of(Value v);
-
-int64_t value_to_int(Value v);
-const char *value_to_string(Value v);
-const char *value_to_type_name(Value v);
-
-Value value_of_int(int64_t i);
-Value value_of_symbol(const char *s);
-Value value_of_string(const char *s);
-
-Value cons(Value car, Value cdr);
-int64_t length(Value list);
-
-Value car(Value v);
-Value cdr(Value v);
 
 [[nodiscard, gnu::malloc, gnu::returns_nonnull]] char *stringify(Value v);
 void display(Value v);
