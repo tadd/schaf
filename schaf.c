@@ -43,6 +43,7 @@ static const char *TYPE_NAMES[] = {
 //   0b0--00100 #f
 //   0b0--01100 #t
 //   0b0-010100 <undef>
+typedef uintptr_t Symbol;
 typedef const uintptr_t Flag;
 static Flag FLAG_NBIT_SYM = 2;
 static Flag FLAG_NBIT_INT = 1;
@@ -194,7 +195,7 @@ inline int64_t value_to_int(Value x)
 #endif
 }
 
-inline Symbol value_to_symbol(Value v)
+inline static Symbol value_to_symbol(Value v)
 {
     return (Symbol) v >> FLAG_NBIT_SYM;
 }

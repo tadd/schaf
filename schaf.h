@@ -19,7 +19,6 @@ typedef enum {
 } Type;
 
 typedef uintptr_t Value;
-typedef uintptr_t Symbol;
 
 extern const Value Qnil, Qundef, Qfalse, Qtrue;
 
@@ -35,7 +34,6 @@ bool value_is_pair(Value v);
 Type value_type_of(Value v);
 
 int64_t value_to_int(Value v);
-Symbol value_to_symbol(Value v);
 const char *value_to_string(Value v);
 const char *value_to_type_name(Value v);
 
