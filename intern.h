@@ -131,7 +131,7 @@ typedef struct {
 #define VECTOR(v) ((Vector *) v)
 #define ENV(v) ((Env *) v)
 #define PORT(v) ((Port *) v)
-#define ERROR(v) ((Error *) v)
+#define ERROR(v) ((Error *) ((v) & ~FLAG_ERROR))
 
 #pragma GCC visibility push(hidden) // also affects Clang
 
