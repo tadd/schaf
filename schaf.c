@@ -565,8 +565,6 @@ static void define_procedure(Value env, const char *name, void *cfunc, int64_t a
     env_put(env, value_of_symbol(name), value_of_cfunc(name, cfunc, arity));
 }
 
-static Value assq(Value key, Value l);
-
 #define CXR1(f, x) f(a, x); f(d, x);
 #define CXR2(f, x) CXR1(f, a ## x) CXR1(f, d ## x)
 #define CXR3(f, x) CXR2(f, a ## x) CXR2(f, d ## x)
@@ -665,18 +663,20 @@ static int append_error_message(const char *fmt, ...)
     return n;
 }
 
-static void dump_line_column(Value vfilename, int64_t pos)
+static Value assoc(Value key, Value l);
+
+static void dump_line_column(Value filename, int64_t pos)
 {
     int64_t line, col;
-    Value data = assq(vfilename, source_data);
+    Value data = assoc(filename, source_data);
     if (data == Qnil) {
         append_error_message("\n\t<unknown>");
         return;
     }
     Value newline_pos = caddr(data);
     pos_to_line_col(pos, newline_pos, &line, &col);
-    const char *filename = value_to_string(vfilename);
-    append_error_message("\n\t%s:%"PRId64":%"PRId64" in ", filename, line, col);
+    append_error_message("\n\t%s:%"PRId64":%"PRId64" in ",
+                         value_to_string(filename), line, col);
 }
 
 static bool find_pair(Value tree, Value pair)

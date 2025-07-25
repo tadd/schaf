@@ -426,7 +426,7 @@ static inline Value list3_const(Value x, Value y, Value z)
 // AST: (filename syntax_list newline_positions)
 static Value ast_new(Parser *p, Value syntax_list)
 {
-    Value filename = value_of_symbol(p->filename);
+    Value filename = value_of_string(p->filename);
     return list3_const(filename, syntax_list, reverse(p->newline_pos));
 }
 
