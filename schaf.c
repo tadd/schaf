@@ -33,11 +33,13 @@
 //   0b0-011100 <undef>
 static const uintptr_t FLAG_NBIT_INT = 1;
 static const uintptr_t FLAG_NBIT_SYM = 2;
-static const uintptr_t FLAG_MASK_INT =   0b1;
-static const uintptr_t FLAG_MASK_SYM =  0b11;
-static const uintptr_t FLAG_MASK_IMM = 0b111; // for 64 bit machine
-static const uintptr_t FLAG_INT      =   0b1;
-static const uintptr_t FLAG_SYM      =  0b10;
+static const uintptr_t FLAG_MASK_INT =    0b1;
+static const uintptr_t FLAG_MASK_SYM =   0b11;
+static const uintptr_t FLAG_MASK_IMM =  0b111; // for 64 bit machine
+const uintptr_t FLAG_MASK_ERROR      = 0b1111;
+static const uintptr_t FLAG_INT      =    0b1;
+static const uintptr_t FLAG_SYM      =   0b10;
+static const uintptr_t FLAG_ERROR    = 0b1000;
 const Value SCH_FALSE = 0b00100U;
 const Value SCH_TRUE  = 0b01100U;
 const Value SCH_NULL  = 0b10100U; // emtpy list
@@ -152,7 +154,7 @@ inline static bool sch_value_is_promise(Value v)
 
 inline static bool is_error(Value v)
 {
-    return value_tag_is(v, TAG_ERROR);
+    return (v & FLAG_MASK_ERROR) == FLAG_ERROR;
 }
 
 inline static bool is_boolean(Value v)
@@ -571,8 +573,8 @@ static Value runtime_error(const char *fmt, ...)
     vsnprintf(errmsg, sizeof(errmsg), fmt, ap);
     va_end(ap);
     Error *e = obj_new(TAG_ERROR, sizeof(Error));
-    ERROR(e) = scary_new(sizeof(StackFrame *));
-    return (Value) e;
+    e->call_stack = scary_new(sizeof(StackFrame *));
+    return (Value) e | FLAG_ERROR;
 }
 
 static Value runtime_error_with_obj(const char *message, Value obj)
