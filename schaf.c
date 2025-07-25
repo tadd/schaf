@@ -34,7 +34,7 @@ static const char *TYPE_NAMES[] = {
     [TYPE_ENV] = "environment",
 };
 
-#define OF_BOOL(v) ((v) ? Qtrue : Qfalse)
+#define OF_BOOL(v) ((!!(v) << 3U) | 0b100U)
 
 // Value (uintptr_t):
 //   0b.....000 Pointer (Unchangeable pattern!)
