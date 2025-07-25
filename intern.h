@@ -157,7 +157,7 @@ typedef struct {
 #define VECTOR(v) (((Vector *) v)->body)
 #define ENV(v) ((Env *) v)
 #define PORT(v) ((Port *) v)
-#define ERROR(v) (((Error *) v)->call_stack)
+#define ERROR(v) (((Error *) ((v) & ~FLAG_MASK_ERROR))->call_stack)
 
 typedef struct {
     int64_t *newline_pos; // list of position | int
@@ -168,6 +168,7 @@ typedef struct {
 #pragma GCC visibility push(hidden) // also affects Clang
 
 extern Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
+extern const uintptr_t FLAG_MASK_ERROR;
 
 Source *iparse(FILE *in, const char *filename);
 Value parse_datum(FILE *in, const char *filename);
