@@ -2050,8 +2050,17 @@ static Value proc_call_with_values(Value env, Value producer, Value consumer)
     return apply(env, consumer, args);
 }
 
-//- dynamic-wind
-//static Value proc_dynamic_wind(Value env, Value before, Value thunk, Value after);
+static Value proc_dynamic_wind(Value env, Value before, Value thunk, Value after)
+{
+    EXPECT(type, TYPE_PROC, before);
+    EXPECT(type, TYPE_PROC, thunk);
+    EXPECT(type, TYPE_PROC, after);
+
+    apply(env, before, Qnil);
+    apply(env, thunk, Qnil);
+    apply(env, after, Qnil);
+    return Qfalse;
+}
 
 // 6.5. Eval
 static Value proc_eval(UNUSED Value genv, Value expr, Value env)
@@ -2520,7 +2529,7 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "call-with-current-continuation", proc_callcc, 1);
     define_procedure(e, "values", proc_values, -1);
     define_procedure(e, "call-with-values", proc_call_with_values, 2);
-    //- dynamic-wind
+    define_procedure(e, "dynamic-wind", proc_dynamic_wind, 3);
     // 6.5. Eval
     define_procedure(e, "eval", proc_eval, 2);
     define_procedure(e, "scheme-report-environment", proc_scheme_report_environment, 1);
