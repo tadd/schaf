@@ -21,6 +21,7 @@
 
 (define fail-message-procs
   `((,> . ,(msg-proc-2 ">"))
+    (,= . ,(msg-proc-2 "="))
     (,equal? . ,(msg-proc-2 "equal?"))
     (,eq? . ,(msg-proc-2 "eq?"))
     (,eqv? . ,(msg-proc-2 "eqv?"))
