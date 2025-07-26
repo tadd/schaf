@@ -1,11 +1,15 @@
 (define tests '())
 (define n-failure 0)
 (define n-success 0)
+(define n-ignored 0)
 (define test-name #f)
 
 (define (describe name f)
   (set! tests `((,name . ,f) . ,tests)))
 ;;(define context describe)
+
+(define (xdescribe name f);; ignored case
+  (set! n-ignored (+ n-ignored 1)))
 
 (define (display* . args)
   (for-each display args))
@@ -72,7 +76,8 @@
 (define (test-summarize)
   (display* "Test summary: "
             n-success " succeeded, "
-            n-failure " failed.")
+            n-failure " failed, "
+            n-ignored " ignored.")
   (newline))
 
 (define (test-init)
