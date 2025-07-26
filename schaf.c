@@ -868,7 +868,7 @@ static Value syn_if(Value env, Value args)
         return eval(env, then);
     Value els = cddr(args);
     if (els == Qnil)
-        return Qnil;
+        return Qfalse;
     return eval(env, car(els));
 }
 
@@ -878,7 +878,7 @@ static Value iset(Value env, Value ident, Value val)
     bool found = env_set(env, ident, val);
     if (!found)
         return runtime_error("unbound variable: %s", value_to_string(ident));
-    return Qnil;
+    return Qfalse;
 }
 
 static Value syn_set(Value env, Value ident, Value expr)
@@ -924,7 +924,7 @@ static Value syn_cond(Value env, Value clauses)
             return eval_body(env, exprs);
         }
     }
-    return Qnil;
+    return Qfalse;
 }
 
 static Value expect_list_head(Value v)
@@ -954,7 +954,7 @@ static Value syn_case(Value env, Value args)
         if (memq(key, data) != Qfalse)
             return eval_body(env, exprs);
     }
-    return Qnil;
+    return Qfalse;
 }
 
 //PTR
@@ -1229,7 +1229,7 @@ static Value define_variable(Value env, Value ident, Value expr)
         found = env_set(env, ident, val);
     if (!found)
         env_put(env, ident, val); // prepend new
-    return Qnil;
+    return Qfalse;
 }
 
 static Value define_proc_internal(Value env, Value heads, Value body)
@@ -1917,7 +1917,7 @@ static Value proc_for_each(Value env, Value args)
         CHECK_ERROR(v);
     }
     CHECK_ERROR_TRUTHY(e);
-    return Qnil;
+    return Qfalse;
 }
 
 [[gnu::noreturn, gnu::noinline]]
@@ -2172,7 +2172,7 @@ static Value proc_display(UNUSED Value env, Value obj)
 static Value proc_newline(UNUSED Value env)
 {
     puts("");
-    return Qnil;
+    return Qfalse;
 }
 
 // 6.6.4. System interface
