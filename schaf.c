@@ -2052,10 +2052,18 @@ static Value proc_open_input_file(UNUSED Value env, Value vpath)
     return value_of_port(fp);
 }
 
+static void close_port(Port *p)
+{
+    if (p->fp == NULL)
+        return;
+    fclose(p->fp);
+    p->fp = NULL; // guarantee safety
+}
+
 static Value proc_close_port(UNUSED Value env, Value port)
 {
     EXPECT(type, TYPE_PORT, port);
-    fclose(PORT(port)->fp);
+    close_port(PORT(port));
     return Qfalse;
 }
 
