@@ -229,6 +229,17 @@ inline const char *value_to_string(Value v)
     return STRING(v)->body;
 }
 
+// define caar, cadr, ... cddddr, 28 procedures, at once
+#define CXR1(f, x) f(a, x); f(d, x);
+#define CXR2(f, x) CXR1(f, a ## x) CXR1(f, d ## x)
+#define CXR3(f, x) CXR2(f, a ## x) CXR2(f, d ## x)
+#define CXR4(f, x) CXR3(f, a) CXR3(f, d)
+#define CXRS(f) CXR2(f,) CXR3(f,) CXR4(f,)
+
+#define DEF_CXR(x, y) \
+    static Value c##x##y##r(Value v) { return c##x##r(c##y##r(v)); }
+CXRS(DEF_CXR)
+
 // value_of_*: Convert external plain C data to internal
 
 inline Value value_of_int(int64_t i)
@@ -297,8 +308,6 @@ static Value apply_cfunc_0(Value env, Value f, UNUSED Value args)
 {
     return CFUNC(f)->f0(env);
 }
-
-static Value cadr(Value l), caddr(Value l);
 
 static Value apply_cfunc_1(Value env, Value f, Value args)
 {
@@ -567,16 +576,6 @@ static void define_procedure(Value env, const char *name, void *cfunc, int64_t a
 {
     env_put(env, value_of_symbol(name), value_of_cfunc(name, cfunc, arity));
 }
-
-#define CXR1(f, x) f(a, x); f(d, x);
-#define CXR2(f, x) CXR1(f, a ## x) CXR1(f, d ## x)
-#define CXR3(f, x) CXR2(f, a ## x) CXR2(f, d ## x)
-#define CXR4(f, x) CXR3(f, a) CXR3(f, d)
-#define CXRS(f) CXR2(f,) CXR3(f,) CXR4(f,)
-
-#define DEF_CXR(x, y) \
-    static Value c##x##y##r(Value v) { return c##x##r(c##y##r(v)); }
-CXRS(DEF_CXR)
 
 //
 // Evaluation
@@ -1639,6 +1638,14 @@ static Value proc_set_cdr(UNUSED Value env, Value pair, Value obj)
     return pair;
 }
 
+#define DEF_CXR_BUILTIN(x, y) \
+    static Value proc_c##x##y##r(UNUSED Value env, Value v) \
+    { \
+        EXPECT(type, TYPE_PAIR, v); \
+        return c##x##y##r(v); \
+    }
+CXRS(DEF_CXR_BUILTIN)
+
 bool value_is_null(Value v)
 {
     return v == Qnil;
@@ -2268,14 +2275,6 @@ int sch_fin(void)
     return exit_status;
 }
 
-#define DEF_CXR_BUILTIN(x, y) \
-    static Value proc_c##x##y##r(UNUSED Value env, Value v) \
-    { \
-        EXPECT(type, TYPE_PAIR, v); \
-        return c##x##y##r(v); \
-    }
-CXRS(DEF_CXR_BUILTIN)
-
 void sch_init(uintptr_t *sp)
 {
     gc_init(sp);
@@ -2375,7 +2374,7 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "car", proc_car, 1);
     define_procedure(e, "cdr", proc_cdr, 1);
 #define DEFUN_CXR(x, y) define_procedure(e, "c" #x #y "r", proc_c##x##y##r, 1)
-    CXRS(DEFUN_CXR); // defines 28 procedures
+    CXRS(DEFUN_CXR); // registers 28 procedures
     define_procedure(e, "set-car!", proc_set_car, 2);
     define_procedure(e, "set-cdr!", proc_set_cdr, 2);
     define_procedure(e, "null?", proc_null_p, 1);
