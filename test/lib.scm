@@ -23,6 +23,10 @@
     ((msg-proc-1 msg) x)
     (display* " to <" y ">")))
 
+(define funcs
+  '(> = equal? eq? eqv? boolean? even? integer? list? negative? null?
+    number? odd? pair? port? positive? procedure? string? symbol? zero?))
+
 (define fail-message-procs
   `((,> . ,(msg-proc-2 ">"))
     (,= . ,(msg-proc-2 "="))
