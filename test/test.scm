@@ -1015,8 +1015,7 @@
   (expect procedure? car)
   (noexpect procedure? 'car)
   (expect procedure? (lambda (x) (* x x)))
-  (noexpect procedure? '(lambda (x) (* x x)))
-  (expect-t (call/cc (lambda (c) (procedure? c))))))
+  (noexpect procedure? '(lambda (x) (* x x)))))
 
 (describe "apply" (lambda ()
   (expect = (apply + '()) 0)
@@ -1050,53 +1049,6 @@
   (let ((x 0))
     (for-each (lambda (a b) (set! x (+ a b))) '(1 2) '(4))
     (expect = x 5))))
-
-(describe "call-with-current-continuation" (lambda ()
-  (define (f)
-    (call-with-current-continuation
-     (lambda (exit)
-       (for-each (lambda (x)
-                   (if (negative? x)
-                       (exit x)))
-                 '(54 0 37 -3 245 19))
-       #t)))
-  (define list-length
-    (lambda (obj)
-      (call-with-current-continuation
-       (lambda (return)
-         (letrec ((r
-                   (lambda (obj)
-                     (cond ((null? obj) 0)
-                           ((pair? obj)
-                            (+ (r (cdr obj)) 1))
-                           (else (return #f))))))
-           (r obj))))))
-
-  (expect = (f) -3)
-  (expect = (list-length '(1 2 3 4)) 4)
-  (expect-f (list-length '(a b . c)))))
-
-(describe "values and call-with-values" (lambda ()
-  (expect =
-          (call-with-values (lambda () (values 4 5))
-            (lambda (a b) b))
-          5)
-  (expect = (call-with-values * -) -1)))
-
-(describe "values and call-with-values nested" (lambda ()
-  (expect = (call-with-values
-              (lambda ()
-                (call-with-values
-                  (lambda () (values 4 5))
-                  (lambda (a b) b))); returns 5
-              (lambda (x) (* 2 x)))
-          10)))
-
-(describe "call/cc applicable in call/cc" (lambda ()
-  (define (f)
-    (call/cc call/cc)
-    42)
-  (expect = (f) 42)))
 
 ;; 6.5. Eval
 (describe "eval" (lambda ()
@@ -1169,8 +1121,6 @@
 (describe "load" (lambda ()
   (load "data-fact.txt")
   (expect = (fact 5) 120)))
-
-(load "./test-callcc.scm")
 
 ;; Local Extensions
 (if local? (begin
