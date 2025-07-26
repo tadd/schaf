@@ -1158,6 +1158,12 @@
   (expect = (list-length '(1 2 3 4)) 4)
   (expect-f (list-length '(a b . c)))))
 
+(describe "call/cc applicable in call/cc" (lambda ()
+  (define (f)
+    (call/cc call/cc)
+    42)
+  (expect = (f) 42)))
+
 (describe "values and call-with-values" (lambda ()
   (expect =
           (call-with-values (lambda () (values 4 5))
@@ -1174,11 +1180,24 @@
               (lambda (x) (* 2 x)))
           10)))
 
-(describe "call/cc applicable in call/cc" (lambda ()
+(describe "dynamic-wind" (lambda ()
   (define (f)
-    (call/cc call/cc)
-    42)
-  (expect = (f) 42)))
+    (let ((path '())
+          (c #f))
+      (let ((add (lambda (s)
+                   (set! path (cons s path)))))
+        (dynamic-wind
+            (lambda () (add 'connect))
+            (lambda () (add (call/cc
+                             (lambda (c0)
+                               (set! c c0)
+                               'talk1))))
+            (lambda () (add 'disconnect)))
+        (if (< (length path) 4)
+            (c 'talk2)
+            (reverse path)))))
+  (expect equal? (f) '(connect talk1 disconnect
+                       connect talk2 disconnect))))
 
 ;; 6.5. Eval
 (describe "eval" (lambda ()
