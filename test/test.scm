@@ -1118,6 +1118,14 @@
   (expect equal? (read-file "test/data-trivial.txt") '(1 2 "abc"))
   (expect equal? (read-file "test/data-fact.txt") fact)))
 
+(describe "read /dev/null" (lambda ()
+  (define (read-file f)
+    (let* ((p (open-input-file f))
+           (data (read p)))
+      (close-input-port p)
+      data))
+  (expect-f (read-file "/dev/null"))))
+
 (describe "call/cc applicable in call/cc" (lambda ()
   (define (f)
     (call/cc call/cc)
