@@ -16,6 +16,7 @@
   (expect eq? '.. '..)
   (expect eq? '... '...)))
 
+;; 4. Expressions
 ;; 4.1. Primitive expression types
 ;; 4.1.2. Literal expressions
 (describe "quote basic" (lambda ()
@@ -434,6 +435,10 @@
   (expect equal? `((foo ,(- 10 3)) ,@(cdr '(c)) . ,(car '(9))) '((foo 7) . 9))
   (expect equal? `((foo ,(- 10 3)) ,@(cdr '(c)) . ,(car '(cons))) '((foo 7) . cons))))
 
+;; 4.3. Macros
+;; 4.3.2. Pattern language
+;; (describe "syntax-rules" ...)
+
 ;; 5. Program structure
 ;; 5.2. Definitions
 (describe "define variable" (lambda ()
@@ -465,6 +470,9 @@
     (define f (lambda () (g)))
     (define g (lambda () 42))
     (expect = (f) 42))))
+
+;; 5.3. Syntax definitions
+;; (describe "define-syntax" ...)
 
 ;; 6. Standard procedures
 ;; 6.1. Equivalence predicates
@@ -1068,6 +1076,13 @@
   (expect = (list-length '(1 2 3 4)) 4)
   (expect-f (list-length '(a b . c)))))
 
+(describe "call/cc applicable in call/cc" (lambda ()
+  (define (f)
+    (call/cc call/cc)
+    42)
+  (expect = (f) 42)))
+
+;; 6.5. Eval
 (describe "eval" (lambda ()
   (expect = (eval '(* 7 3) (scheme-report-environment 5)) 21)
   (let ((f (eval '(lambda (f x) (f x x))
@@ -1126,11 +1141,14 @@
       data))
   (expect-f (read-file "/dev/null"))))
 
-(describe "call/cc applicable in call/cc" (lambda ()
-  (define (f)
-    (call/cc call/cc)
-    42)
-  (expect = (f) 42)))
+;; 6.6.3. Output
+;; (describe "display" ...)
+;; (describe "newline" ...)
+
+;; 6.6.4. System interface
+(describe "load" (lambda ()
+  (load "data-fact.txt")
+  (expect = (fact 5) 120)))
 
 (load "./test-callcc.scm")
 

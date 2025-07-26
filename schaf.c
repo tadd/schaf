@@ -836,6 +836,7 @@ static Value load_inner(const char *path)
 // Built-in Procedures / Syntax
 //
 
+// 4. Expressions
 // 4.1. Primitive expression types
 // 4.1.2. Literal expressions
 static Value syn_quote(UNUSED Value env, Value datum)
@@ -1211,6 +1212,11 @@ static Value syn_unquote_splicing(UNUSED Value env, UNUSED Value args)
     return runtime_error("applied out of quasiquote (`)");
 }
 
+// 4.3. Macros
+// 4.3.2. Pattern language
+//- syntax-rules
+
+// 5. Program structure
 // 5.2. Definitions
 static Value define_variable(Value env, Value ident, Value expr)
 {
@@ -1259,6 +1265,10 @@ static Value syn_define(Value env, Value args)
     UNREACHABLE();
 }
 
+// 5.3. Syntax definitions
+//- define-syntax
+
+// 6. Standard procedures
 // 6.1. Equivalence predicates
 static Value proc_eq(UNUSED Value env, Value x, Value y)
 {
@@ -1296,6 +1306,7 @@ static Value proc_equal(UNUSED Value env, Value x, Value y)
     return OF_BOOL(equal(x, y));
 }
 
+// 6.2. Numbers
 // 6.2.5. Numerical operations
 static int64_t get_int(Value v, Value *err)
 {
@@ -1559,6 +1570,7 @@ static Value proc_expt(UNUSED Value env, Value x, Value y)
     return value_of_int(c);
 }
 
+// 6.3. Other data types
 // 6.3.1. Booleans
 static Value proc_not(UNUSED Value env, Value x)
 {
@@ -1964,6 +1976,7 @@ static Value proc_callcc(Value env, Value proc)
     return apply(env, proc, list1(c));
 }
 
+// 6.5. Eval
 static Value proc_eval(UNUSED Value genv, Value expr, Value env)
 {
     EXPECT(type, TYPE_ENV, env);
@@ -1984,6 +1997,12 @@ static Value proc_null_environment(UNUSED Value env, Value version)
     return env_dup(NULL, env_null);
 }
 
+static Value proc_interaction_environment(UNUSED Value env)
+{
+    return env_dup("interaction", env_default); // alias
+}
+
+// 6.6. Input and output
 // 6.6.1. Ports
 static Value proc_port_p(UNUSED Value env, Value port)
 {
@@ -2188,11 +2207,6 @@ static Value proc_cputime(UNUSED Value env) // in micro sec
     clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t);
     int64_t n = t.tv_sec * MICRO + lround(t.tv_nsec / 1000.0);
     return value_of_int(n);
-}
-
-static Value proc_interaction_environment(UNUSED Value env)
-{
-    return env_dup("interaction", env_default); // alias of "default"
 }
 
 static Value proc_schaf_environment(UNUSED Value env)
