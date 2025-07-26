@@ -1934,7 +1934,7 @@ static Value apply_continuation(UNUSED Value env, Value f, Value args)
 {
     GET_SP(sp);
     Continuation *cont = CONTINUATION(f);
-    cont->retval = car(args);
+    cont->retval = PROCEDURE(f)->arity == 1 ? car(args) : args;
     int64_t d = sp - cont->sp;
     if (d < 1)
         d = 1;
@@ -1943,10 +1943,10 @@ static Value apply_continuation(UNUSED Value env, Value f, Value args)
     jump(cont);
 }
 
-static Value value_of_continuation(void)
+static Value value_of_continuation(int64_t n)
 {
     Continuation *c = obj_new(sizeof(Continuation), TAG_CONTINUATION);
-    c->proc.arity = 1; // by spec
+    c->proc.arity = n; // call/cc: 1, call-with-values: -1
     c->proc.apply = apply_continuation;
     c->sp = c->stack = NULL;
     c->stack_len = 0;
@@ -1970,10 +1970,37 @@ static bool continuation_set(Value c)
 static Value proc_callcc(Value env, Value proc)
 {
     EXPECT(type, TYPE_PROC, proc);
-    Value c = value_of_continuation();
+    Value c = value_of_continuation(1);
     if (continuation_set(c))
         return CONTINUATION(c)->retval;
     return apply(env, proc, list1(c));
+}
+
+static Value inner_continuation = Qfalse; // Yeah we live in the land of single-thread
+
+static Value proc_values(Value env, Value args)
+{
+    if (inner_continuation == Qfalse)
+        return car(args);
+    return apply(env, inner_continuation, args);
+}
+
+static Value proc_call_with_values(Value env, Value producer, Value consumer)
+{
+    EXPECT(type_twin, TYPE_PROC, producer, consumer);
+
+    Value k = value_of_continuation(-1), origk = inner_continuation;
+    Value args;
+    if (continuation_set(k))
+        args = CONTINUATION(k)->retval;
+    else {
+        inner_continuation = k;
+        Value val = apply(env, producer, Qnil);
+        CHECK_ERROR(val);
+        args = list1(val);
+    }
+    inner_continuation = origk;
+    return apply(env, consumer, args);
 }
 
 // 6.5. Eval
@@ -2378,8 +2405,8 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "for-each", proc_for_each, -1);
     define_procedure(e, "call/cc", proc_callcc, 1); // alias
     define_procedure(e, "call-with-current-continuation", proc_callcc, 1);
-    //- values
-    //- call-with-values
+    define_procedure(e, "values", proc_values, -1);
+    define_procedure(e, "call-with-values", proc_call_with_values, 2);
     //- dynamic-wind
     // 6.5. Eval
     define_procedure(e, "eval", proc_eval, 2);

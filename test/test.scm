@@ -1076,6 +1076,22 @@
   (expect = (list-length '(1 2 3 4)) 4)
   (expect-f (list-length '(a b . c)))))
 
+(describe "values and call-with-values" (lambda ()
+  (expect =
+          (call-with-values (lambda () (values 4 5))
+            (lambda (a b) b))
+          5)
+  (expect = (call-with-values * -) -1)))
+
+(describe "values and call-with-values nested" (lambda ()
+  (expect = (call-with-values
+              (lambda ()
+                (call-with-values
+                  (lambda () (values 4 5))
+                  (lambda (a b) b))); returns 5
+              (lambda (x) (* 2 x)))
+          10)))
+
 (describe "call/cc applicable in call/cc" (lambda ()
   (define (f)
     (call/cc call/cc)
