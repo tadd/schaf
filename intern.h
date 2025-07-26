@@ -175,7 +175,7 @@ static inline Value list2_const(Value x, Value y)
 }
 
 #define DUMMY_PAIR() ((Value) &(Pair) { \
-            .header = { .tag = TAG_PAIR }, \
+            .header = { .tag = TAG_PAIR, .immutable = false }, \
             .car = Qundef, .cdr = Qnil \
         })
 
