@@ -118,6 +118,7 @@ static inline bool value_is_procedure(Value v)
     case TAG_STRING:
     case TAG_PAIR:
     case TAG_ENV:
+    case TAG_PORT:
         return false;
     case TAG_ERROR:
         break;
@@ -166,6 +167,8 @@ Type value_type_of(Value v)
         return TYPE_PROC;
     case TAG_ENV:
         return TYPE_ENV;
+    case TAG_PORT:
+        return TYPE_PORT;
     case TAG_ERROR:
         break;
     }
@@ -1248,6 +1251,7 @@ static Value syn_define(Value env, Value args)
     case TYPE_STRING:
     case TYPE_PROC:
     case TYPE_ENV:
+    case TYPE_PORT:
     case TYPE_UNDEF:
         return runtime_error("the first argument expected symbol or pair but got %s",
                              value_type_to_string(t));
@@ -1280,6 +1284,7 @@ static bool equal(Value x, Value y)
     case TYPE_INT:
     case TYPE_PROC:
     case TYPE_ENV:
+    case TYPE_PORT:
     case TYPE_UNDEF:
         return false;
     }
@@ -1979,6 +1984,70 @@ static Value proc_null_environment(UNUSED Value env, Value version)
     return env_dup(NULL, env_null);
 }
 
+// 6.6.1. Ports
+static Value proc_port_p(UNUSED Value env, Value port)
+{
+    return OF_BOOL(value_tag_is(port, TAG_PORT));
+}
+
+static Value value_of_port(FILE *fp)
+{
+    Port *p = obj_new(sizeof(Port), TAG_PORT);
+    p->fp = fp;
+    return (Value) p;
+}
+
+static Value port_stdin(void)
+{
+    static Value p = Qfalse;
+    if (p == Qfalse)
+        p = value_of_port(stdin);
+    return p;
+}
+
+static Value proc_current_input_port(UNUSED Value env)
+{
+    return port_stdin();
+}
+
+static Value proc_open_input_file(UNUSED Value env, Value vpath)
+{
+    EXPECT(type, TYPE_STRING, vpath);
+    const char *path = value_to_string(vpath);
+    FILE *fp = fopen(path, "r");
+    if (fp == NULL)
+        return runtime_error("cannot open file: %s", path);
+    return value_of_port(fp);
+}
+
+static Value proc_close_input_port(UNUSED Value env, Value port)
+{
+    EXPECT(type, TYPE_PORT, port);
+    fclose(PORT(port)->fp);
+    return Qfalse;
+}
+
+// 6.6.2. Input
+static Value iread(FILE *in)
+{
+    Value ast = iparse(in, "<read>");
+    // use #f as an EOF object
+    return ast == Qundef ? Qfalse : caadr(ast);
+}
+
+static Value proc_read(UNUSED Value env, Value args)
+{
+    EXPECT(arity_range, 0, 1, args);
+    Value port;
+    if (args == Qnil)
+        port = port_stdin();
+    else {
+        port = car(args);
+        EXPECT(type, TYPE_PORT, port);
+    }
+    return iread(PORT(port)->fp);
+}
+
 // 6.6.3. Output
 static void display_list(FILE *f, Value l)
 {
@@ -2021,6 +2090,9 @@ static void fdisplay(FILE* f, Value v)
         break;
     case TYPE_ENV:
         fprintf(f, "<environment: %s>", ENV(v)->name);
+        break;
+    case TYPE_PORT:
+        fprintf(f, "<port>");
         break;
     case TYPE_UNDEF:
         fprintf(f, "<undef>");
@@ -2277,8 +2349,13 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "null-environment", proc_null_environment, 1);
     define_procedure(e, "interaction-environment", proc_interaction_environment, 0);
     // 6.6. Input and output
+    // 6.6.1. Ports
+    define_procedure(e, "port?", proc_port_p, 1); // R5RS missing the definition!!
+    define_procedure(e, "open-input-file", proc_open_input_file, 1);
+    define_procedure(e, "close-input-port", proc_close_input_port, 1);
+    define_procedure(e, "current-input-port", proc_current_input_port, 0);
     // 6.6.2. Input
-    //- read
+    define_procedure(e, "read", proc_read, -1);
     // 6.6.3. Output
     define_procedure(e, "display", proc_display, 1);
     define_procedure(e, "newline", proc_newline, 0);

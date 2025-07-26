@@ -18,6 +18,7 @@ typedef enum {
     TYPE_STRING,
     TYPE_PROC,
     TYPE_ENV,
+    TYPE_PORT,
 } Type;
 
 typedef enum {
@@ -28,6 +29,7 @@ typedef enum {
     TAG_CLOSURE,
     TAG_CONTINUATION,
     TAG_ENV,
+    TAG_PORT,
     // internal use only
     TAG_ERROR,
     TAG_LAST = TAG_ERROR
@@ -96,6 +98,11 @@ typedef struct {
 
 typedef struct {
     Header header;
+    FILE *fp;
+} Port;
+
+typedef struct {
+    Header header;
     Value call_stack; // list of '(func-name . location)
 } Error;
 
@@ -111,6 +118,7 @@ typedef struct {
 #define CONTINUATION(v) ((Continuation *) v)
 #define ENV(v) ((Env *) v)
 #define ERROR(v) ((Error *) v)
+#define PORT(v) ((Port *) v)
 
 #pragma GCC visibility push(hidden) // also affects Clang
 

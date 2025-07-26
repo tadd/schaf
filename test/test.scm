@@ -1084,6 +1084,40 @@
   (noexpect equal? r5rs-env null-env)
   (noexpect equal? r5rs-env int-env)))
 
+;; 6.6. Input and output
+;; 6.6.1. Ports
+(describe "port?" (lambda ()
+  (noexpect port? 'port)
+  (noexpect port? #f)))
+
+(describe "current-input-port" (lambda ()
+  (expect port? (current-input-port)) ; test for twice
+  (expect port? (current-input-port))))
+
+(describe "open-input-file" (lambda ()
+  (let ((p (open-input-file "/dev/null")))
+    (expect port? p)
+    (close-input-port p))))
+
+(describe "close-input-port" (lambda ()
+  (let ((p (open-input-file "/dev/null")))
+    (close-input-port p)
+    (expect-t #t))))
+
+;; 6.6.2. Input
+(describe "read" (lambda ()
+  (define (read-file f)
+    (let* ((p (open-input-file f))
+           (data (read p)))
+      (close-input-port p)
+      data))
+  (define fact '(define (fact n)
+                  (if (<= n 2)
+                      n
+                      (* n (fact (- n 1))))))
+  (expect equal? (read-file "test/data-trivial.txt") '(1 2 "abc"))
+  (expect equal? (read-file "test/data-fact.txt") fact)))
+
 (describe "call/cc applicable in call/cc" (lambda ()
   (define (f)
     (call/cc call/cc)
