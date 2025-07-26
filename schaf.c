@@ -230,7 +230,7 @@ inline const char *value_to_string(Value v)
 }
 
 // define caar, cadr, ... cddddr, 28 procedures, at once
-#define CXR1(f, x) f(a, x); f(d, x);
+#define CXR1(f, x) f(a, x) f(d, x)
 #define CXR2(f, x) CXR1(f, a ## x) CXR1(f, d ## x)
 #define CXR3(f, x) CXR2(f, a ## x) CXR2(f, d ## x)
 #define CXR4(f, x) CXR3(f, a) CXR3(f, d)
@@ -2373,7 +2373,7 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "cons", proc_cons, 2);
     define_procedure(e, "car", proc_car, 1);
     define_procedure(e, "cdr", proc_cdr, 1);
-#define DEFUN_CXR(x, y) define_procedure(e, "c" #x #y "r", proc_c##x##y##r, 1)
+#define DEFUN_CXR(x, y) define_procedure(e, "c" #x #y "r", proc_c##x##y##r, 1);
     CXRS(DEFUN_CXR); // registers 28 procedures
     define_procedure(e, "set-car!", proc_set_car, 2);
     define_procedure(e, "set-cdr!", proc_set_cdr, 2);
