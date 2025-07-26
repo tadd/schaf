@@ -1109,6 +1109,10 @@
   (expect port? (current-input-port)) ; test for twice
   (expect port? (current-input-port))))
 
+(describe "current-output-port" (lambda ()
+  (expect port? (current-output-port)) ; test for twice
+  (expect port? (current-output-port))))
+
 (describe "open-input-file" (lambda ()
   (let ((p (open-input-file "/dev/null")))
     (expect port? p)

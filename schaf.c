@@ -2024,9 +2024,22 @@ static Value port_stdin(void)
     return p;
 }
 
+static Value port_stdout(void)
+{
+    static Value p = Qfalse;
+    if (p == Qfalse)
+        p = value_of_port(stdout);
+    return p;
+}
+
 static Value proc_current_input_port(UNUSED Value env)
 {
     return port_stdin();
+}
+
+static Value proc_current_output_port(UNUSED Value env)
+{
+    return port_stdout();
 }
 
 static Value proc_open_input_file(UNUSED Value env, Value vpath)
@@ -2039,7 +2052,7 @@ static Value proc_open_input_file(UNUSED Value env, Value vpath)
     return value_of_port(fp);
 }
 
-static Value proc_close_input_port(UNUSED Value env, Value port)
+static Value proc_close_port(UNUSED Value env, Value port)
 {
     EXPECT(type, TYPE_PORT, port);
     fclose(PORT(port)->fp);
@@ -2368,9 +2381,12 @@ void sch_init(uintptr_t *sp)
     // 6.6. Input and output
     // 6.6.1. Ports
     define_procedure(e, "port?", proc_port_p, 1); // R5RS missing the definition!!
-    define_procedure(e, "open-input-file", proc_open_input_file, 1);
-    define_procedure(e, "close-input-port", proc_close_input_port, 1);
     define_procedure(e, "current-input-port", proc_current_input_port, 0);
+    define_procedure(e, "current-output-port", proc_current_output_port, 0);
+    define_procedure(e, "open-input-file", proc_open_input_file, 1);
+    define_procedure(e, "close-port", proc_close_port, 1);
+    define_procedure(e, "close-output-port", proc_close_port, 1); // alias
+    define_procedure(e, "close-input-port", proc_close_port, 1);  // alias
     // 6.6.2. Input
     define_procedure(e, "read", proc_read, -1);
     // 6.6.3. Output
