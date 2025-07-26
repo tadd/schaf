@@ -16,12 +16,12 @@
 
 (define (msg-proc-1 msg)
   (lambda (x)
-    (display* "<" x "> to be " msg)))
+    (display* "<" x "> " msg)))
 
 (define (msg-proc-2 msg)
   (lambda (x y)
     ((msg-proc-1 msg) x)
-    (display* " to <" y ">")))
+    (display* " <" y ">")))
 
 (define fail-message-procs
   `((,> . ,(msg-proc-2 ">"))
@@ -29,7 +29,21 @@
     (,equal? . ,(msg-proc-2 "equal?"))
     (,eq? . ,(msg-proc-2 "eq?"))
     (,eqv? . ,(msg-proc-2 "eqv?"))
-    (,null? . ,(msg-proc-1 "null?"))))
+    (,boolean? . ,(msg-proc-1 "boolean?"))
+    (,even? . ,(msg-proc-1 "even?"))
+    (,integer? . ,(msg-proc-1 "integer?"))
+    (,list? . ,(msg-proc-1 "list?"))
+    (,negative? . ,(msg-proc-1 "negative?"))
+    (,null? . ,(msg-proc-1 "null?"))
+    (,number? . ,(msg-proc-1 "number?"))
+    (,odd? . ,(msg-proc-1 "odd?"))
+    (,pair? . ,(msg-proc-1 "pair?"))
+    (,port? . ,(msg-proc-1 "port?"))
+    (,positive? . ,(msg-proc-1 "positive?"))
+    (,procedure? . ,(msg-proc-1 "procedure?"))
+    (,string? . ,(msg-proc-1 "string?"))
+    (,symbol? . ,(msg-proc-1 "symbol?"))
+    (,zero? . ,(msg-proc-1 "zero?"))))
 
 (define (succeed)
   (set! n-success (+ n-success 1)))
@@ -40,8 +54,9 @@
   (fail-message proc args))
 
 (define (fail-message proc args)
-  (let ((f (assq proc fail-message-procs)))
-    (apply (cdr f) args)
+  (let* ((entry (assq proc fail-message-procs))
+         (f (if entry (cdr entry) (msg-proc-1 "??"))))
+    (apply f args)
     (newline)))
 
 (define (expect . args)
