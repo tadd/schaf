@@ -493,23 +493,6 @@ static Value expect_arity(int64_t expected, Value args)
                          expected, actual);
 }
 
-static Value append2(Value l1, Value l2)
-{
-    if (l2 == Qnil)
-        return l1;
-    if (l1 == Qnil)
-        return l2;
-
-    Value ret = list1(car(l1)), prev = ret;
-    for (Value p = cdr(l1); p != Qnil; p = cdr(p)) {
-        Value curr = list1(car(p));
-        PAIR(prev)->cdr = curr;
-        prev = curr;
-    }
-    PAIR(prev)->cdr = l2;
-    return ret;
-}
-
 static Value env_new(const char *name)
 {
     Env *e = obj_new(sizeof(Env), TAG_ENV);
@@ -1686,10 +1669,8 @@ static Value proc_length(UNUSED Value env, Value list)
 
 static Value dup_list(Value l, Value *plast)
 {
-    if (l == Qnil) {
-        *plast = Qnil;
+    if (l == Qnil)
         return Qnil;
-    }
     Value dup = DUMMY_PAIR(), last = dup;
     for (Value p = l; p != Qnil; p = cdr(p)) {
         EXPECT(type, TYPE_PAIR, p);
@@ -1701,16 +1682,19 @@ static Value dup_list(Value l, Value *plast)
 
 static Value proc_append(UNUSED Value env, Value ls)
 {
-    Value l = Qnil, last = Qnil, p = ls;
-    for (Value next; p != Qnil && (next = cdr(p)) != Qnil; p = next) {
-        Value dup = dup_list(car(p), &last);
-        l = append2(l, dup);
+    Value l = DUMMY_PAIR(), last = l, p = ls;
+    for (Value next, nlast = Qnil; p != Qnil && (next = cdr(p)) != Qnil; p = next) {
+        Value dup = dup_list(car(p), &nlast);
+        if (dup != Qnil) {
+            PAIR(last)->cdr = dup;
+            last = nlast;
+        }
     }
+    l = cdr(l);
     if (p != Qnil) {
         if (l == Qnil)
-            l = car(p);
-        else
-            PAIR(last)->cdr = car(p);
+            return car(p);
+        PAIR(last)->cdr = car(p);
     }
     return l;
 }
@@ -1857,12 +1841,13 @@ static Value proc_procedure_p(UNUSED Value env, Value o)
 
 static Value build_apply_args(Value args)
 {
-    Value heads = DUMMY_PAIR(), p = args;
-    for (Value last = heads, next; (next = cdr(p)) != Qnil; p = next)
+    Value heads = DUMMY_PAIR(), p = args, last = heads;
+    for (Value next; (next = cdr(p)) != Qnil; p = next)
         last = PAIR(last)->cdr = list1(car(p));
     Value rest = car(p);
     EXPECT(list_head, rest);
-    return append2(cdr(heads), rest);
+    PAIR(last)->cdr = rest;
+    return cdr(heads);
 }
 
 static Value proc_apply(Value env, Value args)

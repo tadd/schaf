@@ -889,7 +889,15 @@
   (expect = (length '(1 2 3 4)) 4)))
 
 (describe "append" (lambda ()
+  (expect equal? '(x y) (append '(x) '(y)))
+  (expect equal? '(a b c d) (append '(a) '(b c d)))
+  (expect equal? (append '(a (b)) '((c))) '(a (b) (c)))
+  (expect equal? (append '(a b) '(c . d)) '(a b c . d))
+  (expect equal? (append '() 'a) 'a)
+
   (expect null? (append))
+  (expect null? (append '()))
+  (expect null? (append '() '()))
   (expect equal? (append '(1))
           '(1))
   (expect equal? (append '(1) '(2))
@@ -901,7 +909,12 @@
   (expect equal? (append '(1 2) '(3 . 4))
           '(1 . (2 . (3 . 4))))
   (expect equal? (append '(1) '(2) '(3))
-          '(1 2 3))))
+          '(1 2 3))
+  (let* ((l '(a))
+         (m '(b c))
+         (ret (append l m)))
+    (expect eqv? (cdr ret) m); shares the last list
+    (noexpect eqv? l ret)))) ; newly allocated
 
 (describe "reverse" (lambda ()
   (expect equal? '() (reverse '()))
