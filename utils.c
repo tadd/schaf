@@ -194,11 +194,15 @@ void table_dump(const Table *t)
     }
 }
 
+static inline uint64_t rotl(uint64_t x, unsigned k)
+{
+	return (x << k) | (x >> (64U - k));
+}
+
 static inline uint64_t table_hash(uint64_t x)
 {
-    x ^= x << 7;
-    x ^= x >> 9;
-    return x; // xorshift64-based
+    const uint64_t seed = UINT64_C(0xd5a61266f0c9392c);
+    return rotl(x + seed, 23) + x; // xoshiro-based
 }
 
 static inline uint64_t body_index(const Table *t, uint64_t key)
