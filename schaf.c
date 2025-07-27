@@ -285,11 +285,16 @@ void *obj_new(size_t size, ValueTag t)
     return p;
 }
 
-Value value_of_string(const char *s)
+static Value value_of_string_move(char *s)
 {
     String *str = obj_new(sizeof(String), TAG_STRING);
-    str->body = xstrdup(s);
+    str->body = s; // move ownership and use as is
     return (Value) str;
+}
+
+Value value_of_string(const char *s)
+{
+    return value_of_string_move(xstrdup(s));
 }
 
 static void expect_cfunc_arity(int64_t actual)
@@ -1812,6 +1817,22 @@ static Value proc_string_eq(UNUSED Value env, Value s1, Value s2)
     return OF_BOOL(strcmp(STRING(s1)->body, STRING(s2)->body) == 0);
 }
 
+static Value proc_string_append(UNUSED Value env, Value args)
+{
+    EXPECT(list_head, args);
+    size_t len = 0;
+    for (Value p = args, v; p != Qnil; p = cdr(p)) {
+        v = car(p);
+        EXPECT(type, TYPE_STRING, v);
+        len += strlen(STRING(v)->body);
+    }
+    char *s = xmalloc(len + 1);
+    s[0] = '\0';
+    for (Value p = args; p != Qnil; p = cdr(p))
+        strcat(s, STRING(car(p))->body);
+    return value_of_string_move(s);
+}
+
 // 6.4. Control features
 static Value proc_procedure_p(UNUSED Value env, Value o)
 {
@@ -2363,6 +2384,7 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "string?", proc_string_p, 1);
     define_procedure(e, "string-length", proc_string_length, 1);
     define_procedure(e, "string=?", proc_string_eq, 2);
+    define_procedure(e, "string-append", proc_string_append, -1);
     // 6.4. Control features
     define_procedure(e, "procedure?", proc_procedure_p, 1);
     define_procedure(e, "apply", proc_apply, -1);

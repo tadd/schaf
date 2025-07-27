@@ -1031,6 +1031,14 @@
   (noexpect string=? "\\" "\\\\")
   (noexpect string=? "ab" "a\"b")))
 
+(describe "string-append" (lambda ()
+  (expect equal? (string-append) "")
+  (expect equal? (string-append "") "")
+  (expect equal? (string-append "a") "a")
+  (expect equal? (string-append "a" "bc") "abc")
+  (expect equal? (string-append "(" "foo" ")") "(foo)")
+  (expect equal? (string-append "(" "f" "" "o" "o" "" ")") "(foo)")))
+
 ;; 6.4. Control features
 (describe "procedure?" (lambda ()
   (expect procedure? car)
