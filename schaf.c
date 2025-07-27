@@ -518,7 +518,9 @@ static Value env_dup(const char *name, const Value orig)
     if (ENV(orig)->parent != Qfalse)
         bug("duplication of chained environment not permitted");
     Env *e = obj_new(sizeof(Env), TAG_ENV);
-    e->name = name == NULL ? xstrdup(ENV(orig)->name)/*copy*/ : xstrdup(name);
+    if (name == NULL)
+        name = ENV(orig)->name; // copy it
+    e->name = xstrdup(name);
     e->table = table_dup(ENV(orig)->table);
     e->parent = Qfalse;
     return (Value) e;
