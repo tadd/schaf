@@ -674,7 +674,7 @@ static void dump_line_column(Value filename, int64_t pos)
     Value newline_pos = caddr(data);
     pos_to_line_col(pos, newline_pos, &line, &col);
     append_error_message("\n\t%s:%"PRId64":%"PRId64" in ",
-                         value_to_string(filename), line, col);
+                         STRING(filename)->body, line, col);
 }
 
 static bool find_pair(Value tree, Value pair)
@@ -2044,7 +2044,7 @@ static Value proc_current_output_port(UNUSED Value env)
 static Value proc_open_input_file(UNUSED Value env, Value vpath)
 {
     EXPECT(type, TYPE_STRING, vpath);
-    const char *path = value_to_string(vpath);
+    const char *path = STRING(vpath)->body;
     FILE *fp = fopen(path, "r");
     if (fp == NULL)
         return runtime_error("cannot open file: %s", path);
@@ -2179,7 +2179,7 @@ static Value proc_load(UNUSED Value env, Value path)
 {
     EXPECT(type, TYPE_STRING, path);
     // Current spec: path is always relative
-    return load_inner(value_to_string(path));
+    return load_inner(STRING(path)->body);
 }
 
 // Extensions from R7RS (scheme process-context)
