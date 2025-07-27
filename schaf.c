@@ -59,10 +59,6 @@ const Value Qfalse = 0b00100U;
 const Value Qtrue  = 0b01100U;
 const Value Qundef = 0b10100U; // may be an error or something
 
-enum {
-    CFUNCARG_MAX = 3,
-};
-
 //
 // Runtime-locals (aka global variables)
 //
@@ -328,28 +324,115 @@ static Value apply_cfunc_3(Value env, Value f, Value args)
     return CFUNC(f)->f3(env, car(args), cadr(args), caddr(args));
 }
 
-static Value cfunc_new(ValueTag tag, const char *name, void *cfunc, int64_t arity)
+
+// generic macro to handle errors and early-returns
+#define CHECK_ERROR(v) do { \
+        Value V = v; \
+        if (UNLIKELY(is_error(V))) \
+            return V; \
+    } while (0)
+#define CHECK_ERROR_TRUTHY(v) do { \
+        Value V = v; \
+        if (UNLIKELY((V) != Qfalse)) \
+            return V; \
+    } while (0)
+#define CHECK_ERROR_LOCATED(v, l) do { \
+        Value V = v; \
+        if (UNLIKELY(is_error(V))) { \
+            if (ERROR(V)->call_stack == Qnil) \
+                ERROR(V)->call_stack = list1(cons(Qfalse, l)); \
+            return V; \
+        } \
+    } while (0)
+#define EXPECT(f, ...) CHECK_ERROR(expect_##f(__VA_ARGS__))
+
+static Value expect_type(Type expected, Value v);
+
+static Value expect_args_type_v(Type t, Value args)
+{
+    for (Value p = args; p != Qnil; p = cdr(p))
+        EXPECT(type, t, car(p));
+    return Qfalse;
+}
+
+static Value apply_typed_cfunc_v(Value env, Value f, Value args)
+{
+    EXPECT(args_type_v, CFUNC(f)->types[0], args);
+    return CFUNC(f)->f1(env, args);
+}
+
+static Value apply_typed_cfunc_1(Value env, Value f, Value args)
+{
+    Value a = car(args);
+    EXPECT(type, CFUNC(f)->types[0], a);
+    return CFUNC(f)->f1(env, a);
+}
+
+static Value apply_typed_cfunc_1_int(Value env, Value f, Value args)
+{
+    Value a = car(args);
+    EXPECT(type, TYPE_INT, a);
+    return CFUNC(f)->f1_int(env, value_to_int(a));
+}
+
+static Value apply_typed_cfunc_1_str(Value env, Value f, Value args)
+{
+    Value a = car(args);
+    EXPECT(type, TYPE_STRING, a);
+    return CFUNC(f)->f1_str(env, value_to_string(a));
+}
+
+static Value apply_typed_cfunc_2(Value env, Value f, Value args)
+{
+    int8_t *types = CFUNC(f)->types;
+    Value a0 = car(args), a1 = cadr(args);
+    EXPECT(type, types[0], a0);
+    EXPECT(type, types[1], a1);
+    return CFUNC(f)->f2(env, a0, a1);
+}
+
+static Value apply_typed_cfunc_3(Value env, Value f, Value args)
+{
+    int8_t *types = CFUNC(f)->types;
+    Value a0 = car(args), a1 = cadr(args), a2 = caddr(args);
+    EXPECT(type, types[0], a0);
+    EXPECT(type, types[1], a1);
+    EXPECT(type, types[2], a2);
+    return CFUNC(f)->f3(env, a0, a1, a2);
+}
+
+static Value cfunc_new(ValueTag tag, const char *name, void *cfunc, int64_t arity, int8_t *types)
 {
     expect_cfunc_arity(arity);
     CFunc *f = obj_new(sizeof(CFunc), tag);
     f->proc.arity = arity;
     f->name = xstrdup(name);
     f->cfunc = cfunc;
+    bool typed = !!types;
+    f->typed = typed;
     switch (arity) {
     case -1:
-        f->proc.apply = apply_cfunc_v;
+        f->proc.apply = typed ? apply_typed_cfunc_v : apply_cfunc_v;
         break;
     case 0:
         f->proc.apply = apply_cfunc_0;
         break;
     case 1:
-        f->proc.apply = apply_cfunc_1;
+        if (typed) {
+            if (types[0] == TYPE_INT)
+                f->proc.apply = apply_typed_cfunc_1_int;
+            else if (types[0] == TYPE_STRING)
+                f->proc.apply = apply_typed_cfunc_1_str;
+            else
+                f->proc.apply = apply_typed_cfunc_1;
+        } else
+            f->proc.apply = apply_cfunc_1;
         break;
     case 2:
-        f->proc.apply = apply_cfunc_2;
+        f->proc.apply = typed ? apply_typed_cfunc_2 : apply_cfunc_2;
         break;
     case 3:
-        f->proc.apply = apply_cfunc_3;
+        f->proc.apply = typed ? apply_typed_cfunc_3 : apply_cfunc_3;
         break;
     default:
         bug("invalid arity: %"PRId64, arity);
@@ -359,12 +442,29 @@ static Value cfunc_new(ValueTag tag, const char *name, void *cfunc, int64_t arit
 
 static Value value_of_cfunc(const char *name, void *cfunc, int64_t arity)
 {
-    return cfunc_new(TAG_CFUNC, name, cfunc, arity);
+    return cfunc_new(TAG_CFUNC, name, cfunc, arity, NULL);
+}
+
+static Value typed_cfunc_new(ValueTag tag, const char *name, void *cfunc, int64_t arity, int8_t types[])
+{
+    Value func = cfunc_new(tag, name, cfunc, arity, types);
+    CFunc *f = CFUNC(func);
+    if (arity > 0)
+        memcpy(f->types, types, sizeof(int8_t) * arity);
+    else if (arity < 0)
+        f->types[0] = types[0];
+    return func;
+}
+
+
+static Value value_of_cfunc_typed(const char *name, void *cfunc, int64_t arity, int8_t types[])
+{
+    return typed_cfunc_new(TAG_CFUNC, name, cfunc, arity, types);
 }
 
 static Value value_of_syntax(const char *name, void *cfunc, int64_t arity)
 {
-    return cfunc_new(TAG_SYNTAX, name, cfunc, arity);
+    return cfunc_new(TAG_SYNTAX, name, cfunc, arity, NULL);
 }
 
 static Value eval_body(Value env, Value body);
@@ -386,6 +486,13 @@ static Value apply_closure(UNUSED Value env, Value proc, Value args)
     }
     return eval_body(clenv, cl->body);
 }
+
+#if 0
+static Value value_of_syntax_typed(const char *name, void *cfunc, int64_t arity, int8_t types[])
+{
+    return typed_cfunc_new(TAG_SYNTAX, name, cfunc, arity, types);
+}
+#endif
 
 static Value value_of_closure(Value env, Value params, Value body)
 {
@@ -432,29 +539,10 @@ const char *error_message(void)
     return errmsg;
 }
 
-// generic macro to handle errors and early-returns
-#define CHECK_ERROR(v) do { \
-        Value V = v; \
-        if (UNLIKELY(is_error(V))) \
-            return V; \
-    } while (0)
-#define CHECK_ERROR_TRUTHY(v) do { \
-        Value V = v; \
-        if (UNLIKELY((V) != Qfalse)) \
-            return V; \
-    } while (0)
-#define CHECK_ERROR_LOCATED(v, l) do { \
-        Value V = v; \
-        if (UNLIKELY(is_error(V))) { \
-            if (ERROR(V)->call_stack == Qnil) \
-                ERROR(V)->call_stack = list1(cons(Qfalse, l)); \
-            return V; \
-        } \
-    } while (0)
-#define EXPECT(f, ...) CHECK_ERROR(expect_##f(__VA_ARGS__))
-
 static Value expect_type(Type expected, Value v)
 {
+    if (expected == TYPE_ANY)
+        return Qfalse;
     Type t = value_type_of(v);
     if (LIKELY(t == expected))
         return Qfalse;
@@ -575,6 +663,40 @@ static void define_procedure_n(Value env, const char *name, void *cfunc, int64_t
 {
     env_put(env, value_of_symbol(name), value_of_cfunc(name, cfunc, arity));
 }
+
+static void decode_types(int64_t arity, va_list ap, int8_t types[])
+{
+    if (arity < 0)
+        arity = 1;
+    for (int i = 0; i < arity; i++)
+        types[i] = va_arg(ap, Type);
+}
+
+static void define_procedure_n_typed(Value env, const char *name, void *cfunc,
+                                   int64_t arity, ...)
+{
+    expect_cfunc_arity(arity);
+    int8_t types[CFUNCARG_MAX];
+    va_list ap;
+    va_start(ap, arity);
+    decode_types(arity, ap, types);
+    va_end(ap);
+    env_put(env, value_of_symbol(name), value_of_cfunc_typed(name, cfunc, arity, types));
+}
+
+#if 0
+static void define_syntax_n_typed(Value env, const char *name, void *cfunc,
+                                int64_t arity, ...)
+{
+    expect_cfunc_arity(arity);
+    int8_t types[CFUNCARG_MAX];
+    va_list ap;
+    va_start(ap, arity);
+    decode_types(arity, ap, types);
+    va_end(ap);
+    env_put(env, value_of_symbol(name), value_of_syntax_typed(name, cfunc, arity, types));
+}
+#endif
 
 //
 // Evaluation
@@ -1259,6 +1381,8 @@ static Value syn_define(Value env, Value args)
     case TYPE_UNDEF:
         return runtime_error("the first argument expected symbol or pair but got %s",
                              value_type_to_string(t));
+    case TYPE_ANY:
+        break;
     }
     UNREACHABLE();
 }
@@ -1295,6 +1419,8 @@ static bool equal(Value x, Value y)
     case TYPE_PORT:
     case TYPE_UNDEF:
         return false;
+    case TYPE_ANY:
+        break;
     }
     UNREACHABLE();
 }
@@ -1458,10 +1584,9 @@ static Value proc_div(UNUSED Value env, Value args)
     return value_of_int(y);
 }
 
-static Value proc_abs(UNUSED Value env, Value x)
+static Value proc_abs(UNUSED Value env, int64_t x)
 {
-    int64_t n = get_int(x);
-    return value_of_int(n < 0 ? -n : n);
+    return value_of_int(x < 0 ? -x : x);
 }
 
 static Value proc_quotient(UNUSED Value env, Value x, Value y)
@@ -2142,6 +2267,8 @@ static void fdisplay(FILE* f, Value v)
     case TYPE_UNDEF:
         fprintf(f, "<undef>");
         break;
+    case TYPE_ANY:
+        UNREACHABLE();
     }
 }
 
@@ -2178,11 +2305,10 @@ static Value proc_newline(UNUSED Value env)
 }
 
 // 6.6.4. System interface
-static Value proc_load(UNUSED Value env, Value path)
+static Value proc_load(UNUSED Value env, const char *path)
 {
-    EXPECT(type, TYPE_STRING, path);
     // Current spec: path is always relative
-    return load_inner(STRING(path)->body);
+    return load_inner(path);
 }
 
 // Extensions from R7RS (scheme process-context)
@@ -2247,6 +2373,8 @@ int sch_fin(void)
 #define ARITY(f) _Generic((f), \
     Value (*)(Value): 0, \
     Value (*)(Value, Value): 1, \
+    Value (*)(Value, int64_t): 1, \
+    Value (*)(Value, const char *): 1, \
     Value (*)(Value, Value, Value): 2, \
     Value (*)(Value, Value, Value, Value): 3, \
     default: -1)
@@ -2260,6 +2388,18 @@ int sch_fin(void)
 #define define_syntax_v(e, name, f) DEFINE_ANY_V(define_syntax_n, e, name, f)
 #define define_procedure(e, name, f) DEFINE_ANY(define_procedure_n, e, name, f)
 #define define_procedure_v(e, name, f) DEFINE_ANY_V(define_procedure_n, e, name, f)
+
+#define ARG_TYPE_1(f) _Generic((f), \
+    Value (*)(Value, Value): TYPE_ANY, \
+    Value (*)(Value, int64_t): TYPE_INT, \
+    Value (*)(Value, const char *): TYPE_STRING, \
+    default: TYPE_UNDEF)
+
+#define define_procedure_typed(e, name, f) do { \
+        static_assert(ARITY(f) >= 0 && ARITY(f) <= 3, "invalid type function"); \
+        static_assert(ARG_TYPE_1(f) != TYPE_UNDEF, "invalid type function"); \
+        define_procedure_n_typed(e, name, f, ARITY(f), ARG_TYPE_1(f)); \
+    } while (0)
 
 void sch_init(uintptr_t *sp)
 {
@@ -2345,7 +2485,7 @@ void sch_init(uintptr_t *sp)
     define_procedure_v(e, "*", proc_mul);
     define_procedure_v(e, "-", proc_sub);
     define_procedure_v(e, "/", proc_div);
-    define_procedure(e, "abs", proc_abs);
+    define_procedure_typed(e, "abs", proc_abs);
     define_procedure(e, "quotient", proc_quotient);
     define_procedure(e, "remainder", proc_remainder);
     define_procedure(e, "modulo", proc_modulo);
@@ -2415,7 +2555,7 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "display", proc_display);
     define_procedure(e, "newline", proc_newline);
     // 6.6.4. System interface
-    define_procedure(e, "load", proc_load);
+    define_procedure_typed(e, "load", proc_load);
 
     env_r5rs = env_dup("r5rs", e);
 
