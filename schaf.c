@@ -429,14 +429,24 @@ const char *error_message(void)
 }
 
 // generic macro to handle errors and early-returns
-#define CHECK_ERROR(v) if (UNLIKELY(is_error(v))) return v
-#define CHECK_ERROR_TRUTHY(v) if (UNLIKELY((v) != Qfalse)) return v
-#define CHECK_ERROR_LOCATED(v, l) \
-    if (UNLIKELY(is_error(v))) { \
-        if (ERROR(v)->call_stack == Qnil) \
-            ERROR(v)->call_stack = list1(cons(Qfalse, l)); \
-        return v; \
-    }
+#define CHECK_ERROR(v) do { \
+        Value V = v; \
+        if (UNLIKELY(is_error(V))) \
+            return V; \
+    } while (0)
+#define CHECK_ERROR_TRUTHY(v) do { \
+        Value V = v; \
+        if (UNLIKELY((V) != Qfalse)) \
+            return V; \
+    } while (0)
+#define CHECK_ERROR_LOCATED(v, l) do { \
+        Value V = v; \
+        if (UNLIKELY(is_error(V))) { \
+            if (ERROR(V)->call_stack == Qnil) \
+                ERROR(V)->call_stack = list1(cons(Qfalse, l)); \
+            return V; \
+        } \
+    } while (0)
 #define EXPECT(f, ...) CHECK_ERROR(expect_##f(__VA_ARGS__))
 
 static Value expect_type(Type expected, Value v)
