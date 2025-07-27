@@ -1684,7 +1684,9 @@ static Value proc_append(UNUSED Value env, Value ls)
 {
     Value l = DUMMY_PAIR(), last = l, p = ls;
     for (Value next, nlast = Qnil; p != Qnil && (next = cdr(p)) != Qnil; p = next) {
-        Value dup = dup_list(car(p), &nlast);
+        Value pl = car(p);
+        EXPECT(list_head, pl);
+        Value dup = dup_list(pl, &nlast);
         if (dup != Qnil) {
             PAIR(last)->cdr = dup;
             last = nlast;
