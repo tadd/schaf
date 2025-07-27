@@ -300,9 +300,50 @@ static void expect_cfunc_arity(int64_t actual)
         CFUNCARG_MAX, actual);
 }
 
-static Value apply_cfunc_v(Value env, Value f, Value args)
+static Value apply_syntax_v(Value env, Value f, Value args)
 {
     return CFUNC(f)->f1(env, args);
+}
+
+static Value apply_syntax_1(Value env, Value f, Value args)
+{
+    return CFUNC(f)->f1(env, car(args));
+}
+
+static Value apply_syntax_2(Value env, Value f, Value args)
+{
+    return CFUNC(f)->f2(env, car(args), cadr(args));
+}
+
+static Value apply_syntax_3(Value env, Value f, Value args)
+{
+    return CFUNC(f)->f3(env, car(args), cadr(args), caddr(args));
+}
+
+static Value eval(Value env, Value v);
+static Value map_eval(Value env, Value l);
+
+#define CHECK_ERROR_LOCATED_BY_CALLER(v, l) do { \
+        Value V = v; \
+        if (UNLIKELY(is_error(V))) { \
+            if (ERROR(V)->call_stack == Qnil) \
+                ERROR(V)->call_stack = Qtrue; \
+            return V; \
+        } \
+    } while (0)
+#if 0
+#define CHECK_ERROR(v) do { \
+        Value V = v; \
+        if (UNLIKELY(is_error(V))) \
+            return V; \
+    } while (0)
+#endif
+
+static Value apply_cfunc_v(Value env, Value f, Value args)
+{
+    Value eargs = map_eval(env, args);
+    CHECK_ERROR_LOCATED_BY_CALLER(eargs, args);
+    return CFUNC(f)->f1(env, eargs);
 }
 
 static Value apply_cfunc_0(Value env, Value f, UNUSED Value args)
@@ -312,17 +353,50 @@ static Value apply_cfunc_0(Value env, Value f, UNUSED Value args)
 
 static Value apply_cfunc_1(Value env, Value f, Value args)
 {
-    return CFUNC(f)->f1(env, car(args));
+    Value a0 = eval(env, car(args));
+    CHECK_ERROR_LOCATED_BY_CALLER(a0, args);
+    return CFUNC(f)->f1(env, a0);
 }
 
 static Value apply_cfunc_2(Value env, Value f, Value args)
 {
-    return CFUNC(f)->f2(env, car(args), cadr(args));
+    Value a0 = eval(env, car(args));
+    CHECK_ERROR_LOCATED_BY_CALLER(a0, args);
+    Value a1 = eval(env, cadr(args));
+    CHECK_ERROR_LOCATED_BY_CALLER(a1, cdr(args));
+    return CFUNC(f)->f2(env, a0, a1);
 }
 
 static Value apply_cfunc_3(Value env, Value f, Value args)
 {
-    return CFUNC(f)->f3(env, car(args), cadr(args), caddr(args));
+    Value a0 = eval(env, car(args));
+    CHECK_ERROR_LOCATED_BY_CALLER(a0, args);
+    Value a1 = eval(env, cadr(args));
+    CHECK_ERROR_LOCATED_BY_CALLER(a1, cdr(args));
+    Value a2 = eval(env, caddr(args));
+    CHECK_ERROR_LOCATED_BY_CALLER(a1, cddr(args));
+    return CFUNC(f)->f3(env, a0, a1, a2);
+}
+
+typedef Value (*ApplyFunc)(Value env, Value proc, Value args);
+
+static ApplyFunc get_apply_func(ValueTag tag, int64_t arity)
+{
+    bool is_syntax = tag == TAG_SYNTAX;
+    switch (arity) {
+    case -1:
+        return is_syntax ? apply_syntax_v : apply_cfunc_v;
+    case 0:
+        return apply_cfunc_0;
+    case 1:
+        return is_syntax ? apply_syntax_1 : apply_cfunc_1;
+    case 2:
+        return is_syntax ? apply_syntax_2 : apply_cfunc_2;
+    case 3:
+        return is_syntax ? apply_syntax_3 : apply_cfunc_3;
+    default:
+        bug("invalid arity: %"PRId64, arity);
+    }
 }
 
 static Value cfunc_new(ValueTag tag, const char *name, void *cfunc, int64_t arity)
@@ -332,25 +406,7 @@ static Value cfunc_new(ValueTag tag, const char *name, void *cfunc, int64_t arit
     f->proc.arity = arity;
     f->name = xstrdup(name);
     f->cfunc = cfunc;
-    switch (arity) {
-    case -1:
-        f->proc.apply = apply_cfunc_v;
-        break;
-    case 0:
-        f->proc.apply = apply_cfunc_0;
-        break;
-    case 1:
-        f->proc.apply = apply_cfunc_1;
-        break;
-    case 2:
-        f->proc.apply = apply_cfunc_2;
-        break;
-    case 3:
-        f->proc.apply = apply_cfunc_3;
-        break;
-    default:
-        bug("invalid arity: %"PRId64, arity);
-    }
+    f->proc.apply = get_apply_func(tag, arity);
     return (Value) f;
 }
 
@@ -618,12 +674,10 @@ static Value eval_apply(Value env, Value l)
     Value proc = eval(env, symproc);
     CHECK_ERROR_LOCATED(proc, l);
     EXPECT(type, TYPE_PROC, proc);
-    if (!value_tag_is(proc, TAG_SYNTAX)) {
-        args = map_eval(env, args);
-        CHECK_ERROR_LOCATED(args, l);
-    }
     Value ret = apply(env, proc, args);
     if (UNLIKELY(is_error(ret))) {
+        if (ERROR(ret)->call_stack == Qtrue)
+            ERROR(ret)->call_stack = list1(cons(Qfalse, l));// Qnil
         const char *fname = (VALUE_TAG(proc) == TAG_CFUNC) ?
             CFUNC(proc)->name : NULL;
         return push_stack_frame(ret, fname, l);
