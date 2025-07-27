@@ -1518,6 +1518,16 @@ static Value proc_expt(UNUSED Value env, Value x, Value y)
     return value_of_int(c);
 }
 
+// 6.2.6. Numerical input and output
+static Value proc_number_to_string(UNUSED Value env, Value x)
+{
+    char buf[22]; // log10(UINT64_MAX)+2
+    EXPECT(type, TYPE_INT, x);
+    int64_t n = value_to_int(x);
+    snprintf(buf, sizeof(buf), "%"PRId64, n);
+    return value_of_string(buf);
+}
+
 // 6.3. Other data types
 // 6.3.1. Booleans
 static Value proc_not(UNUSED Value env, Value x)
@@ -2318,6 +2328,8 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "remainder", proc_remainder, 2);
     define_procedure(e, "modulo", proc_modulo, 2);
     define_procedure(e, "expt", proc_expt, 2);
+    // 6.2.6. Numerical input and output
+    define_procedure(e, "number->string", proc_number_to_string, 1);
     // 6.3. Other data types
     // 6.3.1. Booleans
     define_procedure(e, "not", proc_not, 1);
