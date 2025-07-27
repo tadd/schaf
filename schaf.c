@@ -1301,32 +1301,25 @@ static Value proc_equal(UNUSED Value env, Value x, Value y)
 
 // 6.2. Numbers
 // 6.2.5. Numerical operations
-static int64_t get_int(Value v, Value *err)
-{
-    Value e = expect_type(TYPE_INT, v);
-    if (UNLIKELY(is_error(e))) {
-        *err = e;
-        return 0;
-    }
-    return value_to_int(v);
-}
-
 static Value proc_integer_p(UNUSED Value env, Value obj)
 {
     return OF_BOOL(value_is_int(obj));
 }
+
+#define get_int(x) ({ \
+            Value X = x; \
+            EXPECT(type, TYPE_INT, X); \
+            value_to_int(X); \
+        })
 
 typedef bool (*RelOpFunc)(int64_t x, int64_t y);
 static Value relop(RelOpFunc func, Value args)
 {
     EXPECT(arity_min, 2, args);
 
-    Value e = Qfalse;
-    int64_t x = get_int(car(args), &e);
-    CHECK_ERROR_TRUTHY(e);
+    int64_t x = get_int(car(args));
     while ((args = cdr(args)) != Qnil) {
-        int64_t y = get_int(car(args), &e);
-        CHECK_ERROR_TRUTHY(e);
+        int64_t y = get_int(car(args));
         if (!func(x, y))
             return Qfalse;
         x = y;
@@ -1393,12 +1386,9 @@ static Value proc_even_p(UNUSED Value env, Value obj)
 static Value proc_max(UNUSED Value env, Value args)
 {
     EXPECT(arity_min, 1, args);
-    Value e = Qfalse;
-    int64_t max = get_int(car(args), &e);
-    CHECK_ERROR_TRUTHY(e);
+    int64_t max = get_int(car(args));
     for (Value p = cdr(args); p != Qnil; p = cdr(p)) {
-        int64_t x = get_int(car(p), &e);
-        CHECK_ERROR_TRUTHY(e);
+        int64_t x = get_int(car(p));
         if (max < x)
             max = x;
     }
@@ -1408,12 +1398,9 @@ static Value proc_max(UNUSED Value env, Value args)
 static Value proc_min(UNUSED Value env, Value args)
 {
     EXPECT(arity_min, 1, args);
-    Value e = Qfalse;
-    int64_t min = get_int(car(args), &e);
-    CHECK_ERROR_TRUTHY(e);
+    int64_t min = get_int(car(args));
     for (Value p = cdr(args); p != Qnil; p = cdr(p)) {
-        int64_t x = get_int(car(p), &e);
-        CHECK_ERROR_TRUTHY(e);
+        int64_t x = get_int(car(p));
         if (min > x)
             min = x;
     }
@@ -1423,11 +1410,8 @@ static Value proc_min(UNUSED Value env, Value args)
 static Value proc_add(UNUSED Value env, Value args)
 {
     int64_t y = 0;
-    Value e = Qfalse;
-    for (Value p = args; p != Qnil; p = cdr(p)) {
-        y += get_int(car(p), &e);
-        CHECK_ERROR_TRUTHY(e);
-    }
+    for (Value p = args; p != Qnil; p = cdr(p))
+        y += get_int(car(p));
     return value_of_int(y);
 }
 
@@ -1435,27 +1419,20 @@ static Value proc_sub(UNUSED Value env, Value args)
 {
     EXPECT(arity_min, 1, args);
 
-    Value e = Qfalse;
-    int64_t y = get_int(car(args), &e);
-    CHECK_ERROR_TRUTHY(e);
+    int64_t y = get_int(car(args));
     Value p = cdr(args);
     if (p == Qnil)
         return value_of_int(-y);
-    for (; p != Qnil; p = cdr(p)) {
-        y -= get_int(car(p), &e);
-        CHECK_ERROR_TRUTHY(e);
-    }
+    for (; p != Qnil; p = cdr(p))
+        y -= get_int(car(p));
     return value_of_int(y);
 }
 
 static Value proc_mul(UNUSED Value env, Value args)
 {
-    Value e = Qfalse;
     int64_t y = 1;
-    for (Value p = args; p != Qnil; p = cdr(p)) {
-        y *= get_int(car(p), &e);
-        CHECK_ERROR_TRUTHY(e);
-    }
+    for (Value p = args; p != Qnil; p = cdr(p))
+        y *= get_int(car(p));
     return value_of_int(y);
 }
 
@@ -1463,15 +1440,12 @@ static Value proc_div(UNUSED Value env, Value args)
 {
     EXPECT(arity_min, 1, args);
 
-    Value e = Qfalse;
-    int64_t y = get_int(car(args), &e);
-    CHECK_ERROR_TRUTHY(e);
+    int64_t y = get_int(car(args));
     Value p = cdr(args);
     if (p == Qnil)
        return value_of_int(1 / y);
     for (; p != Qnil; p = cdr(p)) {
-        int64_t x = get_int(car(p), &e);
-        CHECK_ERROR_TRUTHY(e);
+        int64_t x = get_int(car(p));
         if (x == 0)
             return runtime_error("divided by zero");
         y /= x;
@@ -1481,48 +1455,33 @@ static Value proc_div(UNUSED Value env, Value args)
 
 static Value proc_abs(UNUSED Value env, Value x)
 {
-    Value e = Qfalse;
-    int64_t n = get_int(x, &e);
-    CHECK_ERROR_TRUTHY(e);
+    int64_t n = get_int(x);
     return value_of_int(n < 0 ? -n : n);
 }
 
 static Value proc_quotient(UNUSED Value env, Value x, Value y)
 {
-    Value e = Qfalse;
-    int64_t b = get_int(y, &e);
-    CHECK_ERROR_TRUTHY(e);
+    int64_t a = get_int(x), b = get_int(y);
     if (b == 0)
         return runtime_error("divided by zero");
-    int64_t a = get_int(x, &e);
-    CHECK_ERROR_TRUTHY(e);
-    int64_t c = a / b;
-    return value_of_int(c);
+    return value_of_int(a / b);
 }
 
 
 static Value proc_remainder(UNUSED Value env, Value x, Value y)
 {
-    Value e = Qfalse;
-    int64_t b = get_int(y, &e);
-    CHECK_ERROR_TRUTHY(e);
+    int64_t a = get_int(x), b = get_int(y);
     if (b == 0)
         return runtime_error("divided by zero");
-    int64_t a = get_int(x, &e);
-    CHECK_ERROR_TRUTHY(e);
     int64_t c = a % b;
     return value_of_int(c);
 }
 
 static Value proc_modulo(UNUSED Value env, Value x, Value y)
 {
-    Value e = Qfalse;
-    int64_t b = get_int(y, &e);
-    CHECK_ERROR_TRUTHY(e);
+    int64_t a = get_int(x), b = get_int(y);
     if (b == 0)
         return runtime_error("divided by zero");
-    int64_t a = get_int(x, &e);
-    CHECK_ERROR_TRUTHY(e);
     int64_t c = a % b;
     if ((a < 0 && b > 0) || (a > 0 && b < 0))
         c += b;
@@ -1546,14 +1505,10 @@ static int64_t expt(int64_t x, int64_t y)
 
 static Value proc_expt(UNUSED Value env, Value x, Value y)
 {
-    Value e = Qfalse;
-    int64_t a, b, c;
-    a = get_int(x, &e);
-    CHECK_ERROR_TRUTHY(e);
-    b = get_int(y, &e);
-    CHECK_ERROR_TRUTHY(e);
+    int64_t a = get_int(x), b = get_int(y);
     if (b < 0)
         return runtime_error("cannot power %d which negative", b);
+    int64_t c;
     if (b == 0)
         c = 1;
     else if (a == 0)
@@ -1731,9 +1686,7 @@ static Value proc_reverse(UNUSED Value env, Value list)
 static Value list_tail(Value list, Value k)
 {
     EXPECT(list_head, list);
-    Value e = Qfalse;
-    int64_t n = get_int(k, &e);
-    CHECK_ERROR_TRUTHY(e);
+    int64_t n = get_int(k);
     if (n < 0)
         return runtime_error("2nd element needs to be non-negative: "PRId64, n);
     Value p = list;
