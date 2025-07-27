@@ -32,6 +32,7 @@ static const char *TYPE_NAMES[] = {
     [TYPE_STRING] = "string",
     [TYPE_PROC] = "procedure",
     [TYPE_ENV] = "environment",
+    [TYPE_PORT] = "port",
 };
 
 #define OF_BOOL(v) ((!!(v) << 3U) | 0b100U)
@@ -1617,6 +1618,7 @@ static Value proc_cdr(UNUSED Value env, Value pair)
 
 static Value proc_set_car(UNUSED Value env, Value pair, Value obj)
 {
+    EXPECT(type, TYPE_PAIR, pair);
     if (HEADER(pair)->immutable)
         return runtime_error("cannot modify immutable pair");
     PAIR(pair)->car = obj;
@@ -1625,6 +1627,7 @@ static Value proc_set_car(UNUSED Value env, Value pair, Value obj)
 
 static Value proc_set_cdr(UNUSED Value env, Value pair, Value obj)
 {
+    EXPECT(type, TYPE_PAIR, pair);
     if (HEADER(pair)->immutable)
         return runtime_error("cannot modify immutable pair");
     PAIR(pair)->cdr = obj;
@@ -2209,6 +2212,7 @@ static Value proc_newline(UNUSED Value env)
 // 6.6.4. System interface
 static Value proc_load(UNUSED Value env, Value path)
 {
+    EXPECT(type, TYPE_STRING, path);
     // Current spec: path is always relative
     return load_inner(value_to_string(path));
 }
