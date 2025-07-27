@@ -125,7 +125,7 @@ static size_t list_length(const List *l)
     return len;
 }
 
-static double stdev_length(List **body, size_t n, double avr)
+static double stdev_length(List *const *body, size_t n, double avr)
 {
     double s = 0.0;
     for (size_t i = 0; i < n; i++) {

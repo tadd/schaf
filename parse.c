@@ -80,7 +80,7 @@ void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col
     *col = pos - last + 1;
 }
 
-static void get_line_and_column(Parser *p, int64_t *line, int64_t *col)
+static void get_line_and_column(const Parser *p, int64_t *line, int64_t *col)
 {
     int64_t pos = ftell(p->in);
     Value newline_pos = reverse(p->newline_pos);
@@ -424,7 +424,7 @@ static inline Value list3_const(Value x, Value y, Value z)
 }
 
 // AST: (filename syntax_list newline_positions)
-static Value ast_new(Parser *p, Value syntax_list)
+static Value ast_new(const Parser *p, Value syntax_list)
 {
     Value filename = value_of_string(p->filename);
     return list3_const(filename, syntax_list, reverse(p->newline_pos));
