@@ -1161,12 +1161,13 @@
     (expect-t #t))))
 
 ;; 6.6.2. Input
+(define (read-file f)
+  (let* ((p (open-input-file f))
+         (data (read p)))
+    (close-input-port p)
+    data))
+
 (describe "read" (lambda ()
-  (define (read-file f)
-    (let* ((p (open-input-file f))
-           (data (read p)))
-      (close-input-port p)
-      data))
   (define fact '(define (fact n)
                   (if (<= n 2)
                       n
@@ -1175,11 +1176,6 @@
   (expect equal? (read-file "test/data-fact.txt") fact)))
 
 (describe "read /dev/null" (lambda ()
-  (define (read-file f)
-    (let* ((p (open-input-file f))
-           (data (read p)))
-      (close-input-port p)
-      data))
   (expect-f (read-file "/dev/null"))))
 
 ;; 6.6.3. Output
