@@ -1811,6 +1811,33 @@ static Value proc_string_eq(UNUSED Value env, Value s1, Value s2)
     return OF_BOOL(strcmp(STRING(s1)->body, STRING(s2)->body) == 0);
 }
 
+static size_t xstrcat(char *dest, size_t destlen, const char *src)
+{
+    size_t d = strlen(src);
+    if (d == 0)
+        return destlen;
+    destlen += d;
+    dest = xrealloc(dest, destlen);
+    strcat(dest, src);
+    return destlen;
+}
+
+static Value proc_string_append(UNUSED Value env, Value args)
+{
+    EXPECT(list_head, args);
+    char *buf = xstrdup("");
+    size_t len = 1;
+    for (Value p = args, v; p != Qnil; p = cdr(p)) {
+        v = car(p);
+        EXPECT(type, TYPE_STRING, v);
+        const char *s = value_to_string(v);
+        len = xstrcat(buf, len, s);
+    }
+    Value ret = value_of_string(buf);
+    free(buf);
+    return ret;
+}
+
 // 6.4. Control features
 static Value proc_procedure_p(UNUSED Value env, Value o)
 {
@@ -2363,6 +2390,7 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "string?", proc_string_p, 1);
     define_procedure(e, "string-length", proc_string_length, 1);
     define_procedure(e, "string=?", proc_string_eq, 2);
+    define_procedure(e, "string-append", proc_string_append, -1);
     // 6.4. Control features
     define_procedure(e, "procedure?", proc_procedure_p, 1);
     define_procedure(e, "apply", proc_apply, -1);
