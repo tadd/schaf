@@ -2070,11 +2070,10 @@ static Value proc_close_port(UNUSED Value env, Value port)
 static Value iread(FILE *in)
 {
     Value eof = Qfalse; // temporary
-    Value ast = iparse(in, "<read>");
-    if (ast == Qundef)
+    Value datum = parse_datum(in, "<read>");
+    if (datum == Qundef)
         return eof;
-    Value data = cadr(ast);
-    return data == Qnil ? eof : car(data);
+    return datum;
 }
 
 static Value proc_read(UNUSED Value env, Value args)

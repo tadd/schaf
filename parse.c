@@ -439,6 +439,19 @@ Value iparse(FILE *in, const char *filename)
     return ast;
 }
 
+Value parse_datum(FILE *in, const char *filename)
+{
+    Parser *p = parser_new(in, filename);
+    Value datum;
+    if (setjmp(jmp_parse_error) == 0)
+        datum = parse_expr(p);
+    else
+        datum = Qundef;
+    free(p);
+    return datum;
+}
+
+
 Value parse(const char *path)
 {
     FILE *in = fopen(path, "r");

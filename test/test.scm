@@ -1178,6 +1178,12 @@
 (describe "read /dev/null" (lambda ()
   (expect-f (read-file "/dev/null"))))
 
+(describe "read twice" (lambda ()
+  (let* ((p (open-input-file "test/data-double.txt")))
+    (expect equal? (read p) '(1 2 "abc"))
+    (expect equal? (read p) '(3 4 "def"))
+    (close-input-port p))))
+
 ;; 6.6.3. Output
 ;; (describe "display" ...)
 ;; (describe "newline" ...)
