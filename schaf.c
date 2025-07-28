@@ -578,12 +578,86 @@ static void define_procedure(Value env, const char *name, void *cfunc, int64_t a
 //
 static Value eval(Value env, Value v);
 
+#if 0
+static Value eval_apply(Value env, Value l)
+{
+    Value symproc = car(l), args = cdr(l);
+    Value proc = eval(env, symproc);
+    CHECK_ERROR_LOCATED(proc, l);
+    EXPECT(type, TYPE_PROC, proc);
+    if (!value_tag_is(proc, TAG_SYNTAX)) {
+        args = map_eval(env, args);
+        CHECK_ERROR_LOCATED(args, l);
+    }
+    Value ret = apply(env, proc, args);
+    if (UNLIKELY(is_error(ret))) {
+        const char *fname = (VALUE_TAG(proc) == TAG_CFUNC) ?
+            CFUNC(proc)->name : NULL;
+        return push_stack_frame(ret, fname, l);
+    }
+    return ret;
+}
+
+static Value apply_closure(UNUSED Value env, Value proc, Value args)
+{
+    Closure *cl = CLOSURE(proc);
+    int64_t arity = cl->proc.arity;
+    Value clenv = env_inherit(cl->env);
+    Value params = cl->params;
+    if (arity == -1)
+        env_put(clenv, params, args);
+    else {
+        for (Value pa = args, pp = params; pa != Qnil; pa = cdr(pa), pp = cdr(pp))
+            env_put(clenv, car(pp), car(pa));
+    }
+    return eval_body(clenv, cl->body);
+}
+#endif
+
+static Value map_eval(Value env, Value args);
+static Value eval_apply(Value env, Value pair);
+
 static Value eval_body(Value env, Value body)
 {
     Value last = Qnil;
-    for (Value p = body; p != Qnil; p = cdr(p)) {
-        last = eval(env, car(p));
-        CHECK_ERROR(last);
+    Value p = body;
+    Value stack = Qnil;
+    for (;;) {
+        if (p == Qnil) {
+            if (stack == Qnil)
+                break;
+            Value top = car(stack);
+            stack = cdr(stack);// pop!
+            env = car(top);
+            p = cdr(top);
+            continue;
+        }
+        Value v = car(p);
+        if (!value_is_pair(v)) {
+            last = eval(env, v);
+            p = cdr(p);
+            continue;
+        }
+        Value sym = car(v);
+        Value proc = eval(env, sym);
+        CHECK_ERROR_LOCATED(proc, v);
+        if (VALUE_TAG(proc) != TAG_CLOSURE)
+            return eval_apply(env, v);
+        Value args = map_eval(env, cdr(v));
+        CHECK_ERROR_LOCATED(args, v);
+        Closure *cl = CLOSURE(proc);
+        int64_t arity = cl->proc.arity;
+        Value clenv = env_inherit(cl->env);
+        Value params = cl->params;
+        if (arity == -1)
+            env_put(clenv, params, args);
+        else {
+            for (Value pa = args, pp = params; pa != Qnil; pa = cdr(pa), pp = cdr(pp))
+                env_put(clenv, car(pp), car(pa));
+        }
+        stack = cons(cons(env, cdr(p)), stack);// push!
+        env = clenv;
+        p = cl->body;
     }
     return last;
 }
