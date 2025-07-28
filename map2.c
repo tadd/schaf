@@ -2,43 +2,14 @@
 
 #include "schaf.h"
 
-#define MAP_8(c, x, ...) c(x) __VA_OPT__("Too many arguments!")
-#define MAP_7(c, x, ...) c(x) __VA_OPT__(, MAP_8(c, __VA_ARGS__))
-#define MAP_6(c, x, ...) c(x) __VA_OPT__(, MAP_7(c, __VA_ARGS__))
-#define MAP_5(c, x, ...) c(x) __VA_OPT__(, MAP_6(c, __VA_ARGS__))
+#define MAP_5(c, x, ...) c(x) __VA_OPT__("Too many arguments!")
 #define MAP_4(c, x, ...) c(x) __VA_OPT__(, MAP_5(c, __VA_ARGS__))
 #define MAP_3(c, x, ...) c(x) __VA_OPT__(, MAP_4(c, __VA_ARGS__))
 #define MAP_2(c, x, ...) c(x) __VA_OPT__(, MAP_3(c, __VA_ARGS__))
 #define MAP_1(c, x, ...) c(x) __VA_OPT__(, MAP_2(c, __VA_ARGS__))
 #define MAP(c, ...)           __VA_OPT__(MAP_1(c, __VA_ARGS__))
 
-// MAP2: (args).repeated_permutation(2).map{ c(it) }
-#define MAP2x(c, x, y) c(x, y), c(y, x)
-#define MAP2_4(c, x, y, z, w, ...) c(w, w), MAP2x(c, x, w), MAP2x(c, y, w), MAP2x(c, z, w) \
-        __VA_OPT__("Too many arguments!")
-#define MAP2_3(c, x, y, z, ...) c(z, z), MAP2x(c, x, z), MAP2x(c, y, z) \
-        __VA_OPT__(, MAP2_4(c, x, y, z, __VA_ARGS__))
-#define MAP2_2(c, x, y, ...) c(y, y), MAP2x(c, x, y) \
-        __VA_OPT__(, MAP2_3(c, x, y, __VA_ARGS__))
-#define MAP2_1(c, x, ...) c(x, x) __VA_OPT__(, MAP2_2(c, x, __VA_ARGS__))
-#define MAP2(c, ...) __VA_OPT__(MAP2_1(c, __VA_ARGS__))
-
-// MAP3: (args).repeated_permutation(3).map{ c(it) }
-#define MAP3x3(c, x, y, z) c(x, y, z), c(x, z, y), c(y, x, z), c(y, z, x), c(z, x, y), c(z, y, x)
-#define MAP3x2(c, x, y) c(x, x, y), c(x, y, x), c(x, y, y), c(y, x, x), c(y, x, y), c(y, y, x)
-#define MAP3_3(c, x, y, z, ...) c(z, z, z), MAP3x2(c, x, z), MAP3x2(c, y, z), MAP3x3(c, x, y, z) \
-        __VA_OPT__("Too many arguments!")
-#define MAP3_2(c, x, y, ...) c(y, y, y), MAP3x2(c, x, y) \
-        __VA_OPT__(, MAP3_3(c, x, y, __VA_ARGS__))
-#define MAP3_1(c, x, ...) c(x, x, x) __VA_OPT__(, MAP3_2(c, x, __VA_ARGS__))
-#define MAP3(c, ...) __VA_OPT__(MAP3_1(c, __VA_ARGS__))
-
-#define MAPARG_8(c, a, x, ...) c(a, x) __VA_OPT__("Too many arguments!")
-#define MAPARG_7(c, a, x, ...) c(a, x) __VA_OPT__(, MAPARG_8(c, a, __VA_ARGS__))
-#define MAPARG_6(c, a, x, ...) c(a, x) __VA_OPT__(, MAPARG_7(c, a, __VA_ARGS__))
-#define MAPARG_5(c, a, x, ...) c(a, x) __VA_OPT__(, MAPARG_6(c, a, __VA_ARGS__))
-#define MAPARG_4(c, a, x, ...) c(a, x) __VA_OPT__(, MAPARG_5(c, a, __VA_ARGS__))
-#define MAPARG_3(c, a, x, ...) c(a, x) __VA_OPT__(, MAPARG_4(c, a, __VA_ARGS__))
+#define MAPARG_3(c, a, x, ...) c(a, x) __VA_OPT__("Too many arguments!")
 #define MAPARG_2(c, a, x, ...) c(a, x) __VA_OPT__(, MAPARG_3(c, a, __VA_ARGS__))
 #define MAPARG_1(c, a, x, ...) c(a, x) __VA_OPT__(, MAPARG_2(c, a, __VA_ARGS__))
 #define MAPARG(c, a, ...)              __VA_OPT__(MAPARG_1(c, a, __VA_ARGS__))
@@ -51,16 +22,16 @@
         __VA_OPT__(, MAPARG_TWIN_2(c, a, x, __VA_ARGS__))
 #define MAPARG_TWIN(c, a, ...)  __VA_OPT__(MAPARG_TWIN_1(c, a, __VA_ARGS__))
 
+#define MAPARG_EXPAND2(c, a, x, y) \
+        c(a, x, x, y), c(a, x, y, x), c(a, x, y, y), \
+        c(a, y, x, x), c(a, y, x, y), c(a, y, y, x)
 #define MAPARG_TRIP_3(c, a, x, y, z, ...) c(a, z, z, z), \
-        c(a, x, x, z), c(a, x, y, z), c(a, y, x, z), c(a, y, y, z), \
-        c(a, x, z, x), c(a, x, z, y), c(a, y, z, x), c(a, y, z, y), \
-        c(a, z, x, x), c(a, z, x, y), c(a, z, y, x), c(a, z, y, y), \
-        c(a, x, z, z), c(a, y, z, z), c(a, z, z, x), c(a, z, z, y), \
-        c(a, z, x, z), c(a, z, y, z) \
+        c(a, x, y, z), c(a, y, z, x), c(a, z, x, y), \
+        c(a, y, x, z), c(a, x, z, y), c(a, z, y, x), \
+        MAPARG_EXPAND2(c, a, x, z), MAPARG_EXPAND2(c, a, y, z) \
         __VA_OPT__("Too many arguments!")
 #define MAPARG_TRIP_2(c, a, x, y, ...) c(a, y, y, y), \
-        c(a, x, x, y), c(a, x, y, x), c(a, x, y, y), \
-        c(a, y, x, x), c(a, y, x, y), c(a, y, y, x) \
+        MAPARG_EXPAND2(c, a, x, y) \
         __VA_OPT__(, MAPARG_TRIP_3(c, a, x, y, __VA_ARGS__))
 #define MAPARG_TRIP_1(c, a, x, ...) c(a, x, x, x) \
         __VA_OPT__(, MAPARG_TRIP_2(c, a, x, __VA_ARGS__))
