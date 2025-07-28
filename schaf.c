@@ -1469,7 +1469,6 @@ static Value proc_quotient(UNUSED Value env, Value x, Value y)
     return value_of_int(a / b);
 }
 
-
 static Value proc_remainder(UNUSED Value env, Value x, Value y)
 {
     int64_t a = get_int(x), b = get_int(y);

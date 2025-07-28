@@ -450,7 +450,6 @@ Value parse_datum(FILE *in, const char *filename)
     return datum;
 }
 
-
 Value parse(const char *path)
 {
     FILE *in = fopen(path, "r");
