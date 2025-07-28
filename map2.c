@@ -14,69 +14,48 @@
 #define MAPARG_1(c, a, x, ...) c(a, x) __VA_OPT__(, MAPARG_2(c, a, __VA_ARGS__))
 #define MAPARG(c, a, ...)              __VA_OPT__(MAPARG_1(c, a, __VA_ARGS__))
 
-#define MAPARG_TWIN_3(c, a, x, y, ...) c(a, x, y), c(a, y, x), c(a, y, y) \
+#define MAPARG_TWIN_EXPAND(c, a, x, y) c(a, x, y), c(a, y, x), c(a, y, y)
+#define MAPARG_TWIN_3(c, a, x, y, ...) MAPARG_TWIN_EXPAND(c, a, x, y) \
         __VA_OPT__("Too many arguments!")
-#define MAPARG_TWIN_2(c, a, x, y, ...) c(a, x, y), c(a, y, x), c(a, y, y) \
+#define MAPARG_TWIN_2(c, a, x, y, ...) MAPARG_TWIN_EXPAND(c, a, x, y) \
         __VA_OPT__(, MAPARG_TWIN_3(c, a, y, __VA_ARGS__))
 #define MAPARG_TWIN_1(c, a, x, ...) c(a, x, x) \
         __VA_OPT__(, MAPARG_TWIN_2(c, a, x, __VA_ARGS__))
 #define MAPARG_TWIN(c, a, ...)  __VA_OPT__(MAPARG_TWIN_1(c, a, __VA_ARGS__))
 
-#define MAPARG_EXPAND2(c, a, x, y) \
+#define MAPARG_TRIP_EXPAND(c, a, x, y) \
         c(a, x, x, y), c(a, x, y, x), c(a, x, y, y), \
         c(a, y, x, x), c(a, y, x, y), c(a, y, y, x)
 #define MAPARG_TRIP_3(c, a, x, y, z, ...) c(a, z, z, z), \
         c(a, x, y, z), c(a, y, z, x), c(a, z, x, y), \
         c(a, y, x, z), c(a, x, z, y), c(a, z, y, x), \
-        MAPARG_EXPAND2(c, a, x, z), MAPARG_EXPAND2(c, a, y, z) \
+        MAPARG_TRIP_EXPAND(c, a, x, z), MAPARG_TRIP_EXPAND(c, a, y, z) \
         __VA_OPT__("Too many arguments!")
 #define MAPARG_TRIP_2(c, a, x, y, ...) c(a, y, y, y), \
-        MAPARG_EXPAND2(c, a, x, y) \
+        MAPARG_TRIP_EXPAND(c, a, x, y) \
         __VA_OPT__(, MAPARG_TRIP_3(c, a, x, y, __VA_ARGS__))
 #define MAPARG_TRIP_1(c, a, x, ...) c(a, x, x, x) \
         __VA_OPT__(, MAPARG_TRIP_2(c, a, x, __VA_ARGS__))
-#define MAPARG_TRIP(c, a, ...)  __VA_OPT__(MAPARG_TRIP_1(c, a, __VA_ARGS__))
+#define MAPARG_TRIP(c, a, ...) __VA_OPT__(MAPARG_TRIP_1(c, a, __VA_ARGS__))
 
 #define UNWRAP(...) __VA_ARGS__
 
-#define MAP2_TWIN_6(c, ys, x, ...) MAPARG(c, x, UNWRAP ys) \
+#define MAPx_TWIN_6(c, m, ys, x, ...) m(c, x, UNWRAP ys) \
         __VA_OPT__("Too many arguments!")
-#define MAP2_TWIN_5(c, ys, x, ...) MAPARG(c, x, UNWRAP ys) \
-        __VA_OPT__(, MAP2_TWIN_6(c, ys, __VA_ARGS__))
-#define MAP2_TWIN_4(c, ys, x, ...) MAPARG(c, x, UNWRAP ys) \
-        __VA_OPT__(, MAP2_TWIN_5(c, ys, __VA_ARGS__))
-#define MAP2_TWIN_3(c, ys, x, ...) MAPARG(c, x, UNWRAP ys) \
-        __VA_OPT__(, MAP2_TWIN_4(c, ys, __VA_ARGS__))
-#define MAP2_TWIN_2(c, ys, x, ...) MAPARG(c, x, UNWRAP ys) \
-        __VA_OPT__(, MAP2_TWIN_3(c, ys, __VA_ARGS__))
-#define MAP2_TWIN_1(c, ys, ...) __VA_OPT__(MAP2_TWIN_2(c, ys, __VA_ARGS__))
-#define MAP2_TWIN(c, xs, ys) MAP2_TWIN_1(c, ys, UNWRAP xs)
+#define MAPx_TWIN_5(c, m, ys, x, ...) m(c, x, UNWRAP ys) \
+        __VA_OPT__(, MAPx_TWIN_6(c, m, ys, __VA_ARGS__))
+#define MAPx_TWIN_4(c, m, ys, x, ...) m(c, x, UNWRAP ys) \
+        __VA_OPT__(, MAPx_TWIN_5(c, m, ys, __VA_ARGS__))
+#define MAPx_TWIN_3(c, m, ys, x, ...) m(c, x, UNWRAP ys) \
+        __VA_OPT__(, MAPx_TWIN_4(c, m, ys, __VA_ARGS__))
+#define MAPx_TWIN_2(c, m, ys, x, ...) m(c, x, UNWRAP ys) \
+        __VA_OPT__(, MAPx_TWIN_3(c, m, ys, __VA_ARGS__))
+#define MAPx_TWIN_1(c, m, ys, ...) __VA_OPT__(MAPx_TWIN_2(c, m, ys, __VA_ARGS__))
+#define MAPx_TWIN(c, m, xs, ys) MAPx_TWIN_1(c, m, ys, UNWRAP xs)
 
-#define MAP3_TWIN_6(c, ys, x, ...) MAPARG_TWIN(c, x, UNWRAP ys) \
-        __VA_OPT__("Too many arguments!")
-#define MAP3_TWIN_5(c, ys, x, ...) MAPARG_TWIN(c, x, UNWRAP ys) \
-        __VA_OPT__(, MAP3_TWIN_6(c, ys, __VA_ARGS__))
-#define MAP3_TWIN_4(c, ys, x, ...) MAPARG_TWIN(c, x, UNWRAP ys) \
-        __VA_OPT__(, MAP3_TWIN_5(c, ys, __VA_ARGS__))
-#define MAP3_TWIN_3(c, ys, x, ...) MAPARG_TWIN(c, x, UNWRAP ys) \
-        __VA_OPT__(, MAP3_TWIN_4(c, ys, __VA_ARGS__))
-#define MAP3_TWIN_2(c, ys, x, ...) MAPARG_TWIN(c, x, UNWRAP ys) \
-        __VA_OPT__(, MAP3_TWIN_3(c, ys, __VA_ARGS__))
-#define MAP3_TWIN_1(c, ys, ...) __VA_OPT__(MAP3_TWIN_2(c, ys, __VA_ARGS__))
-#define MAP3_TWIN(c, xs, ys) MAP3_TWIN_1(c, ys, UNWRAP xs)
-
-#define MAP4_TWIN_6(c, ys, x, ...) MAPARG_TRIP(c, x, UNWRAP ys) \
-        __VA_OPT__("Too many arguments!")
-#define MAP4_TWIN_5(c, ys, x, ...) MAPARG_TRIP(c, x, UNWRAP ys) \
-        __VA_OPT__(, MAP4_TWIN_6(c, ys, __VA_ARGS__))
-#define MAP4_TWIN_4(c, ys, x, ...) MAPARG_TRIP(c, x, UNWRAP ys) \
-        __VA_OPT__(, MAP4_TWIN_5(c, ys, __VA_ARGS__))
-#define MAP4_TWIN_3(c, ys, x, ...) MAPARG_TRIP(c, x, UNWRAP ys) \
-        __VA_OPT__(, MAP4_TWIN_4(c, ys, __VA_ARGS__))
-#define MAP4_TWIN_2(c, ys, x, ...) MAPARG_TRIP(c, x, UNWRAP ys) \
-        __VA_OPT__(, MAP4_TWIN_3(c, ys, __VA_ARGS__))
-#define MAP4_TWIN_1(c, ys, ...) __VA_OPT__(MAP4_TWIN_2(c, ys, __VA_ARGS__))
-#define MAP4_TWIN(c, xs, ys) MAP4_TWIN_1(c, ys, UNWRAP xs)
+#define MAP2_TWIN(c, xs, ys) MAPx_TWIN(c, MAPARG, xs, ys)
+#define MAP3_TWIN(c, xs, ys) MAPx_TWIN(c, MAPARG_TWIN, xs, ys)
+#define MAP4_TWIN(c, xs, ys) MAPx_TWIN(c, MAPARG_TRIP, xs, ys)
 
 #define TYPES_ARG Value, int64_t, const char*
 #define TYPES_RET TYPES_ARG, void, bool
