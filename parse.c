@@ -345,7 +345,7 @@ static Value parse_list(Parser *p)
         if (c == ')')
             break;
         if (c == EOF)
-            parse_error(p, "')'", "'EOF'");
+            parse_error(p, "')'", "EOF");
         if (c == '.')
             return parse_dotted_pair(p, cdr(ret), last);
         ungetc(c, p->in);
@@ -365,7 +365,7 @@ static Value parse_quoted(Parser *p, Value sym)
 {
     Value e = parse_expr(p);
     if (e == Qundef)
-        parse_error(p, "expression", "'EOF'");
+        parse_error(p, "expression", "EOF");
     return list2_const(sym, e);
 }
 

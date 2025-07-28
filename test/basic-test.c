@@ -182,8 +182,8 @@ Test(schaf, parse_lambda) {
 }
 
 Test(schaf, parse_broken) {
-    expect_parse_error("got 'EOF'", "(");
-    expect_parse_error("got 'EOF'", "'");
+    expect_parse_error("got EOF", "(");
+    expect_parse_error("got EOF", "'");
 }
 
 Test(schaf, parse_error_line_column) {
