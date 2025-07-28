@@ -2,12 +2,17 @@
 
 #include "schaf.h"
 
-#define MAP_4(c, x, ...) c(x) __VA_OPT__("Too many arguments for MAP()!")
+#define MAP_8(c, x, ...) c(x) __VA_OPT__("Too many arguments for MAP()!")
+#define MAP_7(c, x, ...) c(x) __VA_OPT__(, MAP_8(c, __VA_ARGS__))
+#define MAP_6(c, x, ...) c(x) __VA_OPT__(, MAP_7(c, __VA_ARGS__))
+#define MAP_5(c, x, ...) c(x) __VA_OPT__(, MAP_6(c, __VA_ARGS__))
+#define MAP_4(c, x, ...) c(x) __VA_OPT__(, MAP_5(c, __VA_ARGS__))
 #define MAP_3(c, x, ...) c(x) __VA_OPT__(, MAP_4(c, __VA_ARGS__))
 #define MAP_2(c, x, ...) c(x) __VA_OPT__(, MAP_3(c, __VA_ARGS__))
 #define MAP_1(c, x, ...) c(x) __VA_OPT__(, MAP_2(c, __VA_ARGS__))
 #define MAP(c, ...)           __VA_OPT__(MAP_1(c, __VA_ARGS__))
 
+// MAP2: (args).repeated_permutation(2).map{ c(it) }
 #define MAP2x(c, x, y) c(x, y), c(y, x)
 #define MAP2_4(c, x, y, z, w, ...) c(w, w), MAP2x(c, x, w), MAP2x(c, y, w), MAP2x(c, z, w) \
         __VA_OPT__("Too many arguments for MAP2()!")
@@ -18,25 +23,72 @@
 #define MAP2_1(c, x, ...) c(x, x) __VA_OPT__(, MAP2_2(c, x, __VA_ARGS__))
 #define MAP2(c, ...) __VA_OPT__(MAP2_1(c, __VA_ARGS__))
 
-#define TYPES Value, int64_t, const char*
+// MAP3: (args).repeated_permutation(3).map{ c(it) }
+#define MAP3x3(c, x, y, z) c(x, y, z), c(x, z, y), c(y, x, z), c(y, z, x), c(z, x, y), c(z, y, x)
+#define MAP3x2(c, x, y) c(x, x, y), c(x, y, x), c(x, y, y), c(y, x, x), c(y, x, y), c(y, y, x)
+#define MAP3_3(c, x, y, z, ...) c(z, z, z), MAP3x2(c, x, z), MAP3x2(c, y, z), MAP3x3(c, x, y, z) \
+        __VA_OPT__("Too many arguments for MAP3()!")
+#define MAP3_2(c, x, y, ...) c(y, y, y), MAP3x2(c, x, y) \
+        __VA_OPT__(, MAP3_3(c, x, y, __VA_ARGS__))
+#define MAP3_1(c, x, ...) c(x, x, x) __VA_OPT__(, MAP3_2(c, x, __VA_ARGS__))
+#define MAP3(c, ...) __VA_OPT__(MAP3_1(c, __VA_ARGS__))
+
+#define MAPARG_8(c, a, x, ...) c(a, x) __VA_OPT__("Too many arguments for MAPARG()!")
+#define MAPARG_7(c, a, x, ...) c(a, x) __VA_OPT__(, MAPARG_8(c, a, __VA_ARGS__))
+#define MAPARG_6(c, a, x, ...) c(a, x) __VA_OPT__(, MAPARG_7(c, a, __VA_ARGS__))
+#define MAPARG_5(c, a, x, ...) c(a, x) __VA_OPT__(, MAPARG_6(c, a, __VA_ARGS__))
+#define MAPARG_4(c, a, x, ...) c(a, x) __VA_OPT__(, MAPARG_5(c, a, __VA_ARGS__))
+#define MAPARG_3(c, a, x, ...) c(a, x) __VA_OPT__(, MAPARG_4(c, a, __VA_ARGS__))
+#define MAPARG_2(c, a, x, ...) c(a, x) __VA_OPT__(, MAPARG_3(c, a, __VA_ARGS__))
+#define MAPARG_1(c, a, x, ...) c(a, x) __VA_OPT__(, MAPARG_2(c, a, __VA_ARGS__))
+#define MAPARG(c, a, ...)              __VA_OPT__(MAPARG_1(c, a, __VA_ARGS__))
+
+#define UNWRAP(...) __VA_ARGS__
+
+#define MAP2_TWIN_6(c, ys, x, ...) MAPARG(c, x, UNWRAP ys) \
+        __VA_OPT__(, MAP2_TWIN_7(c, ys, __VA_ARGS__))
+#define MAP2_TWIN_5(c, ys, x, ...) MAPARG(c, x, UNWRAP ys) \
+        __VA_OPT__(, MAP2_TWIN_6(c, ys, __VA_ARGS__))
+#define MAP2_TWIN_4(c, ys, x, ...) MAPARG(c, x, UNWRAP ys) \
+        __VA_OPT__(, MAP2_TWIN_5(c, ys, __VA_ARGS__))
+#define MAP2_TWIN_3(c, ys, x, ...) MAPARG(c, x, UNWRAP ys) \
+        __VA_OPT__(, MAP2_TWIN_4(c, ys, __VA_ARGS__))
+#define MAP2_TWIN_2(c, ys, x, ...) MAPARG(c, x, UNWRAP ys) \
+        __VA_OPT__(, MAP2_TWIN_3(c, ys, __VA_ARGS__))
+#define MAP2_TWIN_1(c, ys, ...) __VA_OPT__(MAP2_TWIN_2(c, ys, __VA_ARGS__))
+#define MAP2_TWIN(c, xs, ys) MAP2_TWIN_1(c, ys, UNWRAP xs)
+
+#define TYPES_ARG Value, int64_t, const char*
+#define TYPES_RET TYPES_ARG, void, bool
+#define TY3_PAT(t, u, v) Value (*)(Value, t, u, v): 3
 #define TY2_PAT(t, u) Value (*)(Value, t, u): 2
-#define TY1_PAT(t) Value (*)(Value, t): 1
-#define TY2 MAP2(TY2_PAT, TYPES)
-#define TY1 MAP(TY1_PAT, TYPES)
-#define TY0 Value (*)(Value): 0
-#define PATS TY0, TY1, TY2
+#define TY1_PAT(t, u) t (*)(Value, u): 1
+#define TY0_PAT(t) t (*)(Value): 0
+#define TY3 MAP3(TY3_PAT, TYPES_ARG)
+#define TY2 MAP2(TY2_PAT, TYPES_ARG)
+#define TY1 MAP2_TWIN(TY1_PAT, (TYPES_RET), (TYPES_ARG))
+#define TY0 MAP(TY0_PAT, TYPES_RET)
+#define PATS TY0, TY1, TY2, TY3
 #define ARITY(f) _Generic((f), PATS, default: -1)
 
 Value f(Value env);
 Value g(Value env, const char *s);
 Value h(Value env, int64_t i);
 Value i(Value env, int64_t i, const char *s);
+Value j(Value env, int64_t i, const char *s, Value v);
+bool k(Value env);
+void l(Value env);
+
+#define print_arity(f) printf(#f": %d\n", ARITY(f))
 
 int main(void)
 {
-    printf("f: %d\n", ARITY(f));
-    printf("g: %d\n", ARITY(g));
-    printf("h: %d\n", ARITY(h));
-    printf("i: %d\n", ARITY(i));
+    print_arity(f);
+    print_arity(g);
+    print_arity(h);
+    print_arity(i);
+    print_arity(j);
+    print_arity(k);
+    print_arity(l);
 }
 
