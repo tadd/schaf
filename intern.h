@@ -17,6 +17,7 @@ typedef enum {
     TYPE_PAIR,
     TYPE_STRING,
     TYPE_PROC,
+    TYPE_VECTOR,
     TYPE_ENV,
     TYPE_PORT,
 } Type;
@@ -28,6 +29,7 @@ typedef enum {
     TAG_SYNTAX, // almost a C Function
     TAG_CLOSURE,
     TAG_CONTINUATION,
+    TAG_VECTOR,
     TAG_ENV,
     TAG_PORT,
     // internal use only
@@ -91,6 +93,12 @@ typedef struct {
 
 typedef struct {
     Header header;
+    int64_t length, capacity;
+    Value *body;
+} Vector;
+
+typedef struct {
+    Header header;
     char *name;
     Value parent;
     Table *table;
@@ -116,6 +124,7 @@ typedef struct {
 #define CFUNC(v) ((CFunc *) v)
 #define CLOSURE(v) ((Closure *) v)
 #define CONTINUATION(v) ((Continuation *) v)
+#define VECTOR(v) ((Vector *) v)
 #define ENV(v) ((Env *) v)
 #define PORT(v) ((Port *) v)
 #define ERROR(v) ((Error *) v)
@@ -156,6 +165,9 @@ Value cons(Value car, Value cdr);
 Value car(Value v);
 Value cdr(Value v);
 int64_t length(Value list);
+
+Value vector_new(void);
+Value vector_push(Value v, Value e);
 
 #pragma GCC visibility pop
 

@@ -118,6 +118,7 @@ static inline bool value_is_procedure(Value v)
         return true;
     case TAG_STRING:
     case TAG_PAIR:
+    case TAG_VECTOR:
     case TAG_ENV:
     case TAG_PORT:
         return false;
@@ -166,6 +167,8 @@ Type value_type_of(Value v)
     case TAG_CLOSURE:
     case TAG_CONTINUATION:
         return TYPE_PROC;
+    case TAG_VECTOR:
+        return TYPE_VECTOR;
     case TAG_ENV:
         return TYPE_ENV;
     case TAG_PORT:
@@ -1255,6 +1258,7 @@ static Value syn_define(Value env, Value args)
     case TYPE_INT:
     case TYPE_STRING:
     case TYPE_PROC:
+    case TYPE_VECTOR:
     case TYPE_ENV:
     case TYPE_PORT:
     case TYPE_UNDEF:
@@ -1274,6 +1278,19 @@ static Value proc_eq(UNUSED Value env, Value x, Value y)
     return OF_BOOL(x == y);
 }
 
+static bool equal(Value x, Value y);
+
+static bool vector_equal(const Vector *x, const Vector *y)
+{
+    if (x->length != y->length)
+        return false;
+    for (int64_t i = 0; i < x->length; i++) {
+        if (!equal(x->body[i], y->body[i]))
+            return false;
+    }
+    return true;
+}
+
 static bool equal(Value x, Value y)
 {
     if (x == y)
@@ -1287,6 +1304,8 @@ static bool equal(Value x, Value y)
                equal(cdr(x), cdr(y));
     case TYPE_STRING:
         return (strcmp(STRING(x)->body, STRING(y)->body) == 0);
+    case TYPE_VECTOR:
+        return vector_equal(VECTOR(x), VECTOR(y));
     case TYPE_SYMBOL:
     case TYPE_NULL:
     case TYPE_BOOL:
@@ -1832,6 +1851,53 @@ static Value proc_string_append(UNUSED Value env, Value args)
     return value_of_string_move(s);
 }
 
+// 6.3.6. Vectors
+Value vector_new(void)
+{
+    const int64_t INIT_LEN = 2;
+    Vector *v = obj_new(sizeof(Vector), TAG_VECTOR);
+    v->length = 0;
+    v->capacity = INIT_LEN;
+    v->body = xmalloc(sizeof(Value) * v->capacity);
+    return (Value) v;
+}
+
+Value vector_push(Value vv, Value e)
+{
+    Vector *v = VECTOR(vv);
+    if (v->length == v->capacity) {
+        v->capacity *= 2;
+        v->body = xrealloc(v->body, sizeof(Value) * v->capacity);
+    }
+    v->body[v->length++] = e;
+    return vv;
+}
+
+static Value proc_vector_p(UNUSED Value env, Value o)
+{
+    return OF_BOOL(value_tag_is(o, TAG_VECTOR));
+}
+
+static Value proc_vector(UNUSED Value env, Value args)
+{
+    Value v = vector_new();
+    for (Value p = args; p != Qnil; p = cdr(p))
+        vector_push(v, car(p));
+    return v;
+}
+
+static Value proc_vector_ref(UNUSED Value env, Value o, Value k)
+{
+    EXPECT(type, TYPE_VECTOR, o);
+    int64_t i = get_int(k);
+    if (i < 0)
+        return runtime_error("invalid index: negative integer %"PRId64, i);
+    Vector *v = VECTOR(o);
+    if (i >= v->length)
+        return Qfalse;
+    return v->body[i];
+}
+
 // 6.4. Control features
 static Value proc_procedure_p(UNUSED Value env, Value o)
 {
@@ -2126,6 +2192,20 @@ static void display_list(FILE *f, Value l)
     fprintf(f, ")");
 }
 
+static void display_vector(FILE *f, Value vv)
+{
+    Vector *v = VECTOR(vv);
+    fprintf(f, "#(");
+    for (int64_t i = 0; i < v->length; i++) {
+        Value e = v->body[i];
+        fdisplay(f, e);
+        if (i + 1 == v->length)
+            break;
+        fprintf(f, " ");
+    }
+    fprintf(f, ")");
+}
+
 static void fdisplay(FILE* f, Value v)
 {
     switch (value_type_of(v)) {
@@ -2147,6 +2227,9 @@ static void fdisplay(FILE* f, Value v)
         break;
     case TYPE_PROC:
         fprintf(f, "<procedure>");
+        break;
+    case TYPE_VECTOR:
+        display_vector(f, v);
         break;
     case TYPE_ENV:
         fprintf(f, "<environment: %s>", ENV(v)->name);
@@ -2384,6 +2467,11 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "string-length", proc_string_length, 1);
     define_procedure(e, "string=?", proc_string_eq, 2);
     define_procedure(e, "string-append", proc_string_append, -1);
+    // 6.3.6. Vectors
+    define_procedure(e, "vector?", proc_vector_p, 1);
+    define_procedure(e, "vector", proc_vector, -1);
+    define_procedure(e, "vector-ref", proc_vector_ref, 2);
+
     // 6.4. Control features
     define_procedure(e, "procedure?", proc_procedure_p, 1);
     define_procedure(e, "apply", proc_apply, -1);

@@ -1039,6 +1039,22 @@
   (expect equal? (string-append "(" "foo" ")") "(foo)")
   (expect equal? (string-append "(" "f" "" "o" "o" "" ")") "(foo)")))
 
+;; 6.3.6. Vectors
+(describe "vector" (lambda ()
+  (expect equal? #() (vector))
+  (expect equal? #(1 2 3) (vector 1 2 3))
+  (expect equal? #(a 42 "foo") (vector 'a 42 "foo"))))
+
+(describe "vector?" (lambda ()
+  (expect vector? (vector))
+  (expect vector? (vector 1 'a 2))))
+
+(describe "vector-ref" (lambda ()
+  (let ((v (vector 0 1 2)))
+    (expect eq? (vector-ref v 0) 0)
+    (expect eq? (vector-ref v 2) 2)
+    (expect-f (vector-ref v 9)))))
+
 ;; 6.4. Control features
 (describe "procedure?" (lambda ()
   (expect procedure? car)

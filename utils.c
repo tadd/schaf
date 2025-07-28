@@ -36,6 +36,14 @@ void *xcalloc(size_t nmem, size_t memsize)
     return p;
 }
 
+void *xrealloc(void *orig, size_t size)
+{
+    void *p = realloc(orig, size);
+    if (p == NULL)
+        error("realloc(%p, %zu) failed", orig, size);
+    return p;
+}
+
 char *xstrdup(const char *s)
 {
     char *dup = xmalloc(strlen(s) + 1);

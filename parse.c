@@ -2,6 +2,7 @@
 #include <inttypes.h>
 #include <setjmp.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <string.h>
 
 #include "intern.h"
@@ -20,6 +21,7 @@ typedef enum {
     TOK_TYPE_STRING,
     TOK_TYPE_IDENT,
     TOK_TYPE_CONST,
+    TOK_TYPE_VECTOR_LPAREN,
     TOK_TYPE_EOF
 } TokenType;
 
@@ -37,6 +39,7 @@ DEF_TOKEN(GRAVE);
 DEF_TOKEN(COMMA);
 DEF_TOKEN(SPLICE);
 DEF_TOKEN(DOT);
+DEF_TOKEN(VECTOR_LPAREN);
 static const Token TOK_EOF = { .type = TOK_TYPE_EOF }; // avoid conflict with stdio.h
 
 // and ctors
@@ -173,6 +176,8 @@ static Token lex_constant(Parser *p)
         return TOK_CONST(Qtrue);
     case 'f':
         return TOK_CONST(Qfalse);
+    case '(':
+        return TOK_VECTOR_LPAREN;
     default:
         parse_error(p, "constants", "#%c", c);
     }
@@ -294,6 +299,8 @@ static const char *token_stringify(Token t)
         return ",@";
     case TOK_TYPE_DOT:
         return ".";
+    case TOK_TYPE_VECTOR_LPAREN:
+        return "#(";
     case TOK_TYPE_INT:
         snprintf(buf, sizeof(buf), "%"PRId64, value_to_int(t.value));
         break;
@@ -368,6 +375,22 @@ static Value parse_quoted(Parser *p, Value sym)
     return list2_const(sym, e);
 }
 
+static Value parse_vector(Parser *p)
+{
+    Value v = vector_new();
+    for (;;) {
+        skip_token_atmosphere(p);
+        int c = fgetc(p->in);
+        if (c == ')')
+            break;
+        if (c == EOF)
+            parse_error(p, "')'", "EOF");
+        ungetc(c, p->in);
+        vector_push(v, parse_expr(p));
+    }
+    return v;
+}
+
 static Value parse_expr(Parser *p)
 {
     Token t = lex(p);
@@ -386,6 +409,8 @@ static Value parse_expr(Parser *p)
         return parse_quoted(p, SYM_UNQUOTE_SPLICING);
     case TOK_TYPE_DOT:
         parse_error(p, "expression", "'.'");
+    case TOK_TYPE_VECTOR_LPAREN:
+        return parse_vector(p); // parse til ')'
     case TOK_TYPE_STRING:
     case TOK_TYPE_INT:
     case TOK_TYPE_CONST:
