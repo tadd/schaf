@@ -71,10 +71,10 @@ typedef struct {
     char *body;
 } String;
 
-typedef struct {
+typedef struct Procedure {
     Header header;
     int64_t arity;
-    Value (*apply)(Value env, Value proc, Value args);
+    Value (*apply)(Value env, const struct Procedure *proc, Value args);
 } Procedure;
 
 typedef struct {
@@ -175,6 +175,14 @@ typedef struct {
     Value ast;
     char filename[];
 } Source;
+
+#define xget(t, g, v) ({ \
+            Value X = v; \
+            EXPECT(type, TYPE_##t, X); \
+            g(X); \
+        })
+#define get(t, v) xget(t, t, (v))
+#define get_proc(v) xget(PROC, PROCEDURE, (v))
 
 #pragma GCC visibility push(hidden) // also affects Clang
 
