@@ -227,7 +227,7 @@ inline int64_t sch_integer_to_cint(Value x)
 #endif
 }
 
-Symbol sch_symbol_to_csymbol(Value v)
+inline Symbol sch_symbol_to_csymbol(Value v)
 {
     return (Symbol) v >> FLAG_NBIT_SYM;
 }
@@ -350,30 +350,30 @@ static Value expect_arity_1(Value args);
 static Value expect_arity_2(Value args);
 static Value expect_arity_3(Value args);
 
-static Value apply_cfunc_v(Value env, Value f, Value args)
+static Value apply_cfunc_v(Value env, const Procedure *f, Value args)
 {
     return CFUNC(f)->f1(env, args);
 }
 
-static Value apply_cfunc_0(Value env, Value f, UNUSED Value args)
+static Value apply_cfunc_0(Value env, const Procedure *f, UNUSED Value args)
 {
     EXPECT(arity_0, args);
     return CFUNC(f)->f0(env);
 }
 
-static Value apply_cfunc_1(Value env, Value f, Value args)
+static Value apply_cfunc_1(Value env, const Procedure *f, Value args)
 {
     EXPECT(arity_1, args);
     return CFUNC(f)->f1(env, car(args));
 }
 
-static Value apply_cfunc_2(Value env, Value f, Value args)
+static Value apply_cfunc_2(Value env, const Procedure *f, Value args)
 {
     EXPECT(arity_2, args);
     return CFUNC(f)->f2(env, car(args), cadr(args));
 }
 
-static Value apply_cfunc_3(Value env, Value f, Value args)
+static Value apply_cfunc_3(Value env, const Procedure *f, Value args)
 {
     EXPECT(arity_3, args);
     return CFUNC(f)->f3(env, car(args), cadr(args), caddr(args));
@@ -419,7 +419,7 @@ static Value syntax_new(const char *name, void *cfunc, int64_t arity)
     return cfunc_new_internal(TAG_SYNTAX, name, cfunc, arity);
 }
 
-static Value apply_cfunc_closure_1(UNUSED Value env, Value f, Value args)
+static Value apply_cfunc_closure_1(UNUSED Value env, const Procedure *f, Value args)
 {
     EXPECT(arity_1, args);
     return CFUNC(f)->f1(CFUNC_CLOSURE(f)->data, car(args));
@@ -439,11 +439,12 @@ static Value cfunc_closure_new(const char *name, void *cfunc, Value data)
 
 static Value eval_body(Value env, Value body);
 static Value env_inherit(Value parent);
-static Value env_put(Value env, Value key, Value value);
+static Value env_put(Value env, Symbol key, Value value);
 static Value expect_arity(int64_t expected, Value args);
+static Value expect_type(Type expected, Value v);
 
 //PTR
-static Value apply_closure(UNUSED Value env, Value proc, Value args)
+static Value apply_closure(UNUSED Value env, const Procedure *proc, Value args)
 {
     EXPECT(arity, PROCEDURE(proc)->arity, args);
     Closure *cl = CLOSURE(proc);
@@ -451,18 +452,31 @@ static Value apply_closure(UNUSED Value env, Value proc, Value args)
     Value clenv = env_inherit(cl->env);
     Value params = cl->params;
     if (arity == -1)
-        env_put(clenv, params, args);
+        env_put(clenv, SYMBOL(params), args);
     else {
         for (Value pa = args, pp = params; pa != Qnil; pa = cdr(pa), pp = cdr(pp))
-            env_put(clenv, car(pp), car(pa));
+            env_put(clenv, SYMBOL(car(pp)), car(pa));
     }
     return eval_body(clenv, cl->body);
 }
 
+static Value expect_list_head(Value v);
+static Value expect_list_type(Type t, Value list)
+{
+    EXPECT(list_head, list);
+    for (Value p = list; p != Qnil; p = cdr(p))
+        EXPECT(type, t, car(p));
+    return Qfalse;
+}
+
 static Value closure_new(Value env, Value params, Value body)
 {
+    bool headp = params == Qnil || sch_value_is_pair(params);
+    if (headp)
+        EXPECT(list_type, TYPE_SYMBOL, params);
+    else
+        EXPECT(type, TYPE_SYMBOL, params);
     Closure *f = obj_new(TAG_CLOSURE, sizeof(Closure));
-    bool headp = (params == Qnil || sch_value_is_pair(params));
     f->proc.arity = headp ? length(params) : -1;
     f->proc.apply = apply_closure;
     f->env = env;
@@ -633,38 +647,36 @@ static Value env_inherit(Value parent)
     return e;
 }
 
-static Value env_put(Value env, Value key, Value value)
+static Value env_put(Value env, Symbol key, Value value)
 {
     Table *t = ENV(env)->table;
     if (t == NULL)
         t = ENV(env)->table = table_new();
-    table_put(t, SYMBOL(key), value);
+    table_put(t, key, value);
     return env;
 }
 
 // chained!
-static bool env_set(Value env, Value key, Value value)
+static bool env_set(Value env, Symbol key, Value value)
 {
-    Symbol sym = SYMBOL(key);
     for (Value p = env; p != Qfalse; p = ENV(p)->parent) {
         Table *t = ENV(p)->table;
         if (t == NULL)
             continue;
-        if (table_set(t, sym, value))
+        if (table_set(t, key, value))
             return true;
     }
     return false;
 }
 
 // chained!!
-static Value env_get(const Value env, Value name)
+static Value env_get(const Value env, Symbol name)
 {
-    Symbol sym = SYMBOL(name);
     for (Value p = env; p != Qfalse; p = ENV(p)->parent) {
         Table *t = ENV(p)->table;
         if (t == NULL)
             continue;
-        Value v = table_get(t, sym);
+        Value v = table_get(t, name);
         if (v != TABLE_NOT_FOUND)
             return v;
     }
@@ -674,12 +686,12 @@ static Value env_get(const Value env, Value name)
 // Note: Do not mistake this for "(define-syntax ...)" which related to macros
 static void define_syntax(Value env, const char *name, void *cfunc, int64_t arity)
 {
-    env_put(env, sch_symbol_new(name), syntax_new(name, cfunc, arity));
+    env_put(env, intern(name), syntax_new(name, cfunc, arity));
 }
 
 static void define_procedure(Value env, const char *name, void *cfunc, int64_t arity)
 {
-    env_put(env, sch_symbol_new(name), cfunc_new(name, cfunc, arity));
+    env_put(env, intern(name), cfunc_new(name, cfunc, arity));
 }
 
 //
@@ -723,9 +735,9 @@ static Value push_stack_frame(Value ve, const char *name, Value loc)
     return ve;
 }
 
-static Value apply(Value env, Value proc, Value args)
+static Value apply(Value env, const Procedure *proc, Value args)
 {
-    return PROCEDURE(proc)->apply(env, proc, args);
+    return proc->apply(env, proc, args);
 }
 
 static const char *get_func_name(Value proc)
@@ -741,12 +753,12 @@ static Value eval_apply(Value env, Value l)
     Value symproc = car(l), args = cdr(l);
     Value proc = eval(env, symproc);
     CHECK_ERROR_LOCATED(proc, l);
-    EXPECT(type, TYPE_PROC, proc);
+    Procedure *p = get_proc(proc);
     if (!value_tag_is(proc, TAG_SYNTAX)) {
         args = map_eval(env, args);
         CHECK_ERROR_LOCATED(args, l);
     }
-    Value ret = apply(env, proc, args);
+    Value ret = apply(env, p, args);
     if (UNLIKELY(is_error(ret))) {
         const char *fname = get_func_name(proc);
         return push_stack_frame(ret, fname, l);
@@ -754,18 +766,18 @@ static Value eval_apply(Value env, Value l)
     return ret;
 }
 
-static Value lookup_or_error(Value env, Value v)
+static Value lookup_or_error(Value env, Symbol ident)
 {
-    Value p = env_get(env, v);
+    Value p = env_get(env, ident);
     if (p == Qundef)
-        return runtime_error("unbound variable: %s", sch_symbol_to_cstr(v));
+        return runtime_error("unbound variable: %s", unintern(ident));
     return p;
 }
 
 static Value eval(Value env, Value v)
 {
     if (sch_value_is_symbol(v))
-        return lookup_or_error(env, v);
+        return lookup_or_error(env, SYMBOL(v));
     if (v == Qnil || !sch_value_is_pair(v))
         return v;
     return eval_apply(env, v);
@@ -990,20 +1002,20 @@ static Value syn_if(Value env, Value args)
 }
 
 // 4.1.6. Assignments
-static Value iset(Value env, Value ident, Value val)
+static Value iset(Value env, Symbol ident, Value val)
 {
     bool found = env_set(env, ident, val);
     if (!found)
-        return runtime_error("unbound variable: %s", sch_symbol_to_cstr(ident));
+        return runtime_error("unbound variable: %s", unintern(ident));
     return Qfalse;
 }
 
 static Value syn_set(Value env, Value ident, Value expr)
 {
-    EXPECT(type, TYPE_SYMBOL, ident);
+    Symbol sym = get(SYMBOL, ident);
     Value v = eval(env, expr);
     CHECK_ERROR(v);
-    return iset(env, ident, v);
+    return iset(env, sym, v);
 }
 
 // 4.2. Derived expression types
@@ -1013,10 +1025,10 @@ static Value cond_eval_recipient(Value env, Value test, Value recipients)
     EXPECT(type, TYPE_PAIR, recipients);
     Value recipient = eval(env, car(recipients)), rest = cdr(recipients);
     CHECK_ERROR(recipient);
-    EXPECT(type, TYPE_PROC, recipient);
+    Procedure *p = get_proc(recipient);
     if (rest != Qnil)
         return runtime_error("only one expression expected after =>");
-    return apply(env, recipient, list1(test));
+    return apply(env, p, list1(test));
 }
 
 //PTR
@@ -1062,8 +1074,8 @@ static Value syn_case(Value env, Value args)
 
     for (Value p = clauses; p != Qnil; p = cdr(p)) {
         Value clause = car(p);
-        EXPECT(type, TYPE_PAIR, clause);
-        Value data = car(clause), exprs = cdr(clause);
+        Pair *pc = get(PAIR, clause);
+        Value data = pc->car, exprs = pc->cdr;
         EXPECT(type, TYPE_PAIR, exprs);
         if (data == SYM_ELSE)
             return eval_body(env, exprs);
@@ -1115,11 +1127,11 @@ static Value let(Value env, Value var, Value bindings, Value body)
             lparams = PAIR(lparams)->cdr = list1(ident);
         Value val = eval(env, expr);
         CHECK_ERROR(val);
-        env_put(letenv, ident, val);
+        env_put(letenv, SYMBOL(ident), val);
     }
     if (named) {
         Value proc = closure_new(letenv, cdr(params), body);
-        env_put(letenv, var, proc); // letenv affects as proc->env
+        env_put(letenv, get(SYMBOL, var), proc); // letenv affects as proc->env
     }
     return eval_body(letenv, body);
 }
@@ -1152,7 +1164,7 @@ static Value let_star(Value env, Value bindings, Value body)
         letenv = env_inherit(letenv);
         Value val = eval(letenv, expr);
         CHECK_ERROR(val);
-        env_put(letenv, ident, val);
+        env_put(letenv, SYMBOL(ident), val);
     }
     return eval_body(letenv, body);
 }
@@ -1181,7 +1193,7 @@ static Value syn_letrec(Value env, Value args)
         EXPECT(type, TYPE_SYMBOL, ident);
         Value val = eval(letenv, cadr(b));
         CHECK_ERROR(val);
-        env_put(letenv, ident, val);
+        env_put(letenv, SYMBOL(ident), val);
     }
     return eval_body(letenv, body);
 }
@@ -1220,7 +1232,7 @@ static Value syn_do(Value env, Value args)
             steps = cons(cons(var, car(step)), steps);
         v = eval(env, init); // in the original env
         CHECK_ERROR(v);
-        env_put(doenv, var, v);
+        env_put(doenv, SYMBOL(var), v);
     }
     Value test = car(tests), exprs = cdr(tests);
     while ((v = eval(doenv, test)) == Qfalse) {
@@ -1233,7 +1245,7 @@ static Value syn_do(Value env, Value args)
             Value var = car(pstep), step = cdr(pstep);
             Value val = eval(doenv, step);
             CHECK_ERROR(val);
-            iset(doenv, var, val);
+            iset(doenv, SYMBOL(var), val);
         }
     }
     CHECK_ERROR(v);
@@ -1340,15 +1352,14 @@ static Value syn_unquote_splicing(UNUSED Value env, UNUSED Value args)
 // 5.2. Definitions
 static Value define_variable(Value env, Value ident, Value expr)
 {
-    EXPECT(type, TYPE_SYMBOL, ident);
-
+    Symbol sym = SYMBOL(ident);
     Value val = eval(env, expr);
     CHECK_ERROR(val);
     bool found = false;
     if (env == env_toplevel)
-        found = env_set(env, ident, val);
+        found = env_set(env, sym, val);
     if (!found)
-        env_put(env, ident, val); // prepend new
+        env_put(env, sym, val); // prepend new
     return Qfalse;
 }
 
@@ -1730,19 +1741,18 @@ static Value proc_cons(UNUSED Value env, Value car, Value cdr)
 
 static Value proc_car(UNUSED Value env, Value pair)
 {
-    EXPECT(type, TYPE_PAIR, pair);
-    return car(pair);
+    Pair *p = get(PAIR, pair);
+    return p->car;
 }
 
 static Value proc_cdr(UNUSED Value env, Value pair)
 {
-    EXPECT(type, TYPE_PAIR, pair);
-    return cdr(pair);
+    Pair *p = get(PAIR, pair);
+    return p->cdr;
 }
 
 static Value expect_mutable_pair(Value pair)
 {
-    EXPECT(type, TYPE_PAIR, pair);
     if (HEADER(pair)->immutable)
         return runtime_error("cannot modify immutable pair");
     return Qfalse;
@@ -1958,20 +1968,17 @@ static Value proc_string_p(UNUSED Value env, Value obj)
 
 static Value proc_string_length(UNUSED Value env, Value s)
 {
-    EXPECT(type, TYPE_STRING, s);
-    return sch_integer_new(strlen(STRING(s)));
+    return sch_integer_new(strlen(get(STRING, s)));
 }
 
 static Value proc_string_eq(UNUSED Value env, Value s1, Value s2)
 {
-    EXPECT(type_twin, TYPE_STRING, s1, s2);
-    return BOOL_VAL(strcmp(STRING(s1), STRING(s2)) == 0);
+    return BOOL_VAL(strcmp(get(STRING, s1), get(STRING, s2)) == 0);
 }
 
 static Value proc_substring(UNUSED Value env, Value string, Value vstart, Value vend)
 {
-    EXPECT(type, TYPE_STRING, string);
-    const char *s = STRING(string);
+    const char *s = get(STRING, string);
     int64_t start = get_non_negative_int(vstart), end = get_non_negative_int(vend);
     if (UNLIKELY(start > end))
         return runtime_error("start index %"PRId64" must be <= end index %"PRId64, start, end);
@@ -1991,8 +1998,7 @@ static Value proc_string_append(UNUSED Value env, Value args)
     size_t len = 0;
     for (Value p = args, v; p != Qnil; p = cdr(p)) {
         v = car(p);
-        EXPECT(type, TYPE_STRING, v);
-        len += strlen(STRING(v));
+        len += strlen(get(STRING, v));
     }
     char *s = xmalloc(len + 1);
     s[0] = '\0';
@@ -2089,10 +2095,10 @@ static Value proc_apply(Value env, Value args)
     EXPECT(arity_min_2, args);
 
     Value proc = car(args);
-    EXPECT(type, TYPE_PROC, proc);
+    Procedure *p = get_proc(proc);
     Value appargs = build_apply_args(cdr(args));
     CHECK_ERROR(appargs);
-    return apply(env, proc, appargs);
+    return apply(env, p, appargs);
 }
 
 static bool cars_cdrs(Value ls, Value *pcars, Value *pcdrs, Value *perr)
@@ -2119,8 +2125,7 @@ static Value proc_map(Value env, Value args)
 {
     EXPECT(arity_min_2, args);
 
-    Value proc = car(args);
-    EXPECT(type, TYPE_PROC, proc);
+    Procedure *proc = get_proc(car(args));
     Value ls = cdr(args);
     Value ret = DUMMY_PAIR(), e = Qfalse;
     for (Value last = ret, cars, cdrs, v; cars_cdrs(ls, &cars, &cdrs, &e); ls = cdrs) {
@@ -2136,8 +2141,8 @@ static Value proc_for_each(Value env, Value args)
 {
     EXPECT(arity_min_2, args);
 
-    Value proc = car(args), e = Qfalse;
-    EXPECT(type, TYPE_PROC, proc);
+    Procedure *proc = get_proc(car(args));
+    Value e = Qfalse;
     for (Value ls = cdr(args), cars, cdrs, v; cars_cdrs(ls, &cars, &cdrs, &e); ls = cdrs) {
         v = apply(env, proc, cars);
         CHECK_ERROR(v);
@@ -2154,12 +2159,12 @@ static void jump(Continuation *cont)
 }
 
 [[gnu::noinline]]
-static Value apply_continuation(UNUSED Value env, Value f, Value args)
+static Value apply_continuation(UNUSED Value env, const Procedure *f, Value args)
 {
     GET_SP(sp);
     EXPECT(arity, PROCEDURE(f)->arity, args);
     Continuation *cont = CONTINUATION(f);
-    cont->retval = PROCEDURE(f)->arity == 1 ? car(args) : args;
+    cont->retval = f->arity == 1 ? car(args) : args;
     int64_t d = sp - cont->sp;
     if (d < 1)
         d = 1;
@@ -2196,10 +2201,11 @@ static bool continuation_set(Value c)
 // shared with dynamic-wind
 static Value callcc(Value env, Value proc)
 {
+    Procedure *p = get_proc(proc);
     Value c = continuation_new(1);
     if (continuation_set(c))
         return CONTINUATION(c)->retval;
-    return apply(env, proc, list1(c));
+    return apply(env, p, list1(c));
 }
 
 static void do_wind(Value new_winders);
@@ -2209,14 +2215,14 @@ static Value callcc_inner2(Value pair, Value arg)
     Value k = car(pair), saved = cdr(pair);
     if (saved != inner_winders)
         do_wind(saved);
-    return apply(Qfalse, k, list1(arg));
+    return apply(Qfalse, PROCEDURE(k), list1(arg));
 }
 
 static Value callcc_inner1(Value proc, Value k)
 {
     Value saved = inner_winders, pair = cons(k, saved);
     Value arg = cfunc_closure_new(".callcc-inner2", callcc_inner2, pair);
-    return apply(Qfalse, proc, list1(arg));
+    return apply(Qfalse, PROCEDURE(proc), list1(arg));
 }
 
 static Value proc_callcc(Value env, Value proc)
@@ -2230,25 +2236,26 @@ static Value proc_values(Value env, Value args)
 {
     if (inner_continuation == Qfalse)
         return car(args);
-    return apply(env, inner_continuation, args);
+    return apply(env, PROCEDURE(inner_continuation), args);
 }
 
 static Value proc_call_with_values(Value env, Value producer, Value consumer)
 {
     EXPECT(type_twin, TYPE_PROC, producer, consumer);
 
+    Procedure *pprod = get_proc(producer), *pcons = get_proc(consumer);
     Value k = continuation_new(-1), origk = inner_continuation;
     Value args;
     if (continuation_set(k))
         args = CONTINUATION(k)->retval;
     else {
         inner_continuation = k;
-        Value val = apply(env, producer, Qnil);
+        Value val = apply(env, pprod, Qnil);
         CHECK_ERROR(val);
         args = list1(val);
     }
     inner_continuation = origk;
-    return apply(env, consumer, args);
+    return apply(env, pcons, args);
 }
 
 static Value common_tail(Value x, Value y)
@@ -2270,29 +2277,29 @@ static void do_wind(Value new_winders)
     for (Value ls = inner_winders; ls != tail; ls = cdr(ls)) {
         inner_winders = cdr(ls);
         Value f = cdar(ls);
-        apply(Qfalse, f, Qnil);
+        apply(Qfalse, PROCEDURE(f), Qnil);
     }
     Value rev = Qnil;
     for (Value p = new_winders; p != tail; p = cdr(p))
         rev = cons(car(p), rev);
     for (Value p = rev; p != Qnil; p = cdr(p)) {
         Value f = caar(p);
-        apply(Qfalse, f, Qnil);
+        apply(Qfalse, PROCEDURE(f), Qnil);
         inner_winders = p;
     }
 }
 
 static Value proc_dynamic_wind(Value env, Value before, Value thunk, Value after)
 {
-    EXPECT(type, TYPE_PROC, before);
-    EXPECT(type, TYPE_PROC, thunk);
-    EXPECT(type, TYPE_PROC, after);
+    Procedure *pbefore = get_proc(before);
+    Procedure *pthunk = get_proc(thunk);
+    Procedure *pafter = get_proc(after);
 
-    apply(env, before, Qnil);
+    apply(env, pbefore, Qnil);
     inner_winders = cons(cons(before, after), inner_winders);
-    Value ret = apply(env, thunk, Qnil);
+    Value ret = apply(env, pthunk, Qnil);
     inner_winders = cdr(inner_winders);
-    apply(env, after, Qnil);
+    apply(env, pafter, Qnil);
     return ret;
 }
 
@@ -2332,23 +2339,25 @@ static Value proc_interaction_environment(UNUSED Value env)
 static Value open_port(const char *path, PortType type);
 static void close_port(Value port);
 
-static Value call_with_file(Value env, Value path, Value thunk, PortType type)
+static Value call_with_file(Value env, const char *path, Procedure *thunk, PortType type)
 {
-    Value file = open_port(STRING(path), type);
+    Value file = open_port(path, type);
     Value ret = apply(env, thunk, list1(file));
     close_port(file);
     return ret;
 }
 
-static Value proc_call_with_input_file(Value env, Value path, Value thunk)
+static Value proc_call_with_input_file(Value env, Value vpath, Value vthunk)
 {
-    EXPECT(type, TYPE_STRING, path);
+    const char *path = get(STRING, vpath);
+    Procedure *thunk = get_proc(vthunk);
     return call_with_file(env, path, thunk, PORT_INPUT);
 }
 
-static Value proc_call_with_output_file(Value env, Value path, Value thunk)
+static Value proc_call_with_output_file(Value env, Value vpath, Value vthunk)
 {
-    EXPECT(type, TYPE_STRING, path);
+    const char *path = get(STRING, vpath);
+    Procedure *thunk = get_proc(vthunk);
     return call_with_file(env, path, thunk, PORT_OUTPUT);
 }
 
@@ -2410,20 +2419,21 @@ static Value open_port(const char *path, PortType type)
 }
 static Value proc_open_input_file(UNUSED Value env, Value path)
 {
-    EXPECT(type, TYPE_STRING, path);
-    return open_port(STRING(path), PORT_INPUT);
+    return open_port(get(STRING, path), PORT_INPUT);
 }
 
 static Value proc_open_output_file(UNUSED Value env, Value path)
 {
-    EXPECT(type, TYPE_STRING, path);
-    return open_port(STRING(path), PORT_OUTPUT);
+    return open_port(get(STRING, path), PORT_OUTPUT);
 }
 
-static Value with_file(Value env, Value path, Value thunk, Value *curr_port, PortType type)
+static Value with_file(Value env, Value vpath, Value vthunk,
+                       Value *curr_port, PortType type)
 {
+    const char *path = get(STRING, vpath);
+    Procedure *thunk = get_proc(vthunk);
     Value orig = *curr_port;
-    *curr_port = open_port(STRING(path), type);
+    *curr_port = open_port(path, type);
     Value ret = apply(env, thunk, Qnil);
     close_port(*curr_port);
     *curr_port = orig;
@@ -2432,16 +2442,12 @@ static Value with_file(Value env, Value path, Value thunk, Value *curr_port, Por
 
 static Value proc_with_input_from_file(Value env, Value path, Value thunk)
 {
-    EXPECT(type, TYPE_STRING, path);
-    EXPECT(type, TYPE_PROC, thunk);
     return with_file(env, path, thunk, &current_input_port, PORT_INPUT);
 }
 
-static Value proc_with_output_to_file(Value env, Value path, Value thunk)
+static Value proc_with_output_to_file(Value env, Value vpath, Value vthunk)
 {
-    EXPECT(type, TYPE_STRING, path);
-    EXPECT(type, TYPE_PROC, thunk);
-    return with_file(env, path, thunk, &current_output_port, PORT_OUTPUT);
+    return with_file(env, vpath, vthunk, &current_output_port, PORT_OUTPUT);
 }
 
 static void close_port(Value v)
@@ -2690,9 +2696,8 @@ static Value proc_newline(UNUSED Value env, Value args)
 // 6.6.4. System interface
 static Value proc_load(UNUSED Value env, Value path)
 {
-    EXPECT(type, TYPE_STRING, path);
     // Current spec: path is always relative
-    return load_inner(STRING(path));
+    return load_inner(get(STRING, path));
 }
 
 //
@@ -2736,8 +2741,7 @@ static Value proc_open_output_string(UNUSED Value env)
 
 static Value proc_get_output_string(UNUSED Value env, Value port)
 {
-    EXPECT(type, TYPE_PORT, port);
-    Port *p = PORT(port);
+    Port *p = get(PORT, port);
     if (p->string == NULL)
         return runtime_error("not a string port");
     fflush(p->fp); // open_memstream() requires flushing
@@ -2769,7 +2773,7 @@ static Value syn_defined_p(Value env, Value name)
 {
     if (!sch_value_is_symbol(name))
         return Qfalse;
-    return BOOL_VAL(env_get(env, name) != Qundef);
+    return BOOL_VAL(env_get(env, SYMBOL(name)) != Qundef);
 }
 
 static Value proc_cputime(UNUSED Value env) // in micro sec
