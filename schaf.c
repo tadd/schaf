@@ -307,27 +307,27 @@ static void expect_cfunc_arity(int64_t actual)
         CFUNCARG_MAX, actual);
 }
 
-static Value apply_cfunc_v(Value env, Value f, Value args)
+static Value apply_cfunc_v(Value env, const Procedure *f, Value args)
 {
     return CFUNC(f)->f1(env, args);
 }
 
-static Value apply_cfunc_0(Value env, Value f, UNUSED Value args)
+static Value apply_cfunc_0(Value env, const Procedure *f, UNUSED Value args)
 {
     return CFUNC(f)->f0(env);
 }
 
-static Value apply_cfunc_1(Value env, Value f, Value args)
+static Value apply_cfunc_1(Value env, const Procedure *f, Value args)
 {
     return CFUNC(f)->f1(env, car(args));
 }
 
-static Value apply_cfunc_2(Value env, Value f, Value args)
+static Value apply_cfunc_2(Value env, const Procedure *f, Value args)
 {
     return CFUNC(f)->f2(env, car(args), cadr(args));
 }
 
-static Value apply_cfunc_3(Value env, Value f, Value args)
+static Value apply_cfunc_3(Value env, const Procedure *f, Value args)
 {
     return CFUNC(f)->f3(env, car(args), cadr(args), caddr(args));
 }
@@ -376,7 +376,7 @@ static Value env_inherit(Value parent);
 static Value env_put(Value env, Value key, Value value);
 
 //PTR
-static Value apply_closure(UNUSED Value env, Value proc, Value args)
+static Value apply_closure(UNUSED Value env, const Procedure *proc, Value args)
 {
     Closure *cl = CLOSURE(proc);
     int64_t arity = cl->proc.arity;
@@ -615,10 +615,10 @@ static Value push_stack_frame(Value ve, const char *name, Value loc)
     return ve;
 }
 
-static Value apply(Value env, Value proc, Value args)
+static Value apply(Value env, const Procedure *proc, Value args)
 {
-    EXPECT(arity, PROCEDURE(proc)->arity, args);
-    return PROCEDURE(proc)->apply(env, proc, args);
+    EXPECT(arity, proc->arity, args);
+    return proc->apply(env, proc, args);
 }
 
 static Value eval_apply(Value env, Value l)
@@ -626,12 +626,12 @@ static Value eval_apply(Value env, Value l)
     Value symproc = car(l), args = cdr(l);
     Value proc = eval(env, symproc);
     CHECK_ERROR_LOCATED(proc, l);
-    EXPECT(type, TYPE_PROC, proc);
+    Procedure *p = get_proc(proc);
     if (!value_tag_is(proc, TAG_SYNTAX)) {
         args = map_eval(env, args);
         CHECK_ERROR_LOCATED(args, l);
     }
-    Value ret = apply(env, proc, args);
+    Value ret = apply(env, p, args);
     if (UNLIKELY(is_error(ret))) {
         const char *fname = (VALUE_TAG(proc) == TAG_CFUNC) ?
             CFUNC(proc)->name : NULL;
@@ -898,10 +898,10 @@ static Value cond_eval_recipient(Value env, Value test, Value recipients)
     EXPECT(type, TYPE_PAIR, recipients);
     Value recipient = eval(env, car(recipients)), rest = cdr(recipients);
     CHECK_ERROR(recipient);
-    EXPECT(type, TYPE_PROC, recipient);
+    Procedure *p = get_proc(recipient);
     if (rest != Qnil)
         return runtime_error("only one expression expected after =>");
-    return apply(env, recipient, list1(test));
+    return apply(env, p, list1(test));
 }
 
 //PTR
@@ -947,8 +947,8 @@ static Value syn_case(Value env, Value args)
 
     for (Value p = clauses; p != Qnil; p = cdr(p)) {
         Value clause = car(p);
-        EXPECT(type, TYPE_PAIR, clause);
-        Value data = car(clause), exprs = cdr(clause);
+        Pair *pc = get(PAIR, clause);
+        Value data = pc->car, exprs = pc->cdr;
         EXPECT(type, TYPE_PAIR, exprs);
         if (data == SYM_ELSE)
             return eval_body(env, exprs);
@@ -1007,12 +1007,12 @@ static Value let(Value env, Value var, Value bindings, Value body)
     CHECK_ERROR(args);
     if (var == Qfalse) {
         Value proc = value_of_closure(env, params, body);
-        return apply_closure(Qfalse, proc, args);
+        return apply_closure(Qfalse, PROCEDURE(proc), args);
     }
     Value letenv = env_inherit(env);
     Value proc = value_of_closure(letenv, params, body);
     env_put(letenv, var, proc); // affects as proc->env
-    return apply_closure(Qfalse, proc, args);
+    return apply_closure(Qfalse, PROCEDURE(proc), args);
 }
 
 //PTR
@@ -1595,31 +1595,31 @@ static Value proc_cons(UNUSED Value env, Value car, Value cdr)
 
 static Value proc_car(UNUSED Value env, Value pair)
 {
-    EXPECT(type, TYPE_PAIR, pair);
-    return car(pair);
+    Pair *p = get(PAIR, pair);
+    return p->car;
 }
 
 static Value proc_cdr(UNUSED Value env, Value pair)
 {
-    EXPECT(type, TYPE_PAIR, pair);
-    return cdr(pair);
+    Pair *p = get(PAIR, pair);
+    return p->cdr;
 }
 
 static Value proc_set_car(UNUSED Value env, Value pair, Value obj)
 {
-    EXPECT(type, TYPE_PAIR, pair);
+    Pair *p = get(PAIR, pair);
     if (HEADER(pair)->immutable)
         return runtime_error("cannot modify immutable pair");
-    PAIR(pair)->car = obj;
+    p->car = obj;
     return pair;
 }
 
 static Value proc_set_cdr(UNUSED Value env, Value pair, Value obj)
 {
-    EXPECT(type, TYPE_PAIR, pair);
+    Pair *p = get(PAIR, pair);
     if (HEADER(pair)->immutable)
         return runtime_error("cannot modify immutable pair");
-    PAIR(pair)->cdr = obj;
+    p->cdr = obj;
     return pair;
 }
 
@@ -1920,10 +1920,10 @@ static Value proc_apply(Value env, Value args)
     EXPECT(arity_min, 2, args);
 
     Value proc = car(args);
-    EXPECT(type, TYPE_PROC, proc);
+    Procedure *p = get_proc(proc);
     Value appargs = build_apply_args(cdr(args));
     CHECK_ERROR(appargs);
-    return apply(env, proc, appargs);
+    return apply(env, p, appargs);
 }
 
 static Value cars_cdrs(Value ls, Value *pcars, Value *pcdrs, Value *perr)
@@ -1950,8 +1950,7 @@ static Value proc_map(Value env, Value args)
 {
     EXPECT(arity_min, 2, args);
 
-    Value proc = car(args);
-    EXPECT(type, TYPE_PROC, proc);
+    Procedure *proc = get_proc(car(args));
     Value ls = cdr(args);
     Value ret = DUMMY_PAIR(), e = Qfalse;
     for (Value last = ret, cars, cdrs, v; cars_cdrs(ls, &cars, &cdrs, &e); ls = cdrs) {
@@ -1967,8 +1966,8 @@ static Value proc_for_each(Value env, Value args)
 {
     EXPECT(arity_min, 2, args);
 
-    Value proc = car(args), e = Qfalse;
-    EXPECT(type, TYPE_PROC, proc);
+    Procedure *proc = get_proc(car(args));
+    Value e = Qfalse;
     for (Value ls = cdr(args), cars, cdrs, v; cars_cdrs(ls, &cars, &cdrs, &e); ls = cdrs) {
         v = apply(env, proc, cars);
         CHECK_ERROR(v);
@@ -1987,11 +1986,11 @@ static void jump(Continuation *cont)
 #define GET_SP(p) uintptr_t v##p = 0, *p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
 
 [[gnu::noreturn, gnu::noinline]]
-static Value apply_continuation(UNUSED Value env, Value f, Value args)
+static Value apply_continuation(UNUSED Value env, const Procedure *f, Value args)
 {
     GET_SP(sp);
     Continuation *cont = CONTINUATION(f);
-    cont->retval = PROCEDURE(f)->arity == 1 ? car(args) : args;
+    cont->retval = f->arity == 1 ? car(args) : args;
     int64_t d = sp - cont->sp;
     if (d < 1)
         d = 1;
@@ -2026,11 +2025,11 @@ static bool continuation_set(Value c)
 
 static Value proc_callcc(Value env, Value proc)
 {
-    EXPECT(type, TYPE_PROC, proc);
+    Procedure *p = get_proc(proc);
     Value c = value_of_continuation(1);
     if (continuation_set(c))
         return CONTINUATION(c)->retval;
-    return apply(env, proc, list1(c));
+    return apply(env, p, list1(c));
 }
 
 static Value inner_continuation = Qfalse; // Yeah we live in the land of single-thread
@@ -2039,25 +2038,24 @@ static Value proc_values(Value env, Value args)
 {
     if (inner_continuation == Qfalse)
         return car(args);
-    return apply(env, inner_continuation, args);
+    return apply(env, PROCEDURE(inner_continuation), args);
 }
 
 static Value proc_call_with_values(Value env, Value producer, Value consumer)
 {
-    EXPECT(type_twin, TYPE_PROC, producer, consumer);
-
+    Procedure *pprod = get_proc(producer), *pcons = get_proc(consumer);
     Value k = value_of_continuation(-1), origk = inner_continuation;
     Value args;
     if (continuation_set(k))
         args = CONTINUATION(k)->retval;
     else {
         inner_continuation = k;
-        Value val = apply(env, producer, Qnil);
+        Value val = apply(env, pprod, Qnil);
         CHECK_ERROR(val);
         args = list1(val);
     }
     inner_continuation = origk;
-    return apply(env, consumer, args);
+    return apply(env, pcons, args);
 }
 
 // 6.5. Eval

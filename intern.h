@@ -57,10 +57,10 @@ typedef struct {
     char *body;
 } String;
 
-typedef struct {
+typedef struct Procedure {
     Header header;
     int64_t arity;
-    Value (*apply)(Value env, Value proc, Value args);
+    Value (*apply)(Value env, const struct Procedure *proc, Value args);
 } Procedure;
 
 typedef struct CFunc {
@@ -128,6 +128,10 @@ typedef struct {
 #define ENV(v) ((Env *) v)
 #define PORT(v) ((Port *) v)
 #define ERROR(v) ((Error *) v)
+
+#define get(t, v) ({ EXPECT(type, TYPE_##t, v); t(v); })
+#define get_proc(v) ({ EXPECT(type, TYPE_PROC, v); PROCEDURE(v); })
+#define get_str(v) ({ EXPECT(type, TYPE_STRING, v); STRING(v)->body; })
 
 #pragma GCC visibility push(hidden) // also affects Clang
 
