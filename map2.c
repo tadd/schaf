@@ -70,6 +70,28 @@
 #define PATS TY0, TY1, TY2, TY3
 #define ARITY(f) _Generic((f), PATS, default: -1)
 
+#define RET_CONV_0(f) _Generic(RETVAL(f), \
+        Value: retval_id, \
+        int64_t: value_of_int, \
+        const char *: value_of_string, \
+        void: retval_false, \
+        bool: value_of_bool, \
+        default : NULL)
+#define PATS_RET_CONV MAP(RET_CONV_0, TYPES_RET)
+#define RET_CONV(f) _Generic((f), PATS_RET_CONV, default: -1)
+
+#if 0
+apply_val_0
+apply_int_0
+apply_str_0
+apply_void_0
+apply_bool_0
+apply_val_1_val
+apply_val_1_int
+apply_val_1_str
+//...
+#endif
+
 Value f(Value env);
 Value g(Value env, const char *s);
 Value h(Value env, int64_t i);
