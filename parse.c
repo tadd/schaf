@@ -63,7 +63,6 @@ static inline Token TOK_CONST(Value c)
 typedef struct {
     FILE *in;
     const char *filename;
-    Token prev_token;
     Value newline_pos; // list of pos | int
 } Parser;
 
@@ -243,11 +242,6 @@ static Token lex_ident(Parser *p, int init)
 
 static Token lex(Parser *p)
 {
-    if (p->prev_token.type != TOK_TYPE_EOF)  {
-        Token t = p->prev_token;
-        p->prev_token = TOK_EOF;
-        return t;
-    }
     skip_token_atmosphere(p);
     int c = fgetc(p->in);
     switch (c) {
@@ -280,11 +274,6 @@ static Token lex(Parser *p)
     if (is_initial(c))
         return lex_ident(p, c);
     parse_error(p, "valid char", "'%c'", c);
-}
-
-static void unlex(Parser *p, Token t)
-{
-    p->prev_token = t;
 }
 
 static const char *token_stringify(Token t)
@@ -351,14 +340,15 @@ static Value parse_list(Parser *p)
     Value ret = DUMMY_PAIR(), last = ret;
     int64_t pos = ftell(p->in);
     for (;;) {
-        Token t = lex(p);
-        if (t.type == TOK_TYPE_RPAREN)
+        skip_token_atmosphere(p);
+        int c = fgetc(p->in);
+        if (c == ')')
             break;
-        if (t.type == TOK_TYPE_EOF)
-            parse_error(p, "')'", "'%s'", token_stringify(t));
-        if (t.type == TOK_TYPE_DOT)
+        if (c == EOF)
+            parse_error(p, "')'", "'EOF'");
+        if (c == '.')
             return parse_dotted_pair(p, cdr(ret), last);
-        unlex(p, t);
+        ungetc(c, p->in);
         Value e = parse_expr(p);
         bool first = (ret == last);
         Value l;
@@ -413,7 +403,6 @@ static Parser *parser_new(FILE *in, const char *filename)
     Parser *p = xmalloc(sizeof(Parser));
     p->in = in;
     p->filename = filename;
-    p->prev_token = TOK_EOF; // we use this since we never postpone EOF things
     p->newline_pos = Qnil;
     return p;
 }
