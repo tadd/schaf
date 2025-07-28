@@ -8,8 +8,6 @@
 #include "schaf.h"
 #include "utils.h"
 
-static jmp_buf jmp_parse_error;
-
 typedef enum {
     TOK_TYPE_LPAREN,
     TOK_TYPE_RPAREN,
@@ -64,6 +62,7 @@ typedef struct {
     FILE *in;
     const char *filename;
     Value newline_pos; // list of pos | int
+    jmp_buf jmp_error;
 } Parser;
 
 void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col)
@@ -89,7 +88,7 @@ static void get_line_and_column(const Parser *p, int64_t *line, int64_t *col)
 #define parse_error(p, exp, act, ...) do { \
         int64_t line, col; \
         get_line_and_column(p, &line, &col); \
-        raise_error(jmp_parse_error, \
+        raise_error(p->jmp_error, \
                     "%s:%"PRId64":%"PRId64": expected %s but got " act, \
                     p->filename, line, col, exp __VA_OPT__(,) __VA_ARGS__); \
     } while (0)
@@ -431,7 +430,7 @@ Value iparse(FILE *in, const char *filename)
 {
     Parser *p = parser_new(in, filename);
     Value ast;
-    if (setjmp(jmp_parse_error) == 0)
+    if (setjmp(p->jmp_error) == 0)
         ast = parse_program(p); // success
     else
         ast = Qundef; // got an error
@@ -443,7 +442,7 @@ Value parse_datum(FILE *in, const char *filename)
 {
     Parser *p = parser_new(in, filename);
     Value datum;
-    if (setjmp(jmp_parse_error) == 0)
+    if (setjmp(p->jmp_error) == 0)
         datum = parse_expr(p);
     else
         datum = Qundef;
