@@ -63,7 +63,7 @@ static inline Token TOK_CONST(Value c)
 
 typedef struct {
     FILE *in;
-    const char *filename;
+    char *filename;
     Value newline_pos; // list of pos | int
     jmp_buf jmp_error;
 } Parser;
@@ -426,9 +426,17 @@ static Parser *parser_new(FILE *in, const char *filename)
 {
     Parser *p = xmalloc(sizeof(Parser));
     p->in = in;
-    p->filename = filename;
+    p->filename = xstrdup(filename);
     p->newline_pos = Qnil;
     return p;
+}
+
+static void parser_free(Parser *p)
+{
+    if (p == NULL)
+        return;
+    free(p->filename);
+    free(p);
 }
 
 static inline Value list3_const(Value x, Value y, Value z)
@@ -459,7 +467,7 @@ Value iparse(FILE *in, const char *filename)
         ast = parse_program(p); // success
     else
         ast = Qundef; // got an error
-    free(p);
+    parser_free(p);
     return ast;
 }
 
@@ -471,7 +479,7 @@ Value parse_datum(FILE *in, const char *filename)
         datum = parse_expr(p);
     else
         datum = Qundef;
-    free(p);
+    parser_free(p);
     return datum;
 }
 
