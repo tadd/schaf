@@ -8,10 +8,18 @@
 
 #ifdef __SANITIZE_ADDRESS__
 #include <sanitizer/asan_interface.h>
-#define UNPOISON(p, n) ASAN_UNPOISON_MEMORY_REGION(p, n)
 #else
-#define UNPOISON(p, n) //nothing
+#define ASAN_UNPOISON_MEMORY_REGION(p, n) //
 #endif
+
+#if defined(DEBUG) && defined(__linux__)
+#include <valgrind/memcheck.h>
+#else
+#define VALGRIND_MAKE_MEM_DEFINED(p, n) //
+#endif
+
+#define UNPOISON(p, n) \
+    VALGRIND_MAKE_MEM_DEFINED(p, n); ASAN_UNPOISON_MEMORY_REGION(p, n)
 
 #define debug(fmt, ...) fprintf(stderr, fmt "\n" __VA_OPT__(,) __VA_ARGS__);
 #define bug(fmt, ...) \

@@ -20,7 +20,7 @@ jobs:
     - uses: actions/checkout@v4
     - if: runner.os == 'Linux'
       run: |
-        sudo apt install -U --no-install-recommends libcriterion-dev
+        sudo apt install -U --no-install-recommends libcriterion-dev valgrind
     - if: runner.os == 'macOS'
       run: |
         brew update
