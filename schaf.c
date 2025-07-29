@@ -206,13 +206,12 @@ inline static Symbol value_to_symbol(Value v)
 
 static const char *name_nth(Value list, int64_t n)
 {
+    Value p = list;
     for (int64_t i = 0; i < n; i++) {
-        list = cdr(list);
-        if (list == Qnil)
+        if ((p = cdr(p)) == Qnil)
             return NULL;
     }
-    Value name = car(list);
-    return STRING(name)->body;
+    return STRING(car(p))->body;
 }
 
 static const char *unintern(Symbol sym)
