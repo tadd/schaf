@@ -28,7 +28,6 @@ typedef struct {
 
 typedef struct {
     size_t size, used;
-    size_t tab_free[TABMAX+1], tab_used[TABMAX+1];
 } HeapStat;
 
 static size_t init_size = 1 * MiB;
@@ -114,8 +113,6 @@ static void increase_heaps(void)
 static void heap_stat(HeapStat *stat)
 {
     stat->size = stat->used = 0;
-    memset(stat->tab_free, 0, sizeof(stat->tab_free));
-    memset(stat->tab_used, 0, sizeof(stat->tab_used));
     for (size_t i = 0; i < heap.size; i++) {
         HeapSlot* slot = heap.slot[i];
         stat->size += slot->size;
