@@ -2336,8 +2336,34 @@ static Value proc_schaf_environment(UNUSED Value env)
     return env_dup(NULL, env_default);
 }
 
+static void free_source_data(void)
+{
+    for (Value p = source_data; p != Qnil; p = cdr(p)) {
+        Value l = car(p);
+        free(STRING(car(l))->body);
+    }
+}
+
+static void free_symbol_names(void)
+{
+    for (Value p = symbol_names; p != Qnil; p = cdr(p))
+        free(STRING(car(p))->body);
+}
+
+static void env_free(Value ve)
+{
+    Env *e = ENV(ve);
+    free(e->name);
+    table_free(e->table);
+}
+
 int sch_fin(void)
 {
+    env_free(env_r5rs);
+    env_free(env_default);
+    env_free(env_toplevel);
+    free_source_data();
+    free_symbol_names();
     gc_fin();
     return exit_status;
 }
