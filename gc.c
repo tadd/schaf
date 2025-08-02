@@ -40,6 +40,7 @@ static const Value *roots[ROOT_SIZE];
 static size_t nroot;
 
 static bool stress, print_stat;
+static bool in_gc;
 
 void sch_set_gc_init_size(double init_mib)
 {
@@ -166,6 +167,9 @@ static void heap_print_stat(const char *header)
 
 static void gc(void)
 {
+    if (in_gc)
+        bug("nested GC detected");
+    in_gc = true;
     if (print_stat)
         heap_print_stat("GC begin");
     // collects nothing
@@ -173,6 +177,7 @@ static void gc(void)
         increase_heaps();
     if (print_stat)
         heap_print_stat("GC end");
+    in_gc = false;
 }
 
 static size_t heaps_size(void)
