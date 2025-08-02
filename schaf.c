@@ -1277,9 +1277,10 @@ static bool equal(Value x, Value y);
 
 static bool vector_equal(const Vector *x, const Vector *y)
 {
-    if (x->length != y->length)
+    size_t len = scary_length(x->body);
+    if (len != scary_length(y->body))
         return false;
-    for (int64_t i = 0; i < x->length; i++) {
+    for (size_t i = 0; i < len; i++) {
         if (!equal(x->body[i], y->body[i]))
             return false;
     }
@@ -1849,23 +1850,15 @@ static Value proc_string_append(UNUSED Value env, Value args)
 // 6.3.6. Vectors
 Value vector_new(void)
 {
-    const int64_t INIT_LEN = 2;
     Vector *v = obj_new(sizeof(Vector), TAG_VECTOR);
-    v->length = 0;
-    v->capacity = INIT_LEN;
-    v->body = xmalloc(sizeof(Value) * v->capacity);
+    v->body = scary_new(sizeof(Value));
     return (Value) v;
 }
 
-Value vector_push(Value vv, Value e)
+Value vector_push(Value v, Value e)
 {
-    Vector *v = VECTOR(vv);
-    if (v->length == v->capacity) {
-        v->capacity *= 2;
-        v->body = xrealloc(v->body, sizeof(Value) * v->capacity);
-    }
-    v->body[v->length++] = e;
-    return vv;
+    scary_push(&VECTOR(v)->body, e);
+    return v;
 }
 
 static Value proc_vector_p(UNUSED Value env, Value o)
@@ -1888,7 +1881,7 @@ static Value proc_vector_ref(UNUSED Value env, Value o, Value k)
     if (i < 0)
         return runtime_error("invalid index: negative integer %"PRId64, i);
     Vector *v = VECTOR(o);
-    if (i >= v->length)
+    if ((size_t) i >= scary_length(v->body))
         return Qfalse;
     return v->body[i];
 }
@@ -2190,10 +2183,10 @@ static void display_list(FILE *f, Value l)
 static void display_vector(FILE *f, const Vector *v)
 {
     fprintf(f, "#(");
-    for (int64_t i = 0; i < v->length; i++) {
+    for (int64_t i = 0, len = scary_length(v->body); i < len; i++) {
         Value e = v->body[i];
         fdisplay(f, e);
-        if (i + 1 == v->length)
+        if (i + 1 == len)
             break;
         fprintf(f, " ");
     }
