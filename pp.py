@@ -116,6 +116,18 @@ class ErrorPrinter(MyPrinter):
     def to_string(self):
         return self.format_members('call_stack')
 
+class PortPrinter(MyPrinter):
+    TYPE = lookup_type('Port')
+
+    def to_string(self):
+        return self.format_members('fp')
+
+class VectorPrinter(MyPrinter):
+    TYPE = lookup_type('Vector')
+
+    def to_string(self):
+        return self.format_members('length', 'capacity', 'body')
+
 class ValuePrinter(MyPrinter):
     TYPE = lookup_type('Value')
     TAG_TO_TYPE = {
@@ -192,7 +204,8 @@ PP()
 
 PRINTERS = [ValuePrinter, EnvPrinter, ProcedurePrinter,
             CFuncPrinter, ClosurePrinter, ContinuationPrinter,
-            TablePrinter, ErrorPrinter]
+            TablePrinter, PortPrinter, VectorPrinter,
+            ErrorPrinter]
 def schaf_pp(val):
     ty = Type.unqualified(val.type)
     g = (pr(val) for pr in PRINTERS if pr.TYPE == ty)
