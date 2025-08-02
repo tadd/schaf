@@ -62,9 +62,14 @@ static inline Token TOK_CONST(Value c)
 }
 
 typedef struct {
+    int64_t length, capacity;
+    int64_t *body;
+} IntList;
+
+typedef struct {
     FILE *in;
     char *filename;
-    Value newline_pos; // list of pos | int
+    IntList *newline_pos;
     jmp_buf jmp_error;
 } Parser;
 
@@ -81,10 +86,13 @@ void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col
     *col = pos - last + 1;
 }
 
+static IntList *int_list_push(IntList *v, int64_t i);
+static Value int_list_to_sch_list(const IntList *v);
+
 static void get_line_and_column(const Parser *p, int64_t *line, int64_t *col)
 {
     int64_t pos = ftell(p->in);
-    Value newline_pos = reverse(p->newline_pos);
+    Value newline_pos = int_list_to_sch_list(p->newline_pos);
     pos_to_line_col(pos, newline_pos, line, col);
 }
 
@@ -98,7 +106,8 @@ static void get_line_and_column(const Parser *p, int64_t *line, int64_t *col)
 
 static inline void put_newline_pos(Parser *p)
 {
-    p->newline_pos = cons(value_of_int(ftell(p->in)), p->newline_pos);
+    int64_t pos = ftell(p->in);
+    int_list_push(p->newline_pos, pos);
 }
 
 static void skip_comment(Parser *p)
@@ -422,12 +431,43 @@ static Value parse_expr(Parser *p)
     return Qundef;
 }
 
+
+static IntList *int_list_new(void)
+{
+    const int64_t INIT_LEN = 2;
+    IntList *v = xmalloc(sizeof(IntList));
+    v->length = 0;
+    v->capacity = INIT_LEN;
+    v->body = xmalloc(sizeof(int64_t) * v->capacity);
+    return v;
+}
+
+static IntList *int_list_push(IntList *v, int64_t i)
+{
+    if (v->length == v->capacity) {
+        v->capacity *= 2;
+        v->body = xrealloc(v->body, sizeof(int64_t) * v->capacity);
+    }
+    v->body[v->length++] = i;
+    return v;
+}
+
+static Value int_list_to_sch_list(const IntList *v)
+{
+    Value l = Qnil;
+    for (int64_t i = v->length-1; i >= 0; i--) {
+        Value e = list1(value_of_int(v->body[i]));
+        l = cons(e, l);
+    }
+    return l;
+}
+
 static Parser *parser_new(FILE *in, const char *filename)
 {
     Parser *p = xmalloc(sizeof(Parser));
     p->in = in;
     p->filename = xstrdup(filename);
-    p->newline_pos = Qnil;
+    p->newline_pos = int_list_new();
     return p;
 }
 
@@ -448,7 +488,8 @@ static inline Value list3_const(Value x, Value y, Value z)
 static Value ast_new(const Parser *p, Value syntax_list)
 {
     Value filename = value_of_string(p->filename);
-    return list3_const(filename, syntax_list, reverse(p->newline_pos));
+    Value newline_pos = int_list_to_sch_list(p->newline_pos);
+    return list3_const(filename, syntax_list, newline_pos);
 }
 
 static Value parse_program(Parser *p)
