@@ -2206,6 +2206,14 @@ static void display_vector(FILE *f, Value vv)
     fprintf(f, ")");
 }
 
+static const char *file_to_name(const FILE *fp)
+{
+    return fp == stdin ? "stdin" :
+        fp == stdout ? "stdout" :
+        fp == stderr ? "stderr" :
+        NULL;
+}
+
 static void fdisplay(FILE* f, Value v)
 {
     switch (value_type_of(v)) {
@@ -2235,7 +2243,11 @@ static void fdisplay(FILE* f, Value v)
         fprintf(f, "<environment: %s>", ENV(v)->name);
         break;
     case TYPE_PORT:
-        fprintf(f, "<port>");
+        const char *name = file_to_name(PORT(v)->fp);
+        if (name != NULL)
+            fprintf(f, "<port: %s>", name);
+        else
+            fprintf(f, "<port: %p>", PORT(v)->fp);
         break;
     case TYPE_UNDEF:
         fprintf(f, "<undef>");
