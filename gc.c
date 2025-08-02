@@ -223,8 +223,10 @@ static void mark_val(Value v)
     switch (VALUE_TAG(v)) {
     case TAG_PAIR: {
         Pair *p = PAIR(v);
-        mark_val(p->car);
-        mark_val(p->cdr);
+        if (p->car != v)
+            mark_val(p->car);
+        if (p->cdr != v)
+            mark_val(p->cdr);
         return;
     }
     case TAG_CLOSURE: {
@@ -236,7 +238,8 @@ static void mark_val(Value v)
     }
     case TAG_CONTINUATION: {
         Continuation *p = CONTINUATION(v);
-        mark_val(p->retval);
+        if (p->retval != v)
+            mark_val(p->retval);
         if (p->exstate == NULL)
             return; // XXX
         mark_jmpbuf(&p->exstate->regs);
@@ -252,8 +255,10 @@ static void mark_val(Value v)
     }
     case TAG_VECTOR: {
         Value *p = VECTOR(v);
-        for (int64_t i = 0, len = scary_length(p); i < len; i++)
-            mark_val(p[i]);
+        for (int64_t i = 0, len = scary_length(p); i < len; i++) {
+            if (p[i] != v)
+                mark_val(p[i]);
+        }
         return;
     }
     case TAG_STRING:
