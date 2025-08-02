@@ -93,8 +93,7 @@ typedef struct {
 
 typedef struct {
     Header header;
-    int64_t length, capacity;
-    Value *body;
+    Value *body;// use scary
 } Vector;
 
 typedef struct {
