@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "intern.h"
+#include "scary.h"
 #include "schaf.h"
 #include "utils.h"
 
@@ -64,15 +65,15 @@ static inline Token TOK_CONST(Value c)
 typedef struct {
     FILE *in;
     char *filename;
-    Value newline_pos; // list of pos | int
+    int64_t *newline_pos;
     jmp_buf jmp_error;
 } Parser;
 
-void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col)
+void pos_to_line_col(int64_t pos, int64_t *newline_pos, int64_t *line, int64_t *col)
 {
     int64_t nline = 0, last = 0;
-    for (Value p = newline_pos; p != Qnil; p = cdr(p), nline++) {
-        int n = value_to_int(car(p));
+    for (size_t i = 0, len = scary_length(newline_pos); i < len; i++) {
+        int64_t n = newline_pos[i];
         if (n > pos)
             break;
         last = n;
@@ -84,8 +85,7 @@ void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col
 static void get_line_and_column(const Parser *p, int64_t *line, int64_t *col)
 {
     int64_t pos = ftell(p->in);
-    Value newline_pos = reverse(p->newline_pos);
-    pos_to_line_col(pos, newline_pos, line, col);
+    pos_to_line_col(pos, p->newline_pos, line, col);
 }
 
 #define parse_error(p, exp, act, ...) do { \
@@ -98,7 +98,7 @@ static void get_line_and_column(const Parser *p, int64_t *line, int64_t *col)
 
 static inline void put_newline_pos(Parser *p)
 {
-    p->newline_pos = cons(value_of_int(ftell(p->in)), p->newline_pos);
+    scary_push(&p->newline_pos, ftell(p->in));
 }
 
 static void skip_comment(Parser *p)
@@ -427,7 +427,7 @@ static Parser *parser_new(FILE *in, const char *filename)
     Parser *p = xmalloc(sizeof(Parser));
     p->in = in;
     p->filename = xstrdup(filename);
-    p->newline_pos = Qnil;
+    p->newline_pos = scary_new(sizeof(int64_t));
     return p;
 }
 
@@ -444,11 +444,18 @@ static inline Value list3_const(Value x, Value y, Value z)
     return cons_const(x, list2_const(y, z));
 }
 
+static Value scary_to_vector(int64_t *a)
+{
+    Vector *v = obj_new(sizeof(Vector), TAG_VECTOR);
+    v->body = scary_dup(a);
+    return (Value) v;
+}
+
 // AST: (filename syntax_list newline_positions)
 static Value ast_new(const Parser *p, Value syntax_list)
 {
     Value filename = value_of_string(p->filename);
-    return list3_const(filename, syntax_list, reverse(p->newline_pos));
+    return list3_const(filename, syntax_list, scary_to_vector(p->newline_pos));
 }
 
 static Value parse_program(Parser *p)

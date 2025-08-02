@@ -671,8 +671,8 @@ static void dump_line_column(Value filename, int64_t pos)
         return;
     }
     Value newline_pos = caddr(data);
-    pos_to_line_col(pos, newline_pos, &line, &col);
-    append_error_message("\n\t%s:%"PRId64":%"PRId64" in ",
+    pos_to_line_col(pos, (int64_t *) VECTOR(newline_pos)->body, &line, &col);
+    append_error_message("\n\t%s:%"PRIu64":%"PRIu64" in ",
                          STRING(filename)->body, line, col);
 }
 
