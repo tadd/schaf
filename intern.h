@@ -134,7 +134,7 @@ extern Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
 
 Value iparse(FILE *in, const char *filename);
 Value parse_datum(FILE *in, const char *filename);
-void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col);
+void pos_to_line_col(int64_t pos, Value *newline_pos, int64_t *line, int64_t *col);
 [[gnu::noreturn]] void raise_error(jmp_buf buf, const char *fmt, ...);
 Value reverse(Value l);
 void *obj_new(size_t size, ValueTag t);
