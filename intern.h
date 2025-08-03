@@ -109,8 +109,13 @@ typedef struct {
 } Port;
 
 typedef struct {
+    const char *func_name;
+    Value loc;
+} StackFrame;
+
+typedef struct {
     Header header;
-    Value call_stack; // list of '(func-name . location)
+    StackFrame **call_stack;
 } Error;
 
 #define HEADER(v) ((Header *) v)

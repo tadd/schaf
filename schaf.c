@@ -422,7 +422,7 @@ static Value runtime_error(const char *fmt, ...)
     va_end(ap);
 
     Error *e = obj_new(sizeof(Error), TAG_ERROR);
-    e->call_stack = Qnil;
+    e->call_stack = scary_new(sizeof(StackFrame *));
     return (Value) e;
 }
 
@@ -445,8 +445,8 @@ const char *error_message(void)
 #define CHECK_ERROR_LOCATED(v, l) do { \
         Value V = v; \
         if (UNLIKELY(is_error(V))) { \
-            if (ERROR(V)->call_stack == Qnil) \
-                ERROR(V)->call_stack = list1(cons(Qfalse, l)); \
+            if (scary_length(ERROR(V)->call_stack) == 0) \
+                push_stack_frame(V, NULL, l); \
             return V; \
         } \
     } while (0)
@@ -601,12 +601,19 @@ static Value map_eval(Value env, Value l)
     return cdr(mapped);
 }
 
+static StackFrame *stack_frame_new(const char *name, Value loc)
+{
+    StackFrame *f = xmalloc(sizeof(StackFrame));
+    f->func_name = name;
+    f->loc = loc;
+    return f;
+}
+
 static Value push_stack_frame(Value ve, const char *name, Value loc)
 {
     Error *e = ERROR(ve);
-    Value str = name == NULL ? Qfalse : value_of_string(name);
-    Value data = cons(str, loc);
-    e->call_stack = cons(data, e->call_stack);
+    StackFrame *f = stack_frame_new(name, loc);
+    scary_push((void ***) &e->call_stack, (void *) f);
     return ve;
 }
 
@@ -703,13 +710,13 @@ static Value find_filename(Value pair)
     return Qfalse;
 }
 
-static void dump_callee_name(Value callers)
+static void dump_callee_name(const StackFrame *next)
 {
-    if (callers == Qnil) {
+    if (next == NULL) {
         append_error_message("<toplevel>");
         return;
     }
-    Value sym = cadar(callers);
+    Value sym = car(next->loc);
     if (!value_is_symbol(sym)) {
         append_error_message("<unknown>");
         return;
@@ -718,41 +725,38 @@ static void dump_callee_name(Value callers)
     append_error_message("'%s'", name);
 }
 
-static void dump_frame(Value data, Value callers)
+static void dump_frame(const StackFrame *f, const StackFrame *next)
 {
-    Value pair = cdr(data);
-    Value filename = find_filename(pair);
+    Value filename = find_filename(f->loc);
     if (filename == Qfalse) {
         append_error_message("\n\t<unknown>");
         return;
     }
-    dump_line_column(filename, LOCATED_PAIR(pair)->pos);
-    dump_callee_name(callers);
+    dump_line_column(filename, LOCATED_PAIR(f->loc)->pos);
+    dump_callee_name(next);
 }
 
-static void prepend_cfunc_name(Value v)
+static void prepend_cfunc_name(const char *name)
 {
-    if (v == Qfalse)
+    if (name == NULL)
         return;
-    const char *s = STRING(v)->body;
-    size_t len = strlen(s) + 2;// strlen(": ")
+    size_t len = strlen(name) + 2;// strlen(": ")
     char tmp[sizeof(errmsg) - len];
     snprintf(tmp, sizeof(tmp), "%s", errmsg);
-    snprintf(errmsg, sizeof(errmsg), "%s: %s", s, tmp);
+    snprintf(errmsg, sizeof(errmsg), "%s: %s", name, tmp);
 }
 
 static Value reverse(Value l);
 
-static void dump_stack_trace(Value call_stack)
+static void dump_stack_trace(StackFrame **call_stack)
 {
-    if (call_stack == Qnil)
+    size_t len = scary_length(call_stack);
+    if (len == 0)
         return;
-    Value ordered = reverse(call_stack);
-    prepend_cfunc_name(caar(ordered));
-    for (Value p = ordered, next; p != Qnil; p = next) {
-        next = cdr(p);
-        dump_frame(car(p), next);
-    }
+    prepend_cfunc_name(call_stack[0]->func_name);
+    for (size_t i = 0; i < len - 1; i++)
+        dump_frame(call_stack[i], call_stack[i+1]);
+    dump_frame(call_stack[len-1], NULL);
 }
 
 static void fdisplay(FILE* f, Value v);
