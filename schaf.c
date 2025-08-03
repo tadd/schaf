@@ -2363,6 +2363,7 @@ static void env_free(Value ve)
 
 int sch_fin(void)
 {
+    env_free(env_null);
     env_free(env_r5rs);
     env_free(env_default);
     env_free(env_toplevel);
