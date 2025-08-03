@@ -2192,9 +2192,8 @@ static void display_list(FILE *f, Value l)
     fprintf(f, ")");
 }
 
-static void display_vector(FILE *f, Value vv)
+static void display_vector(FILE *f, const Vector *v)
 {
-    Vector *v = VECTOR(vv);
     fprintf(f, "#(");
     for (int64_t i = 0; i < v->length; i++) {
         Value e = v->body[i];
@@ -2212,6 +2211,16 @@ static const char *file_to_name(const FILE *fp)
         fp == stdout ? "stdout" :
         fp == stderr ? "stderr" :
         NULL;
+}
+
+static void display_port(FILE *f, const Port *p)
+{
+    FILE *fp = p->fp;
+    const char *name = file_to_name(fp);
+    if (name != NULL)
+        fprintf(f, "<port: %s>", name);
+    else
+        fprintf(f, "<port: %p>", fp);
 }
 
 static void fdisplay(FILE* f, Value v)
@@ -2237,17 +2246,13 @@ static void fdisplay(FILE* f, Value v)
         fprintf(f, "<procedure>");
         break;
     case TYPE_VECTOR:
-        display_vector(f, v);
+        display_vector(f, VECTOR(v));
         break;
     case TYPE_ENV:
         fprintf(f, "<environment: %s>", ENV(v)->name);
         break;
     case TYPE_PORT:
-        const char *name = file_to_name(PORT(v)->fp);
-        if (name != NULL)
-            fprintf(f, "<port: %s>", name);
-        else
-            fprintf(f, "<port: %p>", PORT(v)->fp);
+        display_port(f, PORT(v));
         break;
     case TYPE_UNDEF:
         fprintf(f, "<undef>");
