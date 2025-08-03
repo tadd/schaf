@@ -2326,14 +2326,14 @@ static void do_wind(Value new_winders)
     for (Value ls = inner_winders; ls != tail; ls = cdr(ls)) {
         inner_winders = cdr(ls);
         Value f = cdar(ls);
-        apply(Qfalse, get_proc(f), Qnil);
+        apply(Qfalse, PROCEDURE(f), Qnil);
     }
     Value rev = Qnil;
     for (Value p = new_winders; p != tail; p = cdr(p))
         rev = cons(car(p), rev);
     for (Value p = rev; p != Qnil; p = cdr(p)) {
         Value f = caar(p);
-        apply(Qfalse, get_proc(f), Qnil);
+        apply(Qfalse, PROCEDURE(f), Qnil);
         inner_winders = p;
     }
 }
