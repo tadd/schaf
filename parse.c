@@ -453,8 +453,8 @@ static Value scary_to_vector(Value *a)
     return (Value) v;
 }
 
-// AST: (filename syntax_list newline_positions)
-static Value ast_new(const Parser *p, Value syntax_list)
+// Source: (filename syntax_list newline_positions)
+static Value source_new(const Parser *p, Value syntax_list)
 {
     Value filename = value_of_string(p->filename);
     return list3_const(filename, syntax_list, scary_to_vector(p->newline_pos));
@@ -465,19 +465,25 @@ static Value parse_program(Parser *p)
     Value v = DUMMY_PAIR();
     for (Value last = v, expr; (expr = parse_expr(p)) != Qundef; )
         last = PAIR(last)->cdr = list1(expr);
-    return ast_new(p, cdr(v));
+    return source_new(p, cdr(v));
 }
 
 Value iparse(FILE *in, const char *filename)
 {
     Parser *p = parser_new(in, filename);
-    Value ast;
+    Value src;
     if (setjmp(p->jmp_error) == 0)
-        ast = parse_program(p); // success
+        src = parse_program(p); // success
     else
-        ast = Qundef; // got an error
+        src = Qundef; // got an error
     parser_free(p);
-    return ast;
+    return src;
+}
+
+static Value iparse_ast(FILE *in, const char *filename)
+{
+    Value src = iparse(in, filename);
+    return src == Qundef ? Qundef : car(cdr(src));
 }
 
 Value parse_datum(FILE *in, const char *filename)
@@ -497,15 +503,15 @@ Value parse(const char *path)
     FILE *in = fopen(path, "r");
     if (in == NULL)
         error("parse: can't open file: %s", path);
-    Value ast = iparse(in, path);
+    Value ast = iparse_ast(in, path);
     fclose(in);
-    return ast == Qundef ? Qundef : car(cdr(ast));
+    return ast;
 }
 
 Value parse_string(const char *in)
 {
     FILE *f = fmemopen((char *) in, strlen(in), "r");
-    Value ast = iparse(f, "<inline>");
+    Value ast = iparse_ast(f, "<inline>");
     fclose(f);
-    return ast == Qundef ? Qundef : car(cdr(ast));
+    return ast;
 }
