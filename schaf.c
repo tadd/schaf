@@ -33,6 +33,7 @@ static const char *TYPE_NAMES[] = {
     [TYPE_PROC] = "procedure",
     [TYPE_ENV] = "environment",
     [TYPE_PORT] = "port",
+    [TYPE_VECTOR] = "vector",
 };
 
 #define OF_BOOL(v) ((!!(v) << 3U) | 0b100U)
