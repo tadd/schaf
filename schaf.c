@@ -741,6 +741,8 @@ static void prepend_cfunc_name(Value v)
     snprintf(errmsg, sizeof(errmsg), "%s: %s", s, tmp);
 }
 
+static Value reverse(Value l);
+
 static void dump_stack_trace(Value call_stack)
 {
     if (call_stack == Qnil)
@@ -1699,7 +1701,7 @@ static Value proc_append(UNUSED Value env, Value ls)
     return l;
 }
 
-Value reverse(Value l)
+static Value reverse(Value l)
 {
     Value ret = Qnil;
     for (Value p = l; p != Qnil; p = cdr(p))
