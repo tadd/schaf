@@ -431,22 +431,20 @@ const char *error_message(void)
     return errmsg;
 }
 
-// generic macro to handle errors and early-returns
-#define CHECK_ERROR(v) do { \
-        Value V = v; \
-        if (UNLIKELY(is_error(V))) \
+// generic macros to handle errors and early-returns
+#define CHECK_ERROR_F(v, f) do { \
+        Value V = (v); \
+        if (UNLIKELY(f(V))) \
             return V; \
     } while (0)
-#define CHECK_ERROR_TRUTHY(v) do { \
-        Value V = v; \
-        if (UNLIKELY((V) != Qfalse)) \
-            return V; \
-    } while (0)
+#define CHECK_ERROR(v) CHECK_ERROR_F(v, is_error)
+#define TRUTHY(v) ((v) != Qfalse)
+#define CHECK_ERROR_TRUTHY(v) CHECK_ERROR_F(v, TRUTHY)
 #define CHECK_ERROR_LOCATED(v, l) do { \
-        Value V = v; \
+        Value V = (v); \
         if (UNLIKELY(is_error(V))) { \
             if (scary_length(ERROR(V)->call_stack) == 0) \
-                push_stack_frame(V, NULL, l); \
+                push_stack_frame(V, NULL, (l)); \
             return V; \
         } \
     } while (0)
