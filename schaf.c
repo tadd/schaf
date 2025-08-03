@@ -984,36 +984,30 @@ static Value syn_or(Value env, Value args)
 }
 
 // 4.2.2. Binding constructs
-static Value transpose_2xn(Value ls, Value *pfirsts, Value *pseconds) // 2 * n
-{
-    Value firsts = DUMMY_PAIR(), seconds = DUMMY_PAIR();
-    for (Value lfirsts = firsts, lseconds = seconds; ls != Qnil; ls = cdr(ls)) {
-        Value l = car(ls);
-        EXPECT(arity, 2, l);
-        lfirsts = PAIR(lfirsts)->cdr = list1(car(l));
-        lseconds = PAIR(lseconds)->cdr = list1(cadr(l));
-    }
-    *pfirsts = cdr(firsts);
-    *pseconds = cdr(seconds);
-    return Qfalse;
-}
-
 static Value let(Value env, Value var, Value bindings, Value body)
 {
     EXPECT(list_head, bindings);
-    Value params = Qnil, symargs = Qnil;
-    Value r = transpose_2xn(bindings, &params, &symargs);
-    CHECK_ERROR(r);
-    Value args = map_eval(env, symargs);
-    CHECK_ERROR(args);
-    if (var == Qfalse) {
-        Value proc = value_of_closure(env, params, body);
-        return apply_closure(Qfalse, proc, args);
-    }
+    bool named = var != Qfalse;
     Value letenv = env_inherit(env);
-    Value proc = value_of_closure(letenv, params, body);
-    env_put(letenv, var, proc); // affects as proc->env
-    return apply_closure(Qfalse, proc, args);
+    Value params = DUMMY_PAIR(), lparams = params;
+    for (Value p = bindings; p != Qnil; p = cdr(p)) {
+        Value b = car(p);
+        EXPECT(type, TYPE_PAIR, b);
+        if (length(b) != 2)
+            return runtime_error("malformed binding in let: %s", stringify(b));
+        Value ident = car(b), expr = cadr(b);
+        EXPECT(type, TYPE_SYMBOL, ident);
+        if (named)
+            lparams = PAIR(lparams)->cdr = list1(ident);
+        Value val = eval(env, expr);
+        CHECK_ERROR(val);
+        env_put(letenv, ident, val);
+    }
+    if (named) {
+        Value proc = value_of_closure(letenv, cdr(params), body);
+        env_put(letenv, var, proc); // letenv affects as proc->env
+    }
+    return eval_body(letenv, body);
 }
 
 //PTR
