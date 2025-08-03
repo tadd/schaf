@@ -71,10 +71,10 @@ typedef struct {
     char *body;
 } String;
 
-typedef struct {
+typedef struct Procedure {
     Header header;
     int64_t arity;
-    Value (*apply)(Value env, Value proc, Value args);
+    Value (*apply)(Value env, const struct Procedure *proc, Value args);
 } Procedure;
 
 typedef struct {

@@ -360,30 +360,30 @@ static Value expect_arity_1(Value args);
 static Value expect_arity_2(Value args);
 static Value expect_arity_3(Value args);
 
-static Value apply_cfunc_v(Value env, Value f, Value args)
+static Value apply_cfunc_v(Value env, const Procedure *f, Value args)
 {
     return CFUNC(f)->f1(env, args);
 }
 
-static Value apply_cfunc_0(Value env, Value f, UNUSED Value args)
+static Value apply_cfunc_0(Value env, const Procedure *f, UNUSED Value args)
 {
     EXPECT(arity_0, args);
     return CFUNC(f)->f0(env);
 }
 
-static Value apply_cfunc_1(Value env, Value f, Value args)
+static Value apply_cfunc_1(Value env, const Procedure *f, Value args)
 {
     EXPECT(arity_1, args);
     return CFUNC(f)->f1(env, car(args));
 }
 
-static Value apply_cfunc_2(Value env, Value f, Value args)
+static Value apply_cfunc_2(Value env, const Procedure *f, Value args)
 {
     EXPECT(arity_2, args);
     return CFUNC(f)->f2(env, car(args), cadr(args));
 }
 
-static Value apply_cfunc_3(Value env, Value f, Value args)
+static Value apply_cfunc_3(Value env, const Procedure *f, Value args)
 {
     EXPECT(arity_3, args);
     return CFUNC(f)->f3(env, car(args), cadr(args), caddr(args));
@@ -429,7 +429,7 @@ static Value syntax_new(const char *name, void *cfunc, int64_t arity)
     return cfunc_new_internal(TAG_SYNTAX, name, cfunc, arity);
 }
 
-static Value apply_cfunc_closure_1(UNUSED Value env, Value f, Value args)
+static Value apply_cfunc_closure_1(UNUSED Value env, const Procedure *f, Value args)
 {
     EXPECT(arity_1, args);
     return CFUNC(f)->f1(CFUNC_CLOSURE(f)->data, car(args));
@@ -453,11 +453,11 @@ static Value env_put(Value env, Value key, Value value);
 static Value expect_arity(int64_t expected, Value args);
 
 //PTR
-static Value apply_closure(UNUSED Value env, Value proc, Value args)
+static Value apply_closure(UNUSED Value env, const Procedure *proc, Value args)
 {
     EXPECT(arity, PROCEDURE(proc)->arity, args);
+    int64_t arity = proc->arity;
     Closure *cl = CLOSURE(proc);
-    int64_t arity = cl->proc.arity;
     Value clenv = env_inherit(cl->env);
     Value params = cl->params;
     if (arity == -1)
@@ -733,7 +733,7 @@ static Value push_stack_frame(Value ve, const char *name, Value loc)
     return ve;
 }
 
-static Value apply(Value env, Value proc, Value args)
+static Value apply(Value env, const Procedure *proc, Value args)
 {
     return PROCEDURE(proc)->apply(env, proc, args);
 }
@@ -756,7 +756,7 @@ static Value eval_apply(Value env, Value l)
         args = map_eval(env, args);
         CHECK_ERROR_LOCATED(args, l);
     }
-    Value ret = apply(env, proc, args);
+    Value ret = apply(env, PROCEDURE(proc), args);
     if (UNLIKELY(is_error(ret))) {
         const char *fname = get_func_name(proc);
         return push_stack_frame(ret, fname, l);
@@ -1034,7 +1034,7 @@ static Value cond_eval_recipient(Value env, Value test, Value recipients)
     EXPECT(type, TYPE_PROC, recipient);
     if (rest != Qnil)
         return runtime_error("only one expression expected after =>");
-    return apply(env, recipient, list1(test));
+    return apply(env, PROCEDURE(recipient), list1(test));
 }
 
 //PTR
@@ -2127,7 +2127,7 @@ static Value proc_apply(Value env, Value args)
     EXPECT(type, TYPE_PROC, proc);
     Value appargs = build_apply_args(cdr(args));
     CHECK_ERROR(appargs);
-    return apply(env, proc, appargs);
+    return apply(env, PROCEDURE(proc), appargs);
 }
 
 static bool cars_cdrs(Value ls, Value *pcars, Value *pcdrs, Value *perr)
@@ -2150,12 +2150,17 @@ static bool cars_cdrs(Value ls, Value *pcars, Value *pcdrs, Value *perr)
     return true;
 }
 
+#define get_proc(x) ({ \
+            Value X = x; \
+            EXPECT(type, TYPE_PROC, X); \
+            PROCEDURE(X); \
+        })
+
 static Value proc_map(Value env, Value args)
 {
     EXPECT(arity_min_2, args);
 
-    Value proc = car(args);
-    EXPECT(type, TYPE_PROC, proc);
+    Procedure *proc = get_proc(car(args));
     Value ls = cdr(args);
     Value ret = DUMMY_PAIR(), e = Qfalse;
     for (Value last = ret, cars, cdrs, v; cars_cdrs(ls, &cars, &cdrs, &e); ls = cdrs) {
@@ -2171,8 +2176,8 @@ static Value proc_for_each(Value env, Value args)
 {
     EXPECT(arity_min_2, args);
 
-    Value proc = car(args), e = Qfalse;
-    EXPECT(type, TYPE_PROC, proc);
+    Value e = Qfalse;
+    Procedure *proc = get_proc(car(args));
     for (Value ls = cdr(args), cars, cdrs, v; cars_cdrs(ls, &cars, &cdrs, &e); ls = cdrs) {
         v = apply(env, proc, cars);
         CHECK_ERROR(v);
@@ -2204,7 +2209,7 @@ static void jump(Continuation *cont)
 }
 
 [[gnu::noinline]]
-static Value apply_continuation(UNUSED Value env, Value f, Value args)
+static Value apply_continuation(UNUSED Value env, const Procedure *f, Value args)
 {
     GET_SP(sp);
     EXPECT(arity, PROCEDURE(f)->arity, args);
@@ -2246,10 +2251,11 @@ static bool continuation_set(Value c)
 // shared with dynamic-wind
 static Value callcc(Value env, Value proc)
 {
+    Procedure *p = get_proc(proc);
     Value c = continuation_new(1);
     if (continuation_set(c))
         return CONTINUATION(c)->retval;
-    return apply(env, proc, list1(c));
+    return apply(env, p, list1(c));
 }
 
 static void do_wind(Value new_winders);
@@ -2259,14 +2265,14 @@ static Value callcc_inner2(Value pair, Value arg)
     Value k = car(pair), saved = cdr(pair);
     if (saved != inner_winders)
         do_wind(saved);
-    return apply(Qfalse, k, list1(arg));
+    return apply(Qfalse, get_proc(k), list1(arg));
 }
 
 static Value callcc_inner1(Value proc, Value k)
 {
     Value saved = inner_winders, pair = cons(k, saved);
     Value arg = cfunc_closure_new(".callcc-inner2", callcc_inner2, pair);
-    return apply(Qfalse, proc, list1(arg));
+    return apply(Qfalse, get_proc(proc), list1(arg));
 }
 
 static Value proc_callcc(Value env, Value proc)
@@ -2280,7 +2286,7 @@ static Value proc_values(Value env, Value args)
 {
     if (inner_continuation == Qfalse)
         return car(args);
-    return apply(env, inner_continuation, args);
+    return apply(env, PROCEDURE(inner_continuation), args);
 }
 
 static Value proc_call_with_values(Value env, Value producer, Value consumer)
@@ -2293,12 +2299,12 @@ static Value proc_call_with_values(Value env, Value producer, Value consumer)
         args = CONTINUATION(k)->retval;
     else {
         inner_continuation = k;
-        Value val = apply(env, producer, Qnil);
+        Value val = apply(env, PROCEDURE(producer), Qnil);
         CHECK_ERROR(val);
         args = list1(val);
     }
     inner_continuation = origk;
-    return apply(env, consumer, args);
+    return apply(env, PROCEDURE(consumer), args);
 }
 
 static Value common_tail(Value x, Value y)
@@ -2320,14 +2326,14 @@ static void do_wind(Value new_winders)
     for (Value ls = inner_winders; ls != tail; ls = cdr(ls)) {
         inner_winders = cdr(ls);
         Value f = cdar(ls);
-        apply(Qfalse, f, Qnil);
+        apply(Qfalse, get_proc(f), Qnil);
     }
     Value rev = Qnil;
     for (Value p = new_winders; p != tail; p = cdr(p))
         rev = cons(car(p), rev);
     for (Value p = rev; p != Qnil; p = cdr(p)) {
         Value f = caar(p);
-        apply(Qfalse, f, Qnil);
+        apply(Qfalse, get_proc(f), Qnil);
         inner_winders = p;
     }
 }
@@ -2338,11 +2344,11 @@ static Value proc_dynamic_wind(Value env, Value before, Value thunk, Value after
     EXPECT(type, TYPE_PROC, thunk);
     EXPECT(type, TYPE_PROC, after);
 
-    apply(env, before, Qnil);
+    apply(env, get_proc(before), Qnil);
     inner_winders = cons(cons(before, after), inner_winders);
-    Value ret = apply(env, thunk, Qnil);
+    Value ret = apply(env, get_proc(thunk), Qnil);
     inner_winders = cdr(inner_winders);
-    apply(env, after, Qnil);
+    apply(env, get_proc(after), Qnil);
     return ret;
 }
 
@@ -2385,7 +2391,7 @@ static void close_port(Value port);
 static Value call_with_file(Value env, Value path, Value thunk, PortType type)
 {
     Value file = open_port(STRING(path), type);
-    Value ret = apply(env, thunk, list1(file));
+    Value ret = apply(env, get_proc(thunk), list1(file));
     close_port(file);
     return ret;
 }
@@ -2474,7 +2480,7 @@ static Value with_file(Value env, Value path, Value thunk, Value *curr_port, Por
 {
     Value orig = *curr_port;
     *curr_port = open_port(STRING(path), type);
-    Value ret = apply(env, thunk, Qnil);
+    Value ret = apply(env, get_proc(thunk), Qnil);
     close_port(*curr_port);
     *curr_port = orig;
     return ret;
