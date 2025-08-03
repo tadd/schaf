@@ -143,8 +143,18 @@ class ValuePrinter(MyPrinter):
         return self.deref_as('ValueTag').format_string()[4:].lower()
 
     @property
+    def is_internal_tag(self):
+        return self.tag_name == 'error'
+
+    @property
+    def is_self_format(self):
+        return not self.is_immediate and \
+            (self.is_internal_tag or
+             cfuncall('value_is_procedure', self.val))
+
+    @property
     def type_name(self):
-        if self.is_internal or self.is_proc:
+        if self.is_self_format:
             return self.TAG_TO_TYPE[self.tag_name]
         return cfuncall('value_to_type_name', self.val).string().title()
 
@@ -156,24 +166,13 @@ class ValuePrinter(MyPrinter):
         return f'{{{self.pp(self.deref_as(ty))}}}'
 
     @property
-    def is_internal(self):
-        return not self.is_immediate and self.tag_name == 'error'
-
-    @property
-    def is_proc(self):
-        if self.is_immediate or self.is_internal:
-            return False
-        return cfuncall('value_is_procedure', self.val)
-
-    @property
     def addr(self):
         hex = f'{int(self.val):#x}'
         return self.highlight(hex, 'immediate')
 
-
     def to_string(self):
         addr, ty = (self.addr, self.type_name)
-        if self.is_internal or self.is_proc:
+        if self.is_self_format:
             val = self.format_as(ty)
         else:
             val = self.stringify()
