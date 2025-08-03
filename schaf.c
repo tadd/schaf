@@ -22,20 +22,6 @@
 // Types
 //
 
-static const char *TYPE_NAMES[] = {
-    [TYPE_NULL] = "null",
-    [TYPE_BOOL] = "boolean",
-    [TYPE_INT] = "integer",
-    [TYPE_SYMBOL] = "symbol",
-    [TYPE_UNDEF] = "undef",
-    [TYPE_PAIR] = "pair",
-    [TYPE_STRING] = "string",
-    [TYPE_PROC] = "procedure",
-    [TYPE_ENV] = "environment",
-    [TYPE_PORT] = "port",
-    [TYPE_VECTOR] = "vector",
-};
-
 #define OF_BOOL(v) ((!!(v) << 3U) | 0b100U)
 
 // Value (uintptr_t):
@@ -182,7 +168,31 @@ Type value_type_of(Value v)
 
 static inline const char *value_type_to_string(Type t)
 {
-    return TYPE_NAMES[t];
+    switch (t) {
+    case TYPE_BOOL:
+        return "boolean";
+    case TYPE_INT:
+        return "integer";
+    case TYPE_SYMBOL:
+        return "symbol";
+    case TYPE_NULL:
+        return "null";
+    case TYPE_UNDEF:
+        return "undef";
+    case TYPE_PAIR:
+        return "pair";
+    case TYPE_STRING:
+        return "string";
+    case TYPE_PROC:
+        return "procedure";
+    case TYPE_VECTOR:
+        return "vector";
+    case TYPE_ENV:
+        return "environment";
+    case TYPE_PORT:
+        return "port";
+    }
+    UNREACHABLE();
 }
 
 const char *value_to_type_name(Value v)
