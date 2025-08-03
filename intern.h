@@ -93,8 +93,7 @@ typedef struct {
 
 typedef struct {
     Header header;
-    int64_t length, capacity;
-    Value *body;
+    Value *body;// use scary
 } Vector;
 
 typedef struct {
@@ -110,8 +109,13 @@ typedef struct {
 } Port;
 
 typedef struct {
+    const char *func_name;
+    Value loc;
+} StackFrame;
+
+typedef struct {
     Header header;
-    Value call_stack; // list of '(func-name . location)
+    StackFrame **call_stack;
 } Error;
 
 #define HEADER(v) ((Header *) v)
@@ -135,9 +139,8 @@ extern Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
 
 Value iparse(FILE *in, const char *filename);
 Value parse_datum(FILE *in, const char *filename);
-void pos_to_line_col(int64_t pos, Value newline_pos, int64_t *line, int64_t *col);
+void pos_to_line_col(int64_t pos, Value *newline_pos, int64_t *line, int64_t *col);
 [[gnu::noreturn]] void raise_error(jmp_buf buf, const char *fmt, ...);
-Value reverse(Value l);
 void *obj_new(size_t size, ValueTag t);
 
 void gc_init(uintptr_t *base_sp);
