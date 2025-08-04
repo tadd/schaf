@@ -72,7 +72,7 @@ static void init_chunk(Header *h, size_t size)
     h->tag = TAG_CHUNK;
     h->size = size;
     // h->living = false;
-    // h->next = NULL;
+    // HEADER_NEXT(h) = NULL;
 }
 
 static HeapSlot *heap_slot_new(size_t size)
@@ -97,32 +97,32 @@ void gc_init(uintptr_t *volatile sp)
     heap.size = 1;
     heap_low = first->body;
     heap_high = heap_low + first->size;
-    free_list = (Header *) first->body;
+    free_list = HEADER(first->body);
 }
 
 // Allocation
 
 static Header *allocate_from_chunk(Header *prev, Header *curr, size_t size)
 {
-    Header *next = curr->next;
+    Header *next = HEADER_NEXT(curr);
     if (curr->size > size + sizeof(Header)) {
         Header *rest = (Header *)((uint8_t *) curr + size);
         init_chunk(rest, curr->size - size);
-        rest->next = next;
+        HEADER_NEXT(rest) = next;
         next = rest;
     } else if (curr->size > size)
         size = curr->size;
     if (prev == NULL)
         free_list = next;
     else
-        prev->next = next;
+        HEADER_NEXT(prev) = next;
     init_chunk(curr, size);
     return curr;
 }
 
 static Header *allocate(size_t size)
 {
-    for (Header *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = curr->next) {
+    for (Header *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = HEADER_NEXT(curr)) {
         if (curr->size >= size) // First-fit
             return allocate_from_chunk(prev, curr, size);
     }
@@ -391,7 +391,7 @@ static void heap_print_stat(const char *header)
 
 static void add_to_free_list(Header *h)
 {
-    h->next = free_list; // prepend
+    HEADER_NEXT(h) = free_list; // prepend
     free_list = h;
 }
 
