@@ -1911,7 +1911,7 @@ static Value proc_apply(Value env, Value args)
     return apply(env, proc, appargs);
 }
 
-static Value cars_cdrs(Value ls, Value *pcars, Value *pcdrs, Value *perr)
+static bool cars_cdrs(Value ls, Value *pcars, Value *pcdrs, Value *perr)
 {
     Value cars = DUMMY_PAIR(), cdrs = DUMMY_PAIR();
     for (Value p = ls, lcars = cars, lcdrs = cdrs; p != Qnil; p = cdr(p)) {
