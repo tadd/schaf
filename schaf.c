@@ -96,7 +96,10 @@ static inline bool value_tag_is(Value v, ValueTag expected)
 
 inline bool sch_value_is_string(Value v)
 {
-    return value_tag_is(v, TAG_STRING);
+    if (value_is_immediate(v))
+        return false;
+    ValueTag t = VALUE_TAG(v);
+    return t == TAG_HSTRING || t == TAG_ESTRING;
 }
 
 static inline bool value_is_procedure(Value v)
@@ -110,7 +113,8 @@ static inline bool value_is_procedure(Value v)
     case TAG_CONTINUATION:
     case TAG_CFUNC_CLOSURE:
         return true;
-    case TAG_STRING:
+    case TAG_HSTRING:
+    case TAG_ESTRING:
     case TAG_PAIR:
     case TAG_VECTOR:
     case TAG_ENV:
@@ -154,7 +158,8 @@ Type sch_value_type_of(Value v)
     if (value_is_immediate(v))
         return immediate_type_of(v);
     switch (VALUE_TAG(v)) {
-    case TAG_STRING:
+    case TAG_HSTRING:
+    case TAG_ESTRING:
         return TYPE_STRING;
     case TAG_PAIR:
         return TYPE_PAIR;
@@ -304,13 +309,18 @@ SchObject *obj_new(ValueTag t)
 
 static Value string_new_moved(char *s)
 {
-    SchObject *o = obj_new(TAG_STRING);
-    STRING(o) = s; // move ownership and use as is
+    SchObject *o = obj_new(TAG_HSTRING);
+    HSTRING(o) = s; // move ownership then use as is
     return (Value) o;
 }
 
 Value sch_string_new(const char *s)
 {
+    if (strlen(s) + 1 <= sizeof(((SchObject *) NULL)->estring)) {
+        SchObject *o = obj_new(TAG_ESTRING);
+        strcpy(ESTRING(o), s);
+        return (Value) o;
+    }
     return string_new_moved(xstrdup(s));
 }
 
@@ -2138,8 +2148,6 @@ static void jump(Continuation *cont)
     memcpy(cont->exstate->sp, cont->exstate->stack, cont->exstate->stack_len);
     longjmp(cont->exstate->regs, 1);
 }
-
-#define GET_SP(p) uintptr_t v##p = 0, *p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
 
 [[gnu::noinline]]
 static Value apply_continuation(UNUSED Value env, Value f, Value args)
