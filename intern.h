@@ -49,12 +49,11 @@ typedef enum {
     TAG_LAST = TAG_ERROR
 } ValueTag;
 
-typedef struct Header {
+typedef struct {
     ValueTag tag;
     bool immutable;
     bool living; // used in GC
     size_t size;
-    struct Header *next;
 } Header;
 
 typedef struct {
@@ -129,6 +128,7 @@ typedef struct {
 typedef struct {
     Header header; // common
     union {
+        Header *next;
         char *hstring;
         char estring[sizeof(Closure)];// may be the largest
         Pair pair;
@@ -149,6 +149,7 @@ typedef struct {
 #define HEADER(v) (&OBJ(v)->header)
 #define VALUE_TAG(v) (HEADER(v)->tag)
 
+#define HEADER_NEXT(v) (OBJ(v)->next)
 #define PAIR(v) (&OBJ(v)->pair)
 #define LOCATED_PAIR(v) (&OBJ(v)->lpair)
 #define ESTRING(v) (OBJ(v)->estring)
