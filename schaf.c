@@ -298,7 +298,6 @@ SchObject *obj_new(ValueTag t)
     h->tag = t;
     h->immutable = false;
     h->living = false;
-    h->next = NULL;
     return (SchObject *) h;
 }
 
