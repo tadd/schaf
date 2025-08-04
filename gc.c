@@ -245,7 +245,8 @@ static void mark_val(Value v)
             mark_val(p[i]);
         return;
     }
-    case TAG_STRING:
+    case TAG_HSTRING:
+    case TAG_ESTRING:
     case TAG_CFUNC:
     case TAG_SYNTAX:
     case TAG_PORT:
@@ -419,10 +420,10 @@ static void free_val(Value v)
         *PROCEDURE(v) = (Procedure) { 0, NULL };
 #endif
         return;
-    case TAG_STRING:
-        free(STRING(v));
+    case TAG_HSTRING:
+        free(HSTRING(v));
 #ifdef DEBUG
-        STRING(v) = NULL;
+        HSTRING(v) = NULL;
 #endif
         return;
     case TAG_ENV: {
@@ -457,8 +458,9 @@ static void free_val(Value v)
 #endif
         return;
     }
-    case TAG_EOF:
+    case TAG_ESTRING:
     case TAG_PAIR:
+    case TAG_EOF:
         return;
     case TAG_CHUNK:
         UNREACHABLE();
