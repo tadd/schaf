@@ -1,4 +1,5 @@
 #include <math.h>
+#include <stdalign.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -33,11 +34,23 @@ typedef struct {
     size_t tab_free[TABMAX+1], tab_used[TABMAX+1];
 } HeapStat;
 
+typedef struct GCHeader {
+    bool used;
+    bool living;
+    size_t size;
+    alignas(16) struct GCHeader *next;
+} GCHeader;
+enum {
+    GC_HEADER_OFFSET = offsetof(GCHeader, next)
+};
+#define GC_HEADER(p) ((GCHeader *) (p))
+#define GC_HEADER_FROM_VAL(v) (GC_HEADER((uint8_t *)(v) - GC_HEADER_OFFSET))
+
 static size_t init_size = 1 * MiB;
 static Heap heap; // singleton
 static uint8_t *heap_low, *heap_high;
 
-static Header *free_list;
+static GCHeader *free_list;
 
 static uintptr_t *volatile stack_base;
 static const Value *roots[ROOT_SIZE];
@@ -68,12 +81,11 @@ static inline size_t align(size_t size)
 }
 
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
-static void init_chunk(Header *h, size_t size)
+static void init_header(GCHeader *h, size_t size)
 {
+    h->used = false;
     h->living = false;
-    // h->immutable = false;
     h->size = size;
-    h->tag = TAG_CHUNK;
 }
 
 #ifdef DEBUG
@@ -82,53 +94,62 @@ static void init_chunk(Header *h, size_t size)
 
 static HeapSlot *heap_slot_new(size_t size)
 {
+    size = align(size);
+    size_t hsize = size + GC_HEADER_OFFSET;
     HeapSlot *s = xmalloc(sizeof(HeapSlot));
-    s->size = size;
-    s->body = xmalloc(size);
+    s->size = hsize;
+    s->body = xmalloc(hsize);
 #ifdef __clang__ // XXX: ???
-    memset(s->body, 0, MIN(size, sizeof(Header)));
+    memset(s->body, 0, MIN(size, sizeof(GCHeader)));
 #endif
-    Header *h = HEADER(s->body);
-    init_chunk(h, size);
-    HEADER_NEXT(h) = NULL;
+    GCHeader *h = GC_HEADER(s->body);
+    init_header(h, size);
+    h->next = NULL;
     return s;
 }
 
 void gc_init(uintptr_t *volatile sp)
 {
     stack_base = sp;
-    init_size = align(init_size);
     heap.slot[0] = heap_slot_new(init_size);
     HeapSlot *first = heap.slot[0];
     heap.size = 1;
     heap_low = first->body;
     heap_high = heap_low + first->size;
-    free_list = HEADER(first->body);
+    free_list = GC_HEADER(first->body);
 }
 
 // Allocation
 
-static Header *allocate_from_chunk(Header *prev, Header *curr, size_t size)
+static void *allocate_from_chunk(GCHeader *prev, GCHeader *curr, size_t size)
 {
-    Header *next = HEADER_NEXT(curr);
-    if (curr->size > size) {
-        Header *rest = (Header *)((uint8_t *) curr + size);
-        init_chunk(rest, curr->size - size);
-        HEADER_NEXT(rest) = next;
+    size_t hsize = size + GC_HEADER_OFFSET;
+    GCHeader *next = curr->next;
+    if (curr->size > hsize) {
+        GCHeader *rest = GC_HEADER((uint8_t *) curr + hsize);
+        init_header(rest, curr->size - hsize);
+        rest->next = next;
         next = rest;
         curr->size = size;
+        curr->next = NULL; //XXX
     }
     if (prev == NULL)
         free_list = next;
     else
-        HEADER_NEXT(prev) = next;
-    return curr;
+        prev->next = next;
+    curr->used = true;
+    void *p = &curr->next;
+#ifdef DEBUG
+    memset(p, 0, curr->size);
+#endif
+    return p;
 }
 
-static Header *allocate(size_t size)
+static void *allocate(size_t size)
 {
-    for (Header *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = HEADER_NEXT(curr)) {
-        if (curr->size >= size) // First-fit
+    size_t hsize = size + GC_HEADER_OFFSET;
+    for (GCHeader *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = curr->next) {
+        if (curr->size >= hsize) // First-fit
             return allocate_from_chunk(prev, curr, size);
     }
     return NULL;
@@ -174,7 +195,7 @@ bool in_heap_range(volatile uintptr_t v)
 
 static bool is_valid_tag(ValueTag t)
 {
-    return t < TAG_CHUNK;
+    return t <= TAG_LAST;
 }
 
 static bool is_valid_pointer(Value v)
@@ -184,8 +205,8 @@ static bool is_valid_pointer(Value v)
 
 static bool is_valid_header(Value v)
 {
-    Header *h = HEADER(v);
-    return is_valid_tag(h->tag) && h->size == sizeof(SchObject);
+    return is_valid_tag(VALUE_TAG(v)) &&
+        GC_HEADER_FROM_VAL(v)->size == sizeof(SchObject);
 }
 
 static bool in_heap_val(Value v)
@@ -218,7 +239,7 @@ static void mark_val(Value v)
 {
     if (!is_valid_pointer(v))
         return;
-    Header *h = HEADER(v);
+    GCHeader *h = GC_HEADER_FROM_VAL(v);
     if (h->living)
         return;
     h->living = true; // mark it!
@@ -266,8 +287,6 @@ static void mark_val(Value v)
     case TAG_EOF:
     case TAG_ERROR:
         return;
-    case TAG_CHUNK:
-        UNREACHABLE();
     }
 }
 
@@ -304,7 +323,7 @@ static void mark(void)
 // Dump for debug
 
 UNUSED
-static bool chunk_header_equal(Header *a, Header *b)
+static bool chunk_header_equal(GCHeader *a, GCHeader *b)
 {
     return a->size == b->size;
 }
@@ -315,8 +334,8 @@ static void heap_slot_dump(const HeapSlot *slot)
     uint8_t *p = slot->body, *endp = p + init_size;
     fprintf(stderr, "begin: %p..%p\n", p, endp);
     bool ellipsis = false;
-    for (Header *h, *prev = NULL; p < endp; p += h->size, prev = h) {
-        h = HEADER(p);
+    for (GCHeader *h, *prev = NULL; p < endp; p += h->size, prev = h) {
+        h = GC_HEADER(p);
         if (prev != NULL && chunk_header_equal(h, prev)) {
             if (!ellipsis) {
                 fprintf(stderr, "  [..]\n");
@@ -345,18 +364,17 @@ static void heap_stat(HeapStat *stat)
     for (size_t i = 0; i < heap.size; i++) {
         HeapSlot *slot = heap.slot[i];
         stat->size += slot->size;
-        Header *h;
+        GCHeader *h;
         for (uint8_t *p = slot->body, *endp = p + slot->size; p < endp; p += h->size) {
-            h = HEADER(p);
+            h = GC_HEADER(p);
             size_t j = h->size - 1;
             if (j > TABMAX)
                 j = TABMAX;
-            if (h->tag == TAG_CHUNK)
-                stat->tab_free[j]++;
-            else {
+            if (h->used) {
                 stat->used += h->size;
                 stat->tab_used[j]++;
-            }
+            } else
+                stat->tab_free[j]++;
         }
     }
 }
@@ -390,9 +408,9 @@ static void heap_print_stat(const char *header)
 
 // Freeing
 
-static void add_to_free_list(Header *h)
+static void add_to_free_list(GCHeader *h)
 {
-    HEADER_NEXT(h) = free_list; // prepend
+    h->next = free_list; // prepend
     free_list = h;
 }
 
@@ -454,8 +472,6 @@ static void free_val(Value v)
     case TAG_PAIR:
     case TAG_EOF:
         break;
-    case TAG_CHUNK:
-        UNREACHABLE();
     }
 }
 #ifdef DEBUG
@@ -465,28 +481,29 @@ static void free_val(Value v)
 #undef scary_free
 #endif
 
-static bool adjoining_p(const Header *prev, const Header *curr)
+static bool adjoining_p(const GCHeader *prev, const GCHeader *curr)
 {
-    if (prev == NULL || prev->tag != TAG_CHUNK)
+    if (prev == NULL || prev->used)
         return false;
-    void *prevnext = (uint8_t *) prev + prev->size;
+    void *prevnext = (uint8_t *) prev + GC_HEADER_OFFSET + prev->size;
     return prevnext == curr;
 }
 
-static void free_chunk(Header *prev, Header *curr)
+static void free_chunk(GCHeader *prev, GCHeader *curr)
 {
-    Value val = (Value) curr;
+    Value val = (Value) &curr->next;
     free_val(val);
     if (adjoining_p(prev, curr)) {
-        prev->size += curr->size;
+        prev->size += curr->size + GC_HEADER_OFFSET;
 #ifdef DEBUG
-        memset(curr, 0, sizeof(SchObject));
+        memset(&curr->next, 0, curr->size);
+        memset(curr, 0, sizeof(GCHeader));
 #else
         curr->size = 0; // XXX: for is_valid_header ?
 #endif
         return;
     }
-    curr->tag = TAG_CHUNK;
+    curr->used = false;
     add_to_free_list(curr);
 }
 
@@ -494,10 +511,10 @@ static void sweep_slot(HeapSlot *slot)
 {
     uint8_t *p = slot->body, *endp = p + slot->size;
     size_t offset;
-    for (Header *h, *prev = NULL; p < endp; p += offset, prev = h) {
-        h = HEADER(p);
-        offset = h->size;
-        if (h->tag == TAG_CHUNK)
+    for (GCHeader *h, *prev = NULL; p < endp; p += offset, prev = h) {
+        h = GC_HEADER(p);
+        offset = h->size + GC_HEADER_OFFSET;
+        if (!h->used)
             continue;
         if (h->living) {
             h->living = false;
@@ -523,7 +540,7 @@ static void add_slot(void)
         heap_low = beg;
     if (heap_high < end)
         heap_high = end;
-    Header *h = HEADER(last->body);
+    GCHeader *h = GC_HEADER(last->body);
     add_to_free_list(h);
 }
 
@@ -558,12 +575,12 @@ static size_t heap_size(void)
     return stat.size;
 }
 
-Header *gc_malloc(size_t size)
+void *gc_malloc(size_t size)
 {
     if (stress)
         gc();
     size = align(size);
-    Header *p = allocate(size);
+    void *p = allocate(size);
     if (!stress && p == NULL) {
         gc();
         p = allocate(size);
@@ -575,7 +592,7 @@ Header *gc_malloc(size_t size)
     if (p == NULL)
         error("unreachable: heap (~%zu MiB) exhausted", heap_size() / MiB);
 #ifdef DEBUG
-    memset((uint8_t *) p + sizeof(Header), 0, size - sizeof(Header));
+    memset(p, 0, size);
 #endif
     return p;
 }
