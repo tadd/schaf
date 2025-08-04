@@ -41,7 +41,6 @@ typedef struct {
 
 typedef struct GCHeader {
     bool used;
-    bool living;
     size_t size;
     alignas(16) struct GCHeader *next;
 } GCHeader;
@@ -82,6 +81,7 @@ typedef struct {
     uint8_t *low, *high;
     Value **roots;
     GCHeader *free_list;
+    uint8_t *bitmap;
 } MSHeap;
 
 static inline size_t align(size_t size)
@@ -92,7 +92,6 @@ static inline size_t align(size_t size)
 static void init_header(GCHeader *h, size_t size, GCHeader *next)
 {
     h->used = false;
-    h->living = false;
     h->size = size;
     h->next = next;
 }
@@ -184,14 +183,33 @@ static void mark_env_each(uint64_t key, uint64_t value, UNUSED void *data)
     mark_val(value);
 }
 
+typedef uint64_t align_t[2];
+static uintptr_t bitmap_index(const void *p)
+{
+    MSHeap *heap = gc_data;
+    return (align_t *) p - (align_t *) heap->low;
+}
+
+static bool is_living(void *p, bool do_mark)
+{
+    MSHeap *heap = gc_data;
+    uintptr_t index = bitmap_index(p);
+    uint8_t offset = index % 8U;
+    index /= 8U;
+    uint8_t mask = 1UL << offset;
+    bool marked = heap->bitmap[index] & mask;
+    if (do_mark && !marked)
+        heap->bitmap[index] |= mask;
+    return marked;
+}
+
 static void mark_val(Value v)
 {
     if (!is_valid_pointer(v))
         return;
     GCHeader *h = GC_HEADER_FROM_VAL(v);
-    if (h->living)
+    if (is_living(h, true)) // mark it!
         return;
-    h->living = true; // mark it!
     switch (VALUE_TAG(v)) {
     case TAG_PAIR: {
         Pair *p = PAIR(v);
@@ -369,11 +387,7 @@ static void sweep_slot(MSHeapSlot *slot)
     for (GCHeader *h; p < endp; p += offset) {
         h = GC_HEADER(p);
         offset = HSIZE(h->size);
-        if (!h->used)
-            continue;
-        if (h->living)
-            h->living = false;
-        else
+        if (h->used && !is_living(h, false)) // no need to flag/unflag
             free_chunk(h);
     }
 }
@@ -383,6 +397,7 @@ static void sweep(void)
     MSHeap *heap = gc_data;
     for (size_t i = 0; i < heap->size; i++)
         sweep_slot(heap->slot[i]);
+    free(heap->bitmap);
 }
 
 static void ms_add_slot(void)
@@ -423,8 +438,16 @@ static void mark_stack(void)
     mark_array(sp, stack_base - sp);
 }
 
+static void bitmap_init(void)
+{
+    MSHeap *heap = gc_data;
+    size_t rawsize = (align_t *) heap->high - (align_t *) heap->low;
+    heap->bitmap = xcalloc(1, rawsize / 8U);
+}
+
 static void mark(void)
 {
+    bitmap_init();
     mark_stack();
     mark_roots();
     jmp_buf jmp;
@@ -495,6 +518,7 @@ static void ms_stat(HeapStat *stat)
 static void ms_fin(void)
 {
     MSHeap *heap = gc_data;
+    bitmap_init();
     sweep(); // nothing marked, all values are freed
     for (size_t i = 0; i < heap->size; i++) {
         free(heap->slot[i]->body);
