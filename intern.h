@@ -53,7 +53,6 @@ typedef enum {
 typedef struct {
     ValueTag tag;
     bool immutable;
-    bool living; // used in GC
     size_t size;
 } Header;
 
@@ -241,7 +240,7 @@ static inline Value list2_const(Value x, Value y)
 }
 
 #define DUMMY_PAIR() ((Value) &(SchObject) { \
-            .header = { .tag = TAG_PAIR, .immutable = false, .living = false }, \
+            .header = { .tag = TAG_PAIR, .immutable = false }, \
             .pair = { .car = Qundef, .cdr = Qnil } \
         })
 #define GET_SP(p) uintptr_t v##p = 0, *volatile p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
