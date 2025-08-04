@@ -44,15 +44,12 @@ typedef enum {
     TAG_EOF,
     // internal use only
     TAG_ERROR,
-    TAG_CHUNK,  // not allocated
     TAG_LAST = TAG_ERROR
 } ValueTag;
 
 typedef struct Header {
     ValueTag tag;
     bool immutable;
-    bool living; // used in GC
-    size_t size;
 } Header;
 
 typedef struct {
@@ -122,7 +119,6 @@ typedef struct {
 typedef struct {
     Header header; // common
     union {
-        Header *next;
         char *hstring;
         char estring[sizeof(Continuation)];
         Pair pair;
@@ -142,7 +138,6 @@ typedef struct {
 #define HEADER(v) (&OBJ(v)->header)
 #define VALUE_TAG(v) (HEADER(v)->tag)
 
-#define HEADER_NEXT(v) (OBJ(v)->next)
 #define PAIR(v) (&OBJ(v)->pair)
 #define LOCATED_PAIR(v) (&OBJ(v)->lpair)
 #define ESTRING(v) (OBJ(v)->estring)
@@ -180,7 +175,7 @@ void gc_fin(void);
 
 void gc_add_root(const Value *r);
 size_t gc_stack_get_size(uintptr_t *volatile sp);
-ATTR_XMALLOC Header *gc_malloc(size_t size);
+ATTR_XMALLOC void *gc_malloc(size_t size);
 
 bool value_is_null(Value v);
 bool value_is_int(Value v);
@@ -233,7 +228,7 @@ static inline Value list2_const(Value x, Value y)
 }
 
 #define DUMMY_PAIR() ((Value) &(SchObject) { \
-            .header = { .tag = TAG_PAIR, .immutable = false, .living = false }, \
+            .header = { .tag = TAG_PAIR, .immutable = false }, \
             .pair = { .car = Qundef, .cdr = Qnil } \
         })
 #define GET_SP(p) uintptr_t v##p = 0, *volatile p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
