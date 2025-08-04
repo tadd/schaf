@@ -114,7 +114,6 @@ static inline bool value_is_procedure(Value v)
     case TAG_ENV:
     case TAG_PORT:
         return false;
-    case TAG_CHUNK:
     case TAG_ERROR:
         break; // internal objects
     }
@@ -167,7 +166,6 @@ Type value_type_of(Value v)
         return TYPE_ENV;
     case TAG_PORT:
         return TYPE_PORT;
-    case TAG_CHUNK:
     case TAG_ERROR:
         break; // internal objects
     }
@@ -285,7 +283,6 @@ SchObject *obj_new(ValueTag t)
     Header *h = gc_malloc(sizeof(SchObject));
     h->tag = t;
     h->immutable = false;
-    h->living = false;
     return (SchObject *) h;
 }
 
