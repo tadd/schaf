@@ -575,13 +575,14 @@ static void define_procedure(Value env, const char *name, void *cfunc, int64_t a
 // Evaluation
 //
 static Value eval(Value env, Value v);
+static Value push_stack_frame(Value ve, const char *name, Value loc);
 
 static Value eval_body(Value env, Value body)
 {
     Value last = Qnil;
     for (Value p = body; p != Qnil; p = cdr(p)) {
         last = eval(env, car(p));
-        CHECK_ERROR(last);
+        CHECK_ERROR_LOCATED(last, p);
     }
     return last;
 }
@@ -591,7 +592,7 @@ static Value map_eval(Value env, Value l)
     Value mapped = DUMMY_PAIR();
     for (Value last = mapped, p = l, v; p != Qnil; p = cdr(p)) {
         v = eval(env, car(p));
-        CHECK_ERROR(v);
+        CHECK_ERROR_LOCATED(v, p);
         last = PAIR(last)->cdr = list1(v);
     }
     return cdr(mapped);
@@ -619,23 +620,130 @@ static Value apply(Value env, Value proc, Value args)
     return PROCEDURE(proc)->apply(env, proc, args);
 }
 
+static Value syn_if(Value env, Value args);
+
+#define BREAK_ERROR(v) do { \
+        Value V = (v); \
+        if (UNLIKELY(is_error(V))) { \
+            retval = V; \
+            goto ret; \
+        } \
+    } while (0)
+#define BREAK_ERROR_LOCATED(v, l) do { \
+        Value V = (v); \
+        if (UNLIKELY(is_error(V))) { \
+            if (scary_length(ERROR(V)->call_stack) == 0) \
+                push_stack_frame(V, NULL, (l)); \
+            retval = V; \
+            goto ret; \
+        } \
+    } while (0)
+
 static Value eval_apply(Value env, Value l)
 {
-    Value symproc = car(l), args = cdr(l);
-    Value proc = eval(env, symproc);
-    CHECK_ERROR_LOCATED(proc, l);
-    EXPECT(type, TYPE_PROC, proc);
-    if (!value_tag_is(proc, TAG_SYNTAX)) {
-        args = map_eval(env, args);
-        CHECK_ERROR_LOCATED(args, l);
+    Value retval = Qfalse;
+    Value *stack = scary_new(sizeof(Value));
+    Value prev_env = Qfalse;
+    for (;;) {
+        Value symproc = car(l), args = cdr(l);
+        Value proc = eval(env, symproc);
+        BREAK_ERROR_LOCATED(proc, l);
+        EXPECT(type, TYPE_PROC, proc);
+        EXPECT(arity, PROCEDURE(proc)->arity, args);
+        if (!value_tag_is(proc, TAG_SYNTAX)) {
+            args = map_eval(env, args);
+            BREAK_ERROR_LOCATED(args, l);
+        }
+        switch (VALUE_TAG(proc)) {
+        case TAG_CLOSURE:
+            // scary_push(&stack, l);
+            Closure *cl = CLOSURE(proc);
+            Value params = cl->params, tail;
+            if (env == prev_env) {
+                if (cl->proc.arity == -1) {
+                    if (!env_set(env, params, args))
+                        bug("known variable not exist");
+                } else {
+                    for (Value pa = args, pp = params; pa != Qnil; pa = cdr(pa), pp = cdr(pp)) {
+                        if (!env_set(env, car(pp), car(pa)))
+                            bug("known variable not exist");
+                    }
+                }
+            } else {
+                env = env_inherit(cl->env);
+                if (cl->proc.arity == -1)
+                    env_put(env, params, args);
+                else {
+                    for (Value pa = args, pp = params; pa != Qnil; pa = cdr(pa), pp = cdr(pp))
+                        env_put(env, car(pp), car(pa));
+                }
+            }
+            Value last = Qnil, p = cl->body;
+            for (Value next; p != Qnil && (next = cdr(p)) != Qnil; p = next) {
+                last = eval(env, car(p));
+                BREAK_ERROR(last);
+            }
+            tail = car(p);
+            if (!value_is_pair(tail)) {
+                retval = eval(env, tail);
+                goto ret;
+            }
+#if 0
+            retval = eval(env, tail);
+            goto ret;
+#else
+            prev_env = env;
+            l = tail;
+            break;
+#endif
+        case TAG_CFUNC:
+            retval = PROCEDURE(proc)->apply(env, proc, args);
+            goto ret;
+        case TAG_SYNTAX:
+            void *f = CFUNC(proc)->cfunc;
+            if (f == syn_if) {
+                EXPECT(arity_range, 2, 3, args);
+                // scary_push(&stack, l);
+
+                Value cond = car(args), then = cadr(args);
+                Value v = eval(env, cond), tail;
+                BREAK_ERROR(v);
+                if (v != Qfalse)
+                    tail = then;
+                else {
+                    Value els = cddr(args);
+                    if (els == Qnil)
+                        return Qfalse;
+                    tail = car(els);
+                }
+                if (!value_is_pair(tail)) {
+                    retval = eval(env, tail);
+                    goto ret;
+                }
+                l = tail;
+                break;
+            } 
+            retval = PROCEDURE(proc)->apply(env, proc, args);
+            goto ret;
+        case TAG_CONTINUATION:
+            retval = PROCEDURE(proc)->apply(env, proc, args);
+            goto ret;
+        default:
+            UNREACHABLE();
+        }
+        continue;
+    ret:
+        if (UNLIKELY(is_error(retval))) {
+            const char *fname = (VALUE_TAG(proc) == TAG_CFUNC) ?
+                CFUNC(proc)->name : NULL;
+            for (ssize_t i = 1, len = scary_length(stack); i < len; i++) {
+                push_stack_frame(retval, NULL, stack[i]);
+            }
+            push_stack_frame(retval, fname, l);
+            return retval;
+        }
+        return retval;
     }
-    Value ret = apply(env, proc, args);
-    if (UNLIKELY(is_error(ret))) {
-        const char *fname = (VALUE_TAG(proc) == TAG_CFUNC) ?
-            CFUNC(proc)->name : NULL;
-        return push_stack_frame(ret, fname, l);
-    }
-    return ret;
 }
 
 static Value lookup_or_error(Value env, Value v)
@@ -868,7 +976,7 @@ static Value syn_if(Value env, Value args)
 
     Value cond = car(args), then = cadr(args);
     Value v = eval(env, cond);
-    CHECK_ERROR(v);
+    CHECK_ERROR_LOCATED(v, args);
     if (v != Qfalse)
         return eval(env, then);
     Value els = cddr(args);
