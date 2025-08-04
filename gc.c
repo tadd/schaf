@@ -71,8 +71,8 @@ static void init_chunk(Header *h, size_t size)
     memset(h, 0, size); // for ease of debug
     h->tag = TAG_CHUNK;
     h->size = size;
-    h->living = false; // XXX
-    h->next = NULL;
+    // h->living = false;
+    // h->next = NULL;
 }
 
 static HeapSlot *heap_slot_new(size_t size)
@@ -143,23 +143,28 @@ void sch_gc_mark(Value v)
     mark_val(v);
 }
 
+#ifdef DEBUG
 static bool in_heap_slot(const HeapSlot *slot, const uint8_t *p)
 {
     const uint8_t *beg = slot->body, *end = beg + slot->size;
-    return p >= beg && p < end &&
-        (p - beg) % sizeof(uintptr_t) == 0;
+    return p >= beg && p < end;
 }
+#endif
 
 bool in_heap_range(volatile uintptr_t v)
 {
     const uint8_t *volatile p = (uint8_t *volatile) v;
-    if (p == NULL || p < heap_low || p >= heap_high)
+    if (p < heap_low || p >= heap_high)
         return false;
+#ifdef DEBUG
     for (size_t i = 0; i < heap.size; i++) {
         if (in_heap_slot(heap.slot[i], p))
             return true;
     }
     return false;
+#else
+    return true;
+#endif
 }
 
 static bool is_valid_tag(ValueTag t)
@@ -169,21 +174,13 @@ static bool is_valid_tag(ValueTag t)
 
 static bool is_valid_pointer(Value v)
 {
-    return v % 8U == 0 && v != 0 && v >= 0x1000;
-}
-
-static bool is_valid_bool(int b)
-{
-    return b == true || b == false;
+    return v % 8U == 0 && v >= 0x100000;
 }
 
 static bool is_valid_header(Value v)
 {
     Header *h = HEADER(v);
-    return is_valid_tag(h->tag) &&
-        is_valid_bool(h->immutable) && is_valid_bool(h->living) &&
-        h->size == sizeof(SchObject) &&
-        (uintptr_t) h->next % 8 == 0;
+    return is_valid_tag(h->tag) && h->size == sizeof(SchObject);
 }
 
 static bool in_heap_val(Value v)
@@ -212,9 +209,14 @@ static void mark_env_each(uint64_t key, uint64_t value, UNUSED void *data)
     mark_val(value);
 }
 
+static bool is_markable(Value v)
+{
+    return is_valid_pointer(v) && is_valid_tag(HEADER(v)->tag);
+}
+
 static void mark_val(Value v)
 {
-    if (!in_heap_val(v))//XXX
+    if (!is_markable(v))
         return;
     Header *h = HEADER(v);
     if (h->living)
@@ -237,8 +239,6 @@ static void mark_val(Value v)
     case TAG_CONTINUATION: {
         Continuation *p = CONTINUATION(v);
         mark_val(p->retval);
-        if (p->exstate == NULL)
-            return; // XXX
         mark_jmpbuf(&p->exstate->regs);
         mark_array(p->exstate->stack, p->exstate->stack_len / sizeof(uintptr_t));
         return;
@@ -401,58 +401,69 @@ static bool is_user_opened_file(FILE *fp)
 
 static void free_val(Value v)
 {
-    if (!in_heap_val(v))//XXX
-        return;
     switch (VALUE_TAG(v)) {
     case TAG_CFUNC:
     case TAG_SYNTAX: {
         CFunc *p = CFUNC(v);
         free(p->name);
-        p->name = NULL; //XXX;
+#ifdef DEBUG
+        p->name = NULL;
         p->cfunc = NULL;
         p->proc = (Procedure) { 0, NULL };
+#endif
         return;
     }
     case TAG_CONTINUATION: {
         Continuation *p = CONTINUATION(v);
         free((void *) p->exstate->stack);
         free(p->exstate);
-        p->exstate = NULL; //XXX
+#ifdef DEBUG
+        p->exstate = NULL;
         p->proc = (Procedure) { 0, NULL };
+#endif
         return;
     }
-    case TAG_CLOSURE: {
+    case TAG_CLOSURE:
+#ifdef DEBUG
         *PROCEDURE(v) = (Procedure) { 0, NULL };
+#endif
         return;
-    }
     case TAG_STRING:
         free(STRING(v));
-        STRING(v) = NULL; // XXX
+#ifdef DEBUG
+        STRING(v) = NULL;
+#endif
         return;
     case TAG_ENV: {
         Env *p = ENV(v);
         table_free(p->table);
         free(p->name);
-        p->name = NULL;  // XXX
-        p->table = NULL; // XXX
-        p->parent = Qfalse; // XXX
+#ifdef DEBUG
+        p->name = NULL;
+        p->table = NULL;
+        p->parent = Qfalse;
+#endif
         return;
     }
     case TAG_PORT: {
         FILE *fp = PORT(v)->fp;
-        if (is_user_opened_file(fp))//XXX
+        if (is_user_opened_file(fp))
             fclose(fp);
-        PORT(v)->fp = NULL;//XXX
+        PORT(v)->fp = NULL; // keep safety for fclose()
         return;
     }
     case TAG_VECTOR: {
         scary_free(VECTOR(v));
-        VECTOR(v) = NULL; // XXX
+#ifdef DEBUG
+        VECTOR(v) = NULL;
+#endif
         return;
     }
     case TAG_ERROR: {
         scary_free(ERROR(v));
-        ERROR(v) = NULL; // XXX
+#ifdef DEBUG
+        ERROR(v) = NULL;
+#endif
         return;
     }
     case TAG_EOF:
