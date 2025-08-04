@@ -47,15 +47,12 @@ typedef enum {
     TAG_EOF,
     // internal use only
     TAG_ERROR,
-    TAG_CHUNK,  // not allocated
     TAG_LAST = TAG_ERROR
 } ValueTag;
 
 typedef struct {
     ValueTag tag;
     bool immutable;
-    bool living; // used in GC
-    size_t size;
 } Header;
 
 typedef struct {
@@ -141,8 +138,7 @@ typedef struct {
 typedef struct {
     Header header; // common
     union {
-        alignas(16) Header *next;
-        char *hstring;
+        alignas(16) char *hstring;
         char estring[sizeof(Continuation)];// may be the largest
         Pair pair;
         LocatedPair lpair;
@@ -162,7 +158,6 @@ typedef struct {
 #define HEADER(v) (&OBJ(v)->header)
 #define VALUE_TAG(v) (HEADER(v)->tag)
 
-#define HEADER_NEXT(v) (OBJ(v)->next)
 #define PAIR(v) (&OBJ(v)->pair)
 #define LOCATED_PAIR(v) (&OBJ(v)->lpair)
 #define ESTRING(v) (OBJ(v)->estring)
@@ -253,7 +248,7 @@ static inline Value list2_const(Value x, Value y)
 }
 
 #define DUMMY_PAIR() ((Value) &(SchObject) { \
-            .header = { .tag = TAG_PAIR, .immutable = false, .living = false }, \
+            .header = { .tag = TAG_PAIR, .immutable = false }, \
             .pair = { .car = Qundef, .cdr = Qnil } \
         })
 #define GET_SP(p) uintptr_t v##p = 0, *volatile p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
