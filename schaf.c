@@ -355,6 +355,18 @@ static void expect_cfunc_arity(int64_t actual)
     } while (0)
 #define CHECK_ERROR_LOCATED(v, l) CHECK_ERROR_LOCATED_WITH_MARK(v, NULL, l)
 #define CHECK_ERROR_LOCATED_SYN(v, l) CHECK_ERROR_LOCATED_WITH_MARK(v, 1, l)
+#define CHECK_ERROR_LOCATED_BY_CALLER(v, n) \
+    CHECK_ERROR_LOCATED_WITH_MARK(v, 1, sch_integer_new(n))
+#define CHECK_ERROR_LOCATED_BY_CALLER_MARK_SYN(v, n) do { \
+        Value V = (v); \
+        if (UNLIKELY(is_error(V))) { \
+            if (scary_length(ERROR(V)) == 0) \
+                push_stack_frame(V, ((void *) 1), sch_integer_new(n)); \
+            else \
+                ERROR(V)[0]->func_name = (void *) 1; \
+            return V; \
+        } \
+    } while (0)
 #define CHECK_ERROR_MARK_SYN(v) do { \
         Value V = (v); \
         if (UNLIKELY(is_error(V))) { \
@@ -737,15 +749,26 @@ static StackFrame *stack_frame_new(const char *name, Value loc)
     return f;
 }
 
-static bool frame_should_skip(StackFrame *const *f)
+static bool frame_should_skip(const StackFrame *f)
 {
-    return scary_length(f) > 0 && f[0]->func_name == (void *) 1;
+    return f->func_name == (void *) 1;
+}
+
+static bool frame_should_overwrite(const StackFrame *f)
+{
+    return sch_value_is_integer(f->loc);
 }
 
 static Value push_stack_frame(Value ve, const char *name, Value loc)
 {
-    if (frame_should_skip(ERROR(ve)))
-        return ve; // as is
+    StackFrame **e = ERROR(ve);
+    if (scary_length(e) > 0) {
+        StackFrame *top = e[0];
+        if (frame_should_overwrite(top))
+            e[0]->loc = loc;
+        if (frame_should_skip(top))
+            return ve; // as is
+    }
     StackFrame *f = stack_frame_new(name, loc);
     scary_push((void ***) &ERROR(ve), (const void *) f);
     return ve;
@@ -764,6 +787,17 @@ static const char *get_func_name(Value proc)
     return NULL;
 }
 
+static Value resolve_location(StackFrame *const *f, Value list)
+{
+    if (scary_length(f) == 0 || !sch_value_is_integer(f[0]->loc))
+        return list;
+    int64_t n = sch_integer_to_cint(f[0]->loc);
+    Value p = list; // begins with proc
+    for (int64_t i = 0; i < n; i++)
+        p = cdr(p);
+    return p;
+}
+
 static Value eval_apply(Value env, Value l)
 {
     Value symproc = car(l), args = cdr(l);
@@ -777,7 +811,8 @@ static Value eval_apply(Value env, Value l)
     Value ret = apply(env, proc, args);
     if (UNLIKELY(is_error(ret))) {
         const char *fname = get_func_name(proc);
-        return push_stack_frame(ret, fname, l);
+        Value loc = resolve_location(ERROR(ret), l);
+        return push_stack_frame(ret, fname, loc);
     }
     return ret;
 }
@@ -1118,8 +1153,10 @@ static Value syn_set(Value env, Value ident, Value expr)
 {
     EXPECT(type, TYPE_SYMBOL, ident);
     Value v = eval(env, expr);
-    CHECK_ERROR_MARK_SYN(v);
-    return iset(env, ident, v);
+    CHECK_ERROR_LOCATED_BY_CALLER_MARK_SYN(v, 2);
+    Value e = iset(env, ident, v);
+    CHECK_ERROR_LOCATED_BY_CALLER(e, 1);
+    return Qfalse;
 }
 
 // 4.2. Derived expression types

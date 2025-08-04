@@ -281,7 +281,10 @@ Test(schaf, runtime_error_syntax) {
 "(define (f) (+ x))\n"
 "(f)");
     expect_unbound_var_error(11, "(define y x)");
+    expect_unbound_var_error(23, "(define y 42) (set! y x)");
     expect_unbound_var_error(26, "(define y 42) (set! y (+ x))");
+    expect_unbound_var_error( 7, "(set! x 42)");
+    expect_unbound_var_error(14, "(begin (set! x 42) x)");
     expect_unbound_var_error( 5, "(if x 1)");
     expect_unbound_var_error( 7, "(if 1 x)");
     expect_unbound_var_error(10, "(if #f 1 x)");
@@ -310,10 +313,6 @@ Test(schaf, runtime_error_syntax) {
 }
 
 Test(schaf, runtime_error_syntax_knownbugs, .disabled = true) {
-    expect_unbound_var_error( 7, "(set! x 42)");
-    expect_unbound_var_error(14, "(begin (set! x 42) x)");
-    expect_unbound_var_error(23, "(define y 42) (set! y x)");
-
     expect_unbound_var_error( 4, "`(,x)");
     expect_runtime_error(
 "unbound variable: x\n"
