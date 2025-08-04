@@ -87,7 +87,7 @@ static HeapSlot *heap_slot_new(size_t size)
     Header *h = HEADER(s->body);
     memset(h, 0, MIN(size, sizeof(SchObject))); // XXX
     init_chunk(h, size);
-    h->next = NULL;
+    HEADER_NEXT(h) = NULL;
     return s;
 }
 
@@ -100,31 +100,31 @@ void gc_init(uintptr_t *volatile sp)
     heap.size = 1;
     heap_low = first->body;
     heap_high = heap_low + first->size;
-    free_list = (Header *) first->body;
+    free_list = HEADER(first->body);
 }
 
 // Allocation
 
 static Header *allocate_from_chunk(Header *prev, Header *curr, size_t size)
 {
-    Header *next = curr->next;
-    if (curr->size >= size + sizeof(SchObject)/* == size of chunk */) {
+    Header *next = HEADER_NEXT(curr);
+    if (curr->size > size + sizeof(Header)) {
         Header *rest = (Header *)((uint8_t *) curr + size);
         init_chunk(rest, curr->size - size);
-        rest->next = next;
+        HEADER_NEXT(rest) = next;
         next = rest;
         curr->size = size;
     }
     if (prev == NULL)
         free_list = next;
     else
-        prev->next = next;
+        HEADER_NEXT(prev) = next;
     return curr;
 }
 
 static Header *allocate(size_t size)
 {
-    for (Header *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = curr->next) {
+    for (Header *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = HEADER_NEXT(curr)) {
         if (curr->size >= size) // First-fit
             return allocate_from_chunk(prev, curr, size);
     }
@@ -390,7 +390,7 @@ static void heap_print_stat(const char *header)
 
 static void add_to_free_list(Header *h)
 {
-    h->next = free_list; // prepend
+    HEADER_NEXT(h) = free_list; // prepend
     free_list = h;
 }
 
