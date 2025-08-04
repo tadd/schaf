@@ -276,7 +276,8 @@ static void mark_val(Value v)
             mark_val(p[i]);
         return;
     }
-    case TAG_STRING:
+    case TAG_HSTRING:
+    case TAG_ESTRING:
     case TAG_CFUNC:
     case TAG_SYNTAX:
     case TAG_PORT:
@@ -442,8 +443,8 @@ static void free_val(Value v)
         free(p->exstate);
         break;
     }
-    case TAG_STRING:
-        free(STRING(v));
+    case TAG_HSTRING:
+        free(HSTRING(v));
         break;
     case TAG_ENV: {
         Env *p = ENV(v);
@@ -467,6 +468,7 @@ static void free_val(Value v)
         break;
     }
     case TAG_CLOSURE:
+    case TAG_ESTRING:
     case TAG_PAIR:
     case TAG_EOF:
         break;
