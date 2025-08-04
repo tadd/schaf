@@ -337,44 +337,39 @@ static void expect_cfunc_arity(int64_t actual)
 }
 
 // generic macros to handle errors and early-returns
-#define CHECK_ERROR_F(v, f) do { \
+#define CHECK_ERROR_TRUTHY(v) do { \
         Value V = (v); \
-        if (UNLIKELY(f(V))) \
+        if (V != Qfalse) \
             return V; \
     } while (0)
-#define CHECK_ERROR(v) CHECK_ERROR_F(v, is_error)
-#define TRUTHY(v) ((v) != Qfalse)
-#define CHECK_ERROR_TRUTHY(v) CHECK_ERROR_F(v, TRUTHY)
-#define CHECK_ERROR_LOCATED_WITH_MARK(v, m, l) do { \
+#define XCHECK_ERROR_THEN(v, m, l, f) do { \
         Value V = (v); \
         if (UNLIKELY(is_error(V))) { \
-            if (scary_length(ERROR(V)) == 0) \
-                push_stack_frame(V, ((void *) m), (l)); \
+            f(v, m, l); \
             return V; \
         } \
     } while (0)
-#define CHECK_ERROR_LOCATED(v, l) CHECK_ERROR_LOCATED_WITH_MARK(v, NULL, l)
-#define CHECK_ERROR_LOCATED_SYN(v, l) CHECK_ERROR_LOCATED_WITH_MARK(v, 1, l)
+#define XDISCARD(v, m, l) // nothing
+#define CHECK_ERROR(v) XCHECK_ERROR_THEN(v, 0, 0, XDISCARD)
+#define XPUSH_IF_EMPTY(v, m, l) \
+    if (scary_length(ERROR(v)) == 0) \
+        push_stack_frame(v, ((void *) m), (l));
+#define XCHECK_ERROR_LOCATED_WITH_MARK(v, m, l) XCHECK_ERROR_THEN(v, m, l, XPUSH_IF_EMPTY)
+#define CHECK_ERROR_LOCATED(v, l) XCHECK_ERROR_LOCATED_WITH_MARK(v, NULL, l)
+#define CHECK_ERROR_LOCATED_SYN(v, l) XCHECK_ERROR_LOCATED_WITH_MARK(v, 1, l)
 #define CHECK_ERROR_LOCATED_BY_CALLER(v, n) \
-    CHECK_ERROR_LOCATED_WITH_MARK(v, 1, sch_integer_new(n))
-#define CHECK_ERROR_LOCATED_BY_CALLER_MARK_SYN(v, n) do { \
-        Value V = (v); \
-        if (UNLIKELY(is_error(V))) { \
-            if (scary_length(ERROR(V)) == 0) \
-                push_stack_frame(V, ((void *) 1), sch_integer_new(n)); \
-            else \
-                ERROR(V)[0]->func_name = (void *) 1; \
-            return V; \
-        } \
-    } while (0)
-#define CHECK_ERROR_MARK_SYN(v) do { \
-        Value V = (v); \
-        if (UNLIKELY(is_error(V))) { \
-            if (scary_length(ERROR(V)) > 0) \
-                ERROR(V)[0]->func_name = (void *) 1; \
-            return V; \
-        } \
-    } while (0)
+    XCHECK_ERROR_LOCATED_WITH_MARK(v, 1, sch_integer_new(n))
+#define XPUSH_IF_EMPTY_OR_MARK_SYN(v, m, l) \
+    if (scary_length(ERROR(v)) == 0) \
+        push_stack_frame(v, (m), (l)); \
+    else \
+        ERROR(V)[0]->func_name = (m);
+#define CHECK_ERROR_LOCATED_BY_CALLER_MARK_SYN(v, n) \
+    XCHECK_ERROR_THEN(v, (void *) 1, sch_integer_new(n), XPUSH_IF_EMPTY_OR_MARK_SYN)
+#define XMARK_SYN(v, m, l) \
+    if (scary_length(ERROR(v)) > 0) \
+        ERROR(v)[0]->func_name = (m);
+#define CHECK_ERROR_MARK_SYN(v) XCHECK_ERROR_THEN(v, (void *) 1, 0, XMARK_SYN)
 #define EXPECT(f, ...) CHECK_ERROR(expect_##f(__VA_ARGS__))
 
 static Value expect_arity_0(Value args);
