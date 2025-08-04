@@ -302,7 +302,6 @@ SchObject *obj_new(ValueTag t)
     Header *h = gc_malloc(sizeof(SchObject));
     h->tag = t;
     h->immutable = false;
-    h->living = false;
     return (SchObject *) h;
 }
 
