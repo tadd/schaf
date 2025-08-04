@@ -95,8 +95,8 @@ typedef struct {
 } Closure;
 
 typedef struct {
-    uintptr_t *sp;
-    void *stack;
+    uintptr_t *volatile sp;
+    void *volatile stack;
     size_t stack_len;
     jmp_buf regs;
 } ExecutionState;
@@ -178,11 +178,11 @@ void pos_to_line_col(int64_t pos, int64_t *newline_pos, int64_t *line, int64_t *
 SchObject *obj_new(ValueTag t);
 void source_free(Source *s);
 
-void gc_init(uintptr_t *base_sp);
+void gc_init(uintptr_t *volatile base_sp);
 void gc_fin(void);
 
 void gc_add_root(const Value *r);
-size_t gc_stack_get_size(uintptr_t *sp);
+size_t gc_stack_get_size(uintptr_t *volatile sp);
 
 bool sch_value_is_integer(Value v);
 bool sch_value_is_symbol(Value v);
@@ -238,6 +238,6 @@ static inline Value list2_const(Value x, Value y)
             .header = { .tag = TAG_PAIR, .immutable = false, .living = false }, \
             .pair = { .car = Qundef, .cdr = Qnil } \
         })
-#define GET_SP(p) uintptr_t v##p = 0, *p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
+#define GET_SP(p) uintptr_t v##p = 0, *volatile p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
 
 #endif // INTERN_H
