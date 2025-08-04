@@ -33,14 +33,13 @@
 //   0b0--01100 #t
 //   0b0-010100 <undef>
 typedef uintptr_t Symbol;
-typedef const uintptr_t Flag;
-static Flag FLAG_NBIT_SYM = 2;
-static Flag FLAG_NBIT_INT = 1;
-static Flag FLAG_MASK     = 0b111; // for 64 bit machine
-static Flag FLAG_MASK_SYM =  0b11;
-static Flag FLAG_MASK_INT =   0b1;
-static Flag FLAG_SYM      =  0b10;
-static Flag FLAG_INT      =   0b1;
+static const uintptr_t FLAG_NBIT_SYM = 2;
+static const uintptr_t FLAG_NBIT_INT = 1;
+static const uintptr_t FLAG_MASK     = 0b111; // for 64 bit machine
+static const uintptr_t FLAG_MASK_SYM =  0b11;
+static const uintptr_t FLAG_MASK_INT =   0b1;
+static const uintptr_t FLAG_SYM      =  0b10;
+static const uintptr_t FLAG_INT      =   0b1;
 const Value Qnil   = 0b11100U;
 const Value Qfalse = 0b00100U;
 const Value Qtrue  = 0b01100U;
