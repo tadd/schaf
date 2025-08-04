@@ -2019,32 +2019,48 @@ static Value proc_callcc(Value env, Value proc)
     return apply(env, proc, list1(c));
 }
 
-static Value inner_continuation = Qfalse; // Yeah we live in the land of single-thread
+static Value sym_inner_k = Qfalse;
 
 static Value proc_values(Value env, Value args)
 {
-    if (inner_continuation == Qfalse)
+    if (sym_inner_k == Qfalse)
+        sym_inner_k = value_of_symbol("'k");
+
+    Value k = env_get(env, sym_inner_k);
+    if (k == Qundef)
         return car(args);
-    return apply(env, inner_continuation, args);
+    return apply(env, k, args);
 }
 
 static Value proc_call_with_values(Value env, Value producer, Value consumer)
 {
     EXPECT(type_twin, TYPE_PROC, producer, consumer);
+    if (sym_inner_k == Qfalse)
+        sym_inner_k = value_of_symbol("'k");
 
-    Value k = value_of_continuation(-1), origk = inner_continuation;
-    Value args;
-    if (continuation_set(k))
-        args = CONTINUATION(k)->retval;
-    else {
-        inner_continuation = k;
-        Value val = apply(env, producer, Qnil);
-        CHECK_ERROR(val);
-        args = list1(val);
+    Value k = value_of_continuation(-1);
+    if (continuation_set(k)) {
+        Value args = CONTINUATION(k)->retval;
+        CHECK_ERROR(args);
+        return apply(env, consumer, args);
     }
-    inner_continuation = origk;
+    Value args, val;
+    if (VALUE_TAG(producer) == TAG_CLOSURE) {
+        Value origenv = CLOSURE(producer)->env;
+        Value lenv = env_inherit(origenv);
+        env_put(lenv, sym_inner_k, k);
+        CLOSURE(producer)->env = lenv;
+        val = apply(env, producer, Qnil);
+        CLOSURE(producer)->env = origenv;
+    } else {
+        Value lenv = env_inherit(env);
+        env_put(lenv, sym_inner_k, k);
+        val = apply(lenv, producer, Qnil);
+    }
+    CHECK_ERROR(val);
+    args = list1(val);
     return apply(env, consumer, args);
-}
+ }
 
 // 6.5. Eval
 static Value proc_eval(UNUSED Value genv, Value expr, Value env)
