@@ -1984,7 +1984,7 @@ static Value proc_for_each(Value env, Value args)
 [[gnu::noreturn, gnu::noinline]]
 static void jump(Continuation *cont)
 {
-    memcpy(cont->sp, cont->exstate->stack, cont->exstate->stack_len);
+    memcpy((void *) cont->sp, (void *) cont->exstate->stack, cont->exstate->stack_len);
     longjmp(cont->exstate->regs, 1);
 }
 
@@ -2031,7 +2031,7 @@ static bool continuation_set(Value c)
     cont->exstate->stack_len = gc_stack_get_size(sp);
     cont->exstate->stack = xmalloc(cont->exstate->stack_len);
     UNPOISON(sp, cont->exstate->stack_len);
-    memcpy(cont->exstate->stack, sp, cont->exstate->stack_len);
+    memcpy((void *) cont->exstate->stack, (void *) sp, cont->exstate->stack_len);
     return setjmp(cont->exstate->regs) != 0;
 }
 

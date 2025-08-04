@@ -129,7 +129,7 @@ static Header *allocate(size_t size)
     return NULL;
 }
 
-size_t gc_stack_get_size(uintptr_t *sp)
+size_t gc_stack_get_size(uintptr_t *volatile sp)
 {
     return (uint8_t *) stack_base - (uint8_t *) sp;
 }
@@ -191,10 +191,10 @@ static bool in_heap_val(Value v)
     return is_valid_pointer(v) && in_heap_range(v) && is_valid_header(v);
 }
 
-static void mark_array(void *beg, size_t n)
+static void mark_array(void *volatile beg, size_t n)
 {
     UNPOISON(beg, n * sizeof(uintptr_t));
-    Value *p = beg;
+    Value *volatile p = beg;
     for (size_t i = 0; i < n; i++, p++) {
         if (in_heap_val(*p))
             mark_val(*p);
@@ -419,7 +419,7 @@ static void free_val(Value v)
     }
     case TAG_CONTINUATION: {
         Continuation *p = CONTINUATION(v);
-        free(p->exstate->stack);
+        free((void *) p->exstate->stack);
         free(p->exstate);
         p->exstate = NULL; //XXX
         p->proc = (Procedure) { 0, NULL };
