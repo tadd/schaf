@@ -35,7 +35,7 @@ typedef struct {
 } HeapStat;
 
 static size_t init_size = 1 * MiB;
-static Heap heap;
+static Heap heap; // singleton
 static uint8_t *heap_low, *heap_high;
 
 static Header *free_list;
@@ -86,25 +86,28 @@ static inline size_t align(size_t size)
     return (size + 15U) / 16U * 16U;
 }
 
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
 static void init_chunk(Header *h, size_t size)
 {
-    memset(h, 0, size); // for ease of debug
-    h->tag = TAG_CHUNK;
+    h->living = false;
+    // h->immutable = false;
     h->size = size;
-    h->living = false; // XXX
-    h->next = NULL;
+    h->tag = TAG_CHUNK;
 }
+
+#ifdef DEBUG
+#define xmalloc(n) xcalloc(1, (n))
+#endif
 
 static HeapSlot *heap_slot_new(size_t size)
 {
     HeapSlot *s = xmalloc(sizeof(HeapSlot));
     s->size = size;
-#ifdef DEBUG
-    s->body = xcalloc(1, size);
-#else
     s->body = xmalloc(size);
-#endif
-    init_chunk(HEADER(s->body), size);
+    Header *h = HEADER(s->body);
+    memset(h, 0, MIN(size, sizeof(SchObject))); // XXX
+    init_chunk(h, size);
+    h->next = NULL;
     return s;
 }
 
@@ -125,18 +128,17 @@ void gc_init(uintptr_t *volatile sp)
 static Header *allocate_from_chunk(Header *prev, Header *curr, size_t size)
 {
     Header *next = curr->next;
-    if (curr->size > size + sizeof(Header)) {
+    if (curr->size >= size + sizeof(SchObject)/* == size of chunk */) {
         Header *rest = (Header *)((uint8_t *) curr + size);
         init_chunk(rest, curr->size - size);
         rest->next = next;
         next = rest;
-    } else if (curr->size > size)
-        size = curr->size;
+        curr->size = size;
+    }
     if (prev == NULL)
         free_list = next;
     else
         prev->next = next;
-    init_chunk(curr, size);
     return curr;
 }
 
@@ -163,47 +165,45 @@ void sch_gc_mark(Value v)
     mark_val(v);
 }
 
+#if 0
 static bool in_heap_slot(const HeapSlot *slot, const uint8_t *p)
 {
     const uint8_t *beg = slot->body, *end = beg + slot->size;
-    return p >= beg && p < end &&
-        (p - beg) % sizeof(uintptr_t) == 0;
+    return p >= beg && p < end;
 }
+#endif
 
 bool in_heap_range(volatile uintptr_t v)
 {
     const uint8_t *volatile p = (uint8_t *volatile) v;
-    if (p == NULL || p < heap_low || p >= heap_high)
+    if (p < heap_low || p >= heap_high)
         return false;
+#if 0// left for a while
     for (size_t i = 0; i < heap.size; i++) {
         if (in_heap_slot(heap.slot[i], p))
             return true;
     }
     return false;
+#else
+    return true;
+#endif
 }
 
 static bool is_valid_tag(ValueTag t)
 {
-    return t >= TAG_PAIR && t < TAG_CHUNK;
+    return t < TAG_CHUNK;
 }
 
 static bool is_valid_pointer(Value v)
 {
-    return v % 16U == 0 && v != 0 && v >= 0x1000;
-}
-
-static bool is_valid_bool(int b)
-{
-    return b == true || b == false;
+    return v % 16U == 0 && v >= 0x100000;
 }
 
 static bool is_valid_header(Value v)
 {
     Header *h = HEADER(v);
     return is_valid_tag(h->tag) &&
-        is_valid_bool(h->immutable) && is_valid_bool(h->living) &&
-        h->size == sizeof(SchObject) &&
-        (uintptr_t) h->next % 16U == 0;
+        h->size >= sizeof(SchObject) && h->size < sizeof(SchObject) * 2;
 }
 
 static bool in_heap_val(Value v)
@@ -234,7 +234,7 @@ static void mark_env_each(uint64_t key, uint64_t value, UNUSED void *data)
 
 static void mark_val(Value v)
 {
-    if (!in_heap_val(v))//XXX
+    if (!is_valid_pointer(v))
         return;
     Header *h = HEADER(v);
     if (h->living)
@@ -257,8 +257,6 @@ static void mark_val(Value v)
     case TAG_CONTINUATION: {
         Continuation *p = CONTINUATION(v);
         mark_val(p->retval);
-        if (p->exstate == NULL)
-            return; // XXX
         mark_jmpbuf(&p->exstate->regs);
         mark_array(p->exstate->stack, p->exstate->stack_len / sizeof(uintptr_t));
         return;
@@ -269,8 +267,7 @@ static void mark_val(Value v)
     case TAG_ENV: {
         Env *p = ENV(v);
         table_foreach(p->table, mark_env_each, NULL);
-        if (p->parent != Qfalse)
-            mark_val(p->parent);
+        mark_val(p->parent);
         return;
     }
     case TAG_VECTOR: {
@@ -422,70 +419,67 @@ static bool is_user_opened_file(FILE *fp)
         fp != stdin && fp != stdout && fp != stderr;
 }
 
+#ifdef DEBUG
+#define cfree(f, p) f(p), p = NULL
+#define free(p) cfree(free, p)
+#define table_free(p) cfree(table_free, p)
+#define scary_free(p) cfree(scary_free, p)
+#endif
+
 static void free_val(Value v)
 {
-    if (!in_heap_val(v))//XXX
-        return;
     switch (VALUE_TAG(v)) {
     case TAG_CFUNC:
     case TAG_SYNTAX:
     case TAG_CFUNC_CLOSURE: {
         CFunc *p = CFUNC(v);
         free(p->name);
-        p->name = NULL; //XXX;
-        p->cfunc = NULL;
-        p->proc = (Procedure) { 0, NULL };
         break;
     }
     case TAG_CONTINUATION: {
         Continuation *p = CONTINUATION(v);
-        free((void *) p->exstate->stack);
+        free(p->exstate->stack);
         free(p->exstate);
-        p->exstate = NULL; //XXX
-        p->proc = (Procedure) { 0, NULL };
-        break;
-    }
-    case TAG_CLOSURE: {
-        *PROCEDURE(v) = (Procedure) { 0, NULL };
         break;
     }
     case TAG_STRING:
         free(STRING(v));
-        STRING(v) = NULL; // XXX
         break;
     case TAG_ENV: {
         Env *p = ENV(v);
         table_free(p->table);
         free(p->name);
-        p->name = NULL;  // XXX
-        p->table = NULL; // XXX
-        p->parent = Qfalse; // XXX
         break;
     }
     case TAG_PORT: {
         FILE *fp = PORT(v)->fp;
-        if (is_user_opened_file(fp))//XXX
+        if (is_user_opened_file(fp))
             fclose(fp);
-        PORT(v)->fp = NULL;//XXX
+        PORT(v)->fp = NULL; // keep safety for fclose()
         break;
     }
     case TAG_VECTOR: {
         scary_free(VECTOR(v));
-        VECTOR(v) = NULL; // XXX
         break;
     }
     case TAG_ERROR: {
         scary_free(ERROR(v));
-        ERROR(v) = NULL; // XXX
         break;
     }
-    case TAG_EOF:
+    case TAG_CLOSURE:
     case TAG_PAIR:
+    case TAG_EOF:
         break;
     case TAG_CHUNK:
         UNREACHABLE();
     }
 }
+#ifdef DEBUG
+#undef cfree
+#undef free
+#undef table_free
+#undef scary_free
+#endif
 
 static bool adjoining_p(const Header *curr)
 {
@@ -497,12 +491,16 @@ static void free_chunk(Header *curr)
 {
     Value val = (Value) curr;
     free_val(val);
-    init_chunk(curr, curr->size);
     if (adjoining_p(curr)) {
         free_list->size += curr->size;
-        memset(curr, 0, sizeof(Header)); // for debug
+#ifdef DEBUG
+        memset(curr, 0, sizeof(SchObject));
+#else
+        curr->size = 0; // XXX: for is_valid_header ?
+#endif
         return;
     }
+    curr->tag = TAG_CHUNK;
     add_to_free_list(curr);
 }
 
@@ -600,8 +598,9 @@ void *ms_gc_malloc(size_t size)
     }
     if (UNLIKELY(p == NULL))
         error("unreachable: heap (~%zu MiB) exhausted", heap_size() / MiB);
-    // for debug
+#ifdef DEBUG
     memset((uint8_t *) p + sizeof(Header), 0, size - sizeof(Header));
+#endif
     return p;
 }
 
