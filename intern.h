@@ -32,7 +32,8 @@ typedef enum {
 
 typedef enum {
     TAG_PAIR,
-    TAG_STRING,
+    TAG_HSTRING,
+    TAG_ESTRING,
     TAG_CFUNC,
     TAG_SYNTAX, // almost a C Function
     TAG_CLOSURE,
@@ -122,7 +123,8 @@ typedef struct {
 typedef struct {
     Header header; // common
     union {
-        char *string;
+        char *hstring;
+        char estring[sizeof(Continuation)];
         Pair pair;
         LocatedPair lpair;
         Procedure proc;
@@ -142,7 +144,9 @@ typedef struct {
 
 #define PAIR(v) (&OBJ(v)->pair)
 #define LOCATED_PAIR(v) (&OBJ(v)->lpair)
-#define STRING(v) (OBJ(v)->string)
+#define ESTRING(v) (OBJ(v)->estring)
+#define HSTRING(v) (OBJ(v)->hstring)
+#define STRING(v) (VALUE_TAG(v) == TAG_HSTRING ? OBJ(v)->hstring : OBJ(v)->estring)
 #define PROCEDURE(v) (&OBJ(v)->proc)
 #define CFUNC(v) (&OBJ(v)->cfunc)
 #define CLOSURE(v) (&OBJ(v)->closure)
