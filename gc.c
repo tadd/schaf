@@ -26,6 +26,7 @@ typedef struct {
     // 64 is enough large, it can use up the entire 64-bit memory space
     // (= (fold + 0 (map (cut expt 2 <>) (iota 64))) (- (expt 2 64) 1)) ;;=> #t
     HeapSlot *slot[64];
+    uint8_t *bitmap;
 } Heap;
 
 typedef struct {
@@ -70,7 +71,6 @@ static inline size_t align(size_t size)
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 static void init_chunk(Header *h, size_t size)
 {
-    h->living = false;
     // h->immutable = false;
     h->size = size;
     h->tag = TAG_CHUNK;
@@ -215,14 +215,32 @@ static void mark_env_each(uint64_t key, uint64_t value, UNUSED void *data)
     mark_val(value);
 }
 
+static uintptr_t bitmap_index(const void *p)
+{
+    uintptr_t beg = (uintptr_t) heap_low;
+    uintptr_t n = (uintptr_t) p;
+    return (n - beg) / sizeof(SchObject);
+}
+
+static bool mark_living_unless(void *p, bool b)
+{
+    uintptr_t index = bitmap_index(p);
+    uint8_t offset = index % 8U;
+    index /= 8U;
+    uint8_t mask = 1UL << offset;
+    bool orig = heap.bitmap[index] & mask;
+    if (orig != b)
+        heap.bitmap[index] ^= mask;
+    return orig;
+}
+
 static void mark_val(Value v)
 {
     if (!is_valid_pointer(v))
         return;
     Header *h = HEADER(v);
-    if (h->living)
+    if (mark_living_unless(h, true)) // mark it!
         return;
-    h->living = true; // mark it!
     switch (VALUE_TAG(v)) {
     case TAG_PAIR: {
         Pair *p = PAIR(v);
@@ -292,8 +310,17 @@ static void mark_stack(void)
     mark_array(sp, stack_base - sp);
 }
 
+static void bitmaps_init(void)
+{
+    uintptr_t h = (uintptr_t) heap_high, l = (uintptr_t) heap_low;
+    size_t n = sizeof(SchObject);
+    size_t size = ((h - l)  + (n - 1)) / n; // round up
+    heap.bitmap = xcalloc(1, size / 8U);
+}
+
 static void mark(void)
 {
+    bitmaps_init();
     mark_stack();
     mark_roots();
     jmp_buf jmp;
@@ -498,10 +525,8 @@ static void sweep_slot(HeapSlot *slot)
         offset = h->size;
         if (h->tag == TAG_CHUNK)
             continue;
-        if (h->living) {
-            h->living = false;
+        if (mark_living_unless(h, false))
             continue;
-        }
         free_chunk(h);
     }
 }
@@ -510,6 +535,7 @@ static void sweep(void)
 {
     for (size_t i = 0; i < heap.size; i++)
         sweep_slot(heap.slot[i]);
+    free(heap.bitmap);
 }
 
 static void add_slot(void)
@@ -581,6 +607,7 @@ Header *gc_malloc(size_t size)
 
 void gc_fin(void)
 {
+    bitmaps_init();
     sweep(); // nothing marked, all values are freed
     for (size_t i = 0; i < heap.size; i++) {
         free(heap.slot[i]->body);
