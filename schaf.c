@@ -89,7 +89,10 @@ static inline bool value_tag_is(Value v, ValueTag expected)
 
 inline bool value_is_string(Value v)
 {
-    return value_tag_is(v, TAG_STRING);
+    if (value_is_immediate(v))
+        return false;
+    ValueTag t = VALUE_TAG(v);
+    return t == TAG_HSTRING || t == TAG_ESTRING;
 }
 
 static inline bool value_is_procedure(Value v)
@@ -102,7 +105,8 @@ static inline bool value_is_procedure(Value v)
     case TAG_CLOSURE:
     case TAG_CONTINUATION:
         return true;
-    case TAG_STRING:
+    case TAG_HSTRING:
+    case TAG_ESTRING:
     case TAG_PAIR:
     case TAG_VECTOR:
     case TAG_ENV:
@@ -145,7 +149,8 @@ Type value_type_of(Value v)
     if (value_is_immediate(v))
         return immediate_type_of(v);
     switch (VALUE_TAG(v)) {
-    case TAG_STRING:
+    case TAG_HSTRING:
+    case TAG_ESTRING:
         return TYPE_STRING;
     case TAG_PAIR:
         return TYPE_PAIR;
@@ -285,13 +290,18 @@ SchObject *obj_new(ValueTag t)
 
 static Value value_of_string_move(char *s)
 {
-    SchObject *o = obj_new(TAG_STRING);
-    STRING(o) = s; // move ownership and use as is
+    SchObject *o = obj_new(TAG_HSTRING);
+    HSTRING(o) = s; // move ownership then use as is
     return (Value) o;
 }
 
 Value value_of_string(const char *s)
 {
+    if (strlen(s) + 1 <= sizeof(((SchObject *) NULL)->estring)) {
+        SchObject *o = obj_new(TAG_ESTRING);
+        strcpy(ESTRING(o), s);
+        return (Value) o;
+    }
     return value_of_string_move(xstrdup(s));
 }
 
