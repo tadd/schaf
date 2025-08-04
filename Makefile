@@ -10,7 +10,7 @@ OBJ_COMMON = gc.o libscary.o parse.o schaf.o utils.o
 OBJ = $(OBJ_COMMON) main.o
 OBJ_TEST = $(OBJ_COMMON) test/basic-test.o
 
-all: schaf test
+all: schaf
 
 schaf: $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
