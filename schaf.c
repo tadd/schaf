@@ -430,44 +430,39 @@ const char *error_message(void)
 }
 
 // generic macros to handle errors and early-returns
-#define CHECK_ERROR_F(v, f) do { \
+#define CHECK_ERROR_TRUTHY(v) do { \
         Value V = (v); \
-        if (UNLIKELY(f(V))) \
+        if (V != Qfalse) \
             return V; \
     } while (0)
-#define CHECK_ERROR(v) CHECK_ERROR_F(v, is_error)
-#define TRUTHY(v) ((v) != Qfalse)
-#define CHECK_ERROR_TRUTHY(v) CHECK_ERROR_F(v, TRUTHY)
-#define CHECK_ERROR_LOCATED_C(v, l, c) do { \
+#define XCHECK_ERROR_THEN(v, c, l, f) do { \
         Value V = (v); \
         if (UNLIKELY(is_error(V))) { \
-            if (scary_length(ERROR(V)->call_stack) == 0) \
-                push_stack_frame(V, ((void *) c), (l)); \
+            f(v, c, l); \
             return V; \
         } \
     } while (0)
-#define CHECK_ERROR_LOCATED(v, l) CHECK_ERROR_LOCATED_C(v, l, NULL)
-#define CHECK_ERROR_LOCATED_SYN(v, l) CHECK_ERROR_LOCATED_C(v, l, 1)
+#define XDISCARD(v, c, l) // nothing
+#define CHECK_ERROR(v) XCHECK_ERROR_THEN(v, 0, 0, XDISCARD)
+#define XPUSH_IF_EMPTY(v, c, l) \
+    if (scary_length(ERROR(v)->call_stack) == 0) \
+        push_stack_frame(v, ((void *) c), (l));
+#define XCHECK_ERROR_LOCATED_C(v, l, c) XCHECK_ERROR_THEN(v, c, l, XPUSH_IF_EMPTY)
+#define CHECK_ERROR_LOCATED(v, l) XCHECK_ERROR_LOCATED_C(v, l, NULL)
+#define CHECK_ERROR_LOCATED_SYN(v, l) XCHECK_ERROR_LOCATED_C(v, l, 1)
 #define CHECK_ERROR_LOCATED_BY_CALLER(v, n) \
-    CHECK_ERROR_LOCATED_C(v, value_of_int(n), 1)
-#define CHECK_ERROR_LOCATED_BY_CALLER_MARK_SYN(v, n) do { \
-        Value V = (v); \
-        if (UNLIKELY(is_error(V))) { \
-            if (scary_length(ERROR(V)->call_stack) == 0) \
-                push_stack_frame(V, ((void *) 1), value_of_int(n)); \
-            else \
-                ERROR(V)->call_stack[0]->func_name = (void *) 1; \
-            return V; \
-        } \
-    } while (0)
-#define CHECK_ERROR_MARK_SYN(v) do { \
-        Value V = (v); \
-        if (UNLIKELY(is_error(V))) { \
-            if (scary_length(ERROR(V)->call_stack) > 0) \
-                ERROR(V)->call_stack[0]->func_name = (void *) 1; \
-            return V; \
-        } \
-    } while (0)
+    XCHECK_ERROR_LOCATED_C(v, value_of_int(n), 1)
+#define XPUSH_IF_EMPTY_OR_MARK_SYN(v, c, l) \
+    if (scary_length(ERROR(v)->call_stack) == 0) \
+        push_stack_frame(v, (c), (l)); \
+    else \
+        ERROR(V)->call_stack[0]->func_name = (c);
+#define CHECK_ERROR_LOCATED_BY_CALLER_MARK_SYN(v, n) \
+    XCHECK_ERROR_THEN(v, (void *) 1, value_of_int((n)), XPUSH_IF_EMPTY_OR_MARK_SYN)
+#define XMARK_SYN(v, c, l) \
+    if (scary_length(ERROR(v)->call_stack) > 0) \
+        ERROR(v)->call_stack[0]->func_name = (c);
+#define CHECK_ERROR_MARK_SYN(v) XCHECK_ERROR_THEN(v, (void *) 1, 0, XMARK_SYN)
 #define EXPECT(f, ...) CHECK_ERROR(expect_##f(__VA_ARGS__))
 
 static Value expect_type(Type expected, Value v)
