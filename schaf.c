@@ -54,6 +54,7 @@ static const int64_t CFUNCARG_MAX = 3;
 // Environment: list of Frames
 // Frame: Table of 'symbol => <value>
 static Value env_toplevel, env_default, env_r5rs, env_null;
+static Value port_stdin, port_stdout;
 static char **symbol_names; // ("name0" "name1" ...)
 Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
     SYM_RARROW;
@@ -2121,30 +2122,18 @@ static Value value_of_port(FILE *fp)
     return (Value) o;
 }
 
-static Value port_stdin(void)
-{
-    static Value p = Qfalse;
-    if (p == Qfalse)
-        p = value_of_port(stdin);
-    return p;
-}
-
-static Value port_stdout(void)
-{
-    static Value p = Qfalse;
-    if (p == Qfalse)
-        p = value_of_port(stdout);
-    return p;
-}
-
 static Value proc_current_input_port(UNUSED Value env)
 {
-    return port_stdin();
+    if (port_stdin == Qfalse)
+        port_stdin = value_of_port(stdin);
+    return port_stdin;
 }
 
 static Value proc_current_output_port(UNUSED Value env)
 {
-    return port_stdout();
+    if (port_stdout == Qfalse)
+        port_stdout = value_of_port(stdout);
+    return port_stdout;
 }
 
 static Value proc_open_input_file(UNUSED Value env, Value vpath)
@@ -2187,7 +2176,7 @@ static Value proc_read(UNUSED Value env, Value args)
     EXPECT(arity_range, 0, 1, args);
     Value port;
     if (args == Qnil)
-        port = port_stdin();
+        port = port_stdin;
     else {
         port = car(args);
         EXPECT(type, TYPE_PORT, port);
@@ -2403,6 +2392,11 @@ void sch_init(uintptr_t *sp)
     gc_add_root(&env_r5rs);
     gc_add_root(&env_toplevel);
     gc_add_root(&env_default);
+    gc_add_root(&port_stdin);
+    gc_add_root(&port_stdout);
+
+    port_stdin = value_of_port(stdin);
+    port_stdout = value_of_port(stdout);
 
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
