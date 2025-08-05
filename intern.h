@@ -165,7 +165,7 @@ void pos_to_line_col(int64_t pos, int64_t *newline_pos, int64_t *line, int64_t *
 SchObject *obj_new(ValueTag t);
 void source_free(Source *s);
 
-void gc_init(uintptr_t *base_sp);
+void gc_init(uintptr_t *volatile base_sp);
 void gc_fin(void);
 
 void gc_add_root(const Value *r);

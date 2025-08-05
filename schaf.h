@@ -8,8 +8,8 @@ typedef uintptr_t Value;
 
 extern const Value Qnil, Qundef, Qfalse, Qtrue;
 
-void sch_init(uintptr_t *base);
-#define SCH_INIT() uintptr_t sch_stack_base = 0; sch_init(&sch_stack_base)
+void sch_init(uintptr_t *volatile base);
+#define SCH_INIT() uintptr_t sch_stack_base = 0; sch_init((uintptr_t *) &sch_stack_base)
 int sch_fin(void);
 
 [[nodiscard, gnu::malloc, gnu::returns_nonnull]] char *stringify(Value v);
