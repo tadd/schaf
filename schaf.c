@@ -728,13 +728,19 @@ static const char *get_func_name(Value proc)
 static Value eval_apply(Value env, Value l)
 {
     Value symproc = car(l), args = cdr(l);
-    Value proc = eval(env, symproc);
+    Value proc;
+    if (value_tag_is(symproc, TAG_SYNTAX)) {
+        proc = symproc;
+        goto apply;
+    }
+    proc = eval(env, symproc);
     CHECK_ERROR_LOCATED(proc, l);
     EXPECT(type, TYPE_PROC, proc);
     if (!value_tag_is(proc, TAG_SYNTAX)) {
         args = map_eval(env, args);
         CHECK_ERROR_LOCATED(args, l);
     }
+ apply:
     Value ret = apply(env, proc, args);
     if (UNLIKELY(is_error(ret))) {
         const char *fname = get_func_name(proc);
@@ -866,7 +872,7 @@ static void dump_stack_trace(StackFrame **call_stack)
 
 static Value iload(FILE *in, const char *filename)
 {
-    Source *src = iparse(in, filename);
+    Source *src = iparse(in, filename, ENV(env_null)->table);
     if (src == NULL)
         return Qundef;
     scary_push((void ***) &source_data, (void *) src);
@@ -882,7 +888,7 @@ static Value iload(FILE *in, const char *filename)
 
 static Value iload_inner(FILE *in, const char *path)
 {
-    Source *src = iparse(in, path);
+    Source *src = iparse(in, path, ENV(env_null)->table);
     if (src == NULL)
         return Qundef;
     scary_push((void ***) &source_data, (void *) src);
@@ -2468,7 +2474,7 @@ static Value get_eof_object(void)
 
 static Value iread(FILE *in)
 {
-    Value datum = parse_datum(in, "<read>");
+    Value datum = parse_datum(in, "<read>", ENV(env_null)->table);
     if (datum == Qundef)
         return get_eof_object();
     return datum;
