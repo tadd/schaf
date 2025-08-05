@@ -66,10 +66,11 @@ static inline size_t align(size_t size)
     return (size + 7U) / 8U * 8U;
 }
 
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
 static void init_chunk(Header *h, size_t size)
 {
-#ifdef DEBUG
-    memset(h, 0, size);
+#if 1 // XXX
+    memset(h, 0, MIN(size, sizeof(SchObject)));
 #else
     h->living = false;
     HEADER_NEXT(h) = NULL;
