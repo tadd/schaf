@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -279,11 +280,19 @@ static int repl(void)
     return 0;
 }
 
+static void print_memory_usage(void)
+{
+    print_vmhwm();
+    size_t bytes = sch_gc_allocated_bytes();
+    fprintf(stderr, "Allocated: %ld kb\n", lround(bytes / 1024.0));
+}
+
 int main(int argc, char **argv)
 {
     SchOption o = parse_opt(argc, argv);
     sch_set_gc_stress(o.stress_gc);
     sch_set_gc_print_stat(o.heap_stat);
+    sch_set_gc_count_allocation(o.memory);
     if (o.init_heap_size_mib > 0.0)
         sch_set_gc_init_size(o.init_heap_size_mib);
     if (o.gc_algorithm > 0)
@@ -306,6 +315,6 @@ int main(int argc, char **argv)
     if (o.cputime)
         print_cputime();
     if (o.memory)
-        print_vmhwm();
+        print_memory_usage();
     return sch_fin();
 }
