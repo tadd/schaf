@@ -33,17 +33,25 @@ jobs:
       run: make test
     - name: Test with Santizer
       run: make sanitize
+    - name: Test with stress
+      run: make test-stress
     - name: Test optimized
       run: make clean && make -j4 test OPTFLAGS='-O3 -flto=auto'
     - name: Test optimized with Sanitizer
       run: make -j4 sanitize OPTFLAGS='-O3 -flto=auto'
+    - name: Test optimized with stress
+      run: make test-stress OPTFLAGS='-O3 -flto=auto'
     - name: Clang - Make binaries
       run: make clean && make -j4 schaf{,-san} test/basic-test{,-san} CC=clang
     - name: Clang - Test
       run: make test CC=clang
     - name: Clang - Test with Santizer
       run: make sanitize CC=clang
+    - name: Clang - Test with stress
+      run: make test-stress CC=clang
     - name: Clang - Test optimized
       run: make clean && make -j4 test CC=clang OPTFLAGS='-O3 -flto=auto'
     - name: Clang - Test optimized with Sanitizer
       run: make -j4 sanitize CC=clang OPTFLAGS='-O3 -flto=auto'
+    - name: Clang - Test optimized with stress
+      run: make test-stress CC=clang OPTFLAGS='-O3 -flto=auto'
