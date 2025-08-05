@@ -39,7 +39,7 @@ static uint8_t *heap_low, *heap_high;
 
 static Header *free_list;
 
-static uintptr_t *stack_base;
+static uintptr_t *volatile stack_base;
 static const Value *roots[ROOT_SIZE];
 static size_t nroot;
 
@@ -88,7 +88,7 @@ static HeapSlot *heap_slot_new(size_t size)
     return h;
 }
 
-void gc_init(uintptr_t *sp)
+void gc_init(uintptr_t *volatile sp)
 {
     stack_base = sp;
     init_size = align(init_size);
@@ -131,7 +131,7 @@ static Header *allocate(size_t size)
 
 size_t gc_stack_get_size(uintptr_t *volatile sp)
 {
-    return (uint8_t *) stack_base - (uint8_t *) sp;
+    return (uint8_t *volatile) stack_base - (uint8_t *volatile) sp;
 }
 
 // Marking
@@ -149,9 +149,9 @@ static bool in_heap_slot(const HeapSlot *slot, const uint8_t *p)
     return p >= beg && p < end;
 }
 
-bool in_heap_range(uintptr_t v)
+bool in_heap_range(volatile uintptr_t v)
 {
-    const uint8_t *p = (uint8_t *) v;
+    const uint8_t *volatile p = (uint8_t *volatile) v;
     if (p < heap_low || p >= heap_high)
         return false;
     for (size_t i = 0; i < heap.size; i++) {
