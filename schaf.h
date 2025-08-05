@@ -2,6 +2,7 @@
 #define SCHAF_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 typedef uintptr_t Value;
@@ -21,8 +22,10 @@ Value eval_string(const char *s);
 
 const char *error_message(void);
 
+size_t sch_gc_allocated_bytes(void);
 void sch_set_gc_init_size(double mib);
 void sch_set_gc_stress(bool b);
 void sch_set_gc_print_stat(bool b);
+void sch_set_gc_count_allocation(bool b);
 
 #endif

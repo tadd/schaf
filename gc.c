@@ -43,7 +43,8 @@ static uintptr_t *volatile stack_base;
 static const Value *roots[ROOT_SIZE];
 static size_t nroot;
 
-static bool stress, print_stat;
+static size_t allocated_bytes;
+static bool stress, print_stat, count_allocation;
 static bool in_gc;
 
 void sch_set_gc_init_size(double init_mib)
@@ -59,6 +60,11 @@ void sch_set_gc_stress(bool b)
 void sch_set_gc_print_stat(bool b)
 {
     print_stat = b;
+}
+
+void sch_set_gc_count_allocation(bool b)
+{
+    count_allocation = b;
 }
 
 static inline size_t align(size_t size)
@@ -586,7 +592,14 @@ Header *gc_malloc(size_t size)
 #ifdef DEBUG
     memset((uint8_t *) p + sizeof(Header), 0, size - sizeof(Header));
 #endif
+    if (count_allocation)
+        allocated_bytes += size;
     return p;
+}
+
+size_t sch_gc_allocated_bytes(void)
+{
+    return allocated_bytes;
 }
 
 void gc_fin(void)
