@@ -163,7 +163,7 @@ bool in_heap_range(volatile uintptr_t v)
 
 static bool is_valid_tag(ValueTag t)
 {
-    return t >= TAG_PAIR && t < TAG_CHUNK;
+    return t < TAG_CHUNK;
 }
 
 static bool is_valid_pointer(Value v)
