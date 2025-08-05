@@ -2594,6 +2594,9 @@ void sch_init(uintptr_t *sp)
     gc_add_root(&env_r5rs);
     gc_add_root(&env_toplevel);
     gc_add_root(&env_default);
+    gc_add_root(&eof_object);
+    gc_add_root(&current_input_port);
+    gc_add_root(&current_output_port);
 
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
