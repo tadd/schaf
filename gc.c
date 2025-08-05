@@ -62,7 +62,8 @@ static size_t init_size = 1 * MiB;
 
 static const uintptr_t *volatile stack_base;
 
-static bool stress, print_stat;
+static size_t allocated_bytes;
+static bool stress, print_stat, count_allocation;
 static bool in_gc, initialized;
 
 //
@@ -83,6 +84,11 @@ typedef struct {
     Value **roots;
     GCHeader *free_list;
 } MSHeap;
+
+void sch_set_gc_count_allocation(bool b)
+{
+    count_allocation = b;
+}
 
 static inline size_t align(size_t size)
 {
@@ -732,6 +738,11 @@ void gc_init(const uintptr_t *volatile sp)
     initialized = true;
 }
 
+size_t sch_gc_allocated_bytes(void)
+{
+    return allocated_bytes;
+}
+
 void gc_fin(void)
 {
     funcs.fin();
@@ -739,6 +750,8 @@ void gc_fin(void)
 
 void *gc_malloc(size_t size)
 {
+    if (count_allocation)
+        allocated_bytes += size;
     return funcs.malloc(size);
 }
 
