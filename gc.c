@@ -34,7 +34,7 @@ typedef struct {
 } HeapStat;
 
 static size_t init_size = 1 * MiB;
-static Heap heap;
+static Heap heap; // singleton
 static uint8_t *heap_low, *heap_high;
 
 static Header *free_list;
@@ -68,11 +68,14 @@ static inline size_t align(size_t size)
 
 static void init_chunk(Header *h, size_t size)
 {
-    memset(h, 0, size); // for ease of debug
+#ifdef DEBUG
+    memset(h, 0, size);
+#else
+    h->living = false;
+    HEADER_NEXT(h) = NULL;
+#endif
     h->tag = TAG_CHUNK;
     h->size = size;
-    // h->living = false;
-    // HEADER_NEXT(h) = NULL;
 }
 
 static HeapSlot *heap_slot_new(size_t size)
@@ -492,7 +495,7 @@ static void free_chunk(Header *prev, Header *curr)
     init_chunk(curr, curr->size);
     if (adjoining_p(prev, curr)) {
         prev->size += curr->size;
-        memset(curr, 0, sizeof(Header)); // for debug
+        memset(curr, 0, sizeof(Header)); // XXX: for debug?
         return;
     }
     add_to_free_list(curr);
@@ -582,8 +585,9 @@ Header *gc_malloc(size_t size)
     }
     if (p == NULL)
         error("unreachable: heap (~%zu MiB) exhausted", heap_size() / MiB);
-    // for debug
+#ifdef DEBUG
     memset((uint8_t *) p + sizeof(Header), 0, size - sizeof(Header));
+#endif
     return p;
 }
 
