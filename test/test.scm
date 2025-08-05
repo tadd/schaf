@@ -1216,7 +1216,7 @@
 
 ;; 6.6.4. System interface
 (describe "load" (lambda ()
-  (load "data-fact.txt")
+  (load "./data-fact.txt")
   (expect = (fact 5) 120)))
 
 (load "./test-callcc.scm")
