@@ -1053,7 +1053,8 @@
   (let ((v (vector 0 1 2)))
     (expect eq? (vector-ref v 0) 0)
     (expect eq? (vector-ref v 2) 2)
-    (expect-f (vector-ref v 9)))))
+    (if local?
+        (expect-f (vector-ref v 9))))))
 
 ;; 6.4. Control features
 (describe "procedure?" (lambda ()
@@ -1200,7 +1201,8 @@
   (expect equal? (read-file "test/data-fact.txt") fact)))
 
 (describe "read /dev/null" (lambda ()
-  (expect-f (read-file "/dev/null"))))
+  (if local?
+      (expect-f (read-file "/dev/null")))))
 
 (describe "read twice" (lambda ()
   (let* ((p (open-input-file "test/data-double.txt")))
