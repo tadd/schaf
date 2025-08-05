@@ -79,6 +79,7 @@ typedef struct {
     char *filename;
     int64_t *newline_pos;
     jmp_buf jmp_error;
+    const Table *env; // used to get syntax entities
 } Parser;
 
 void pos_to_line_col(int64_t pos, int64_t *newline_pos, int64_t *line, int64_t *col)
@@ -407,6 +408,19 @@ static Value parse_vector(Parser *p)
     return v;
 }
 
+static Value syntax_or_symbol(Parser *p, Value ident)
+{
+    if (p->env == NULL)
+        return ident;
+    if (ident == SYM_QUOTE || ident == SYM_QUASIQUOTE ||
+        ident == SYM_UNQUOTE || ident == SYM_UNQUOTE_SPLICING)
+        return ident;
+    uint64_t v = table_get(p->env, value_to_symbol(ident));
+    if (v == TABLE_NOT_FOUND)
+        return ident;
+    return (Value) v; // got the syntax value!
+}
+
 static Value parse_expr(Parser *p)
 {
     Token t = lex(p);
@@ -433,20 +447,22 @@ static Value parse_expr(Parser *p)
         return Qfalse;
     case TOK_TYPE_STRING:
     case TOK_TYPE_INT:
-    case TOK_TYPE_IDENT:
         return t.value;
+    case TOK_TYPE_IDENT:
+        return syntax_or_symbol(p, t.value);
     case TOK_TYPE_EOF:
         break;
     }
     return Qundef;
 }
 
-static Parser *parser_new(FILE *in, const char *filename)
+static Parser *parser_new(FILE *in, const char *filename, const Table *env)
 {
     Parser *p = xmalloc(sizeof(Parser));
     p->in = in;
     p->filename = xstrdup(filename);
     p->newline_pos = scary_new(sizeof(int64_t));
+    p->env = env;
     return p;
 }
 
@@ -486,9 +502,9 @@ static Source *parse_program(Parser *p)
     return source_new(p, cdr(v));
 }
 
-Source *iparse(FILE *in, const char *filename)
+Source *iparse(FILE *in, const char *filename, const Table *env)
 {
-    Parser *p = parser_new(in, filename);
+    Parser *p = parser_new(in, filename, env);
     Source *src;
     if (setjmp(p->jmp_error) == 0)
         src = parse_program(p); // success
@@ -500,7 +516,7 @@ Source *iparse(FILE *in, const char *filename)
 
 static Value iparse_ast(FILE *in, const char *filename)
 {
-    Source *src = iparse(in, filename);
+    Source *src = iparse(in, filename, NULL);
     if (src == NULL)
         return Qundef;
     Value ast = src->ast;
@@ -508,9 +524,9 @@ static Value iparse_ast(FILE *in, const char *filename)
     return ast;
 }
 
-Value parse_datum(FILE *in, const char *filename)
+Value parse_datum(FILE *in, const char *filename, const Table *env)
 {
-    Parser *p = parser_new(in, filename);
+    Parser *p = parser_new(in, filename, env);
     Value datum;
     if (setjmp(p->jmp_error) == 0)
         datum = parse_expr(p);

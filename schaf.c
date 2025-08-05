@@ -32,7 +32,6 @@
 //   0b0--00100 #f
 //   0b0--01100 #t
 //   0b0-010100 <undef>
-typedef uintptr_t Symbol;
 static const uintptr_t FLAG_NBIT_SYM = 2;
 static const uintptr_t FLAG_NBIT_INT = 1;
 static const uintptr_t FLAG_MASK     = 0b111; // for 64 bit machine
@@ -212,7 +211,7 @@ inline int64_t value_to_int(Value x)
 #endif
 }
 
-inline static Symbol value_to_symbol(Value v)
+inline Symbol value_to_symbol(Value v)
 {
     return (Symbol) v >> FLAG_NBIT_SYM;
 }
@@ -622,13 +621,19 @@ static Value apply(Value env, Value proc, Value args)
 static Value eval_apply(Value env, Value l)
 {
     Value symproc = car(l), args = cdr(l);
-    Value proc = eval(env, symproc);
+    Value proc;
+    if (value_tag_is(symproc, TAG_SYNTAX)) {
+        proc = symproc;
+        goto apply;
+    }
+    proc = eval(env, symproc);
     CHECK_ERROR_LOCATED(proc, l);
     EXPECT(type, TYPE_PROC, proc);
     if (!value_tag_is(proc, TAG_SYNTAX)) {
         args = map_eval(env, args);
         CHECK_ERROR_LOCATED(args, l);
     }
+ apply:
     Value ret = apply(env, proc, args);
     if (UNLIKELY(is_error(ret))) {
         const char *fname = (VALUE_TAG(proc) == TAG_CFUNC) ?
@@ -765,7 +770,7 @@ static void fdisplay(FILE* f, Value v);
 
 static Value iload(FILE *in, const char *filename)
 {
-    Source *src = iparse(in, filename);
+    Source *src = iparse(in, filename, ENV(env_null)->table);
     if (src == NULL)
         return Qundef;
     scary_push((void ***) &source_data, (void *) src);
@@ -781,7 +786,7 @@ static Value iload(FILE *in, const char *filename)
 
 static Value iload_inner(FILE *in, const char *path)
 {
-    Source *src = iparse(in, path);
+    Source *src = iparse(in, path, ENV(env_null)->table);
     if (src == NULL)
         return Qundef;
     scary_push((void ***) &source_data, (void *) src);
@@ -2145,7 +2150,7 @@ static Value proc_close_port(UNUSED Value env, Value port)
 static Value iread(FILE *in)
 {
     Value eof = Qfalse; // temporary
-    Value datum = parse_datum(in, "<read>");
+    Value datum = parse_datum(in, "<read>", ENV(env_null)->table);
     if (datum == Qundef)
         return eof;
     return datum;

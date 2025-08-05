@@ -143,8 +143,8 @@ typedef struct {
 
 extern Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
 
-Source *iparse(FILE *in, const char *filename);
-Value parse_datum(FILE *in, const char *filename);
+Source *iparse(FILE *in, const char *filename, const Table *env);
+Value parse_datum(FILE *in, const char *filename, const Table *env);
 void pos_to_line_col(int64_t pos, int64_t *newline_pos, int64_t *line, int64_t *col);
 [[gnu::noreturn]] void raise_error(jmp_buf buf, const char *fmt, ...);
 void *obj_new(size_t size, ValueTag t);
@@ -166,6 +166,8 @@ Type value_type_of(Value v);
 int64_t value_to_int(Value v);
 const char *value_to_string(Value v);
 const char *value_to_type_name(Value v);
+typedef uintptr_t Symbol;
+Symbol value_to_symbol(Value v);
 
 Value value_of_int(int64_t i);
 Value value_of_symbol(const char *s);
