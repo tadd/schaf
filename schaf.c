@@ -2050,6 +2050,9 @@ static Value proc_call_with_values(Value env, Value producer, Value consumer)
     return apply(env, consumer, args);
 }
 
+//- dynamic-wind
+//static Value proc_dynamic_wind(Value env, Value before, Value thunk, Value after);
+
 // 6.5. Eval
 static Value proc_eval(UNUSED Value genv, Value expr, Value env)
 {
@@ -2390,6 +2393,7 @@ void sch_init(uintptr_t *sp)
     DEF_SYMBOL(UNQUOTE, "unquote");
     DEF_SYMBOL(UNQUOTE_SPLICING, "unquote-splicing");
     DEF_SYMBOL(RARROW, "=>");
+    source_data = scary_new(sizeof(Source *));
 
     env_toplevel = env_new("default");
     Value e = env_toplevel;
@@ -2551,5 +2555,4 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "schaf-environment", proc_schaf_environment, 0);
 
     env_default = env_dup("default", e);
-    source_data = scary_new(sizeof(Source *));
 }
