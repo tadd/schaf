@@ -88,7 +88,7 @@ static HeapSlot *heap_slot_new(size_t size)
 #else
     h->body = xmalloc(size);
 #endif
-    init_chunk((Header *) h->body, size);
+    init_chunk(HEADER(h->body), size);
     return h;
 }
 
@@ -526,7 +526,7 @@ static void add_slot(void)
         heap_low = beg;
     if (heap_high < end)
         heap_high = end;
-    Header *h = (Header *) last->body;
+    Header *h = HEADER(last->body);
     add_to_free_list(h);
 }
 
