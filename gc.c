@@ -180,7 +180,8 @@ static bool is_valid_pointer(Value v)
 static bool is_valid_header(Value v)
 {
     Header *h = HEADER(v);
-    return is_valid_tag(h->tag) && h->size == sizeof(SchObject);
+    return is_valid_tag(h->tag) &&
+        h->size >= sizeof(SchObject) && h->size < sizeof(SchObject) * 2;// XXX
 }
 
 static bool in_heap_val(Value v)
