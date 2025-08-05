@@ -59,10 +59,14 @@ static inline size_t align(size_t size)
 
 static HeapSlot *heap_slot_new(size_t size)
 {
-    HeapSlot *h = xcalloc(1, sizeof(HeapSlot));
+    HeapSlot *h = xmalloc(sizeof(HeapSlot));
     h->size = size;
     h->used = 0;
+#ifdef DEBUG
     h->body = xcalloc(1, size);
+#else
+    h->body = xmalloc(size);
+#endif
     return h;
 }
 
