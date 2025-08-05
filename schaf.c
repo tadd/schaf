@@ -77,7 +77,7 @@ inline bool value_is_symbol(Value v)
     return (v & FLAG_MASK_SYM) == FLAG_SYM;
 }
 
-static bool value_is_immediate(Value v)
+static inline bool value_is_immediate(Value v)
 {
     return v & FLAG_MASK;
 }
