@@ -5,6 +5,7 @@ LIBS = -lm
 ANALYZER = -fanalyzer
 SANITIZER = -fsanitize=undefined #,address
 TIMEOUT = timeout 2
+TIMEOUT_LONGER = timeout 10
 
 OBJ_COMMON = gc.o libscary.o parse.o schaf.o utils.o
 OBJ = $(OBJ_COMMON) main.o
@@ -53,6 +54,8 @@ utils.o: utils.h
 
 test: test-c test-scheme
 test-san: test-c-san test-scheme-san
+test-stress: test-scheme-stress test-scheme-stress-san
+test-all: test test-san test-stress
 
 test-c: test/basic-test
 	$(TIMEOUT) ./$<
@@ -64,7 +67,9 @@ test-scheme: schaf
 test-scheme-san: schaf-san
 	$(TIMEOUT) ./$< test/test.scm
 test-scheme-stress: schaf
-	./$< -S test/test.scm
+	$(TIMEOUT_LONGER) ./$< -S test/test.scm
+test-scheme-stress-san: schaf-san
+	$(TIMEOUT_LONGER) ./$< -S test/test.scm
 
 test/basic-test: $(OBJ_TEST)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) -lcriterion
@@ -73,4 +78,5 @@ test/basic-test-san: $(OBJ_TEST:.o=.san.o)
 
 test/basic-test.o: schaf.h utils.h
 
-.PHONY: test test-san test-c test-c-san test-scheme test-scheme-san test-scheme-stress
+.PHONY: test test-all test-san test-c test-c-san test-scheme test-scheme-san \
+	test-scheme-stress test-scheme-stress-san
