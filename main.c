@@ -39,6 +39,7 @@ typedef struct {
     bool heap_stat;
     double init_heap_size_mib;
     bool stress_gc;
+    bool interacitve;
 } Option;
 
 static double parse_posnum(const char *s)
@@ -62,6 +63,7 @@ static Option parse_opt(int argc, char *const *argv)
         .heap_stat = false,
         .init_heap_size_mib = 0.0,
         .stress_gc = false,
+        .interacitve = false,
     };
     int opt;
     while ((opt = getopt(argc, argv, "e:H:MPpSsTh")) != -1) {
@@ -99,7 +101,7 @@ static Option parse_opt(int argc, char *const *argv)
     }
     o.path = argv[optind];
     if (o.path == NULL && o.script == NULL)
-        opt_error("no program provided");
+        o.interacitve = true;
     if (o.path != NULL && o.script != NULL)
         opt_error("filename %s given while option '-e' passed", o.path);
     return o;
@@ -138,6 +140,24 @@ static void print_vmhwm(void)
         error("memory usage not printed");
 }
 
+static int repl(void)
+{
+    char buf[BUFSIZ];
+    for (;;) {
+        printf("schaf$ ");
+        if (!fgets(buf, sizeof(buf), stdin)) // read,
+            break;
+        Value v = eval_string(buf); // eval,
+        if (v == Qundef) {
+            printf("error: %s\n", error_message());
+            continue;
+        }
+        display(v); // print!
+        printf("\n");
+    }
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     Option o = parse_opt(argc, argv);
@@ -147,6 +167,8 @@ int main(int argc, char **argv)
         sch_set_gc_init_size(o.init_heap_size_mib);
 
     SCH_INIT();
+    if (o.interacitve)
+        return repl();
     Value v;
     if (o.parse_only)
         v = o.script ? parse_string(o.script) : parse(o.path);
