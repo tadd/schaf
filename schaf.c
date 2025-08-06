@@ -2276,7 +2276,7 @@ void display(Value v)
 static Value proc_display(UNUSED Value env, Value obj)
 {
     display(obj);
-    return obj;
+    return Qfalse;
 }
 
 static Value proc_newline(UNUSED Value env)
