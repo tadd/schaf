@@ -175,8 +175,10 @@ static void table_resize(Table *t)
     const size_t old_body_size = t->body_size;
     List **old_body = t->body;
     t->body_size *= TABLE_RESIZE_FACTOR;
-    t->body = xmalloc(t->body_size * sizeof(List *));
-    List dummies[t->body_size], *lasts[t->body_size];
+    size_t newsize = t->body_size * sizeof(List *);
+    t->body = xmalloc(newsize);
+    List **lasts = xmalloc(newsize);
+    List *dummies = xmalloc(t->body_size * sizeof(List));
     for (size_t i = 0; i < t->body_size; i++) {
         dummies[i].next = NULL;
         t->body[i] = lasts[i] = &dummies[i];
@@ -190,8 +192,10 @@ static void table_resize(Table *t)
         }
     }
     free(old_body);
+    free(lasts);
     for (size_t i = 0; i < t->body_size; i++)
         t->body[i] = t->body[i]->next; // ensure not to use dummies
+    free(dummies);
 }
 
 static inline bool table_too_many_elements(const Table *t)
