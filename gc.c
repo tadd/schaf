@@ -69,14 +69,10 @@ static inline size_t align(size_t size)
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 static void init_chunk(Header *h, size_t size)
 {
-#if 1 // XXX
-    memset(h, 0, MIN(size, sizeof(SchObject)));
-#else
     h->living = false;
-    HEADER_NEXT(h) = NULL;
-#endif
-    h->tag = TAG_CHUNK;
+    h->immutable = false;
     h->size = size;
+    h->tag = TAG_CHUNK;
 }
 
 static HeapSlot *heap_slot_new(size_t size)
@@ -88,7 +84,9 @@ static HeapSlot *heap_slot_new(size_t size)
 #else
     h->body = xmalloc(size);
 #endif
+    memset(HEADER(h->body), 0, MIN(size, sizeof(SchObject))); // XXX
     init_chunk(HEADER(h->body), size);
+    HEADER_NEXT(HEADER(h->body)) = NULL;
     return h;
 }
 
@@ -109,18 +107,17 @@ void gc_init(uintptr_t *volatile sp)
 static Header *allocate_from_chunk(Header *prev, Header *curr, size_t size)
 {
     Header *next = HEADER_NEXT(curr);
-    if (curr->size > size + sizeof(Header)) {
+    if (curr->size >= size + sizeof(SchObject)/* == size of chunk */) {
         Header *rest = (Header *)((uint8_t *) curr + size);
         init_chunk(rest, curr->size - size);
         HEADER_NEXT(rest) = next;
         next = rest;
-    } else if (curr->size > size)
-        size = curr->size;
+        curr->size = size;
+    }
     if (prev == NULL)
         free_list = next;
     else
         HEADER_NEXT(prev) = next;
-    init_chunk(curr, size);
     return curr;
 }
 
@@ -179,7 +176,7 @@ static bool is_valid_header(Value v)
 {
     Header *h = HEADER(v);
     return is_valid_tag(h->tag) &&
-        h->size >= sizeof(SchObject) && h->size < sizeof(SchObject) * 2;// XXX
+        h->size >= sizeof(SchObject) && h->size < sizeof(SchObject) * 2;
 }
 
 static bool in_heap_val(Value v)
@@ -484,12 +481,16 @@ static void free_chunk(Header *prev, Header *curr)
 {
     Value val = (Value) curr;
     free_val(val);
-    init_chunk(curr, curr->size);
     if (adjoining_p(prev, curr)) {
         prev->size += curr->size;
-        memset(curr, 0, sizeof(Header)); // XXX: for debug?
+#ifdef DEBUG
+        memset(curr, 0, sizeof(SchObject));
+#else
+        curr->size = 0; // XXX: for is_valid_header ?
+#endif
         return;
     }
+    init_chunk(curr, curr->size);
     add_to_free_list(curr);
 }
 
