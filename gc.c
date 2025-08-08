@@ -84,8 +84,10 @@ static HeapSlot *heap_slot_new(size_t size)
     HeapSlot *s = xmalloc(sizeof(HeapSlot));
     s->size = size;
     s->body = xmalloc(size);
+#ifdef __clang__ // XXX: ???
+    memset(s->body, 0, MIN(size, sizeof(Header)));
+#endif
     Header *h = HEADER(s->body);
-    memset(h, 0, MIN(size, sizeof(SchObject))); // XXX
     init_chunk(h, size);
     HEADER_NEXT(h) = NULL;
     return s;
