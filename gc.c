@@ -76,15 +76,17 @@ static void init_chunk(Header *h, size_t size)
     h->tag = TAG_CHUNK;
 }
 
-#define MIN(x, y) ((x) < (y) ? (x) : (y))
 static HeapSlot *heap_slot_new(size_t size)
 {
     HeapSlot *s = xmalloc(sizeof(HeapSlot));
     size = align(size);
     s->size = size;
     s->body = xmalloc(size);
+#if defined(__clang__) // XXX: ???
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+    memset(s->body, 0, MIN(size, sizeof(Header)));
+#endif
     Header *h = HEADER(s->body);
-    memset(h, 0, MIN(size, sizeof(SchObject))); // XXX
     init_chunk(h, size);
     HEADER_NEXT(h) = NULL;
     return s;
