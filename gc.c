@@ -77,19 +77,20 @@ static void init_chunk(Header *h, size_t size)
 
 static HeapSlot *heap_slot_new(size_t size)
 {
-    HeapSlot *h = xmalloc(sizeof(HeapSlot));
-    h->size = size;
+    HeapSlot *s = xmalloc(sizeof(HeapSlot));
+    s->size = size;
 #ifdef DEBUG
-    h->body = xcalloc(1, size);
+    s->body = xcalloc(1, size);
 #else
-    h->body = xmalloc(size);
+    s->body = xmalloc(size);
 #endif
 #ifdef __clang__ // XXX: ???
-    memset(h->body, 0, MIN(size, sizeof(Header)));
+    memset(s->body, 0, MIN(size, sizeof(Header)));
 #endif
-    init_chunk(HEADER(h->body), size);
-    HEADER_NEXT(HEADER(h->body)) = NULL;
-    return h;
+    Header *h = HEADER(s->body);
+    init_chunk(h, size);
+    HEADER_NEXT(h) = NULL;
+    return s;
 }
 
 void gc_init(uintptr_t *volatile sp)
