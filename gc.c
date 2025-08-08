@@ -81,16 +81,17 @@ static void init_chunk(Header *h, size_t size, Header *next)
     HEADER_NEXT(h) = next;
 }
 
-#define MIN(x, y) ((x) < (y) ? (x) : (y))
 static MSHeapSlot *ms_heap_slot_new(size_t size)
 {
     MSHeapSlot *s = xmalloc(sizeof(MSHeapSlot));
     size = align(size);
     s->size = size;
     s->body = xmalloc(size);
-    Header *h = HEADER(s->body);
-    memset(h, 0, MIN(size, sizeof(SchObject))); // XXX
-    init_chunk(h, size, NULL);
+#if defined(__clang__) // XXX: ???
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+    memset(s->body, 0, MIN(size, sizeof(Header)));
+#endif
+    init_chunk(HEADER(s->body), size, NULL);
     return s;
 }
 
