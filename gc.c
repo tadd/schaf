@@ -118,10 +118,11 @@ void gc_init(uintptr_t *volatile sp)
 
 static void *allocate_from_chunk(GCHeader *prev, GCHeader *curr, size_t size)
 {
+    size_t tsize = size + sizeof(GCHeader);
     GCHeader *next = curr->next;
-    if (curr->size > size + sizeof(GCHeader)) {
-        GCHeader *rest = GC_HEADER((uint8_t *)(curr + 1) + size);
-        init_header(rest, curr->size - size - sizeof(GCHeader));
+    if (curr->size > tsize) {
+        GCHeader *rest = GC_HEADER((uint8_t *)curr + tsize);
+        init_header(rest, curr->size - tsize);
         rest->next = next;
         next = rest;
         curr->size = size;
@@ -130,7 +131,8 @@ static void *allocate_from_chunk(GCHeader *prev, GCHeader *curr, size_t size)
         free_list = next;
     else
         prev->next = next;
-    void *p = curr + 1;
+    // curr->used = true;
+    void *p = (uint8_t *) curr + sizeof(GCHeader);
 #ifdef DEBUG
     memset(p, 0, curr->size);
 #endif
@@ -139,8 +141,9 @@ static void *allocate_from_chunk(GCHeader *prev, GCHeader *curr, size_t size)
 
 static void *allocate(size_t size)
 {
+    size_t tsize = size + sizeof(GCHeader);
     for (GCHeader *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = curr->next) {
-        if (curr->size >= size) // First-fit
+        if (curr->size >= tsize) // First-fit
             return allocate_from_chunk(prev, curr, size);
     }
     return NULL;
@@ -511,9 +514,9 @@ static void sweep_slot(HeapSlot *slot)
 {
     uint8_t *p = slot->body, *endp = p + slot->size;
     size_t offset;
-    for (GCHeader *h, *prev = NULL; p < endp; p += offset + sizeof(GCHeader), prev = h) {
+    for (GCHeader *h, *prev = NULL; p < endp; p += offset, prev = h) {
         h = GC_HEADER(p);
-        offset = h->size;
+        offset = h->size + sizeof(GCHeader);
         if (!h->used)
             continue;
         if (h->living) {
