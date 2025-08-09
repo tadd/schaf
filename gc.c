@@ -41,7 +41,6 @@ typedef struct {
 static void heap_print_stat(const char *header);
 static size_t heap_size(void);
 [[gnu::noreturn]] static void error_out_of_memory(void);
-static inline size_t align(size_t size);
 
 // Static data
 static void *gc_data; // singleton; maybe a heap or some context
@@ -72,6 +71,12 @@ typedef struct {
     Header *free_list;
 } MSHeap;
 
+static inline size_t align_objsize(size_t size)
+{
+    const size_t n = sizeof(SchObject);
+    return (size + (n-1)) / n * n;
+}
+
 static void init_chunk(Header *h, size_t size, Header *next)
 {
     h->living = false;
@@ -84,7 +89,7 @@ static void init_chunk(Header *h, size_t size, Header *next)
 static MSHeapSlot *ms_heap_slot_new(size_t size)
 {
     MSHeapSlot *s = xmalloc(sizeof(MSHeapSlot));
-    size = align(size);
+    size = align_objsize(size);
     s->size = size;
     s->body = xmalloc(size);
 #if defined(__clang__) // XXX: ???
@@ -137,8 +142,7 @@ static bool is_valid_header(Value v)
     Header *h = HEADER(v);
     UNPOISON(&h->tag, sizeof(ValueTag)); // Suspicious but
     UNPOISON(&h->size, sizeof(size_t));  // need to be read
-    return is_valid_tag(h->tag) &&
-        h->size >= sizeof(SchObject) && h->size < sizeof(SchObject) * 2;
+    return is_valid_tag(h->tag) && h->size == sizeof(SchObject);
 }
 
 static bool in_heap_val(Value v)
@@ -434,7 +438,7 @@ static void *ms_malloc(size_t size)
 {
     if (stress)
         ms_gc();
-    size = align(size);
+    size = align_objsize(size);
     Header *p = ms_allocate(size);
     if (!stress && p == NULL) {
         ms_gc();
