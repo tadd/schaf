@@ -2,6 +2,7 @@
 #define INTERN_H
 
 #include <setjmp.h>
+#include <stdalign.h>
 
 #include "schaf.h"
 #include "utils.h"
