@@ -76,15 +76,15 @@ static void init_chunk(Header *h, size_t size)
     h->tag = TAG_CHUNK;
 }
 
+#ifdef DEBUG
+#define xmalloc(n) xcalloc(1, (n))
+#endif
+
 static HeapSlot *heap_slot_new(size_t size)
 {
     HeapSlot *s = xmalloc(sizeof(HeapSlot));
     s->size = size;
-#ifdef DEBUG
-    s->body = xcalloc(1, size);
-#else
     s->body = xmalloc(size);
-#endif
 #ifdef __clang__ // XXX: ???
     memset(s->body, 0, MIN(size, sizeof(Header)));
 #endif
