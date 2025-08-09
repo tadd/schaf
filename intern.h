@@ -2,6 +2,7 @@
 #define INTERN_H
 
 #include <setjmp.h>
+#include <stdalign.h>
 
 #include "schaf.h"
 #include "utils.h"
@@ -128,7 +129,7 @@ typedef struct {
 typedef struct {
     Header header; // common
     union {
-        Header *next;
+        alignas(16) Header *next;
         char *hstring;
         char estring[sizeof(Closure)];// may be the largest
         Pair pair;
