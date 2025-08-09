@@ -63,7 +63,8 @@ void sch_set_gc_print_stat(bool b)
 
 static inline size_t align(size_t size)
 {
-    return (size + 15U) / 16U * 16U;
+    const size_t n = sizeof(SchObject);
+    return (size + (n-1)) / n * n;
 }
 
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
@@ -110,7 +111,7 @@ void gc_init(uintptr_t *volatile sp)
 static Header *allocate_from_chunk(Header *prev, Header *curr, size_t size)
 {
     Header *next = HEADER_NEXT(curr);
-    if (curr->size > size + sizeof(Header)) {
+    if (curr->size > size) {
         Header *rest = (Header *)((uint8_t *) curr + size);
         init_chunk(rest, curr->size - size);
         HEADER_NEXT(rest) = next;
@@ -184,8 +185,7 @@ static bool is_valid_pointer(Value v)
 static bool is_valid_header(Value v)
 {
     Header *h = HEADER(v);
-    return is_valid_tag(h->tag) &&
-        h->size >= sizeof(SchObject) && h->size < sizeof(SchObject) * 2;
+    return is_valid_tag(h->tag) && h->size == sizeof(SchObject);
 }
 
 static bool in_heap_val(Value v)
