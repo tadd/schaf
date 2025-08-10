@@ -136,6 +136,9 @@ Test(schaf, parse_string) {
     expect_vstr_eq_parsed("abc", "\"abc\"");
     expect_vstr_eq_parsed("a\\b", "\"a\\\\b\"");
     expect_vstr_eq_parsed("a\"b", "\"a\\\"b\"");
+    expect_vstr_eq_parsed("\a\b\t\r\n", "\"\\a\\b\\t\\r\\n\"");
+    expect_vstr_eq_parsed("\\\"|", "\"\\\\\\\"\\|\"");
+    expect_vstr_eq_parsed("a\x20,b", "\"a\\x20;,b\"");
 }
 
 Test(schaf, parse_string_list) {

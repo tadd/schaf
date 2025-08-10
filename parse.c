@@ -165,14 +165,55 @@ static Token lex_dots(Parser *p)
     return TOK_IDENT_DOT3();
 }
 
+static int unescape_hex(Parser *p)
+{
+    unsigned u;
+    int n = fscanf(p->in, "%x", &u);
+    if (n == EOF)
+        parse_error(p, "hex escape in string literal", "EOF");
+    if (n != 1)
+        parse_error(p, "hex escape in string literal", "invalid string");
+    int c = fgetc(p->in);
+    if (c != ';')
+        parse_error(p, "hex escape in string literal", "not a terminator: '%c' (need ';')", c);
+    if (u == 0)
+        parse_error(p, "hex escape in string literal", "NUL character which forbidden (as of now)");
+    if (u > 0xffu)
+        parse_error(p, "hex escape in string literal", "too large value: %u", u);
+    return u;
+}
+
+static int unescape(Parser *p, int c)
+{
+    switch (c) {
+    case 'a':
+        return '\a';
+    case 'b':
+        return '\b';
+    case 't':
+        return '\t';
+    case 'r':
+        return '\r';
+    case 'n':
+        return '\n';
+    case 'x':
+        return unescape_hex(p);
+    case '\\':
+    case '"':
+    case '|':
+        return c; // as is
+    default:
+        parse_error(p, "escape in string literal", "unknown: '\\%c'", c);
+    }
+}
+
 static Token lex_string(Parser *p)
 {
     char buf[BUFSIZ], *pbuf = buf, *end = pbuf + sizeof(buf) - 2;
     for (int c; (c = fgetc(p->in)) != '"'; *pbuf++ = c) {
         if (c == '\\') {
             c = fgetc(p->in);
-            if (c != '\\' && c != '"')
-                parse_error(p, "'\\' or '\"' in string literal", "'%c'", c);
+            c = unescape(p, c);
         }
         if (pbuf == end)
             parse_error(p, "string literal", "too long: \"%s...\"", pbuf);
