@@ -1247,10 +1247,7 @@
 
 ;; 6.6.2. Input
 (define (read-file f)
-  (let* ((p (open-input-file f))
-         (data (read p)))
-    (close-input-port p)
-    data))
+  (with-input-from-file f read))
 
 (describe "read" (lambda ()
   (define fact '(define (fact n)
@@ -1265,10 +1262,10 @@
       (expect-f (read-file "/dev/null")))))
 
 (describe "read twice" (lambda ()
-  (let* ((p (open-input-file "test/data-double.txt")))
-    (expect equal? (read p) '(1 2 "abc"))
-    (expect equal? (read p) '(3 4 "def"))
-    (close-input-port p))))
+  (with-input-from-file "test/data-double.txt"
+    (lambda ()
+      (expect equal? (read) '(1 2 "abc"))
+      (expect equal? (read) '(3 4 "def"))))))
 
 ;; 6.6.3. Output
 ;; (describe "display" ...)
