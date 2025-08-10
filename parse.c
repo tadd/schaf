@@ -237,14 +237,14 @@ static Token lex_constant(Parser *p)
     }
 }
 
-static Token lex_int(Parser *p, int c, int sign)
+static Token lex_int(Parser *p, int c, int coeff)
 {
     ungetc(c, p->in);
     int64_t i;
     int n = fscanf(p->in, "%"SCNd64, &i);
     if (n != 1)
         parse_error(p, "integer", "invalid string");
-    return TOKEN_INT(sign * i);
+    return TOKEN_INT(coeff * i);
 }
 
 static Token lex_after_sign(Parser *p, int csign)
@@ -253,8 +253,8 @@ static Token lex_after_sign(Parser *p, int csign)
     int dig = isdigit(c);
     bool minus = csign == '-';
     if (dig) {
-        int sign = minus ? -1 : 1;
-        return lex_int(p, c, sign);
+        int coeff = minus ? -1 : 1;
+        return lex_int(p, c, coeff);
     }
     ungetc(c, p->in);
     return minus ? TOK_IDENT_MINUS() : TOK_IDENT_PLUS();
