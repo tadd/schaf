@@ -1086,6 +1086,12 @@
     (if local?
         (expect-f (vector-ref v 9))))))
 
+(describe "vector-set!" (lambda ()
+  (let ((v (vector 0 1 2)))
+    (expect = (vector-ref v 1) 1)
+    (vector-set! v 1 42)
+    (expect = (vector-ref v 1) 42))))
+
 ;; 6.4. Control features
 (describe "procedure?" (lambda ()
   (expect procedure? car)

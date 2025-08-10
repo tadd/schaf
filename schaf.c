@@ -4,6 +4,7 @@
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1935,6 +1936,16 @@ static Value proc_vector_ref(UNUSED Value env, Value o, Value k)
     return v->body[i];
 }
 
+static Value proc_vector_set(UNUSED Value env, Value o, Value k, Value obj)
+{
+    EXPECT(type, TYPE_VECTOR, o);
+    int64_t i = get_non_negative_int(k);
+    Vector *v = VECTOR(o);
+    if ((size_t) i < scary_length(v->body))
+        v->body[i] = obj;
+    return Qfalse;
+}
+
 // 6.4. Control features
 static Value proc_procedure_p(UNUSED Value env, Value o)
 {
@@ -2666,6 +2677,7 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "vector", proc_vector, -1);
     define_procedure(e, "vector-length", proc_vector_length, 1);
     define_procedure(e, "vector-ref", proc_vector_ref, 2);
+    define_procedure(e, "vector-set!", proc_vector_set, 3);
 
     // 6.4. Control features
     define_procedure(e, "procedure?", proc_procedure_p, 1);
