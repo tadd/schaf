@@ -2250,7 +2250,8 @@ static Value read_string(int64_t k, FILE *fp)
 {
     if (eof_object == Qfalse)
         eof_object = value_of_eof();
-
+    if (k == 0)
+        return value_of_string("");
     char buf[k + 1];
     char *p = fgets(buf, sizeof(buf), fp);
     if (p == NULL)

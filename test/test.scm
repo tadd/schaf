@@ -1294,7 +1294,9 @@
     (expect equal? (read-string-from-data-trivial 1) "(")
     (expect equal? (read-string-from-data-trivial 4) "(1 2")
     (expect equal? (read-string-from-data-trivial 12) "(1 2 \"abc\")\n")
-    (expect equal? (read-string-from-data-trivial 999)"(1 2 \"abc\")\n")
+    (expect equal? (read-string-from-data-trivial 999) "(1 2 \"abc\")\n")))
+
+  (describe "read-string EOF" (lambda ()
     (with-input-from-file "test/data-trivial.txt"
       (lambda ()
         (read-string 999)
