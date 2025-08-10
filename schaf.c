@@ -51,6 +51,8 @@ static const int64_t CFUNCARG_MAX = 3;
 // Runtime-locals (aka global variables)
 //
 
+// Singleton
+Value eof_object = Qfalse;
 // Environment: list of Frames
 // Frame: Table of 'symbol => <value>
 static Value env_toplevel, env_default, env_r5rs, env_null;
@@ -108,6 +110,7 @@ static inline bool value_is_procedure(Value v)
     case TAG_VECTOR:
     case TAG_ENV:
     case TAG_PORT:
+    case TAG_EOF:
         return false;
     case TAG_ERROR:
         break;
@@ -160,6 +163,8 @@ Type value_type_of(Value v)
         return TYPE_ENV;
     case TAG_PORT:
         return TYPE_PORT;
+    case TAG_EOF:
+        return TYPE_EOF;
     case TAG_ERROR:
         break;
     }
@@ -191,6 +196,8 @@ static inline const char *value_type_to_string(Type t)
         return "environment";
     case TYPE_PORT:
         return "port";
+    case TYPE_EOF:
+        return "eof";
     }
     UNREACHABLE();
 }
@@ -1259,6 +1266,7 @@ static Value syn_define(Value env, Value args)
     case TYPE_VECTOR:
     case TYPE_ENV:
     case TYPE_PORT:
+    case TYPE_EOF:
     case TYPE_UNDEF:
         return runtime_error("the first argument expected symbol or pair but got %s",
                              value_type_to_string(t));
@@ -1312,6 +1320,7 @@ static bool equal(Value x, Value y)
     case TYPE_PROC:
     case TYPE_ENV:
     case TYPE_PORT:
+    case TYPE_EOF:
     case TYPE_UNDEF:
         return false;
     }
@@ -2207,12 +2216,19 @@ static Value proc_close_port(UNUSED Value env, Value port)
 }
 
 // 6.6.2. Input
+static Value value_of_eof(void)
+{
+    // an empty object
+    return (Value) obj_new(sizeof(Header), TAG_EOF);
+}
+
 static Value iread(FILE *in)
 {
-    Value eof = Qfalse; // temporary
+    if (eof_object == Qfalse)
+        eof_object = value_of_eof();
     Value datum = parse_datum(in, "<read>");
     if (datum == Qundef)
-        return eof;
+        return eof_object;
     return datum;
 }
 
@@ -2227,6 +2243,11 @@ static Value proc_read(UNUSED Value env, Value args)
         EXPECT(type, TYPE_PORT, port);
     }
     return iread(PORT(port)->fp);
+}
+
+static Value proc_eof_object_p(UNUSED Value env, Value obj)
+{
+    return OF_BOOL(value_tag_is(obj, TAG_EOF));
 }
 
 // 6.6.3. Output
@@ -2308,6 +2329,9 @@ static void fdisplay(FILE* f, Value v)
         break;
     case TYPE_PORT:
         display_port(f, PORT(v));
+        break;
+    case TYPE_EOF:
+        fprintf(f, "<eof>");
         break;
     case TYPE_UNDEF:
         fprintf(f, "<undef>");
@@ -2606,6 +2630,7 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "close-input-port", proc_close_port, 1);  // alias
     // 6.6.2. Input
     define_procedure(e, "read", proc_read, -1);
+    define_procedure(e, "eof-object?", proc_eof_object_p, 1);
     // 6.6.3. Output
     define_procedure(e, "display", proc_display, 1);
     define_procedure(e, "newline", proc_newline, 0);

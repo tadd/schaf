@@ -1258,8 +1258,7 @@
   (expect equal? (read-file "test/data-fact.txt") fact)))
 
 (describe "read /dev/null" (lambda ()
-  (if local?
-      (expect-f (read-file "/dev/null")))))
+  (expect eof-object? (read-file "/dev/null"))))
 
 (describe "read twice" (lambda ()
   (with-input-from-file "test/data-double.txt"

@@ -20,6 +20,7 @@ typedef enum {
     TYPE_VECTOR,
     TYPE_ENV,
     TYPE_PORT,
+    TYPE_EOF,
 } Type;
 
 typedef enum {
@@ -32,6 +33,7 @@ typedef enum {
     TAG_VECTOR,
     TAG_ENV,
     TAG_PORT,
+    TAG_EOF,
     // internal use only
     TAG_ERROR,
     TAG_LAST = TAG_ERROR
