@@ -1846,6 +1846,23 @@ static Value proc_string_eq(UNUSED Value env, Value s1, Value s2)
     return OF_BOOL(strcmp(STRING(s1)->body, STRING(s2)->body) == 0);
 }
 
+static Value proc_substring(UNUSED Value env, Value string, Value vstart, Value vend)
+{
+    EXPECT(type, TYPE_STRING, string);
+    const char *s = STRING(string)->body;
+    int64_t start = get_non_negative_int(vstart), end = get_non_negative_int(vend);
+    if (UNLIKELY(start > end))
+        return runtime_error("start index %"PRId64" must be <= end index %"PRId64, start, end);
+    size_t len = strlen(s);
+    if (UNLIKELY((size_t) end > len))
+        return runtime_error("end index %"PRId64" must be <= string length %"PRId64, end, len);
+    size_t newlen = end - start;
+    char buf[newlen+1];
+    strncpy(buf, s + start, newlen);
+    buf[newlen] = '\0';
+    return value_of_string(buf);
+}
+
 static Value proc_string_append(UNUSED Value env, Value args)
 {
     EXPECT(list_head, args);
@@ -2622,6 +2639,7 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "string?", proc_string_p, 1);
     define_procedure(e, "string-length", proc_string_length, 1);
     define_procedure(e, "string=?", proc_string_eq, 2);
+    define_procedure(e, "substring", proc_substring, 3);
     define_procedure(e, "string-append", proc_string_append, -1);
     // 6.3.6. Vectors
     define_procedure(e, "vector?", proc_vector_p, 1);

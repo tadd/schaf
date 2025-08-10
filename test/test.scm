@@ -1032,6 +1032,18 @@
   (noexpect string=? "\\" "\\\\")
   (noexpect string=? "ab" "a\"b")))
 
+(describe "substring" (lambda ()
+  (expect equal? (substring "abc" 0 0) "")
+  (expect equal? (substring "abc" 0 1) "a")
+  (expect equal? (substring "abc" 0 2) "ab")
+  (expect equal? (substring "abc" 0 3) "abc")
+  (expect equal? (substring "abc" 1 1) "")
+  (expect equal? (substring "abc" 1 2) "b")
+  (expect equal? (substring "abc" 1 3) "bc")
+  (expect equal? (substring "abc" 2 2) "")
+  (expect equal? (substring "abc" 2 3) "c")
+  (expect equal? (substring "abc" 3 3) "")))
+
 (describe "string-append" (lambda ()
   (expect equal? (string-append) "")
   (expect equal? (string-append "") "")
