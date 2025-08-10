@@ -222,6 +222,59 @@ static Token lex_string(Parser *p)
     return TOKEN_STRING(buf);
 }
 
+static int scan_binary_int(FILE *in, int64_t *pi)
+{
+    int64_t i = 0;
+    unsigned n = 0;
+    for (int c; n < 64U; n++) {
+        c = fgetc(in);
+        if (c == '0')
+            i <<= 1U;
+        else if (c == '1')
+            i = (i << 1U) | 1U;
+        else {
+            ungetc(c, in);
+            break;
+        }
+    }
+    if (n == 0 || n == 64U)
+        return 0; // invalid or too long
+    *pi = i;
+    return 1;
+}
+
+static Token lex_int_prefixed(Parser *p, int cradix)
+{
+    int c = fgetc(p->in), coeff = 1;
+    if (c == '+')
+        ; // just ignore
+    else if (c == '-')
+        coeff = -1;
+    else
+        ungetc(c, p->in);
+    int n;
+    int64_t i;
+    switch (cradix) {
+    case 'b':
+        n = scan_binary_int(p->in, &i);
+        break;
+    case 'o':
+        n = fscanf(p->in, "%"SCNo64, &i);
+        break;
+    case 'd':
+        n = fscanf(p->in, "%"SCNd64, &i);
+        break;
+    case 'x':
+        n = fscanf(p->in, "%"SCNx64, &i);
+        break;
+    default:
+        bug("invalid radix");
+    }
+    if (n != 1)
+        parse_error(p, "prefixed integer", "invalid string");
+    return TOKEN_INT(coeff * i);
+}
+
 static Token lex_constant(Parser *p)
 {
     int c = fgetc(p->in);
@@ -232,6 +285,11 @@ static Token lex_constant(Parser *p)
         return TOKEN_C(CONST_FALSE);
     case '(':
         return TOK_VECTOR_LPAREN;
+    case 'b':
+    case 'd':
+    case 'o':
+    case 'x':
+        return lex_int_prefixed(p, c);
     default:
         parse_error(p, "constants", "#%c", c);
     }

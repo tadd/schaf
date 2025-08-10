@@ -124,6 +124,24 @@ Test(schaf, parse_int) {
     expect_vint_eq_parsed(-42, "-42");
 }
 
+Test(schaf, parse_prefixed_int) {
+    expect_vint_eq_parsed(42, "#b101010");
+    expect_vint_eq_parsed(42, "#b+101010");
+    expect_vint_eq_parsed(-42, "#b-101010");
+
+    expect_vint_eq_parsed(42, "#d42");
+    expect_vint_eq_parsed(42, "#d+42");
+    expect_vint_eq_parsed(-42, "#d-42");
+
+    expect_vint_eq_parsed(42, "#o52");
+    expect_vint_eq_parsed(42, "#o+52");
+    expect_vint_eq_parsed(-42, "#o-52");
+
+    expect_vint_eq_parsed(42, "#x2a");
+    expect_vint_eq_parsed(42, "#x+2a");
+    expect_vint_eq_parsed(-42, "#x-2a");
+}
+
 Test(schaf, parse_nil) {
     cr_expect(parse_expr_string("()") == Qnil);
 }
