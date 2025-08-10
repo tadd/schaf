@@ -62,6 +62,7 @@ static Source **source_data;
 static jmp_buf jmp_exit;
 static uint8_t exit_status; // should be <= 125 to be portable
 static char errmsg[BUFSIZ];
+static Value current_input_port = Qfalse, current_output_port = Qfalse;
 
 //
 // value_is_*: Type Checks
@@ -2081,52 +2082,113 @@ static Value proc_interaction_environment(UNUSED Value env)
 
 // 6.6. Input and output
 // 6.6.1. Ports
+static Value open_port(const char *path, bool output);
+
+static Value proc_call_with_input_file(Value env, Value path, Value thunk)
+{
+    EXPECT(type, TYPE_STRING, path);
+    Value file = open_port(STRING(path)->body, false);
+    return apply(env, thunk, list1(file));
+}
+
+static Value proc_call_with_output_file(Value env, Value path, Value thunk)
+{
+    EXPECT(type, TYPE_STRING, path);
+    Value file = open_port(STRING(path)->body, true);
+    return apply(env, thunk, list1(file));
+}
+
 static Value proc_port_p(UNUSED Value env, Value port)
 {
     return OF_BOOL(value_tag_is(port, TAG_PORT));
 }
 
-static Value value_of_port(FILE *fp)
+static Value proc_input_port_p(UNUSED Value env, Value port)
+{
+    return OF_BOOL(value_tag_is(port, TAG_PORT) && !PORT(port)->output);
+}
+
+static Value proc_output_port_p(UNUSED Value env, Value port)
+{
+    return OF_BOOL(value_tag_is(port, TAG_PORT) && PORT(port)->output);
+}
+
+static Value value_of_port(FILE *fp, bool output)
 {
     Port *p = obj_new(sizeof(Port), TAG_PORT);
     p->fp = fp;
+    p->output = output;
     return (Value) p;
 }
 
-static Value port_stdin(void)
+static Value get_current_input_port(void)
 {
-    static Value p = Qfalse;
-    if (p == Qfalse)
-        p = value_of_port(stdin);
-    return p;
+    if (current_input_port == Qfalse)
+        current_input_port = value_of_port(stdin, false);
+    return current_input_port;
 }
 
-static Value port_stdout(void)
+static Value get_current_output_port(void)
 {
-    static Value p = Qfalse;
-    if (p == Qfalse)
-        p = value_of_port(stdout);
-    return p;
+    if (current_output_port == Qfalse)
+        current_output_port = value_of_port(stdout, true);
+    return current_output_port;
 }
 
 static Value proc_current_input_port(UNUSED Value env)
 {
-    return port_stdin();
+    return get_current_input_port();
 }
 
 static Value proc_current_output_port(UNUSED Value env)
 {
-    return port_stdout();
+    return get_current_output_port();
 }
 
-static Value proc_open_input_file(UNUSED Value env, Value vpath)
+static Value open_port(const char *path, bool output)
 {
-    EXPECT(type, TYPE_STRING, vpath);
-    const char *path = STRING(vpath)->body;
-    FILE *fp = fopen(path, "r");
+    const char *mode = output ? "a" : "r";
+    FILE *fp = fopen(path, mode);
     if (fp == NULL)
-        return runtime_error("cannot open file: %s", path);
-    return value_of_port(fp);
+        return runtime_error("cannot open %s file: %s",
+                             output ? "output" : "input", path);
+    return value_of_port(fp, output);
+}
+
+static Value proc_open_input_file(UNUSED Value env, Value path)
+{
+    EXPECT(type, TYPE_STRING, path);
+    return open_port(STRING(path)->body, false);
+}
+
+static Value proc_open_output_file(UNUSED Value env, Value path)
+{
+    EXPECT(type, TYPE_STRING, path);
+    return open_port(STRING(path)->body, true);
+}
+
+static void close_port(Port *p);
+
+static Value proc_with_input_from_file(Value env, Value path, Value thunk)
+{
+    EXPECT(type, TYPE_STRING, path);
+    Value orig = current_input_port;
+    current_input_port = open_port(STRING(path)->body, false);
+    Value ret = apply(env, thunk, Qnil);
+    close_port(PORT(current_input_port));
+    current_input_port = orig;
+    return ret;
+}
+
+static Value proc_with_output_to_file(Value env, Value path, Value thunk)
+{
+    EXPECT(type, TYPE_STRING, path);
+    Value orig = current_output_port;
+    current_output_port = open_port(STRING(path)->body, true);
+    Value ret = apply(env, thunk, Qnil);
+    close_port(PORT(current_output_port));
+    current_output_port = orig;
+    return ret;
 }
 
 static void close_port(Port *p)
@@ -2159,7 +2221,7 @@ static Value proc_read(UNUSED Value env, Value args)
     EXPECT(arity_range, 0, 1, args);
     Value port;
     if (args == Qnil)
-        port = port_stdin();
+        port = get_current_input_port();
     else {
         port = car(args);
         EXPECT(type, TYPE_PORT, port);
@@ -2528,11 +2590,18 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "interaction-environment", proc_interaction_environment, 0);
     // 6.6. Input and output
     // 6.6.1. Ports
+    define_procedure(e, "call-with-input-file", proc_call_with_input_file, 2);
+    define_procedure(e, "call-with-output-file", proc_call_with_output_file, 2);
     define_procedure(e, "port?", proc_port_p, 1); // R5RS missing the definition!!
+    define_procedure(e, "input-port?", proc_input_port_p, 1);
+    define_procedure(e, "output-port?", proc_output_port_p, 1);
     define_procedure(e, "current-input-port", proc_current_input_port, 0);
     define_procedure(e, "current-output-port", proc_current_output_port, 0);
+    define_procedure(e, "with-input-from-file", proc_with_input_from_file, 2);
+    define_procedure(e, "with-output-to-file", proc_with_output_to_file, 2);
     define_procedure(e, "open-input-file", proc_open_input_file, 1);
-    define_procedure(e, "close-port", proc_close_port, 1);
+    define_procedure(e, "open-output-file", proc_open_output_file, 1);
+    define_procedure(e, "close-port", proc_close_port, 1); // From R7RS
     define_procedure(e, "close-output-port", proc_close_port, 1); // alias
     define_procedure(e, "close-input-port", proc_close_port, 1);  // alias
     // 6.6.2. Input

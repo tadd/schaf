@@ -1175,15 +1175,75 @@
   (expect port? (current-output-port)) ; test for twice
   (expect port? (current-output-port))))
 
+(describe "input-port?" (lambda ()
+  (expect input-port? (current-input-port))
+  (noexpect input-port? (current-output-port))))
+
+(describe "output-port?" (lambda ()
+  (noexpect output-port? (current-input-port))
+  (expect output-port? (current-output-port))))
+
 (describe "open-input-file" (lambda ()
   (let ((p (open-input-file "/dev/null")))
-    (expect port? p)
+    (expect input-port? p)
+    (close-input-port p))))
+
+(describe "open-output-file" (lambda ()
+  (let ((p (open-output-file "/dev/null")))
+    (expect output-port? p)
     (close-input-port p))))
 
 (describe "close-input-port" (lambda ()
   (let ((p (open-input-file "/dev/null")))
     (close-input-port p)
     (expect-t #t))))
+
+(describe "close-output-port" (lambda ()
+  (let ((p (open-output-file "/dev/null")))
+    (close-output-port p)
+    (expect-t #t))))
+
+(describe "call-with-input-file" (lambda ()
+  (define pp #f)
+  (call-with-input-file "/dev/null"
+    (lambda (p)
+      (expect input-port? p)
+      (set! pp p)))
+  (expect input-port? pp)));; closed
+
+(describe "call-with-output-file" (lambda ()
+  (define pp #f)
+  (call-with-output-file "/dev/null"
+    (lambda (p)
+      (expect output-port? p)
+      (set! pp p)))
+  (expect output-port? pp)));; closed
+
+(describe "with-input-from-file" (lambda ()
+  (define pp #f)
+  (define stdin (current-input-port))
+  (with-input-from-file "/dev/null"
+    (lambda ()
+      (define in (current-input-port))
+      (expect input-port? in)
+      (noexpect equal? in stdin)
+      (set! pp in)))
+  (expect input-port? pp);; closed
+  (noexpect equal? pp (current-input-port))
+  (expect equal? stdin (current-input-port))))
+
+(describe "with-output-to-file" (lambda ()
+  (define pp #f)
+  (define stdout (current-output-port))
+  (with-output-to-file "/dev/null"
+    (lambda ()
+      (define out (current-output-port))
+      (expect output-port? out)
+      (noexpect equal? out stdout)
+      (set! pp out)))
+  (expect output-port? pp);; closed
+  (noexpect equal? pp (current-output-port))
+  (expect equal? stdout (current-output-port))))
 
 ;; 6.6.2. Input
 (define (read-file f)

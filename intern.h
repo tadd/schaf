@@ -106,6 +106,7 @@ typedef struct {
 typedef struct {
     Header header;
     FILE *fp;
+    bool output;
 } Port;
 
 typedef struct {
