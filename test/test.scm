@@ -1062,6 +1062,23 @@
   (expect vector? (vector))
   (expect vector? (vector 1 'a 2))))
 
+(describe "make-vector" (lambda ()
+  (define v0 (make-vector 0))
+  (define v (make-vector 3 0))
+
+  (expect vector? v0)
+  (expect = (vector-length v0) 0)
+
+  (expect vector? v)
+  (expect = (vector-length v) 3)
+  (expect = (vector-ref v 0) 0)
+  (expect = (vector-ref v 1) 0)
+  (expect = (vector-ref v 2) 0)))
+
+(describe "vector-length" (lambda ()
+  (expect = (vector-length (vector)) 0)
+  (expect = (vector-length (vector 1 2 3)) 3)))
+
 (describe "vector-ref" (lambda ()
   (let ((v (vector 0 1 2)))
     (expect eq? (vector-ref v 0) 0)

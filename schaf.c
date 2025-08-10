@@ -1906,6 +1906,25 @@ static Value proc_vector(UNUSED Value env, Value args)
     return v;
 }
 
+static Value proc_make_vector(UNUSED Value env, Value args)
+{
+    EXPECT(arity_range, 1, 2, args);
+    int64_t k = get_non_negative_int(car(args));
+    Value fill = Qfalse;
+    if (cdr(args) != Qnil)
+        fill = cadr(args);
+    Value v = vector_new();
+    for (int64_t i = 0; i < k; i++)
+        vector_push(v, fill);
+    return v;
+}
+
+static Value proc_vector_length(UNUSED Value env, Value v)
+{
+    EXPECT(type, TYPE_VECTOR, v);
+    return value_of_int(scary_length(VECTOR(v)->body));
+}
+
 static Value proc_vector_ref(UNUSED Value env, Value o, Value k)
 {
     EXPECT(type, TYPE_VECTOR, o);
@@ -2643,7 +2662,9 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "string-append", proc_string_append, -1);
     // 6.3.6. Vectors
     define_procedure(e, "vector?", proc_vector_p, 1);
+    define_procedure(e, "make-vector", proc_make_vector, -1);
     define_procedure(e, "vector", proc_vector, -1);
+    define_procedure(e, "vector-length", proc_vector_length, 1);
     define_procedure(e, "vector-ref", proc_vector_ref, 2);
 
     // 6.4. Control features
