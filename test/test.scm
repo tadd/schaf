@@ -1,6 +1,7 @@
 (load "./lib.scm")
 
-(define local? #t) ;; tweak me when to use other implementations
+(define local? #t)            ;; tweak me when to use any other implementations
+(define r7rs? (or local? #t)) ;; tweak me when to use other pure-R5RS implementations
 
 (describe "parsing comments" (lambda ()
   (expect = 1 1 ; foo
@@ -1276,6 +1277,13 @@
   (expect = (fact 5) 120)))
 
 (load "./test-callcc.scm")
+
+;; R7RS
+(if r7rs? (begin
+  (describe "close-port" (lambda ()
+    (let ((p (open-input-file "/dev/null")))
+      (close-port p)
+      (expect-t #t))))))
 
 ;; Local Extensions
 (if local? (begin
