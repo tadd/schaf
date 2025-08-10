@@ -51,8 +51,6 @@ static const int64_t CFUNCARG_MAX = 3;
 // Runtime-locals (aka global variables)
 //
 
-// Singleton
-Value eof_object = Qfalse;
 // Environment: list of Frames
 // Frame: Table of 'symbol => <value>
 static Value env_toplevel, env_default, env_r5rs, env_null;
@@ -64,6 +62,8 @@ static Source **source_data;
 static jmp_buf jmp_exit;
 static uint8_t exit_status; // should be <= 125 to be portable
 static char errmsg[BUFSIZ];
+// Singletons
+static Value eof_object = Qfalse;
 static Value current_input_port = Qfalse, current_output_port = Qfalse;
 
 //
@@ -2223,13 +2223,18 @@ static Value value_of_eof(void)
     return (Value) obj_new(sizeof(Header), TAG_EOF);
 }
 
-static Value iread(FILE *in)
+static Value get_eof_object(void)
 {
     if (eof_object == Qfalse)
         eof_object = value_of_eof();
+    return eof_object;
+}
+
+static Value iread(FILE *in)
+{
     Value datum = parse_datum(in, "<read>");
     if (datum == Qundef)
-        return eof_object;
+        return get_eof_object();
     return datum;
 }
 
@@ -2248,14 +2253,12 @@ static Value proc_read(UNUSED Value env, Value args)
 
 static Value read_string(int64_t k, FILE *fp)
 {
-    if (eof_object == Qfalse)
-        eof_object = value_of_eof();
     if (k == 0)
         return value_of_string("");
     char buf[k + 1];
     char *p = fgets(buf, sizeof(buf), fp);
     if (p == NULL)
-        return eof_object;
+        return get_eof_object();
     return value_of_string(buf);
 }
 
