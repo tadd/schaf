@@ -2625,7 +2625,6 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "with-output-to-file", proc_with_output_to_file, 2);
     define_procedure(e, "open-input-file", proc_open_input_file, 1);
     define_procedure(e, "open-output-file", proc_open_output_file, 1);
-    define_procedure(e, "close-port", proc_close_port, 1); // From R7RS
     define_procedure(e, "close-output-port", proc_close_port, 1); // alias
     define_procedure(e, "close-input-port", proc_close_port, 1);  // alias
     // 6.6.2. Input
@@ -2639,7 +2638,10 @@ void sch_init(uintptr_t *sp)
 
     env_r5rs = env_dup("r5rs", e);
 
-    // Extensions from R7RS (scheme process-context)
+    // Extensions from R7RS
+    // (scheme base)
+    define_procedure(e, "close-port", proc_close_port, 1);
+    // (scheme process-context)
     define_procedure(e, "exit", proc_exit, -1);
 
     // Local Extensions
