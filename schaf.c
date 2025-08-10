@@ -2245,6 +2245,32 @@ static Value proc_read(UNUSED Value env, Value args)
     return iread(PORT(port)->fp);
 }
 
+static Value read_string(int64_t k, FILE *fp)
+{
+    if (eof_object == Qfalse)
+        eof_object = value_of_eof();
+
+    char buf[k + 1];
+    char *p = fgets(buf, sizeof(buf), fp);
+    if (p == NULL)
+        return eof_object;
+    return value_of_string(buf);
+}
+
+static Value proc_read_string(UNUSED Value env, Value args)
+{
+    EXPECT(arity_range, 1, 2, args);
+    int64_t k = get_int(car(args));
+    Value port;
+    if (cdr(args) == Qnil)
+        port = get_current_input_port();
+    else {
+        port = cadr(args);
+        EXPECT(type, TYPE_PORT, port);
+    }
+    return read_string(k, PORT(port)->fp);
+}
+
 static Value proc_eof_object_p(UNUSED Value env, Value obj)
 {
     return OF_BOOL(value_tag_is(obj, TAG_EOF));
@@ -2641,6 +2667,7 @@ void sch_init(uintptr_t *sp)
     // Extensions from R7RS
     // (scheme base)
     define_procedure(e, "close-port", proc_close_port, 1);
+    define_procedure(e, "read-string", proc_read_string, -1);
     // (scheme process-context)
     define_procedure(e, "exit", proc_exit, -1);
 

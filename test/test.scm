@@ -1283,7 +1283,22 @@
   (describe "close-port" (lambda ()
     (let ((p (open-input-file "/dev/null")))
       (close-port p)
-      (expect-t #t))))))
+      (expect-t #t))))
+
+  (define (read-string-from-data-trivial k)
+    (with-input-from-file "test/data-trivial.txt"
+      (lambda () (read-string k))))
+
+  (describe "read-string" (lambda ()
+    (expect equal? (read-string-from-data-trivial 0) "")
+    (expect equal? (read-string-from-data-trivial 1) "(")
+    (expect equal? (read-string-from-data-trivial 4) "(1 2")
+    (expect equal? (read-string-from-data-trivial 12) "(1 2 \"abc\")\n")
+    (expect equal? (read-string-from-data-trivial 999)"(1 2 \"abc\")\n")
+    (with-input-from-file "test/data-trivial.txt"
+      (lambda ()
+        (read-string 999)
+        (expect eof-object? (read-string 1))))))))
 
 ;; Local Extensions
 (if local? (begin
