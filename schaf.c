@@ -1535,11 +1535,16 @@ static int64_t expt(int64_t x, int64_t y)
     return z;
 }
 
+#define get_non_negative_int(x) ({ \
+            int64_t N = get_int(x); \
+            if (UNLIKELY(N < 0)) \
+                return runtime_error("must be non-negative: %"PRId64, N); \
+            N; \
+        })
+
 static Value proc_expt(UNUSED Value env, Value x, Value y)
 {
-    int64_t a = get_int(x), b = get_int(y);
-    if (b < 0)
-        return runtime_error("cannot power %d which negative", b);
+    int64_t a = get_int(x), b = get_non_negative_int(y);
     int64_t c;
     if (b == 0)
         c = 1;
@@ -1728,9 +1733,7 @@ static Value proc_reverse(UNUSED Value env, Value list)
 static Value list_tail(Value list, Value k)
 {
     EXPECT(list_head, list);
-    int64_t n = get_int(k);
-    if (n < 0)
-        return runtime_error("2nd element needs to be non-negative: "PRId64, n);
+    int64_t n = get_non_negative_int(k);
     Value p = list;
     int64_t i;
     for (i = 0; p != Qnil; p = cdr(p), i++) {
@@ -1889,9 +1892,7 @@ static Value proc_vector(UNUSED Value env, Value args)
 static Value proc_vector_ref(UNUSED Value env, Value o, Value k)
 {
     EXPECT(type, TYPE_VECTOR, o);
-    int64_t i = get_int(k);
-    if (i < 0)
-        return runtime_error("invalid index: negative integer %"PRId64, i);
+    int64_t i = get_non_negative_int(k);
     Vector *v = VECTOR(o);
     if ((size_t) i >= scary_length(v->body))
         return Qfalse;
@@ -2260,7 +2261,7 @@ static Value read_string(int64_t k, FILE *fp)
 static Value proc_read_string(UNUSED Value env, Value args)
 {
     EXPECT(arity_range, 1, 2, args);
-    int64_t k = get_int(car(args));
+    int64_t k = get_non_negative_int(car(args));
     Value port;
     if (cdr(args) == Qnil)
         port = get_current_input_port();
