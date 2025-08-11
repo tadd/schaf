@@ -240,8 +240,7 @@ static void mark_val(Value v)
     case TAG_ENV: {
         Env *p = ENV(v);
         table_foreach(p->table, mark_env_each, NULL);
-        if (p->parent != Qfalse)
-            mark_val(p->parent);
+        mark_val(p->parent);
         return;
     }
     case TAG_VECTOR: {
@@ -394,6 +393,13 @@ static bool is_user_opened_file(FILE *fp)
         fp != stdin && fp != stdout && fp != stderr;
 }
 
+#ifdef DEBUG
+#define cfree(f, p) f(p), p = NULL
+#define free(p) cfree(free, p)
+#define table_free(p) cfree(table_free, p)
+#define scary_free(p) cfree(scary_free, p)
+#endif
+
 static void free_val(Value v)
 {
     if (!is_valid_pointer(v))
@@ -403,74 +409,53 @@ static void free_val(Value v)
     case TAG_SYNTAX: {
         CFunc *p = CFUNC(v);
         free(p->name);
-#ifdef DEBUG
-        p->name = NULL;
-        p->cfunc = NULL;
-        p->proc = (Procedure) { 0, NULL };
-#endif
-        return;
+        break;
     }
     case TAG_CONTINUATION: {
         Continuation *p = CONTINUATION(v);
-        free((void *) p->exstate->stack);
+        free(p->exstate->stack);
         free(p->exstate);
-#ifdef DEBUG
-        p->exstate = NULL;
-        p->proc = (Procedure) { 0, NULL };
-#endif
-        return;
+        break;
     }
-    case TAG_CLOSURE:
-#ifdef DEBUG
-        *PROCEDURE(v) = (Procedure) { 0, NULL };
-#endif
-        return;
     case TAG_HSTRING:
         free(HSTRING(v));
-#ifdef DEBUG
-        HSTRING(v) = NULL;
-#endif
-        return;
+        break;
     case TAG_ENV: {
         Env *p = ENV(v);
         table_free(p->table);
         free(p->name);
-#ifdef DEBUG
-        p->name = NULL;
-        p->table = NULL;
-        p->parent = Qfalse;
-#endif
-        return;
+        break;
     }
     case TAG_PORT: {
         FILE *fp = PORT(v)->fp;
         if (is_user_opened_file(fp))
             fclose(fp);
         PORT(v)->fp = NULL; // keep safety for fclose()
-        return;
+        break;
     }
     case TAG_VECTOR: {
         scary_free(VECTOR(v));
-#ifdef DEBUG
-        VECTOR(v) = NULL;
-#endif
-        return;
+        break;
     }
     case TAG_ERROR: {
         scary_free(ERROR(v));
-#ifdef DEBUG
-        ERROR(v) = NULL;
-#endif
-        return;
+        break;
     }
+    case TAG_CLOSURE:
     case TAG_ESTRING:
     case TAG_PAIR:
     case TAG_EOF:
-        return;
+        break;
     case TAG_CHUNK:
         UNREACHABLE();
     }
 }
+#ifdef DEBUG
+#undef cfree
+#undef free
+#undef table_free
+#undef scary_free
+#endif
 
 static bool adjoining_p(const Header *prev, const Header *curr)
 {
