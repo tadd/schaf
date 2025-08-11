@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -140,19 +141,49 @@ static void print_vmhwm(void)
         error("memory usage not printed");
 }
 
+static bool to_be_continued(Value ret)
+{
+    return ret == Qundef &&
+        strstr(error_message(), "expected ')' but got EOF") != NULL;
+}
+
+static bool is_empty(const char *line)
+{
+    const char *p = line;
+    while (*p != '\0' && isspace(*p))
+        p++;
+    return *p == '\0';
+}
+
 static int repl(void)
 {
-    char buf[BUFSIZ];
+    char buf[BUFSIZ] = { '\0' }, line[BUFSIZ];
+    bool cont = false;
     for (;;) {
-        printf("schaf$ ");
-        if (!fgets(buf, sizeof(buf), stdin)) // read,
+        printf(cont ? ".....> " : "schaf$ ");
+        cont = false;
+        if (!fgets(line, sizeof(line), stdin)) // Read,
             break;
-        Value v = eval_string(buf); // eval,
+        if (is_empty(line))
+            continue;// ignore
+        size_t linelen = strlen(line), buflen = strlen(buf);
+        if (linelen + buflen >= sizeof(buf)) {
+            printf("error: input too large\n");
+            buf[0] = '\0';
+            continue;
+        }
+        strcat(buf, line);
+        Value v = eval_string(buf); // Eval,
+        if (to_be_continued(v)) {
+            cont = true;
+            continue;
+        }
+        buf[0] = '\0';
         if (v == Qundef) {
             printf("error: %s\n", error_message());
             continue;
         }
-        display(v); // print!
+        display(v); // Print!
         printf("\n");
     }
     return 0;
