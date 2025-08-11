@@ -2240,6 +2240,7 @@ static Value proc_with_input_from_file(Value env, Value path, Value thunk)
 static Value proc_with_output_to_file(Value env, Value path, Value thunk)
 {
     EXPECT(type, TYPE_STRING, path);
+    EXPECT(type, TYPE_PROC, thunk);
     Value orig = current_output_port;
     current_output_port = open_port(STRING(path)->body, true);
     Value ret = apply(env, thunk, Qnil);
