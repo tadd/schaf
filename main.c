@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -140,14 +141,40 @@ static void print_vmhwm(void)
         error("memory usage not printed");
 }
 
+static bool to_be_continued(SchValue ret)
+{
+    return ret == SCH_UNDEF &&
+        strstr(sch_error_message(), "expected ')' but got EOF") != NULL;
+}
+
+static bool is_empty(const char *line)
+{
+    const char *p = line;
+    while (isspace(*p))
+        p++;
+    return *p == '\0';
+}
+
 static int repl(void)
 {
-    char buf[BUFSIZ];
+    char buf[BUFSIZ] = { '\0' }, line[BUFSIZ];
     for (;;) {
-        printf("schaf$ ");
-        if (fgets(buf, sizeof(buf), stdin) == NULL) // read,
+        printf(buf[0] ? ".....> " : "schaf$ ");
+        if (fgets(line, sizeof(line), stdin) == NULL) // read,
             break;
+        if (is_empty(line))
+            continue;// ignore
+        size_t nextlen = strlen(buf) + strlen(line);
+        if (nextlen >= sizeof(buf)) {
+            printf("error: input too large\n");
+            buf[0] = '\0';// shrink
+            continue;
+        }
+        strcat(buf, line);
         SchValue v = sch_eval_string(buf); // eval,
+        if (to_be_continued(v))
+            continue;
+        buf[0] = '\0';
         if (v == SCH_UNDEF) {
             printf("error: %s\n", sch_error_message());
             continue;
@@ -155,6 +182,8 @@ static int repl(void)
         sch_display(v); // print!
         printf("\n");
     }
+    printf("\n");
+    fflush(stdout);
     return 0;
 }
 
