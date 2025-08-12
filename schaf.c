@@ -2347,16 +2347,20 @@ static void display_list(FILE *f, Value l, Value *record)
     fprintf(f, ")");
 }
 
-static void display_vector(FILE *f, const Vector *v)
+static void display_vector(FILE *f, const Vector *v, Value *record)
 {
     fprintf(f, "#(");
+    if (check_circular(f, (Value) v, record))
+        goto end;
     for (int64_t i = 0, len = scary_length(v->body); i < len; i++) {
         Value e = v->body[i];
-        fdisplay(f, e);
+        if (!check_circular(f, e, record))
+            fdisplay_rec(f, e, record);
         if (i + 1 == len)
             break;
         fprintf(f, " ");
     }
+ end:
     fprintf(f, ")");
 }
 
@@ -2401,7 +2405,7 @@ static void fdisplay_rec(FILE* f, Value v, Value *record)
         fprintf(f, "<procedure>");
         break;
     case TYPE_VECTOR:
-        display_vector(f, VECTOR(v));
+        display_vector(f, VECTOR(v), record);
         break;
     case TYPE_ENV:
         fprintf(f, "<environment: %s>", ENV(v)->name);

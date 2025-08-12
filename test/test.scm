@@ -1336,6 +1336,18 @@
   (set-cdr! l l);; !
   (expect-no-stuck-on-display l)))
 
+(describe "display no stuck on circular vector" (lambda ()
+  (define v #(#f))
+  (vector-set! v 0 v);; !
+  (expect-no-stuck-on-display v)))
+
+(describe "display no stuck on circular list AND vector" (lambda ()
+  (define l (list 0))
+  (define v (vector l))
+  (set-car! l v);; !
+  (expect-no-stuck-on-display l)
+  (expect-no-stuck-on-display v)))
+
 (describe "newline" (lambda ()
   (call-with-output-file "/dev/null"
     (lambda (p)
