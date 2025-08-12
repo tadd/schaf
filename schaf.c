@@ -2674,10 +2674,10 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "cons", proc_cons, 2);
     define_procedure(e, "car", proc_car, 1);
     define_procedure(e, "cdr", proc_cdr, 1);
-#define DEFUN_CXR(x, y) define_procedure(e, "c" #x #y "r", proc_c##x##y##r, 1);
-    CXRS(DEFUN_CXR); // registers 28 procedures
     define_procedure(e, "set-car!", proc_set_car, 2);
     define_procedure(e, "set-cdr!", proc_set_cdr, 2);
+#define DEFUN_CXR(x, y) define_procedure(e, "c" #x #y "r", proc_c##x##y##r, 1);
+    CXRS(DEFUN_CXR); // registers 28 procedures
     define_procedure(e, "null?", proc_null_p, 1);
     define_procedure(e, "list?", proc_list_p, 1);
     define_procedure(e, "list", proc_list, -1);
