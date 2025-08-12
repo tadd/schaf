@@ -770,8 +770,6 @@ static void dump_stack_trace(StackFrame **call_stack)
     dump_frame(call_stack[len-1], NULL);
 }
 
-static void fdisplay(FILE* f, Value v);
-
 static Value iload(FILE *in, const char *filename)
 {
     Source *src = iparse(in, filename);
@@ -2204,7 +2202,7 @@ static Value proc_current_output_port(UNUSED Value env)
 
 static Value open_port(const char *path, bool output)
 {
-    const char *mode = output ? "a" : "r";
+    const char *mode = output ? "w" : "r";
     FILE *fp = fopen(path, mode);
     if (fp == NULL)
         return runtime_error("cannot open %s file: %s",
@@ -2303,6 +2301,8 @@ static Value proc_eof_object_p(UNUSED Value env, Value obj)
 {
     return OF_BOOL(value_tag_is(obj, TAG_EOF));
 }
+
+static void fdisplay(FILE* f, Value v);
 
 // 6.6.3. Output
 static void display_list(FILE *f, Value l)
@@ -2413,15 +2413,31 @@ void display(Value v)
     fdisplay(stdout, v);
 }
 
-static Value proc_display(UNUSED Value env, Value obj)
+static Value arg_or_current_output(Value arg)
 {
-    display(obj);
+    if (arg == Qnil)
+        return get_current_output_port();
+    Value p = car(arg);
+    EXPECT(type, TYPE_PORT, p);
+    return p;
+}
+
+static Value proc_display(UNUSED Value env, Value args)
+{
+    EXPECT(arity_range, 1, 2, args);
+    Value obj = car(args);
+    Value out = arg_or_current_output(cdr(args));
+    CHECK_ERROR(out);
+    fdisplay(PORT(out)->fp, obj);
     return Qfalse;
 }
 
-static Value proc_newline(UNUSED Value env)
+static Value proc_newline(UNUSED Value env, Value args)
 {
-    puts("");
+    EXPECT(arity_range, 0, 1, args);
+    Value out = arg_or_current_output(args);
+    CHECK_ERROR(out);
+    fputs("\n", PORT(out)->fp);
     return Qfalse;
 }
 
@@ -2726,8 +2742,8 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "read", proc_read, -1);
     define_procedure(e, "eof-object?", proc_eof_object_p, 1);
     // 6.6.3. Output
-    define_procedure(e, "display", proc_display, 1);
-    define_procedure(e, "newline", proc_newline, 0);
+    define_procedure(e, "display", proc_display, -1);
+    define_procedure(e, "newline", proc_newline, -1);
     // 6.6.4. System interface
     define_procedure(e, "load", proc_load, 1);
 
