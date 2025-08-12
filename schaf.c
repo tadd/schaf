@@ -289,7 +289,7 @@ void *obj_new(size_t size, ValueTag t)
     return p;
 }
 
-static Value value_of_string_move(char *s)
+static Value value_of_string_moved(char *s)
 {
     String *str = obj_new(sizeof(String), TAG_STRING);
     str->body = s; // move ownership and use as is
@@ -298,7 +298,7 @@ static Value value_of_string_move(char *s)
 
 Value value_of_string(const char *s)
 {
-    return value_of_string_move(xstrdup(s));
+    return value_of_string_moved(xstrdup(s));
 }
 
 static void expect_cfunc_arity(int64_t actual)
@@ -1875,7 +1875,7 @@ static Value proc_string_append(UNUSED Value env, Value args)
     s[0] = '\0';
     for (Value p = args; p != Qnil; p = cdr(p))
         strcat(s, STRING(car(p))->body);
-    return value_of_string_move(s);
+    return value_of_string_moved(s);
 }
 
 // 6.3.6. Vectors
@@ -2173,6 +2173,8 @@ static Value value_of_port(FILE *fp, bool output)
     Port *p = obj_new(sizeof(Port), TAG_PORT);
     p->fp = fp;
     p->output = output;
+    p->string = NULL;
+    p->string_size = 0;
     return (Value) p;
 }
 
@@ -2252,6 +2254,10 @@ static void close_port(Port *p)
     if (p->fp == NULL)
         return;
     fclose(p->fp);
+    if (p->string != NULL) {
+        free(p->string);
+        p->string = NULL;
+    }
     p->fp = NULL; // guarantee safety
 }
 
@@ -2284,16 +2290,20 @@ static Value iread(FILE *in)
     return datum;
 }
 
+static Value arg_or_current_port(Value arg, bool output)
+{
+    if (arg == Qnil)
+        return output ? get_current_output_port() : get_current_input_port();
+    Value p = car(arg);
+    EXPECT(type, TYPE_PORT, p);
+    return p;
+}
+
 static Value proc_read(UNUSED Value env, Value args)
 {
     EXPECT(arity_range, 0, 1, args);
-    Value port;
-    if (args == Qnil)
-        port = get_current_input_port();
-    else {
-        port = car(args);
-        EXPECT(type, TYPE_PORT, port);
-    }
+    Value port = arg_or_current_port(args, false);
+    CHECK_ERROR(port);
     return iread(PORT(port)->fp);
 }
 
@@ -2396,7 +2406,7 @@ static void fdisplay(FILE* f, Value v)
 char *stringify(Value v)
 {
     char *s;
-    size_t size;
+    size_t size = 0;
     errno = 0;
     FILE *stream = open_memstream(&s, &size);
     if (stream == NULL) {
@@ -2413,20 +2423,11 @@ void display(Value v)
     fdisplay(stdout, v);
 }
 
-static Value arg_or_current_output(Value arg)
-{
-    if (arg == Qnil)
-        return get_current_output_port();
-    Value p = car(arg);
-    EXPECT(type, TYPE_PORT, p);
-    return p;
-}
-
 static Value proc_display(UNUSED Value env, Value args)
 {
     EXPECT(arity_range, 1, 2, args);
     Value obj = car(args);
-    Value out = arg_or_current_output(cdr(args));
+    Value out = arg_or_current_port(cdr(args), true);
     CHECK_ERROR(out);
     fdisplay(PORT(out)->fp, obj);
     return Qfalse;
@@ -2435,7 +2436,7 @@ static Value proc_display(UNUSED Value env, Value args)
 static Value proc_newline(UNUSED Value env, Value args)
 {
     EXPECT(arity_range, 0, 1, args);
-    Value out = arg_or_current_output(args);
+    Value out = arg_or_current_port(args, true);
     CHECK_ERROR(out);
     fputs("\n", PORT(out)->fp);
     return Qfalse;
@@ -2469,14 +2470,39 @@ static Value proc_read_string(UNUSED Value env, Value args)
 {
     EXPECT(arity_range, 1, 2, args);
     int64_t k = get_non_negative_int(car(args));
-    Value port;
-    if (cdr(args) == Qnil)
-        port = get_current_input_port();
-    else {
-        port = cadr(args);
-        EXPECT(type, TYPE_PORT, port);
-    }
+    Value port = arg_or_current_port(cdr(args), false);
+    CHECK_ERROR(port);
     return read_string(k, PORT(port)->fp);
+}
+
+static Value value_of_string_port(void)
+{
+    Port *p = obj_new(sizeof(Port), TAG_PORT);
+    p->output = true;
+    p->string = (void *) 1U; // dummy
+    p->string_size = 0;
+    errno = 0;
+    FILE *stream = open_memstream(&p->string, &p->string_size);
+    if (stream == NULL)
+        return runtime_error("open_memstream failed: %s", strerror(errno));
+    p->fp = stream;
+    return (Value) p;
+}
+
+static Value proc_open_output_string(UNUSED Value env)
+{
+    return value_of_string_port();
+}
+
+static Value proc_get_output_string(UNUSED Value env, Value p)
+{
+    EXPECT(type, TYPE_PORT, p);
+    if (PORT(p)->string == NULL)
+        return runtime_error("not a string port");
+    fflush(PORT(p)->fp); // open_memstream() requires flushing
+    if (PORT(p)->string_size == 0)
+        return value_of_string("");
+    return value_of_string(PORT(p)->string);
 }
 
 // (scheme process-context)
@@ -2753,6 +2779,8 @@ void sch_init(uintptr_t *sp)
     // (scheme base)
     define_procedure(e, "close-port", proc_close_port, 1);
     define_procedure(e, "read-string", proc_read_string, -1);
+    define_procedure(e, "open-output-string", proc_open_output_string, 0);
+    define_procedure(e, "get-output-string", proc_get_output_string, 1);
     // (scheme process-context)
     define_procedure(e, "exit", proc_exit, -1);
 

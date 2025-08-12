@@ -109,6 +109,8 @@ typedef struct {
     Header header;
     FILE *fp;
     bool output;
+    char *string;
+    size_t string_size;
 } Port;
 
 typedef struct {

@@ -1345,7 +1345,19 @@
     (with-input-from-file "test/data-trivial.txt"
       (lambda ()
         (read-string 999)
-        (expect eof-object? (read-string 1))))))))
+        (expect eof-object? (read-string 1))))))
+
+  (describe "open/get-output-string" (lambda ()
+    (define (call-with-output-string proc)
+      (let ((p (open-output-string)))
+        (proc p)
+        (close-output-port p)))
+    (call-with-output-string
+     (lambda (p)
+       (expect port? p)
+       (expect string=? (get-output-string p) "")
+       (display "hello!" p)
+       (expect string=? (get-output-string p) "hello!")))))))
 
 ;; Local Extensions
 (if local? (begin
