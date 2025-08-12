@@ -2691,7 +2691,7 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "member", proc_member, 2);
     define_procedure(e, "assq", proc_assq, 2);
     define_procedure(e, "assv", proc_assq, 2); // alias
-    define_procedure(e, "assoc", proc_assoc, 2); // alias
+    define_procedure(e, "assoc", proc_assoc, 2);
     // 6.3.3. Symbols
     define_procedure(e, "symbol?", proc_symbol_p, 1);
     // 6.3.5. Strings
