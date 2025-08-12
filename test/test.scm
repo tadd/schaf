@@ -1309,6 +1309,33 @@
     (lambda (p)
      (display "\"testing\"" p)))))
 
+(define (expect-no-stuck-on-display obj)
+  (with-output-to-file "/dev/null"
+    (lambda ()
+      (display obj)
+      (expect-t #t))))
+
+(describe "display no stuck on circular list car" (lambda ()
+  (define l (list 42))
+  (set-car! l l);; make it circular!
+  (expect-no-stuck-on-display l)))
+
+(describe "display no stuck on circular list cdr" (lambda ()
+  (define l (list 42))
+  (set-cdr! l l);; !
+  (expect-no-stuck-on-display l)))
+
+(describe "display no stuck on circular list car but cdr" (lambda ()
+  (define l (list 1 2))
+  (set-car! l l);; !
+  (expect-no-stuck-on-display l)))
+
+(describe "display no stuck on circular list car and cdr" (lambda ()
+  (define l (list 1 2))
+  (set-car! l l);; !
+  (set-cdr! l l);; !
+  (expect-no-stuck-on-display l)))
+
 (describe "newline" (lambda ()
   (call-with-output-file "/dev/null"
     (lambda (p)
@@ -1323,7 +1350,16 @@
 
 (load "./test-callcc.scm")
 
+;;
 ;; R7RS
+;;
+
+(define (call-with-output-string proc)
+  (let* ((p (open-output-string))
+         (ret (proc p)))
+    (close-output-port p)
+    ret))
+
 (if r7rs? (begin
   (describe "close-port" (lambda ()
     (let ((p (open-input-file "/dev/null")))
@@ -1348,10 +1384,6 @@
         (expect eof-object? (read-string 1))))))
 
   (describe "open/get-output-string" (lambda ()
-    (define (call-with-output-string proc)
-      (let ((p (open-output-string)))
-        (proc p)
-        (close-output-port p)))
     (call-with-output-string
      (lambda (p)
        (expect port? p)
@@ -1359,7 +1391,10 @@
        (display "hello!" p)
        (expect string=? (get-output-string p) "hello!")))))))
 
+;;
 ;; Local Extensions
+;;
+
 (if local? (begin
   (describe "_cputime" (lambda ()
     (let ((t (_cputime)))
@@ -1389,6 +1424,56 @@
     (expect = (eval '(* 7 3) (schaf-environment)) 21)
     (let ((f (eval '(lambda (f x) (f x x))
                    (schaf-environment))))
-      (expect = (f + 10) 20))))))
+      (expect = (f + 10) 20))))
+
+  ;; Detailed and implementation-dependent specs
+
+  (define (stringify obj)
+    (call-with-output-string
+     (lambda (p)
+       (display obj p)
+       (get-output-string p))))
+
+  (describe "display circular list car" (lambda ()
+    (define l (list 42))
+    (set-car! l l);; make it circular!
+    (expect equal? (stringify l) "(..)")))
+
+  (describe "display circular list car and cdr" (lambda ()
+    (define l (list 1 2))
+    (set-car! l l);; !
+    (set-cdr! l l);; !
+    (expect equal? (stringify l) "(.. ..)")))
+
+  (describe "display circular list car but cdr" (lambda ()
+    (define l (list 1 2))
+    (set-car! l l);; !
+    (expect equal? (stringify l) "(.. 2)")))
+
+  (describe "display circular list cdr" (lambda ()
+    (define l (list 42))
+    (set-cdr! l l);; !
+    (expect equal? (stringify l) "(42 ..)")))
+
+  (describe "display circular list cdr at 3rd" (lambda ()
+    (define l (list 1 2 #f))
+    (set-cdr! (cdr l) l);; !
+    (expect equal? (stringify l) "(1 2 ..)")))
+
+  (describe "display circular list mid" (lambda ()
+    (define l (list 1 #f 2))
+    (set-car! (cdr l) l);; !
+    (expect equal? (stringify l) "(1 .. 2)")))
+
+  (describe "display circular list car of 3" (lambda ()
+    (define l (list 0 1 2))
+    (set-car! l l);; !
+    (expect equal? (stringify l) "(.. 1 2)")))
+
+  (describe "display circular list mid twice" (lambda ()
+   (define l (list 1 #f #f 2))
+   (set-car! (cdr l) l);; !
+   (set-car! (cddr l) l);; !
+   (expect equal? (stringify l) "(1 .. .. 2)")))))
 
 (test-run)

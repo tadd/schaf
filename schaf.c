@@ -2313,19 +2313,34 @@ static Value proc_eof_object_p(UNUSED Value env, Value obj)
 }
 
 static void fdisplay(FILE* f, Value v);
+static void fdisplay_rec(FILE* f, Value v, Value *record);
+
+static bool check_circular(FILE *f, Value p, Value *record)
+{
+    bool circular = memq(p, *record) != Qfalse;
+    if (circular)
+        fprintf(f, "..");
+    else
+        *record = cons(p, *record);
+    return circular;
+}
 
 // 6.6.3. Output
-static void display_list(FILE *f, Value l)
+static void display_list(FILE *f, Value l, Value *record)
 {
     fprintf(f, "(");
     for (Value p = l, next; p != Qnil; p = next) {
-        fdisplay(f, car(p));
+        if (check_circular(f, p, record))
+            break;
+        Value val = car(p);
+        if (!check_circular(f, val, record))
+            fdisplay_rec(f, val, record);
         if ((next = cdr(p)) == Qnil)
             break;
         fprintf(f, " ");
         if (!value_is_pair(next)) {
             fprintf(f, ". ");
-            fdisplay(f, next);
+            fdisplay_rec(f, next, record);
             break;
         }
     }
@@ -2363,7 +2378,7 @@ static void display_port(FILE *f, const Port *p)
         fprintf(f, "<port: %p>", fp);
 }
 
-static void fdisplay(FILE* f, Value v)
+static void fdisplay_rec(FILE* f, Value v, Value *record)
 {
     switch (value_type_of(v)) {
     case TYPE_NULL:
@@ -2380,7 +2395,7 @@ static void fdisplay(FILE* f, Value v)
         fprintf(f, "%s", value_to_string(v));
         break;
     case TYPE_PAIR:
-        display_list(f, v);
+        display_list(f, v, record);
         break;
     case TYPE_PROC:
         fprintf(f, "<procedure>");
@@ -2401,6 +2416,12 @@ static void fdisplay(FILE* f, Value v)
         fprintf(f, "<undef>");
         break;
     }
+}
+
+static void fdisplay(FILE* f, Value v)
+{
+    Value record = Qnil;
+    fdisplay_rec(f, v, &record);
 }
 
 char *stringify(Value v)
