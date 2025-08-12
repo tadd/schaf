@@ -1303,8 +1303,18 @@
       (expect equal? (read) '(3 4 "def"))))))
 
 ;; 6.6.3. Output
-;; (describe "display" ...)
-;; (describe "newline" ...)
+
+(describe "display" (lambda ()
+  (call-with-output-file "/dev/null"
+    (lambda (p)
+     (display "\"testing\"" p)))))
+
+(describe "newline" (lambda ()
+  (call-with-output-file "/dev/null"
+    (lambda (p)
+      (display "\"a" p)
+      (newline p)
+      (display "b\"" p)))))
 
 ;; 6.6.4. System interface
 (describe "load" (lambda ()
