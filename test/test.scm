@@ -1305,16 +1305,20 @@
 ;; 6.6.3. Output
 
 (describe "display" (lambda ()
-  (call-with-output-file "/dev/null"
-    (lambda (p)
-     (display "\"testing\"" p)))))
+ (call-with-temporary-file
+   (lambda (p)
+     (display "\"testing\"" p)
+     (let ((s (read p)))
+       (expect equal? (read-file test-file) "testing"))))))
 
 (describe "newline" (lambda ()
-  (call-with-output-file "/dev/null"
+   (call-with-temporary-file
     (lambda (p)
       (display "\"a" p)
       (newline p)
-      (display "b\"" p)))))
+      (display "b\"" p)
+      (let ((s (read p)))
+        (expect equal? (read-file test-file) "a\nb"))))))
 
 ;; 6.6.4. System interface
 (describe "load" (lambda ()
@@ -1366,6 +1370,15 @@
       (expect-f (f2))
       (expect-t (g))
       (expect-f (g2)))))
+
+  (describe "call-with-temporary-file" (lambda ()
+    (call-with-temporary-file
+     (lambda (p)
+       (display "\"tmp\"" p)
+       (expect eof-object? (read p))))
+    (call-with-temporary-file
+     (lambda (p) ;; should be different file
+       (expect eof-object? (read p))))))
 
   (describe "schaf-environment" (lambda ()
     (define schaf-env (schaf-environment))

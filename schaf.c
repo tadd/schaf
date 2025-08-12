@@ -2530,6 +2530,19 @@ static Value proc_print(UNUSED Value env, Value l)
     return obj;
 }
 
+static Value proc_call_with_temporary_file(Value env, Value proc)
+{
+    EXPECT(type, TYPE_PROC, proc);
+    errno = 0;
+    FILE *fp = tmpfile();
+    if (fp == NULL)
+        return runtime_error("tmpfile() failed: %s", strerror(errno));
+    Value tmp = value_of_port(fp, true);
+    apply(env, proc, list1(tmp));
+    close_port(PORT(tmp));
+    return Qfalse;
+}
+
 static Value proc_schaf_environment(UNUSED Value env)
 {
     return env_dup(NULL, env_default);
@@ -2760,6 +2773,8 @@ void sch_init(uintptr_t *sp)
     define_syntax(e, "_defined?", syn_defined_p, 1);
     define_procedure(e, "_cputime", proc_cputime, 0);
     define_procedure(e, "print", proc_print, -1); // like Gauche
+    define_procedure(e, "call-with-temporary-file", // ditto
+                     proc_call_with_temporary_file, 1);
     define_procedure(e, "schaf-environment", proc_schaf_environment, 0);
 
     env_default = env_dup("default", e);
