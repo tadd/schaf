@@ -3104,6 +3104,9 @@ void sch_init(const void *sp)
     define_syntax(e, "unquote", syn_unquote, 1);
     define_syntax(e, "unquote-splicing", syn_unquote_splicing, 1);
     // 4.3. Macros
+    // 4.3.1. Binding constructs for syntactic keywords
+    //- let-syntax
+    //- letrec-syntax
     // 4.3.2. Pattern language
     //- syntax-rules
 
@@ -3125,7 +3128,12 @@ void sch_init(const void *sp)
     // 6.2. Numbers
     // 6.2.5. Numerical operations
     define_procedure(e, "number?", proc_integer_p, 1); // alias
+    //- real?
+    //- rational?
+    //- real?
     define_procedure(e, "integer?", proc_integer_p, 1);
+    //- exact?
+    //- inexact?
     define_procedure(e, "=", proc_numeq, -1);
     define_procedure(e, "<", proc_lt, -1);
     define_procedure(e, ">", proc_gt, -1);
@@ -3146,9 +3154,37 @@ void sch_init(const void *sp)
     define_procedure(e, "quotient", proc_quotient, 2);
     define_procedure(e, "remainder", proc_remainder, 2);
     define_procedure(e, "modulo", proc_modulo, 2);
+    //- gcd
+    //- lcm
+    //- numerator
+    //- denominator
+    //- floor
+    //- ceiling
+    //- truncate
+    //- round
+    //- rationalize
+    //- exp
+    //- log
+    //- sin
+    //- cos
+    //- tan
+    //- asin
+    //- acos
+    //- atan
+    //- sqrt
     define_procedure(e, "expt", proc_expt, 2);
+    //- make-rectangular
+    //- make-polar
+    //- real-part
+    //- imag-part
+    //- magnitude
+    //- angle
+    //- exact->inexact
+    //- inexact->exact
     // 6.2.6. Numerical input and output
     define_procedure(e, "number->string", proc_number_to_string, 1);
+    //- number->string with radix
+    //- string->number
     // 6.3. Other data types
     // 6.3.1. Booleans
     define_procedure(e, "not", proc_not, 1);
@@ -3178,12 +3214,52 @@ void sch_init(const void *sp)
     define_procedure(e, "assoc", proc_assoc, 2);
     // 6.3.3. Symbols
     define_procedure(e, "symbol?", proc_symbol_p, 1);
+    //- symbol->string
+    //- string->symbol
+    // 6.3.4. Characters
+    //- char?
+    //- char=?
+    //- char<?
+    //- char>?
+    //- char<=?
+    //- char>=?
+    //- char-ci=?
+    //- char-ci<?
+    //- char-ci>?
+    //- char-ci<=?
+    //- char-ci>=?
+    //- char-alphabetic?
+    //- char-numeric?
+    //- char-whitespace?
+    //- char-upper-case?
+    //- char-lower-case?
+    //- char->integer
+    //- integer->char
+    //- char-upcase
+    //- char-downcase
     // 6.3.5. Strings
     define_procedure(e, "string?", proc_string_p, 1);
+    //- make-string
+    //- string
     define_procedure(e, "string-length", proc_string_length, 1);
+    //- string-ref
+    //- string-set!
     define_procedure(e, "string=?", proc_string_eq, 2);
+    //- string-ci=?
+    //- string<?
+    //- string>?
+    //- string<=?
+    //- string>=?
+    //- string-ci<?
+    //- string-ci>?
+    //- string-ci<=?
+    //- string-ci>=?
     define_procedure(e, "substring", proc_substring, 3);
     define_procedure(e, "string-append", proc_string_append, -1);
+    //- string->list
+    //- list->string
+    //- string-copy
+    //- string-fill!
     // 6.3.6. Vectors
     define_procedure(e, "vector?", proc_vector_p, 1);
     define_procedure(e, "make-vector", proc_make_vector, -1);
@@ -3191,6 +3267,9 @@ void sch_init(const void *sp)
     define_procedure(e, "vector-length", proc_vector_length, 1);
     define_procedure(e, "vector-ref", proc_vector_ref, 2);
     define_procedure(e, "vector-set!", proc_vector_set, 3);
+    //- vector->list
+    //- list->vector
+    //- vector-fill!
 
     // 6.4. Control features
     define_procedure(e, "procedure?", proc_procedure_p, 1);
@@ -3225,12 +3304,19 @@ void sch_init(const void *sp)
     define_procedure(e, "close-output-port", proc_close_output_port, 1);
     // 6.6.2. Input
     define_procedure(e, "read", proc_read, -1);
+    //- read-char
+    //- peek-char
     define_procedure(e, "eof-object?", proc_eof_object_p, 1);
+    //- char-ready?
     // 6.6.3. Output
+    //- write
     define_procedure(e, "display", proc_display, -1);
     define_procedure(e, "newline", proc_newline, -1);
+    //- write-char
     // 6.6.4. System interface
     define_procedure(e, "load", proc_load, 1);
+    //- transcript-on
+    //- transcript-off
 
     env_r5rs = env_dup("r5rs", e);
     gc_add_root(&env_r5rs);
