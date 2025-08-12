@@ -2299,31 +2299,6 @@ static Value proc_read(UNUSED Value env, Value args)
     return iread(PORT(port)->fp);
 }
 
-static Value read_string(int64_t k, FILE *fp)
-{
-    if (k == 0)
-        return value_of_string("");
-    char buf[k + 1];
-    char *p = fgets(buf, sizeof(buf), fp);
-    if (p == NULL)
-        return get_eof_object();
-    return value_of_string(buf);
-}
-
-static Value proc_read_string(UNUSED Value env, Value args)
-{
-    EXPECT(arity_range, 1, 2, args);
-    int64_t k = get_non_negative_int(car(args));
-    Value port;
-    if (cdr(args) == Qnil)
-        port = get_current_input_port();
-    else {
-        port = cadr(args);
-        EXPECT(type, TYPE_PORT, port);
-    }
-    return read_string(k, PORT(port)->fp);
-}
-
 static Value proc_eof_object_p(UNUSED Value env, Value obj)
 {
     return OF_BOOL(value_tag_is(obj, TAG_EOF));
@@ -2458,7 +2433,37 @@ static Value proc_load(UNUSED Value env, Value path)
     return load_inner(STRING(path)->body);
 }
 
-// Extensions from R7RS (scheme process-context)
+//
+// Extensions from R7RS
+//
+
+// (scheme base)
+static Value read_string(int64_t k, FILE *fp)
+{
+    if (k == 0)
+        return value_of_string("");
+    char buf[k + 1];
+    char *p = fgets(buf, sizeof(buf), fp);
+    if (p == NULL)
+        return get_eof_object();
+    return value_of_string(buf);
+}
+
+static Value proc_read_string(UNUSED Value env, Value args)
+{
+    EXPECT(arity_range, 1, 2, args);
+    int64_t k = get_non_negative_int(car(args));
+    Value port;
+    if (cdr(args) == Qnil)
+        port = get_current_input_port();
+    else {
+        port = cadr(args);
+        EXPECT(type, TYPE_PORT, port);
+    }
+    return read_string(k, PORT(port)->fp);
+}
+
+// (scheme process-context)
 static Value proc_exit(UNUSED Value env, Value args)
 {
     EXPECT(arity_range, 0, 1, args);
@@ -2475,12 +2480,24 @@ static Value proc_exit(UNUSED Value env, Value args)
     longjmp(jmp_exit, 1);
 }
 
+//
 // Local Extensions
+//
+
 static Value syn_defined_p(Value env, Value name)
 {
     if (!value_is_symbol(name))
         return Qfalse;
     return OF_BOOL(env_get(env, name) != Qundef);
+}
+
+static Value proc_cputime(UNUSED Value env) // in micro sec
+{
+    static const int64_t MICRO = 1000*1000;
+    struct timespec t;
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t);
+    int64_t n = t.tv_sec * MICRO + lround(t.tv_nsec / 1000.0);
+    return value_of_int(n);
 }
 
 static Value proc_print(UNUSED Value env, Value l)
@@ -2497,19 +2514,14 @@ static Value proc_print(UNUSED Value env, Value l)
     return obj;
 }
 
-static Value proc_cputime(UNUSED Value env) // in micro sec
-{
-    static const int64_t MICRO = 1000*1000;
-    struct timespec t;
-    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t);
-    int64_t n = t.tv_sec * MICRO + lround(t.tv_nsec / 1000.0);
-    return value_of_int(n);
-}
-
 static Value proc_schaf_environment(UNUSED Value env)
 {
     return env_dup(NULL, env_default);
 }
+
+//
+// Interpreter things
+//
 
 static void free_source_data(void)
 {
@@ -2730,8 +2742,8 @@ void sch_init(uintptr_t *sp)
 
     // Local Extensions
     define_syntax(e, "_defined?", syn_defined_p, 1);
-    define_procedure(e, "print", proc_print, -1); // like Gauche
     define_procedure(e, "_cputime", proc_cputime, 0);
+    define_procedure(e, "print", proc_print, -1); // like Gauche
     define_procedure(e, "schaf-environment", proc_schaf_environment, 0);
 
     env_default = env_dup("default", e);
