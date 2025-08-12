@@ -118,12 +118,13 @@ typedef struct {
     Table *table;
 } Env;
 
+typedef struct StringStream StringStream;
+
 typedef struct {
     Header header;
     FILE *fp;
     bool output;
-    char *string;
-    size_t string_size;
+    StringStream *sstream;
 } Port;
 
 typedef struct {

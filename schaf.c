@@ -2270,8 +2270,7 @@ static Value value_of_port(FILE *fp, bool output)
     Port *p = obj_new(sizeof(Port), TAG_PORT);
     p->fp = fp;
     p->output = output;
-    p->string = NULL;
-    p->string_size = 0;
+    p->sstream = NULL;
     return (Value) p;
 }
 
@@ -2346,14 +2345,19 @@ static Value proc_with_output_to_file(Value env, Value path, Value thunk)
     return ret;
 }
 
+struct StringStream {
+    char **body;
+    size_t *size;
+};
+
 static void close_port(Port *p)
 {
     if (p->fp == NULL)
         return;
     fclose(p->fp);
-    if (p->string != NULL) {
-        free(p->string);
-        p->string = NULL;
+    if (p->sstream != NULL) {
+        free(p->sstream->body);
+        p->sstream = NULL;
     }
     p->fp = NULL; // guarantee safety
 }
@@ -2597,15 +2601,19 @@ static Value proc_read_string(UNUSED Value env, Value args)
 
 static Value value_of_string_port(void)
 {
-    Port *p = obj_new(sizeof(Port), TAG_PORT);
-    p->output = true;
-    p->string = (void *) 1U; // dummy
-    p->string_size = 0;
+    char **s = xcalloc(1, sizeof(char *));
+    size_t *size = xcalloc(1, sizeof(size_t));
     errno = 0;
-    FILE *stream = open_memstream(&p->string, &p->string_size);
+    FILE *stream = open_memstream(s, size);
     if (stream == NULL)
         return runtime_error("open_memstream failed: %s", strerror(errno));
+    StringStream *sstream = xmalloc(sizeof(StringStream));
+    sstream->body = s;
+    sstream->size = size;
+    Port *p = obj_new(sizeof(Port), TAG_PORT);
     p->fp = stream;
+    p->output = true;
+    p->sstream = sstream;
     return (Value) p;
 }
 
@@ -2617,12 +2625,13 @@ static Value proc_open_output_string(UNUSED Value env)
 static Value proc_get_output_string(UNUSED Value env, Value p)
 {
     EXPECT(type, TYPE_PORT, p);
-    if (PORT(p)->string == NULL)
+    StringStream *s = PORT(p)->sstream;
+    if (s == NULL)
         return runtime_error("not a string port");
     fflush(PORT(p)->fp); // open_memstream() requires flushing
-    if (PORT(p)->string_size == 0)
+    if (*s->size == 0)
         return value_of_string("");
-    return value_of_string(PORT(p)->string);
+    return value_of_string(*s->body);
 }
 
 // (scheme process-context)
