@@ -1486,6 +1486,16 @@
    (define l (list 1 #f #f 2))
    (set-car! (cdr l) l);; !
    (set-car! (cddr l) l);; !
-   (expect equal? (stringify l) "(1 .. .. 2)")))))
+   (expect equal? (stringify l) "(1 .. .. 2)")))
+
+  (describe "display nested list" (lambda ()
+   (expect equal? (stringify '((0))) "((0))")))
+
+  (describe "display nested vector" (lambda ()
+   (expect equal? (stringify #(#(0))) "#(#(0))")))
+
+  (describe "display mutually nested list and vector" (lambda ()
+   (expect equal? (stringify #((0))) "#((0))")
+   (expect equal? (stringify '(#(0))) "(#(0))")))))
 
 (test-run)

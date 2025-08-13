@@ -2320,8 +2320,6 @@ static bool check_circular(FILE *f, Value p, Value *record)
     bool circular = memq(p, *record) != Qfalse;
     if (circular)
         fprintf(f, "..");
-    else
-        *record = cons(p, *record);
     return circular;
 }
 
@@ -2332,6 +2330,7 @@ static void display_list(FILE *f, Value l, Value *record)
     for (Value p = l, next; p != Qnil; p = next) {
         if (check_circular(f, p, record))
             break;
+        *record = cons(p, *record);
         Value val = car(p);
         if (!check_circular(f, val, record))
             fdisplay_rec(f, val, record);
@@ -2352,6 +2351,7 @@ static void display_vector(FILE *f, const Vector *v, Value *record)
     fprintf(f, "#(");
     if (check_circular(f, (Value) v, record))
         goto end;
+    *record = cons((Value) v, *record);
     for (int64_t i = 0, len = scary_length(v->body); i < len; i++) {
         Value e = v->body[i];
         if (!check_circular(f, e, record))
