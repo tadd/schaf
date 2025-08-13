@@ -104,7 +104,6 @@ static inline bool value_is_procedure(Value v)
     case TAG_SYNTAX:
     case TAG_CFUNC:
     case TAG_CLOSURE:
-    case TAG_CONTINUATION:
         return true;
     case TAG_STRING:
     case TAG_PAIR:
@@ -156,7 +155,6 @@ Type value_type_of(Value v)
     case TAG_CFUNC:
     case TAG_SYNTAX:
     case TAG_CLOSURE:
-    case TAG_CONTINUATION:
         return TYPE_PROC;
     case TAG_VECTOR:
         return TYPE_VECTOR;
@@ -2023,62 +2021,7 @@ static Value proc_for_each(Value env, Value args)
     return Qfalse;
 }
 
-[[gnu::noreturn, gnu::noinline]]
-static void jump(Continuation *cont)
-{
-    memcpy(cont->sp, cont->stack, cont->stack_len);
-    longjmp(cont->state, 1);
-}
-
-#define GET_SP(p) uintptr_t v##p = 0, *p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
-
-[[gnu::noreturn, gnu::noinline]]
-static Value apply_continuation(UNUSED Value env, Value f, Value args)
-{
-    GET_SP(sp);
-    Continuation *cont = CONTINUATION(f);
-    cont->retval = PROCEDURE(f)->arity == 1 ? car(args) : args;
-    int64_t d = sp - cont->sp;
-    if (d < 1)
-        d = 1;
-    volatile uintptr_t pad[d];
-    pad[0] = pad[d-1] = 0; // avoid unused
-    jump(cont);
-}
-
-static Value value_of_continuation(int64_t n)
-{
-    Continuation *c = obj_new(sizeof(Continuation), TAG_CONTINUATION);
-    c->proc.arity = n; // call/cc: 1, call-with-values: -1
-    c->proc.apply = apply_continuation;
-    c->sp = c->stack = NULL;
-    c->stack_len = 0;
-    c->retval = Qfalse;
-    return (Value) c;
-}
-
-[[gnu::noinline]]
-static bool continuation_set(Value c)
-{
-    GET_SP(sp); // must be the first!
-    Continuation *cont = CONTINUATION(c);
-    cont->sp = sp;
-    cont->stack_len = gc_stack_get_size(sp);
-    cont->stack = xmalloc(cont->stack_len);
-    UNPOISON(sp, cont->stack_len);
-    memcpy(cont->stack, sp, cont->stack_len);
-    return setjmp(cont->state) != 0;
-}
-
-static Value proc_callcc(Value env, Value proc)
-{
-    EXPECT(type, TYPE_PROC, proc);
-    Value c = value_of_continuation(1);
-    if (continuation_set(c))
-        return CONTINUATION(c)->retval;
-    return apply(env, proc, list1(c));
-}
-
+#if 0
 static Value inner_continuation = Qfalse; // Yeah we live in the land of single-thread
 
 static Value proc_values(Value env, Value args)
@@ -2105,6 +2048,7 @@ static Value proc_call_with_values(Value env, Value producer, Value consumer)
     inner_continuation = origk;
     return apply(env, consumer, args);
 }
+#endif
 
 //- dynamic-wind
 //static Value proc_dynamic_wind(Value env, Value before, Value thunk, Value after);
@@ -2713,10 +2657,10 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "apply", proc_apply, -1);
     define_procedure(e, "map", proc_map, -1);
     define_procedure(e, "for-each", proc_for_each, -1);
-    define_procedure(e, "call/cc", proc_callcc, 1); // alias
-    define_procedure(e, "call-with-current-continuation", proc_callcc, 1);
+#if 0
     define_procedure(e, "values", proc_values, -1);
     define_procedure(e, "call-with-values", proc_call_with_values, 2);
+#endif
     //- dynamic-wind
     // 6.5. Eval
     define_procedure(e, "eval", proc_eval, 2);

@@ -29,7 +29,6 @@ typedef enum {
     TAG_CFUNC,
     TAG_SYNTAX, // almost a C Function
     TAG_CLOSURE,
-    TAG_CONTINUATION,
     TAG_VECTOR,
     TAG_ENV,
     TAG_PORT,
@@ -85,15 +84,6 @@ typedef struct {
 } Closure;
 
 typedef struct {
-    Procedure proc;
-    uintptr_t *sp;
-    void *stack;
-    size_t stack_len;
-    jmp_buf state;
-    Value retval;
-} Continuation;
-
-typedef struct {
     Header header;
     Value *body;// use scary
 } Vector;
@@ -130,7 +120,6 @@ typedef struct {
 #define PROCEDURE(v) ((Procedure *) v)
 #define CFUNC(v) ((CFunc *) v)
 #define CLOSURE(v) ((Closure *) v)
-#define CONTINUATION(v) ((Continuation *) v)
 #define VECTOR(v) ((Vector *) v)
 #define ENV(v) ((Env *) v)
 #define PORT(v) ((Port *) v)
