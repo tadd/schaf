@@ -21,3 +21,10 @@ Our milestones will be available at the
 * Both "**Sch**eme" and "**Sch**af" begin with `Sch`. So we can use the prefix `sch_` for
   our exported symbols in both senses.
 * [It](https://de.wiktionary.org/wiki/Schaf)'s like me who got lost.
+
+## Related Works
+
+* [libscary]: A (scary) scalable array library in C.
+  * Dynamic-extended, type-safe-on-push, and zero-overhead on read/write
+
+[libscary]: https://github.com/tadd/libscary
