@@ -1,7 +1,7 @@
 (load "./lib.scm")
 
-(define local? #t)            ;; tweak me when to use any other implementations
-(define r7rs? (or local? #t)) ;; tweak me when to use other pure-R5RS implementations
+(define r7rs? #t)             ;; tweak me when to use other pure-R5RS implementations
+(define local? (and r7rs? #t));; tweak me when to use any other implementations
 
 (describe "parsing comments" (lambda ()
   (expect = 1 1 ; foo

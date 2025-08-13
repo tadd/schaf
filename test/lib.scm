@@ -16,12 +16,12 @@
 
 (define (msg-proc-1 msg)
   (lambda (x)
-    (display* "<" x "> " msg)))
+    (display* "<" x "> to be " msg)))
 
 (define (msg-proc-2 msg)
   (lambda (x y)
     ((msg-proc-1 msg) x)
-    (display* " <" y ">")))
+    (display* " to <" y ">")))
 
 (define fail-message-procs
   `((,> . ,(msg-proc-2 ">"))
