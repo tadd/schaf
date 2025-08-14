@@ -37,6 +37,7 @@ typedef enum {
     TAG_SYNTAX, // almost a C Function
     TAG_CLOSURE,
     TAG_CONTINUATION,
+    TAG_CFUNC_CLOSURE,
     TAG_VECTOR,
     TAG_ENV,
     TAG_PORT,
@@ -72,7 +73,7 @@ typedef struct {
     Value (*apply)(Value env, Value proc, Value args);
 } Procedure;
 
-typedef struct CFunc {
+typedef struct {
     Procedure proc;
     char *name;
     union {
@@ -83,6 +84,11 @@ typedef struct CFunc {
         Value (*f3)(Value, Value, Value, Value);
     };
 } CFunc;
+
+typedef struct {
+    CFunc cfunc;
+    Value data;
+} CFuncClosure;
 
 typedef struct {
     Procedure proc;
@@ -140,6 +146,7 @@ typedef struct {
 #define CFUNC(v) ((CFunc *) v)
 #define CLOSURE(v) ((Closure *) v)
 #define CONTINUATION(v) ((Continuation *) v)
+#define CFUNC_CLOSURE(v) ((CFuncClosure *) v)
 #define VECTOR(v) ((Vector *) v)
 #define ENV(v) ((Env *) v)
 #define PORT(v) ((Port *) v)

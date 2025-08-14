@@ -105,6 +105,7 @@ static inline bool value_is_procedure(Value v)
     case TAG_CFUNC:
     case TAG_CLOSURE:
     case TAG_CONTINUATION:
+    case TAG_CFUNC_CLOSURE:
         return true;
     case TAG_STRING:
     case TAG_PAIR:
@@ -157,6 +158,7 @@ Type value_type_of(Value v)
     case TAG_SYNTAX:
     case TAG_CLOSURE:
     case TAG_CONTINUATION:
+    case TAG_CFUNC_CLOSURE:
         return TYPE_PROC;
     case TAG_VECTOR:
         return TYPE_VECTOR;
@@ -371,6 +373,31 @@ static Value value_of_cfunc(const char *name, void *cfunc, int64_t arity)
 static Value value_of_syntax(const char *name, void *cfunc, int64_t arity)
 {
     return cfunc_new(TAG_SYNTAX, name, cfunc, arity);
+}
+
+static Value apply_cfunc_closure_1(UNUSED Value env, Value f, Value args)
+{
+    return CFUNC(f)->f1(CFUNC_CLOSURE(f)->data, car(args));
+}
+
+static Value value_of_cfunc_closure(const char *name, void *cfunc,
+                                    int64_t arity, Value data)
+{
+    expect_cfunc_arity(arity);
+    CFuncClosure *cc = obj_new(sizeof(CFuncClosure), TAG_CFUNC_CLOSURE);
+    cc->data = data;
+    CFunc *f = CFUNC(cc);
+    f->proc.arity = arity;
+    f->name = xstrdup(name);
+    f->cfunc = cfunc;
+    switch (arity) {
+    case 1:
+        f->proc.apply = apply_cfunc_closure_1;
+        break;
+    default:
+        bug("invalid arity: %"PRId64, arity);
+    }
+    return (Value) cc;
 }
 
 static Value eval_body(Value env, Value body);
