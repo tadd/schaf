@@ -2070,13 +2070,25 @@ static bool continuation_set(Value c)
     return setjmp(cont->state) != 0;
 }
 
-static Value proc_callcc(Value env, Value proc)
+// shared with dynamic-wind
+static Value inner_winders = Qnil;
+static void do_wind(Value env, Value new_winders);
+
+static Value callcc(Value env, Value proc)
 {
-    EXPECT(type, TYPE_PROC, proc);
     Value c = value_of_continuation(1);
     if (continuation_set(c))
         return CONTINUATION(c)->retval;
     return apply(env, proc, list1(c));
+}
+
+static Value proc_callcc(Value env, Value proc)
+{
+    EXPECT(type, TYPE_PROC, proc);
+    Value lenv = env_inherit(env);
+    env_put(lenv, value_of_symbol("f"), proc);
+    Value inner = build_inner_proc(lenv);
+    return callcc(env, inner);
 }
 
 static Value inner_continuation = Qfalse; // Yeah we live in the land of single-thread
@@ -2106,6 +2118,51 @@ static Value proc_call_with_values(Value env, Value producer, Value consumer)
     return apply(env, consumer, args);
 }
 
+static Value common_tail(Value x, Value y)
+{
+    int64_t lx = length(x), ly = length(y);
+    if (lx > ly)
+        x = list_tail(x, lx - ly);
+    else if (ly > lx)
+        y = list_tail(y, ly - lx);
+    Value px = x;
+    for (Value py = y; px != Qnil && py != Qnil && px != py; px = cdr(px), py = cdr(py))
+        ;
+    return px;
+}
+
+static void do_wind_f(Value env, Value ls, Value tail)
+{
+    if (ls == tail)
+        return;
+    do_wind_f(env, cdr(ls), tail);
+    Value pr = caar(ls);
+    apply(env, pr, Qnil);
+    inner_winders = ls;
+}
+
+static void do_wind(Value env, Value new_winders)
+{
+    Value tail = common_tail(new_winders, inner_winders);
+    for (Value ls = inner_winders; ls != tail; ls = cdr(ls)) {
+        inner_winders = cdr(ls);
+        Value f = cdar(ls);
+        apply(env, f, Qnil);
+    }
+#if 1
+    do_wind_f(env, new_winders, tail);
+#else
+    Value rev = Qnil;
+    for (Value p = new_winders; p != tail; p = cdr(p))
+        rev = cons(car(p), rev);
+    for (Value p = rev; p != Qnil; p = cdr(p)) {
+        Value f = car(p);
+        apply(env, f, Qnil);
+        inner_winders = p;
+    }
+#endif
+}
+
 static Value proc_dynamic_wind(Value env, Value before, Value thunk, Value after)
 {
     EXPECT(type, TYPE_PROC, before);
@@ -2113,7 +2170,9 @@ static Value proc_dynamic_wind(Value env, Value before, Value thunk, Value after
     EXPECT(type, TYPE_PROC, after);
 
     apply(env, before, Qnil);
+    inner_winders = cons(cons(before, after), inner_winders);
     Value ret = apply(env, thunk, Qnil);
+    inner_winders = cdr(inner_winders);
     apply(env, after, Qnil);
     return ret;
 }
