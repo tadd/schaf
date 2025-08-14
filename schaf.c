@@ -2071,9 +2071,6 @@ static bool continuation_set(Value c)
 }
 
 // shared with dynamic-wind
-static Value inner_winders = Qnil;
-static void do_wind(Value env, Value new_winders);
-
 static Value callcc(Value env, Value proc)
 {
     Value c = value_of_continuation(1);
@@ -2081,6 +2078,79 @@ static Value callcc(Value env, Value proc)
         return CONTINUATION(c)->retval;
     return apply(env, proc, list1(c));
 }
+
+
+// terminate with Qundef
+static Value list(Value arg, ...)
+{
+    if (arg == Qundef)
+        return Qnil;
+    Value o, ret = list1(arg), last = ret;
+    va_list ap;
+    va_start(ap, arg);
+    while ((o = va_arg(ap, Value)) != Qundef)
+        last = PAIR(last)->cdr = list1(o);
+    va_end(ap);
+    return ret;
+}
+
+static void do_wind(Value env, Value new_winders);
+static Value dwind_winders = Qnil;
+static Value dwind_k = Qfalse, dwind_f = Qfalse, dwind_saved = Qfalse;
+
+static Value inner2(Value env, Value x)
+{
+    if (dwind_saved != dwind_winders)
+        do_wind(env, dwind_saved);
+    return apply(env, dwind_k, list1(x));
+}
+
+typedef struct {
+    CFunc cfunc;
+    Value data;
+} CFuncWithData;
+#define CFUNC_D(v) ((CFuncWithData *) v)
+
+static Value value_of_cfunc_with_data(const char *name, void *cfunc,
+                                      int64_t arity, Value data)
+{
+    Value v = value_of_cfunc(name, cfunc, arity);
+    Value vd = (Value) xrealloc((void *) v, sizeof(CFuncWithData));
+    CFUNC_D(vd)->data = data;
+    return vd;
+}
+
+static Value inner1(Value env, Value k)
+{
+    Value orig = dwind_saved;
+    dwind_saved = dwind_winders;
+    Value arg = value_of_cfunc_with_data("inner2", inner2, 1, k);
+    return apply(env, f, list1(arg));
+}
+
+
+#if 0
+
+static Value build_inner_proc(Value env)
+{
+    Value lenv = env_inherit(env);
+    env_put(lenv, value_of_symbol("save"), dwind_winders);
+#define S(s) value_of_symbol(#s)
+    Value inner_body =
+        list(list(S(if),
+                  list(S(not),
+                       list(S(eq?), S(save), dwind_winders, Qundef),
+                       Qundef),
+                  list(S(do-wind), S(save), Qundef),
+                  Qundef),
+             list(S(k), S(x)),
+             Qundef);
+    Value inner = value_of_closure(lenv, list1(S(x)), inner_body);
+#undef S
+    return inner;
+}
+
+#endif
 
 static Value proc_callcc(Value env, Value proc)
 {
@@ -2138,14 +2208,14 @@ static void do_wind_f(Value env, Value ls, Value tail)
     do_wind_f(env, cdr(ls), tail);
     Value pr = caar(ls);
     apply(env, pr, Qnil);
-    inner_winders = ls;
+    dwind_winders = ls;
 }
 
 static void do_wind(Value env, Value new_winders)
 {
-    Value tail = common_tail(new_winders, inner_winders);
-    for (Value ls = inner_winders; ls != tail; ls = cdr(ls)) {
-        inner_winders = cdr(ls);
+    Value tail = common_tail(new_winders, dwind_winders);
+    for (Value ls = dwind_winders; ls != tail; ls = cdr(ls)) {
+        dwind_winders = cdr(ls);
         Value f = cdar(ls);
         apply(env, f, Qnil);
     }
@@ -2170,9 +2240,9 @@ static Value proc_dynamic_wind(Value env, Value before, Value thunk, Value after
     EXPECT(type, TYPE_PROC, after);
 
     apply(env, before, Qnil);
-    inner_winders = cons(cons(before, after), inner_winders);
+    dwind_winders = cons(cons(before, after), dwind_winders);
     Value ret = apply(env, thunk, Qnil);
-    inner_winders = cdr(inner_winders);
+    dwind_winders = cdr(dwind_winders);
     apply(env, after, Qnil);
     return ret;
 }
