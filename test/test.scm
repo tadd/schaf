@@ -1181,53 +1181,6 @@
           10)))
 
 (describe "dynamic-wind" (lambda ()
-  (define winders '())
-
-  (define (dynamic-wind before thunk after)
-    (before)
-    (set! winders (cons (cons before after) winders))
-    (let ((ret (thunk)))
-      (set! winders (cdr winders))
-      (after)
-      ret))
-
-  (define (common-tail x y)
-    (let ((lx (length x))
-          (ly (length y)))
-      (do ((x (if (> lx ly)
-                  (list-tail x (- lx ly))
-                  x)
-              (cdr x))
-           (y (if (> ly lx)
-                  (list-tail y (- ly lx))
-                  y)
-              (cdr y)))
-          ((eq? x y) x))))
-
-  (define (do-wind new)
-    (let ((tail (common-tail new winders)))
-      (let f ((ls winders))
-        (if (not (eq? ls tail))
-            (begin
-              (set! winders (cdr ls))
-              ((cdar ls))
-              (f (cdr ls)))))
-      (let f ((ls new))
-        (if (not (eq? ls tail))
-            (begin
-              (f (cdr ls))
-              ((caar ls))
-              (set! winders ls))))))
-
-(define (lcall/cc f)
-  (call/cc
-   (lambda (k)
-     (f (let ((saved winders))
-          (lambda (x)
-            (if (not (eq? saved winders))
-                (do-wind saved))
-            (k x)))))))
-
   (define (f)
     (let ((path '())
           (c #f))
@@ -1235,7 +1188,7 @@
                    (set! path (cons s path)))))
         (dynamic-wind
             (lambda () (add 'connect))
-            (lambda () (add (lcall/cc ;;call/cc 
+            (lambda () (add (call/cc
                              (lambda (c0)
                                (set! c c0)
                                'talk1))))

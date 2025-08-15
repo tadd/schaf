@@ -1756,28 +1756,29 @@ static Value proc_reverse(UNUSED Value env, Value list)
     return reverse(list);
 }
 
-static Value list_tail(Value list, Value k)
+static Value list_tail(Value list, int64_t k)
 {
     EXPECT(list_head, list);
-    int64_t n = get_non_negative_int(k);
     Value p = list;
     int64_t i;
     for (i = 0; p != Qnil; p = cdr(p), i++) {
-        if (i == n)
+        if (i == k)
             break;
     }
-    if (i != n)
-        return runtime_error("list is shorter than %"PRId64"", n);
+    if (i != k)
+        return runtime_error("list is shorter than %"PRId64"", k);
     return p;
 }
 
-static Value proc_list_tail(UNUSED Value env, Value list, Value k)
+static Value proc_list_tail(UNUSED Value env, Value list, Value vk)
 {
+    int64_t k = get_non_negative_int(vk);
     return list_tail(list, k);
 }
 
-static Value proc_list_ref(UNUSED Value env, Value list, Value k)
+static Value proc_list_ref(UNUSED Value env, Value list, Value vk)
 {
+    int64_t k = get_non_negative_int(vk);
     Value tail = list_tail(list, k);
     if (tail == Qnil)
         return runtime_error("list is not longer than %"PRId64, value_to_int(k));
@@ -2097,13 +2098,40 @@ static bool continuation_set(Value c)
     return setjmp(cont->state) != 0;
 }
 
-static Value proc_callcc(Value env, Value proc)
+// shared with dynamic-wind
+static Value callcc(Value env, Value proc)
 {
-    EXPECT(type, TYPE_PROC, proc);
     Value c = value_of_continuation(1);
     if (continuation_set(c))
         return CONTINUATION(c)->retval;
     return apply(env, proc, list1(c));
+}
+
+static void do_wind(Value new_winders);
+static Value inner_winders = Qnil;
+
+static Value callcc_inner2(Value data, Value x)
+{
+    Value k = car(data), saved = cadr(data);
+    if (saved != inner_winders)
+        do_wind(saved);
+    return apply(Qfalse, k, list1(x));
+}
+
+static Value callcc_inner1(Value data, Value k)
+{
+    Value f = data;
+    Value saved = inner_winders;
+    Value nextdata = cons(k, list1(saved));
+    Value arg = value_of_cfunc_closure(".callcc-inner2", callcc_inner2, 1, nextdata);
+    return apply(Qfalse, f, list1(arg));
+}
+
+static Value proc_callcc(Value env, Value proc)
+{
+    EXPECT(type, TYPE_PROC, proc);
+    Value inner = value_of_cfunc_closure(".callcc-inner1", callcc_inner1, 1, proc);
+    return callcc(env, inner);
 }
 
 static Value inner_continuation = Qfalse; // Yeah we live in the land of single-thread
@@ -2133,6 +2161,37 @@ static Value proc_call_with_values(Value env, Value producer, Value consumer)
     return apply(env, consumer, args);
 }
 
+static Value common_tail(Value x, Value y)
+{
+    int64_t lx = length(x), ly = length(y);
+    if (lx > ly)
+        x = list_tail(x, lx - ly);
+    else if (ly > lx)
+        y = list_tail(y, ly - lx);
+    Value px = x;
+    for (Value py = y;  px != py; px = cdr(px), py = cdr(py))
+        ;
+    return px;
+}
+
+static void do_wind(Value new_winders)
+{
+    Value tail = common_tail(new_winders, inner_winders);
+    for (Value ls = inner_winders; ls != tail; ls = cdr(ls)) {
+        inner_winders = cdr(ls);
+        Value f = cdar(ls);
+        apply(Qfalse, f, Qnil);
+    }
+    Value rev = Qnil;
+    for (Value p = new_winders; p != tail; p = cdr(p))
+        rev = cons(car(p), rev);
+    for (Value p = rev; p != Qnil; p = cdr(p)) {
+        Value f = caar(p);
+        apply(Qfalse, f, Qnil);
+        inner_winders = p;
+    }
+}
+
 static Value proc_dynamic_wind(Value env, Value before, Value thunk, Value after)
 {
     EXPECT(type, TYPE_PROC, before);
@@ -2140,7 +2199,9 @@ static Value proc_dynamic_wind(Value env, Value before, Value thunk, Value after
     EXPECT(type, TYPE_PROC, after);
 
     apply(env, before, Qnil);
+    inner_winders = cons(cons(before, after), inner_winders);
     Value ret = apply(env, thunk, Qnil);
+    inner_winders = cdr(inner_winders);
     apply(env, after, Qnil);
     return ret;
 }
