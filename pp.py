@@ -117,7 +117,7 @@ class ErrorPrinter(MyPrinter):
         return self.format_members('call_stack')
 
 class ValuePrinter(MyPrinter):
-    TYPE = lookup_type('Value')
+    TYPE = lookup_type('SchValue')
     TAG_TO_TYPE = {
         'cfunc': 'CFunc',
         'syntax': 'CFunc',
@@ -159,7 +159,7 @@ class ValuePrinter(MyPrinter):
         return cfuncall('value_to_type_name', self.val).string().title()
 
     def stringify(self):
-        s = cfuncall('stringify', self.val).string()
+        s = cfuncall('sch_stringify', self.val).string()
         return self.highlight(s, 'expr')
 
     def format_as(self, ty):
