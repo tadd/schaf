@@ -59,7 +59,7 @@ class ProcedurePrinter(MyPrinter):
         return [f.name for f in self.TYPE.fields() if f.name != 'proc']
 
     def to_string(self):
-        return self.format_members('arity')
+        return self.format_members('arity', 'apply')
 
 class CFuncPrinter(ProcedurePrinter):
     TYPE = lookup_type('CFunc')
