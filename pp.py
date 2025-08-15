@@ -8,22 +8,28 @@ def cfuncall(name, *args):
     func = sym.value()
     return func(*args)
 
-class MyPrinter:
-    COLORS = {
-        'green': 32,
-        'blue': 34,
-        'cyan': 36,
-    }
-    HIGHLIGHT = {
-        'param': 'cyan',
-    }
+COLORS = {
+    'green': 32,
+    'blue': 34,
+    'cyan': 36,
+}
 
+HIGHLIGHT = {
+    'param': 'cyan',
+    'immediate': 'blue',
+    'expr': 'green',
+}
+
+def color(name, s):
+    c = COLORS[name]
+    return f'\x1b[{c}m{s}\x1b[0m'
+
+def highlight(ty, s):
+    return color(HIGHLIGHT[ty], s)
+
+class MyPrinter:
     def __init__(self, val):
         self.val = val
-
-    def color(self, s, cname):
-        c = self.COLORS[cname]
-        return f'\x1b[{c}m{s}\x1b[0m'
 
     def display_hint(self):
         return 'map'
@@ -42,11 +48,8 @@ class MyPrinter:
     def format_single(self, val, pretty=True):
         return self.pp(val) if pretty else val.format_string()
 
-    def highlight(self, s, ty):
-        return self.color(s, self.HIGHLIGHT[ty])
-
     def param(self, s):
-        return self.highlight(s, 'param')
+        return highlight('param', s)
 
     def format_members(self, *keys, pretty=True):
         s = [f'{self.param(k)} = {self.format_single(self.val[k], pretty)}' for k in keys]
@@ -127,10 +130,6 @@ class ValuePrinter(MyPrinter):
         'error': 'Error',
         None: None
     }
-    HIGHLIGHT = {
-        'immediate': 'blue',
-        'expr': 'green',
-    }
 
     @property
     def is_immediate(self):
@@ -160,7 +159,7 @@ class ValuePrinter(MyPrinter):
 
     def stringify(self):
         s = cfuncall('sch_stringify', self.val).string()
-        return self.highlight(s, 'expr')
+        return highlight('expr', s)
 
     def format_as(self, ty):
         return f'{{{self.pp(self.deref_as(ty))}}}'
@@ -168,7 +167,7 @@ class ValuePrinter(MyPrinter):
     @property
     def addr(self):
         hex = f'{int(self.val):#x}'
-        return self.highlight(hex, 'immediate')
+        return highlight('immediate', hex)
 
     def to_string(self):
         addr, ty = (self.addr, self.type_name)
