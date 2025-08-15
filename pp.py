@@ -1,4 +1,4 @@
-from gdb import Command, COMMAND_DATA, Type, Symbol, \
+from gdb import Command, COMMAND_DATA, Type, \
     block_for_pc, lookup_symbol, lookup_type, parse_and_eval
 
 def cfuncall(name, *args):
