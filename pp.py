@@ -43,6 +43,17 @@ def format_value(val, pretty=True):
             return pr.to_string()
     return val.format_string()
 
+# gdb methods:
+#
+# * Value.format_string
+# * pretty_printer.to_string
+
+# our own methods:
+#
+# * format_members
+# * format_casted
+# * format_as
+
 class SchafPrinter:
     def __init__(self, val):
         self.val = val
