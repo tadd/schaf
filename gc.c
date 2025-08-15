@@ -55,7 +55,7 @@ void sch_set_gc_print_stat(bool b)
 
 static inline size_t align(size_t size)
 {
-    return (size + 7U) / 8U * 8U;
+    return (size + 15U) / 16U * 16U;
 }
 
 static HeapSlot *heap_slot_new(size_t size)
