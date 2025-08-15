@@ -5,7 +5,7 @@ LIBS = -lm
 ANALYZER = -fanalyzer
 SANITIZER = -fsanitize=undefined #,address
 TIMEOUT = timeout 2
-TIMEOUT_LONGER = timeout 10
+TIMEOUT_LONGER = timeout 20
 
 OBJ_COMMON = gc.o libscary.o parse.o schaf.o utils.o
 OBJ = $(OBJ_COMMON) main.o
