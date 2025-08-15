@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -76,12 +77,32 @@ static inline size_t align(size_t size)
     return (size + (n-1)) / n * n;
 }
 
+static void assert_bool(bool b)
+{
+    assert(b == true || b == false);
+}
+
+static bool is_valid_pointer(Value v);
+
+static void assert_valid_header(GCHeader *h, const char *f)
+{
+    (void)f;
+    // assert(h->size >= sizeof(SchObject));
+    if (!is_valid_pointer((Value) h)){
+        debug("invalid pointer: %p", h);
+        assert(is_valid_pointer((Value) h));
+    }
+    assert_bool(h->living);
+    assert_bool(h->used);
+}
+
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 static void init_header(GCHeader *h, size_t size)
 {
     h->used = false;
     h->living = false;
     h->size = size;
+    assert_valid_header(h, __func__);
 }
 
 #ifdef DEBUG
@@ -123,16 +144,20 @@ static void *allocate_from_chunk(GCHeader *prev, GCHeader *curr, size_t size)
     if (curr->size > hsize) {
         GCHeader *rest = GC_HEADER((uint8_t *) curr + hsize);
         init_header(rest, curr->size - hsize);
+        assert_valid_header(rest, __func__);
         rest->next = next;
         next = rest;
         curr->size = size;
         curr->next = NULL; //XXX
+        assert_valid_header(curr, __func__);
     }
     if (prev == NULL)
         free_list = next;
     else
         prev->next = next;
+    assert_valid_header(curr, __func__);
     // curr->used = true; // FIXME: actually needed!
+    // assert_valid_header(curr, __func__);
     void *p = curr + 1;
 #ifdef DEBUG
     memset(p, 0, curr->size);
@@ -508,6 +533,7 @@ static void sweep_slot(HeapSlot *slot)
     size_t offset;
     for (GCHeader *h, *prev = NULL; p < endp; p += offset, prev = h) {
         h = GC_HEADER(p);
+        assert_valid_header(h, __func__);
         offset = h->size + sizeof(GCHeader);
         if (!h->used)
             continue;
