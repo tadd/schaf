@@ -121,6 +121,12 @@ class ContinuationPrinter(ProcedurePrinter):
              k in self.child_fields()]
         return f'{sup}, {", ".join(l)}'
 
+class CFuncClosurePrinter(CFuncPrinter):
+    TYPE = lookup_type('CFuncClosure')
+
+    def to_string(self):
+        return f'{super()}, {param("data")} = ...'
+
 class TablePrinter(SchafPrinter):
     TYPE = lookup_type('Table')
 
@@ -149,6 +155,7 @@ class ValuePrinter(SchafPrinter):
         'cfunc': 'CFunc',
         'syntax': 'CFunc',
         'closure': 'Closure',
+        'cfunc_closure': 'CFuncClosure',
         'continuation': 'Continuation',
         'env': 'Env',
         'error': 'Error',
@@ -205,7 +212,7 @@ class PP (Command):
 PP()
 
 PRINTERS = [ValuePrinter, EnvPrinter, ProcedurePrinter,
-            CFuncPrinter, ClosurePrinter, ContinuationPrinter,
+            CFuncPrinter, ClosurePrinter, ContinuationPrinter, CFuncClosurePrinter,
             TablePrinter, ErrorPrinter]
 def schaf_pp(val):
     ty = Type.unqualified(val.type)
