@@ -27,6 +27,10 @@ def color(name, s):
 def highlight(ty, s):
     return color(HIGHLIGHT[ty], s)
 
+def stringify(val):
+    s = cfuncall('sch_stringify', val).string()
+    return highlight('expr', s)
+
 class MyPrinter:
     def __init__(self, val):
         self.val = val
@@ -38,15 +42,11 @@ class MyPrinter:
         ty = lookup_type(tname).pointer()
         return self.val.cast(ty).dereference()
 
-    def pp(self, val):
-        pr = schaf_pp(val)
-        return pr.to_string() if pr else val.format_string()
-
     def pp_val_as(self, ty):
-        return self.pp(self.val.cast(ty))
+        return pretty_string(self.val.cast(ty))
 
     def format_single(self, val, pretty=True):
-        return self.pp(val) if pretty else val.format_string()
+        return pretty_string(val) if pretty else val.format_string()
 
     def param(self, s):
         return highlight('param', s)
@@ -88,7 +88,7 @@ class ClosurePrinter(ProcedurePrinter):
 
 class ContinuationPrinter(ProcedurePrinter):
     TYPE = lookup_type('Continuation')
-    PRETTY_FIELDS = {'call_stack', 'retval'}
+    PRETTY_FIELDS = ['call_stack', 'retval']
 
     def to_string(self):
         pf = self.PRETTY_FIELDS
@@ -157,12 +157,9 @@ class ValuePrinter(MyPrinter):
             return self.TAG_TO_TYPE[self.tag_name]
         return cfuncall('value_to_type_name', self.val).string().title()
 
-    def stringify(self):
-        s = cfuncall('sch_stringify', self.val).string()
-        return highlight('expr', s)
 
     def format_as(self, ty):
-        return f'{{{self.pp(self.deref_as(ty))}}}'
+        return f'{{{pretty_string(self.deref_as(ty))}}}'
 
     @property
     def addr(self):
@@ -174,7 +171,7 @@ class ValuePrinter(MyPrinter):
         if self.is_self_format:
             val = self.format_as(ty)
         else:
-            val = self.stringify()
+            val = stringify(self.val)
         return f'{addr} {ty}: {val}'
 
 class PP (Command):
@@ -183,9 +180,7 @@ class PP (Command):
 
     def invoke(self, argument, from_tty):
         val = parse_and_eval(argument)
-        pp = schaf_pp(val)
-        s = pp.to_string() if pp else str(val)
-        print(s)
+        print(pretty_string(val))
 PP()
 
 PRINTERS = [ValuePrinter, EnvPrinter, ProcedurePrinter,
@@ -195,5 +190,9 @@ def schaf_pp(val):
     ty = Type.unqualified(val.type)
     g = (pr(val) for pr in PRINTERS if pr.TYPE == ty)
     return next(g, None)
+
+def pretty_string(val):
+    pr = schaf_pp(val)
+    return pr.to_string() if pr else val.format_string()
 
 #gdb.pretty_printers.append(schaf_pp)
