@@ -63,6 +63,9 @@ static Source **source_data;
 static jmp_buf jmp_exit;
 static uint8_t exit_status; // should be <= 125 to be portable
 static char errmsg[BUFSIZ];
+static Value inner_winders = Qnil; // both inner_* are used in (dynamic-wind)
+static Value inner_continuation = Qfalse;
+
 // Singletons
 static Value eof_object = Qfalse;
 static Value current_input_port = Qfalse, current_output_port = Qfalse;
@@ -2108,7 +2111,6 @@ static Value callcc(Value env, Value proc)
 }
 
 static void do_wind(Value new_winders);
-static Value inner_winders = Qnil;
 
 static Value callcc_inner2(Value data, Value x)
 {
@@ -2133,8 +2135,6 @@ static Value proc_callcc(Value env, Value proc)
     Value inner = value_of_cfunc_closure(".callcc-inner1", callcc_inner1, 1, proc);
     return callcc(env, inner);
 }
-
-static Value inner_continuation = Qfalse; // Yeah we live in the land of single-thread
 
 static Value proc_values(Value env, Value args)
 {
