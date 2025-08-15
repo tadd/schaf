@@ -31,6 +31,19 @@ def stringify(val):
     s = cfuncall('sch_stringify', val).string()
     return highlight('expr', s)
 
+# gdb methods:
+#
+# * Value.format_string
+# * pretty_printer.to_string
+
+# our own methods:
+#
+# * to_string
+# * format_single
+# * format_members
+# * format
+# * format_as
+
 class MyPrinter:
     def __init__(self, val):
         self.val = val
@@ -156,7 +169,6 @@ class ValuePrinter(MyPrinter):
         if self.is_self_format:
             return self.TAG_TO_TYPE[self.tag_name]
         return cfuncall('value_to_type_name', self.val).string().title()
-
 
     def format_as(self, ty):
         return f'{{{pretty_string(self.deref_as(ty))}}}'
