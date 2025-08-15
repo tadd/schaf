@@ -43,6 +43,17 @@ def format_value(val, pretty=True):
             return pr.to_string()
     return val.format_string()
 
+# gdb methods:
+#
+# * Value.format_string
+# * pretty_printer.to_string
+
+# our own methods:
+#
+# * format_members
+# * format_casted
+# * format_as
+
 class SchafPrinter:
     def __init__(self, val):
         self.val = val
@@ -110,6 +121,12 @@ class ContinuationPrinter(ProcedurePrinter):
              k in self.child_fields()]
         return f'{sup}, {", ".join(l)}'
 
+class CFuncClosurePrinter(CFuncPrinter):
+    TYPE = lookup_type('CFuncClosure')
+
+    def to_string(self):
+        return f'{super()}, {param("data")} = ...'
+
 class TablePrinter(SchafPrinter):
     TYPE = lookup_type('Table')
 
@@ -138,6 +155,7 @@ class ValuePrinter(SchafPrinter):
         'cfunc': 'CFunc',
         'syntax': 'CFunc',
         'closure': 'Closure',
+        'cfunc_closure': 'CFuncClosure',
         'continuation': 'Continuation',
         'env': 'Env',
         'error': 'Error',
@@ -194,7 +212,7 @@ class PP (Command):
 PP()
 
 PRINTERS = [ValuePrinter, EnvPrinter, ProcedurePrinter,
-            CFuncPrinter, ClosurePrinter, ContinuationPrinter,
+            CFuncPrinter, ClosurePrinter, ContinuationPrinter, CFuncClosurePrinter,
             TablePrinter, ErrorPrinter]
 def schaf_pp(val):
     ty = Type.unqualified(val.type)
