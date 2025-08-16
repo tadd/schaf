@@ -2523,16 +2523,22 @@ static void fdisplay(FILE* f, Value v)
     fdisplay_rec(f, v, Qnil);
 }
 
+static FILE *openmem(char **pmem, size_t *psize)
+{
+    errno = 0;
+    FILE *stream = open_memstream(pmem, psize);
+    if (stream == NULL) {
+        perror("open_memstream");
+        exit(2);
+    }
+    return stream;
+}
+
 char *sch_stringify(Value v)
 {
     char *s;
     size_t size = 0;
-    errno = 0;
-    FILE *stream = open_memstream(&s, &size);
-    if (stream == NULL) {
-        perror(NULL);
-        exit(2);
-    }
+    FILE *stream = openmem(&s, &size);
     fdisplay(stream, v);
     fclose(stream);
     return s;
@@ -2679,6 +2685,43 @@ static Value proc_print(UNUSED Value env, Value l)
 static Value proc_schaf_environment(UNUSED Value env)
 {
     return env_dup(NULL, env_default);
+}
+
+static void inspect(FILE* f, Value v, Value record)
+{
+    switch (value_type_of(v)) {
+    case TYPE_SYMBOL:
+        fprintf(f, "'");
+        fdisplay_rec(f, v, record);
+        break;
+    case TYPE_STRING:
+        fprintf(f, "\"");
+        fdisplay_rec(f, v, record);
+        fprintf(f, "\"");
+        break;
+    case TYPE_NULL:
+    case TYPE_BOOL:
+    case TYPE_INT:
+    case TYPE_PAIR:
+    case TYPE_PROC:
+    case TYPE_UNDEF:
+    case TYPE_VECTOR:
+    case TYPE_ENV:
+    case TYPE_PORT:
+    case TYPE_EOF:
+        fdisplay_rec(f, v, record);
+        break;
+    }
+}
+
+char *sch_inspect(Value v)
+{
+    char *s;
+    size_t size = 0;
+    FILE *stream = openmem(&s, &size);
+    inspect(stream, v, Qnil);
+    fclose(stream);
+    return s;
 }
 
 //
