@@ -1513,6 +1513,11 @@
    (set-car! (cddr l) l);; !
    (expect equal? (stringify l) "(1 .. .. 2)")))
 
+  (describe "display circular vector" (lambda ()
+    (define v (vector 42))
+    (vector-set! v 0 v);; !
+    (expect equal? (stringify v) "#(..)")))
+
   (describe "display nested list" (lambda ()
    (expect equal? (stringify '((0))) "((0))")))
 

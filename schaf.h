@@ -12,7 +12,10 @@ void sch_init(const uintptr_t *volatile base);
 #define SCH_INIT() uintptr_t sch_stack_base = 0; sch_init(&sch_stack_base)
 int sch_fin(void);
 
-[[nodiscard, gnu::malloc, gnu::returns_nonnull]] char *sch_stringify(SchValue v);
+[[nodiscard, gnu::malloc, gnu::returns_nonnull]]
+char *sch_stringify(SchValue v);
+[[nodiscard, gnu::malloc, gnu::returns_nonnull]]
+char *sch_inspect(SchValue v);
 void sch_display(SchValue v);
 SchValue sch_parse(const char *path);
 SchValue sch_parse_string(const char *in);
