@@ -42,6 +42,8 @@ static const Token TOK_GRAVE = TOKEN_C(GRAVE);
 static const Token TOK_COMMA = TOKEN_C(COMMA);
 static const Token TOK_SPLICE = TOKEN_C(SPLICE);
 static const Token TOK_DOT = TOKEN_C(DOT);
+static const Token TOK_CONST_TRUE = TOKEN_C(CONST_TRUE);
+static const Token TOK_CONST_FALSE = TOKEN_C(CONST_FALSE);
 static const Token TOK_VECTOR_LPAREN = TOKEN_C(VECTOR_LPAREN);
 static const Token TOK_EOF = { .type = TOK_TYPE_EOF }; // avoid conflict with "EOF" in stdio.h
 static Token tok_ident_dot2 = TOKEN_C(IDENT);
@@ -280,9 +282,9 @@ static Token lex_constant(Parser *p)
     int c = fgetc(p->in);
     switch (c) {
     case 't':
-        return TOKEN_C(CONST_TRUE);
+        return TOK_CONST_TRUE;
     case 'f':
-        return TOKEN_C(CONST_FALSE);
+        return TOK_CONST_FALSE;
     case '(':
         return TOK_VECTOR_LPAREN;
     case 'b':
