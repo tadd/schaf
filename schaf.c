@@ -2762,6 +2762,8 @@ void sch_init(uintptr_t *sp)
     define_syntax(e, "begin", syn_begin, -1);
     // 4.2.4. Iteration
     define_syntax(e, "do", syn_do, -1);
+    // 4.2.5. Delayed evaluation
+    //- delay
     // 4.2.6. Quasiquotation
     define_syntax(e, "quasiquote", syn_quasiquote, 1);
     define_syntax(e, "unquote", syn_unquote, 1);
@@ -2859,6 +2861,7 @@ void sch_init(uintptr_t *sp)
     define_procedure(e, "apply", proc_apply, -1);
     define_procedure(e, "map", proc_map, -1);
     define_procedure(e, "for-each", proc_for_each, -1);
+    //- force
     define_procedure(e, "call/cc", proc_callcc, 1); // alias
     define_procedure(e, "call-with-current-continuation", proc_callcc, 1);
     define_procedure(e, "values", proc_values, -1);
