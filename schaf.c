@@ -1769,7 +1769,7 @@ static Value list_tail(Value list, int64_t k)
             break;
     }
     if (i != k)
-        return runtime_error("list is shorter than %"PRId64"", k);
+        return runtime_error("list is shorter than %"PRId64, k);
     return p;
 }
 
