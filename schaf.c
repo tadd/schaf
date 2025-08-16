@@ -2545,16 +2545,22 @@ static void fdisplay(FILE* f, Value v)
     fdisplay_rec(f, v, Qnil);
 }
 
+static FILE *mopen(char **pmem)
+{
+    static size_t n = 0;
+    errno = 0;
+    FILE *stream = open_memstream(pmem, &n);
+    if (stream == NULL) {
+        perror("open_memstream");
+        exit(2);
+    }
+    return stream;
+}
+
 char *sch_stringify(Value v)
 {
     char *s;
-    size_t size = 0;
-    errno = 0;
-    FILE *stream = open_memstream(&s, &size);
-    if (stream == NULL) {
-        perror(NULL);
-        exit(2);
-    }
+    FILE *stream = mopen(&s);
     fdisplay(stream, v);
     fclose(stream);
     return s;
@@ -2701,6 +2707,102 @@ static Value proc_print(UNUSED Value env, Value l)
 static Value proc_schaf_environment(UNUSED Value env)
 {
     return env_dup(NULL, env_default);
+}
+
+static void inspect(FILE *f, Value l, Value record);
+
+static void inspect_list(FILE *f, Value l, Value record)
+{
+    fprintf(f, "(");
+    for (Value p = l, next; p != Qnil; p = next) {
+        if (check_circular(f, p, record))
+            break;
+        record = cons(p, record);
+        Value val = car(p);
+        if (!check_circular(f, val, record))
+            inspect(f, val, record);
+        if ((next = cdr(p)) == Qnil)
+            break;
+        fprintf(f, " ");
+        if (!value_is_pair(next)) {
+            fprintf(f, ". ");
+            inspect(f, next, record);
+            break;
+        }
+    }
+    fprintf(f, ")");
+}
+
+static void inspect_vector(FILE *f, const Vector *v, Value record)
+{
+    fprintf(f, "#(");
+    if (check_circular(f, (Value) v, record))
+        goto end;
+    record = cons((Value) v, record);
+    for (int64_t i = 0, len = scary_length(v->body); i < len; i++) {
+        Value e = v->body[i];
+        if (!check_circular(f, e, record))
+            inspect(f, e, record);
+        if (i + 1 == len)
+            break;
+        fprintf(f, " ");
+    }
+ end:
+    fprintf(f, ")");
+}
+
+static void inspect(FILE* f, Value v, Value record)
+{
+    switch (value_type_of(v)) {
+    case TYPE_SYMBOL:
+        fprintf(f, "'");
+        fdisplay_rec(f, v, record);
+        break;
+    case TYPE_STRING:
+        fprintf(f, "\"");
+        fdisplay_rec(f, v, record);
+        fprintf(f, "\"");
+        break;
+    case TYPE_PAIR:
+        inspect_list(f, v, record);
+        return;
+    case TYPE_VECTOR:
+        inspect_vector(f, VECTOR(v), record);
+        return;
+    case TYPE_NULL:
+    case TYPE_BOOL:
+    case TYPE_INT:
+    case TYPE_PROC:
+    case TYPE_UNDEF:
+    case TYPE_ENV:
+    case TYPE_PORT:
+    case TYPE_EOF:
+        fdisplay_rec(f, v, record);
+        break;
+    }
+}
+
+char *sch_inspect(Value v)
+{
+    char *s;
+    FILE *stream = mopen(&s);
+    inspect(stream, v, Qnil);
+    fclose(stream);
+    return s;
+}
+
+static Value proc_pp(UNUSED Value env, Value args)
+{
+    Value obj = Qfalse;
+    for (Value p = args, next; p != Qnil; p = next)  {
+        obj = car(p);
+        inspect(stdout, obj, Qnil);
+        next = cdr(p);
+        if (next != Qnil)
+            printf(" ");
+    }
+    puts("");
+    return obj;
 }
 
 //
@@ -2932,6 +3034,7 @@ void sch_init(uintptr_t *sp)
     // Local Extensions
     define_syntax(e, "_defined?", syn_defined_p, 1);
     define_procedure(e, "_cputime", proc_cputime, 0);
+    define_procedure(e, "pp", proc_pp, -1);
     define_procedure(e, "print", proc_print, -1); // like Gauche
     define_procedure(e, "schaf-environment", proc_schaf_environment, 0);
 
