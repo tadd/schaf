@@ -2494,6 +2494,15 @@ static void display_port(FILE *f, const Port *p)
         fprintf(f, "<port: %p>", fp);
 }
 
+static void display_procedure(FILE *f, Value proc)
+{
+    const char *name = get_func_name(proc);
+    if (name != NULL)
+        fprintf(f, "<procedure: %s>", name);
+    else
+        fprintf(f, "<procedure>");
+}
+
 static void fdisplay_rec(FILE* f, Value v, Value record)
 {
     switch (value_type_of(v)) {
@@ -2514,7 +2523,7 @@ static void fdisplay_rec(FILE* f, Value v, Value record)
         display_list(f, v, record);
         break;
     case TYPE_PROC:
-        fprintf(f, "<procedure>");
+        display_procedure(f, v);
         break;
     case TYPE_VECTOR:
         display_vector(f, VECTOR(v), record);
