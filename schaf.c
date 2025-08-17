@@ -658,6 +658,14 @@ static Value apply(Value env, Value proc, Value args)
     return PROCEDURE(proc)->apply(env, proc, args);
 }
 
+static const char *get_func_name(Value proc)
+{
+    ValueTag t = VALUE_TAG(proc);
+    if (t == TAG_CFUNC || t == TAG_SYNTAX)
+        return CFUNC(proc)->name;
+    return NULL;
+}
+
 static Value eval_apply(Value env, Value l)
 {
     Value symproc = car(l), args = cdr(l);
@@ -670,8 +678,7 @@ static Value eval_apply(Value env, Value l)
     }
     Value ret = apply(env, proc, args);
     if (UNLIKELY(is_error(ret))) {
-        const char *fname = (VALUE_TAG(proc) == TAG_CFUNC) ?
-            CFUNC(proc)->name : NULL;
+        const char *fname = get_func_name(proc);
         return push_stack_frame(ret, fname, l);
     }
     return ret;
