@@ -1033,7 +1033,7 @@ static Value let(Value env, Value var, Value bindings, Value body)
         Value b = car(p);
         EXPECT(type, TYPE_PAIR, b);
         if (length(b) != 2)
-            return runtime_error("malformed binding in let: %s", sch_stringify(b));
+            return runtime_error("malformed binding: %s", sch_stringify(b));
         Value ident = car(b), expr = cadr(b);
         EXPECT(type, TYPE_SYMBOL, ident);
         if (named)
@@ -1071,7 +1071,7 @@ static Value let_star(Value env, Value bindings, Value body)
         Value b = car(p);
         EXPECT(type, TYPE_PAIR, b);
         if (length(b) != 2)
-            return runtime_error("malformed binding in let: %s", sch_stringify(b));
+            return runtime_error("malformed binding: %s", sch_stringify(b));
         Value ident = car(b), expr = cadr(b);
         EXPECT(type, TYPE_SYMBOL, ident);
         letenv = env_inherit(letenv);
@@ -1126,19 +1126,26 @@ static Value syn_do(Value env, Value args)
 
     Value bindings = car(args), tests = cadr(args), body = cddr(args);
     EXPECT(list_head, bindings);
-    EXPECT(list_head, tests);
+    EXPECT(type, TYPE_PAIR, tests);
+
     Value doenv = env_inherit(env);
-    Value steps = Qnil, v;
+    Value steps = Qnil, vars = Qnil, v;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
         EXPECT(type, TYPE_PAIR, b);
+        int64_t l = length(b);
+        if (l < 2 || l > 3)
+            return runtime_error("malformed binding: %s", sch_stringify(b));
         Value var = car(b), init = cadr(b), step = cddr(b);
         EXPECT(type, TYPE_SYMBOL, var);
+        if (memq(var, vars) != Qfalse)
+            return runtime_error("duplicated variable: %s", value_to_string(var));
+        vars = cons(var, vars);
         if (step != Qnil)
             steps = cons(cons(var, car(step)), steps);
-        v = eval(env, init);
+        v = eval(env, init); // in the original env
         CHECK_ERROR(v);
-        env_put(doenv, var, v); // in the original env
+        env_put(doenv, var, v);
     }
     Value test = car(tests), exprs = cdr(tests);
     while ((v = eval(doenv, test)) == Qfalse) {
@@ -1155,6 +1162,8 @@ static Value syn_do(Value env, Value args)
         }
     }
     CHECK_ERROR(v);
+    if (exprs == Qnil)
+        return Qfalse;
     return eval_body(doenv, exprs);
 }
 

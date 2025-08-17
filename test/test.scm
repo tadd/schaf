@@ -337,6 +337,12 @@
 (describe "do" (lambda ()
   (expect = 42 (do () (#t 42))) ;; accepts () for bindings
   (expect equal?
+          (do ((vec (make-vector 5))
+               (i 0 (+ i 1)))
+              ((= i 5) vec)
+            (vector-set! vec i i))
+          #(0 1 2 3 4))
+  (expect equal?
           (do ((l '())
                (i 0 (+ i 1)))
               ((= i 5) l)
