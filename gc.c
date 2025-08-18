@@ -80,12 +80,15 @@ static inline size_t align(size_t size)
     return (size + (n-1)) / n * n;
 }
 
+#include <assert.h>
+
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 static void init_header(GCHeader *h, size_t size)
 {
     h->used = false;
     h->living = false;
     h->size = size;
+    assert(h->size > 0);
 }
 
 #ifdef DEBUG
@@ -128,16 +131,19 @@ static void *allocate_from_chunk(GCHeader *prev, GCHeader *curr, size_t size)
     if (curr->size > hsize) {
         GCHeader *rest = GC_HEADER((uint8_t *) curr + hsize);
         init_header(rest, curr->size - hsize);
+        assert(rest->size > 0);
         rest->next = next;
         next = rest;
         curr->size = size;
         curr->next = NULL; //XXX
+        assert(curr->size > 0);
     }
     if (prev == NULL)
         free_list = next;
     else
         prev->next = next;
     curr->used = true;
+    assert(curr->size > 0);
     void *p = &curr->next;
 #ifdef DEBUG
     memset(p, 0, curr->size);
@@ -483,14 +489,18 @@ static void free_val(Value v)
 
 static bool adjoining_p(const GCHeader *prev, const GCHeader *curr)
 {
-    if (prev == NULL || prev->used)
+    if (prev == NULL)
         return false;
+    assert(!prev->used);
     void *prevnext = (uint8_t *) prev + GC_HEADER_OFFSET + prev->size;
     return prevnext == curr;
 }
 
 static void free_chunk(GCHeader *prev, GCHeader *curr)
 {
+    if (prev)
+        assert(prev->size > 0);
+    assert(curr->size > 0);
     Value val = (Value) &curr->next;
     free_val(val);
     if (adjoining_p(prev, curr)) {
@@ -501,10 +511,13 @@ static void free_chunk(GCHeader *prev, GCHeader *curr)
 #else
         curr->size = 0; // XXX: for is_valid_header ?
 #endif
+    assert(prev->size > 0);
         return;
     }
     curr->used = false;
     add_to_free_list(curr);
+    assert(prev->size > 0);
+    assert(curr->size > 0);
 }
 
 static void sweep_slot(HeapSlot *slot)
@@ -513,6 +526,7 @@ static void sweep_slot(HeapSlot *slot)
     size_t offset;
     for (GCHeader *h, *prev = NULL; p < endp; p += offset, prev = h) {
         h = GC_HEADER(p);
+        assert(h->size > 0);
         offset = h->size + GC_HEADER_OFFSET;
         if (!h->used)
             continue;
