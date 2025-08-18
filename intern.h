@@ -188,7 +188,7 @@ void gc_fin(void);
 
 void gc_add_root(const Value *r);
 size_t gc_stack_get_size(uintptr_t *volatile sp);
-ATTR_XMALLOC Header *gc_malloc(size_t size);
+ATTR_XMALLOC Header *gc_malloc(void);
 
 bool value_is_null(Value v);
 bool value_is_int(Value v);

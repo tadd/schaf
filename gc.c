@@ -61,11 +61,17 @@ void sch_set_gc_print_stat(bool b)
     print_stat = b;
 }
 
+#if 1
+#define OBJSIZ sizeof(SchObject)
+#define align(size) ((size + (OBJSIZ-1)) / OBJSIZ * OBJSIZ)
+// #undef N
+#else
 static inline size_t align(size_t size)
 {
     const size_t n = sizeof(SchObject);
     return (size + (n-1)) / n * n;
 }
+#endif
 
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 static void init_chunk(Header *h, size_t size)
@@ -125,8 +131,9 @@ static Header *allocate_from_chunk(Header *prev, Header *curr, size_t size)
     return curr;
 }
 
-static Header *allocate(size_t size)
+static Header *allocate(void)
 {
+    static const size_t size = align(sizeof(SchObject));
     for (Header *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = HEADER_NEXT(curr)) {
         if (curr->size >= size) // First-fit
             return allocate_from_chunk(prev, curr, size);
@@ -558,24 +565,23 @@ static size_t heap_size(void)
     return stat.size;
 }
 
-Header *gc_malloc(size_t size)
+Header *gc_malloc()
 {
     if (stress)
         gc();
-    size = align(size);
-    Header *p = allocate(size);
+    Header *p = allocate();
     if (!stress && p == NULL) {
         gc();
-        p = allocate(size);
+        p = allocate();
     }
     if (p == NULL) {
         add_slot();
-        p = allocate(size);
+        p = allocate();
     }
     if (p == NULL)
         error("unreachable: heap (~%zu MiB) exhausted", heap_size() / MiB);
 #ifdef DEBUG
-    memset((uint8_t *) p + sizeof(Header), 0, size - sizeof(Header));
+    memset((uint8_t *) p + sizeof(Header), 0, sizeof(SchObject) - sizeof(Header));
 #endif
     return p;
 }

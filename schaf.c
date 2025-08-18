@@ -294,7 +294,7 @@ inline Value value_of_symbol(const char *s)
 
 SchObject *obj_new(ValueTag t)
 {
-    Header *h = gc_malloc(sizeof(SchObject));
+    Header *h = gc_malloc();
     h->tag = t;
     h->immutable = false;
     h->living = false;
