@@ -65,7 +65,7 @@ static inline size_t align(size_t size)
 static HeapSlot *heap_slot_new(size_t size)
 {
     HeapSlot *h = xmalloc(sizeof(HeapSlot));
-    h->size = size;
+    h->size = align(size);
     h->used = 0;
     h->body = xmalloc(size);
     return h;
@@ -82,7 +82,6 @@ void gc_fin(void)
 void gc_init(uintptr_t *volatile sp)
 {
     stack_base = sp;
-    init_size = align(init_size);
     heap.slot[0] = heap_slot_new(init_size);
     heap.size = 1;
 }
