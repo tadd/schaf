@@ -83,6 +83,7 @@ static void init_chunk(Header *h, size_t size)
 static HeapSlot *heap_slot_new(size_t size)
 {
     HeapSlot *s = xmalloc(sizeof(HeapSlot));
+    size = align(size);
     s->size = size;
     s->body = xmalloc(size);
 #ifdef __clang__ // XXX: ???
@@ -97,7 +98,7 @@ static HeapSlot *heap_slot_new(size_t size)
 void gc_init(uintptr_t *volatile sp)
 {
     stack_base = sp;
-    init_size = align(init_size);
+    // init_size = align(init_size);
     heap.slot[0] = heap_slot_new(init_size);
     HeapSlot *first = heap.slot[0];
     heap.size = 1;
