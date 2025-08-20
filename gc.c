@@ -472,12 +472,16 @@ static bool adjoining_p(const Header *curr)
         (uint8_t *) free_list + free_list->size == (void *) curr;
 }
 
+static size_t nadjoining = 0;
+
 static void free_chunk(Header *curr)
 {
     Value val = (Value) curr;
     free_val(val);
     if (adjoining_p(curr)) {
+        debug("%s: [%p, %p]", __func__, free_list, curr);
         free_list->size += curr->size;
+        nadjoining++;
 #ifdef DEBUG
         memset(curr, 0, sizeof(SchObject));
 #else
@@ -581,6 +585,7 @@ Header *gc_malloc(size_t size)
 
 void gc_fin(void)
 {
+    debug("adjoined: %zu", nadjoining);
     sweep(); // nothing marked, all values are freed
     for (size_t i = 0; i < heap.size; i++) {
         free(heap.slot[i]->body);
