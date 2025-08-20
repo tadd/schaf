@@ -479,7 +479,13 @@ static void free_chunk(Header *curr)
     Value val = (Value) curr;
     free_val(val);
     if (adjoining_p(curr)) {
-        debug("%s: [%p, %p]", __func__, free_list, curr);
+        static void *prev = NULL;
+        if (prev != free_list) {
+            debug("updated: %p", free_list);
+            prev = free_list;
+        }
+        ptrdiff_t d = curr - free_list;
+        debug("%s: %s0x%.2X", __func__, d < 0 ? "-" : "", (unsigned) d);
         free_list->size += curr->size;
         nadjoining++;
 #ifdef DEBUG
