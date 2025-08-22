@@ -697,14 +697,23 @@ static void define_procedure(Value env, const char *name, void *cfunc, int64_t a
 //
 static Value eval(Value env, Value v);
 
+static inline Value eval_body_m1(Value env, Value body)
+{
+    if (body == Qnil)
+        return Qfalse;
+    Value p = body;
+    for (Value next; (next = cdr(p)) != Qnil; p = next) {
+        Value v = eval(env, car(p));
+        CHECK_ERROR(v);
+    }
+    return car(p);
+}
+
 static Value eval_body(Value env, Value body)
 {
-    Value last = Qfalse;
-    for (Value p = body; p != Qnil; p = cdr(p)) {
-        last = eval(env, car(p));
-        CHECK_ERROR(last);
-    }
-    return last;
+    Value last = eval_body_m1(env, body);
+    CHECK_ERROR(last);
+    return eval(env, last);
 }
 
 static Value map_eval(Value env, Value l)
@@ -746,7 +755,285 @@ static const char *get_func_name(Value proc)
     return NULL;
 }
 
-static Value eval_apply(Value env, Value l)
+typedef enum {
+    SYNID_IF,
+    SYNID_COND,
+    SYNID_CASE,
+    SYNID_AND,
+    SYNID_OR,
+    SYNID_LET,
+    SYNID_LET_STAR,
+    SYNID_LETREC,
+    SYNID_BEGIN,
+    SYNID_DO,
+    SYNID_LAST
+} SyntaxID;
+
+static Symbol syn_id_to_sym[SYNID_LAST];
+static void init_syn_table(void)
+{
+#define INIT_SYN(up, dn) syn_id_to_sym[SYNID_##up] = intern(#dn)
+    INIT_SYN(IF, if);
+    INIT_SYN(COND, cond);
+    INIT_SYN(CASE, case);
+    INIT_SYN(AND, and);
+    INIT_SYN(OR, or);
+    INIT_SYN(LET, let);
+    INIT_SYN(LET_STAR, let*);
+    INIT_SYN(LETREC, letrec);
+    INIT_SYN(BEGIN, begin);
+    INIT_SYN(DO, do);
+}
+
+static SyntaxID get_syn_id(Symbol sym)
+{
+    static bool init = false;
+    if (!init) {
+        init_syn_table();
+        init = true;
+    }
+    for (size_t i = 0; i < sizeof(syn_id_to_sym) / sizeof(syn_id_to_sym[0]); i++) {
+        if (syn_id_to_sym[i] == sym)
+            return i;
+    }
+    return SYNID_LAST; // not found
+}
+
+static Value eval_apply(Value env, Value l);
+static Value lookup_or_error(Value env, Value v);
+static Value cond_eval_recipient(Value env, Value test, Value recipients);
+static Value expect_list_head(Value v);
+static Value memq(Value key, Value l);
+static Value iset(Value env, Value ident, Value val);
+static inline Value eval_apply_nonsyn(Value env, Value l);
+
+static Value eval_syntax(Value env, Value args)
+{
+    const Value initargs = args;
+    for (;;) {
+    next:
+        if (value_is_symbol(args))
+            return lookup_or_error(env, args);
+        if (args == Qnil || !value_is_pair(args))
+            return args;
+        Value a = car(args);
+        SyntaxID id;
+        if (!value_is_symbol(a) || (id = get_syn_id(value_to_symbol(a))) == SYNID_LAST)
+            return args == initargs ? Qundef : eval_apply_nonsyn(env, args);
+        args = cdr(args);
+        Value ret;
+        switch (id) {
+        case SYNID_IF: {
+            EXPECT(arity_range, 2, 3, args);
+            Value cond = car(args), celse = cddr(args);
+            ret = eval(env, cond);
+            CHECK_ERROR(ret);
+            if (ret != Qfalse)
+                args = cadr(args);
+            else if (celse != Qnil)
+                args = car(celse);
+            else
+                return Qfalse;
+            continue;
+        }
+        case SYNID_COND: {
+            EXPECT(arity_min_1, args);
+            for (Value p = args; p != Qnil; p = cdr(p)) {
+                Value clause = car(p);
+                EXPECT(type, TYPE_PAIR, clause);
+                Value test = car(clause);
+                Value exprs = cdr(clause);
+                if (test == SYM_ELSE) {
+                    args = car(exprs);
+                    goto next;
+                }
+                Value t = eval(env, test);
+                CHECK_ERROR(t);
+                if (t != Qfalse) {
+                    if (exprs == Qnil)
+                        return t;
+                    if (car(exprs) == SYM_RARROW)
+                        return cond_eval_recipient(env, t, cdr(exprs));
+                    args = car(exprs);
+                    goto next;
+                }
+            }
+            return Qfalse;
+        }
+        case SYNID_CASE: {
+            EXPECT(arity_min_2, args);
+            Value key = eval(env, car(args)), clauses = cdr(args);
+            CHECK_ERROR(key);
+            EXPECT(list_head, clauses);
+            for (Value p = clauses; p != Qnil; p = cdr(p)) {
+                Value clause = car(p);
+                EXPECT(type, TYPE_PAIR, clause);
+                Value data = car(clause), exprs = cdr(clause);
+                EXPECT(type, TYPE_PAIR, exprs);
+                if (data == SYM_ELSE) {
+                    args = car(exprs);
+                    goto next;
+                }
+                EXPECT(type, TYPE_PAIR, data);
+                if (memq(key, data) != Qfalse) {
+                    args = car(exprs);
+                    goto next;
+                }
+            }
+            return Qfalse;
+        }
+        case SYNID_AND: {
+            if (args == Qnil)
+                return Qtrue;
+            for (Value next; (next = cdr(args)) != Qnil; args = next) {
+                if ((ret = eval(env, car(args))) == Qfalse)
+                    return ret;
+                CHECK_ERROR(ret);
+            }
+            args = car(args);
+            continue;
+        }
+        case SYNID_OR: {
+            if (args == Qnil)
+                return Qfalse;
+            for (Value next; (next = cdr(args)) != Qnil; args = next) {
+                if ((ret = eval(env, car(args))) != Qfalse)
+                    return ret;
+            }
+            args = car(args);
+            continue;
+        }
+        case SYNID_LET: {
+            EXPECT(arity_min_2, args);
+            Value bind_or_var = car(args), body = cdr(args);
+            Value var = Qfalse, bindings = bind_or_var;
+            if (value_is_symbol(bind_or_var)) {
+                var = bind_or_var;
+                bindings = car(body);
+                body = cdr(body);
+            }
+            EXPECT(list_head, bindings);
+            bool named = var != Qfalse;
+            Value letenv = env_inherit(env);
+            Value params = DUMMY_PAIR(), lparams = params;
+            for (Value p = bindings; p != Qnil; p = cdr(p)) {
+                Value b = car(p);
+                EXPECT(type, TYPE_PAIR, b);
+                if (length(b) != 2)
+                    return runtime_error("malformed binding: %s", sch_stringify(b));
+                Value ident = car(b), expr = cadr(b);
+                EXPECT(type, TYPE_SYMBOL, ident);
+                if (named)
+                    lparams = PAIR(lparams)->cdr = list1(ident);
+                Value val = eval(env, expr);
+                CHECK_ERROR(val);
+                env_put(letenv, ident, val);
+            }
+            env = letenv;
+            if (named) {
+                Value proc = value_of_closure(env, cdr(params), body);
+                env_put(env, var, proc); // letenv affects as proc->env
+            }
+            args = eval_body_m1(env, body);
+            CHECK_ERROR(args);
+            continue;
+        }
+        case SYNID_LET_STAR: {
+            EXPECT(arity_min_2, args);
+            Value bindings = car(args), body = cdr(args);
+            EXPECT(list_head, bindings);
+            for (Value p = bindings; p != Qnil; p = cdr(p)) {
+                Value b = car(p);
+                EXPECT(type, TYPE_PAIR, b);
+                if (length(b) != 2)
+                    return runtime_error("malformed binding: %s", sch_stringify(b));
+                Value ident = car(b), expr = cadr(b);
+                EXPECT(type, TYPE_SYMBOL, ident);
+                env = env_inherit(env);
+                Value val = eval(env, expr);
+                CHECK_ERROR(val);
+                env_put(env, ident, val);
+            }
+            args = eval_body_m1(env, body);
+            CHECK_ERROR(args);
+            continue;
+        }
+        case SYNID_LETREC: {
+            EXPECT(arity_min_2, args);
+            Value bindings = car(args);
+            Value body = cdr(args);
+            EXPECT(list_head, bindings);
+            EXPECT(type, TYPE_PAIR, body);
+            env = env_inherit(env);
+            for (Value p = bindings; p != Qnil; p = cdr(p)) {
+                Value b = car(p);
+                EXPECT(type, TYPE_PAIR, b);
+                Value ident = car(b);
+                EXPECT(type, TYPE_SYMBOL, ident);
+                Value val = eval(env, cadr(b));
+                CHECK_ERROR(val);
+                env_put(env, ident, val);
+            }
+            args = eval_body_m1(env, body);
+            CHECK_ERROR(args);
+            continue;
+        }
+        case SYNID_BEGIN:
+            args = eval_body_m1(env, args);
+            CHECK_ERROR(args);
+            continue;
+        case SYNID_DO: {
+            EXPECT(arity_min_2, args);
+            Value bindings = car(args), tests = cadr(args), body = cddr(args);
+            EXPECT(list_head, bindings);
+            EXPECT(type, TYPE_PAIR, tests);
+            Value doenv = env_inherit(env);
+            Value steps = Qnil, vars = Qnil, v;
+            for (Value p = bindings; p != Qnil; p = cdr(p)) {
+                Value b = car(p);
+                EXPECT(type, TYPE_PAIR, b);
+                int64_t l = length(b);
+                if (l < 2 || l > 3)
+                    return runtime_error("malformed binding: %s", sch_stringify(b));
+                Value var = car(b), init = cadr(b), step = cddr(b);
+                EXPECT(type, TYPE_SYMBOL, var);
+                if (memq(var, vars) != Qfalse)
+                    return runtime_error("duplicated variable: %s", value_to_string(var));
+                vars = cons(var, vars);
+                if (step != Qnil)
+                    steps = cons(cons(var, car(step)), steps);
+                v = eval(env, init); // in the original env
+                CHECK_ERROR(v);
+                env_put(doenv, var, v);
+            }
+            env = doenv;
+            Value test = car(tests), exprs = cdr(tests);
+            while ((v = eval(env, test)) == Qfalse) {
+                if (body != Qnil) {
+                    v = eval_body(env, body);
+                    CHECK_ERROR(v);
+                }
+                for (Value p = steps; p != Qnil; p = cdr(p)) {
+                    Value pstep = car(p);
+                    Value var = car(pstep), step = cdr(pstep);
+                    Value val = eval(env, step);
+                    CHECK_ERROR(val);
+                    iset(env, var, val);
+                }
+            }
+            CHECK_ERROR(v);
+            if (exprs == Qnil)
+                return Qfalse;
+            args = car(exprs);
+            continue;
+        }
+        case SYNID_LAST:
+            UNREACHABLE();
+        }
+    }
+}
+
+static inline Value eval_apply_nonsyn(Value env, Value l)
 {
     Value symproc = car(l), args = cdr(l);
     Value proc = eval(env, symproc);
@@ -762,6 +1049,14 @@ static Value eval_apply(Value env, Value l)
         return push_stack_frame(ret, fname, l);
     }
     return ret;
+}
+
+static Value eval_apply(Value env, Value l)
+{
+    Value ret = eval_syntax(env, l);
+    if (ret != Qundef)
+        return ret;
+    return eval_apply_nonsyn(env, l);
 }
 
 static Value lookup_or_error(Value env, Value v)
@@ -1067,8 +1362,6 @@ static Value expect_list_head(Value v)
     EXPECT(type_or, TYPE_NULL, TYPE_PAIR, v);
     return Qfalse;
 }
-
-static Value memq(Value key, Value l);
 
 //PTR
 static Value syn_case(Value env, Value args)
