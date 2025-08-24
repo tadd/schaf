@@ -161,7 +161,7 @@ void table_dump(const Table *t)
 static inline uint64_t table_hash(uint64_t x)
 {
     const __uint128_t k = UINT64_C(0x517cc1b727220a95);
-    return (k * x) & UINT64_C(0xffff'ffff'ffff'ffff);
+    return (uint64_t) ((k * (__uint128_t)x) & UINT64_C(0xffff'ffff'ffff'ffff));
 }
 
 static inline uint64_t body_index(const Table *t, uint64_t key)
