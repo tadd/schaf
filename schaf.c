@@ -728,49 +728,19 @@ static const char *get_func_name(Value proc)
     return NULL;
 }
 
-typedef enum {
-    SYNID_IF,
-    SYNID_COND,
-    SYNID_CASE,
-    SYNID_AND,
-    SYNID_OR,
-    SYNID_LET,
-    SYNID_LET_STAR,
-    SYNID_LETREC,
-    SYNID_BEGIN,
-    SYNID_DO,
-    SYNID_LAST
-} SyntaxID;
-
-static Symbol syn_id_to_sym[SYNID_LAST];
-static void init_syn_table(void)
-{
-#define INIT_SYN(up, dn) syn_id_to_sym[SYNID_##up] = intern(#dn)
-    INIT_SYN(IF, if);
-    INIT_SYN(COND, cond);
-    INIT_SYN(CASE, case);
-    INIT_SYN(AND, and);
-    INIT_SYN(OR, or);
-    INIT_SYN(LET, let);
-    INIT_SYN(LET_STAR, let*);
-    INIT_SYN(LETREC, letrec);
-    INIT_SYN(BEGIN, begin);
-    INIT_SYN(DO, do);
-}
-
-static SyntaxID get_syn_id(Symbol sym)
-{
-    static bool init = false;
-    if (!init) {
-        init_syn_table();
-        init = true;
-    }
-    for (size_t i = 0; i < sizeof(syn_id_to_sym) / sizeof(syn_id_to_sym[0]); i++) {
-        if (syn_id_to_sym[i] == sym)
-            return i;
-    }
-    return SYNID_LAST; // not found
-}
+// Need to be synchronized in sch_init!
+enum {
+    SYM_IF,
+    SYM_COND,
+    SYM_CASE,
+    SYM_AND,
+    SYM_OR,
+    SYM_LET,
+    SYM_LET_STAR,
+    SYM_LETREC,
+    SYM_BEGIN,
+    SYM_DO,
+};
 
 static Value eval_apply(Value env, Value l);
 static Value lookup_or_error(Value env, Value v);
@@ -779,6 +749,11 @@ static Value expect_list_head(Value v);
 static Value memq(Value key, Value l);
 static Value iset(Value env, Value ident, Value val);
 static inline Value eval_apply_nonsyn(Value env, Value l);
+
+static bool syntax_respond_to(Symbol sym)
+{
+    return sym <= SYM_DO;
+}
 
 static Value eval_syntax(Value env, Value args)
 {
@@ -790,16 +765,15 @@ static Value eval_syntax(Value env, Value args)
         if (args == Qnil || !value_is_pair(args))
             return args;
         Value a = car(args);
-        SyntaxID id;
-        if (!value_is_symbol(a) || (id = get_syn_id(value_to_symbol(a))) == SYNID_LAST)
+        Symbol sym;
+        if (!value_is_symbol(a) || !syntax_respond_to((sym = value_to_symbol(a))))
             return args == initargs ? Qundef : eval_apply_nonsyn(env, args);
         args = cdr(args);
-        Value ret;
-        switch (id) {
-        case SYNID_IF: {
+        switch (sym) {
+        case SYM_IF: {
             EXPECT(arity_range, 2, 3, args);
             Value cond = car(args), celse = cddr(args);
-            ret = eval(env, cond);
+            Value ret = eval(env, cond);
             CHECK_ERROR(ret);
             if (ret != Qfalse)
                 args = cadr(args);
@@ -809,7 +783,7 @@ static Value eval_syntax(Value env, Value args)
                 return Qfalse;
             continue;
         }
-        case SYNID_COND: {
+        case SYM_COND:
             EXPECT(arity_min_1, args);
             for (Value p = args; p != Qnil; p = cdr(p)) {
                 Value clause = car(p);
@@ -832,8 +806,7 @@ static Value eval_syntax(Value env, Value args)
                 }
             }
             return Qfalse;
-        }
-        case SYNID_CASE: {
+        case SYM_CASE: {
             EXPECT(arity_min_2, args);
             Value key = eval(env, car(args)), clauses = cdr(args);
             CHECK_ERROR(key);
@@ -855,28 +828,26 @@ static Value eval_syntax(Value env, Value args)
             }
             return Qfalse;
         }
-        case SYNID_AND: {
+        case SYM_AND:
             if (args == Qnil)
                 return Qtrue;
-            for (Value next; (next = cdr(args)) != Qnil; args = next) {
+            for (Value ret, next; (next = cdr(args)) != Qnil; args = next) {
                 if ((ret = eval(env, car(args))) == Qfalse)
                     return ret;
                 CHECK_ERROR(ret);
             }
             args = car(args);
             continue;
-        }
-        case SYNID_OR: {
+        case SYM_OR:
             if (args == Qnil)
                 return Qfalse;
-            for (Value next; (next = cdr(args)) != Qnil; args = next) {
+            for (Value ret, next; (next = cdr(args)) != Qnil; args = next) {
                 if ((ret = eval(env, car(args))) != Qfalse)
                     return ret;
             }
             args = car(args);
             continue;
-        }
-        case SYNID_LET: {
+        case SYM_LET: {
             EXPECT(arity_min_2, args);
             Value bind_or_var = car(args), body = cdr(args);
             Value var = Qfalse, bindings = bind_or_var;
@@ -911,7 +882,7 @@ static Value eval_syntax(Value env, Value args)
             CHECK_ERROR(args);
             continue;
         }
-        case SYNID_LET_STAR: {
+        case SYM_LET_STAR: {
             EXPECT(arity_min_2, args);
             Value bindings = car(args), body = cdr(args);
             EXPECT(list_head, bindings);
@@ -931,7 +902,7 @@ static Value eval_syntax(Value env, Value args)
             CHECK_ERROR(args);
             continue;
         }
-        case SYNID_LETREC: {
+        case SYM_LETREC: {
             EXPECT(arity_min_2, args);
             Value bindings = car(args);
             Value body = cdr(args);
@@ -951,11 +922,11 @@ static Value eval_syntax(Value env, Value args)
             CHECK_ERROR(args);
             continue;
         }
-        case SYNID_BEGIN:
+        case SYM_BEGIN:
             args = eval_body_m1(env, args);
             CHECK_ERROR(args);
             continue;
-        case SYNID_DO: {
+        case SYM_DO: {
             EXPECT(arity_min_2, args);
             Value bindings = car(args), tests = cadr(args), body = cddr(args);
             EXPECT(list_head, bindings);
@@ -1000,8 +971,6 @@ static Value eval_syntax(Value env, Value args)
             args = car(exprs);
             continue;
         }
-        case SYNID_LAST:
-            UNREACHABLE();
         }
     }
 }
@@ -3095,6 +3064,21 @@ void sch_init(uintptr_t *sp)
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
     symbol_names = scary_new(sizeof(char *));
+
+    // Need to be synchronized with enum { SYM_ ...}!
+    intern("if");
+    intern("cond");
+    intern("case");
+    intern("and");
+    intern("or");
+    intern("let");
+    intern("let*");
+    intern("letrec");
+    intern("begin");
+    intern("do");
+    if (intern("if") != SYM_IF || intern("do") != SYM_DO)
+        error("%s failed", __func__);
+
 #define DEF_SYMBOL(var, name) SYM_##var = value_of_symbol(name)
     DEF_SYMBOL(ELSE, "else");
     DEF_SYMBOL(QUOTE, "quote");
