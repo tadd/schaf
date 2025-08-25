@@ -762,6 +762,18 @@ static Value iset(Value env, Value ident, Value val);
 
 static Value eval(Value env, Value args)
 {
+    static const void *labels[] = {
+        [SYM_IF] = &&l_if,
+        [SYM_COND] = &&l_cond,
+        [SYM_CASE] = &&l_case,
+        [SYM_AND] = &&l_and,
+        [SYM_OR] = &&l_or,
+        [SYM_LET] = &&l_let,
+        [SYM_LET_STAR] = &&l_let_star,
+        [SYM_LETREC] = &&l_letrec,
+        [SYM_BEGIN] = &&l_begin,
+        [SYM_DO] = &&l_do,
+    };
     Value proc, pargs, ret;
     for (;;) {
     next:
@@ -774,8 +786,8 @@ static Value eval(Value env, Value args)
         if (!value_is_symbol(a) || !syntax_respond_to((sym = value_to_symbol(a))))
             goto try_closure;
         args = cdr(args);
-        switch (sym) {
-        case SYM_IF: {
+        goto *labels[sym];
+    l_if: {
             EXPECT(arity_range, 2, 3, args);
             Value cond = car(args), celse = cddr(args);
             Value ret = eval(env, cond);
@@ -788,7 +800,7 @@ static Value eval(Value env, Value args)
                 return Qfalse;
             continue;
         }
-        case SYM_COND:
+    l_cond: {
             EXPECT(arity_min_1, args);
             for (Value p = args; p != Qnil; p = cdr(p)) {
                 Value clause = car(p);
@@ -812,7 +824,8 @@ static Value eval(Value env, Value args)
                 }
             }
             return Qfalse;
-        case SYM_CASE: {
+        }
+    l_case: {
             EXPECT(arity_min_2, args);
             Value key = eval(env, car(args)), clauses = cdr(args);
             CHECK_ERROR(key);
@@ -834,7 +847,7 @@ static Value eval(Value env, Value args)
             }
             return Qfalse;
         }
-        case SYM_AND:
+    l_and: {
             if (args == Qnil)
                 return Qtrue;
             for (Value ret, next; (next = cdr(args)) != Qnil; args = next) {
@@ -844,7 +857,8 @@ static Value eval(Value env, Value args)
             }
             args = car(args);
             continue;
-        case SYM_OR:
+        }
+    l_or: {
             if (args == Qnil)
                 return Qfalse;
             for (Value ret, next; (next = cdr(args)) != Qnil; args = next) {
@@ -853,7 +867,8 @@ static Value eval(Value env, Value args)
             }
             args = car(args);
             continue;
-        case SYM_LET: {
+        }
+    l_let: {
             EXPECT(arity_min_2, args);
             Value bind_or_var = car(args), body = cdr(args);
             Value var = Qfalse, bindings = bind_or_var;
@@ -888,7 +903,7 @@ static Value eval(Value env, Value args)
             CHECK_ERROR(args);
             continue;
         }
-        case SYM_LET_STAR: {
+    l_let_star: {
             EXPECT(arity_min_2, args);
             Value bindings = car(args), body = cdr(args);
             EXPECT(list_head, bindings);
@@ -908,7 +923,7 @@ static Value eval(Value env, Value args)
             CHECK_ERROR(args);
             continue;
         }
-        case SYM_LETREC: {
+    l_letrec: {
             EXPECT(arity_min_2, args);
             Value bindings = car(args);
             Value body = cdr(args);
@@ -928,11 +943,12 @@ static Value eval(Value env, Value args)
             CHECK_ERROR(args);
             continue;
         }
-        case SYM_BEGIN:
+    l_begin: {
             args = eval_body_m1(env, args);
             CHECK_ERROR(args);
             continue;
-        case SYM_DO: {
+        }
+    l_do: {
             EXPECT(arity_min_2, args);
             Value bindings = car(args), tests = cadr(args), body = cddr(args);
             EXPECT(list_head, bindings);
@@ -977,33 +993,33 @@ static Value eval(Value env, Value args)
             args = car(exprs);
             continue;
         }
+    try_closure: {
+            Value symproc = car(args);
+            pargs = cdr(args);
+            proc = eval(env, symproc);
+            CHECK_ERROR_LOCATED(proc, args);//
+            EXPECT(type, TYPE_PROC, proc);
+            ValueTag t = VALUE_TAG(proc);
+            if (t != TAG_SYNTAX) {
+                pargs = map_eval(env, pargs);
+                CHECK_ERROR_LOCATED(pargs, args);//
+            }
+            if (t != TAG_CLOSURE)
+                break;
+            Closure *cl = CLOSURE(proc);
+            int64_t arity = cl->proc.arity;
+            EXPECT(arity, arity, pargs);//
+            env = env_inherit(cl->env);
+            Value params = cl->params;
+            if (arity == -1)
+                env_put(env, params, pargs);
+            else {
+                for (Value pa = pargs, pp = params; pa != Qnil; pa = cdr(pa), pp = cdr(pp))
+                    env_put(env, car(pp), car(pa));
+            }
+            args = eval_body_m1(env, cl->body);
+            CHECK_ERROR(args);//
         }
-    try_closure:
-        Value symproc = car(args);
-        pargs = cdr(args);
-        proc = eval(env, symproc);
-        CHECK_ERROR_LOCATED(proc, args);//
-        EXPECT(type, TYPE_PROC, proc);
-        ValueTag t = VALUE_TAG(proc);
-        if (t != TAG_SYNTAX) {
-            pargs = map_eval(env, pargs);
-            CHECK_ERROR_LOCATED(pargs, args);//
-        }
-        if (t != TAG_CLOSURE)
-            break;
-        Closure *cl = CLOSURE(proc);
-        int64_t arity = cl->proc.arity;
-        EXPECT(arity, arity, pargs);//
-        env = env_inherit(cl->env);
-        Value params = cl->params;
-        if (arity == -1)
-            env_put(env, params, pargs);
-        else {
-            for (Value pa = pargs, pp = params; pa != Qnil; pa = cdr(pa), pp = cdr(pp))
-                env_put(env, car(pp), car(pa));
-        }
-        args = eval_body_m1(env, cl->body);
-        CHECK_ERROR(args);//
     }
     ret = apply(env, proc, pargs);
     if (UNLIKELY(is_error(ret))) {
