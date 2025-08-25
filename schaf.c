@@ -689,22 +689,26 @@ enum {
     SYM_DO,
 };
 
-static Value eval_apply(Value env, Value l);
-static Value lookup_or_error(Value env, Value v);
-static Value cond_eval_recipient(Value env, Value test, Value recipients);
-static Value expect_list_head(Value v);
-static Value memq(Value key, Value l);
-static Value iset(Value env, Value ident, Value val);
-static inline Value eval_apply_nonsyn(Value env, Value l);
-
 static bool syntax_respond_to(Symbol sym)
 {
     return sym <= SYM_DO;
 }
 
-static Value eval_syntax(Value env, Value args)
+static Value lookup_or_error(Value env, Value v)
 {
-    const Value initargs = args;
+    Value p = env_get(env, v);
+    if (p == Qundef)
+        return runtime_error("unbound variable: %s", value_to_string(v));
+    return p;
+}
+
+static Value cond_eval_recipient(Value env, Value test, Value recipients);
+static Value expect_list_head(Value v);
+static Value memq(Value key, Value l);
+static Value iset(Value env, Value ident, Value val);
+
+static Value eval(Value env, Value args)
+{
     for (;;) {
     next:
         if (value_is_symbol(args))
@@ -714,7 +718,7 @@ static Value eval_syntax(Value env, Value args)
         Value a = car(args);
         Symbol sym;
         if (!value_is_symbol(a) || !syntax_respond_to((sym = value_to_symbol(a))))
-            return args == initargs ? Qundef : eval_apply_nonsyn(env, args);
+            break;
         args = cdr(args);
         switch (sym) {
         case SYM_IF: {
@@ -744,6 +748,7 @@ static Value eval_syntax(Value env, Value args)
                 Value t = eval(env, test);
                 CHECK_ERROR(t);
                 if (t != Qfalse) {
+
                     if (exprs == Qnil)
                         return t;
                     if (car(exprs) == SYM_RARROW)
@@ -920,49 +925,20 @@ static Value eval_syntax(Value env, Value args)
         }
         }
     }
-}
-
-static inline Value eval_apply_nonsyn(Value env, Value l)
-{
-    Value symproc = car(l), args = cdr(l);
+    Value symproc = car(args), pargs = cdr(args);
     Value proc = eval(env, symproc);
-    CHECK_ERROR_LOCATED(proc, l);
+    CHECK_ERROR_LOCATED(proc, args);
     EXPECT(type, TYPE_PROC, proc);
     if (!value_tag_is(proc, TAG_SYNTAX)) {
-        args = map_eval(env, args);
-        CHECK_ERROR_LOCATED(args, l);
+        pargs = map_eval(env, pargs);
+        CHECK_ERROR_LOCATED(pargs, args);
     }
-    Value ret = apply(env, proc, args);
+    Value ret = apply(env, proc, pargs);
     if (UNLIKELY(is_error(ret))) {
         const char *fname = get_func_name(proc);
-        return push_stack_frame(ret, fname, l);
+        return push_stack_frame(ret, fname, args);
     }
     return ret;
-}
-
-static Value eval_apply(Value env, Value l)
-{
-    Value ret = eval_syntax(env, l);
-    if (ret != Qundef)
-        return ret;
-    return eval_apply_nonsyn(env, l);
-}
-
-static Value lookup_or_error(Value env, Value v)
-{
-    Value p = env_get(env, v);
-    if (p == Qundef)
-        return runtime_error("unbound variable: %s", value_to_string(v));
-    return p;
-}
-
-static Value eval(Value env, Value v)
-{
-    if (value_is_symbol(v))
-        return lookup_or_error(env, v);
-    if (v == Qnil || !value_is_pair(v))
-        return v;
-    return eval_apply(env, v);
 }
 
 [[gnu::format(printf, 1, 2)]]
