@@ -762,6 +762,7 @@ static Value iset(Value env, Value ident, Value val);
 
 static Value eval(Value env, Value args)
 {
+    Value proc, pargs, ret;
     for (;;) {
     next:
         if (value_is_symbol(args))
@@ -771,7 +772,7 @@ static Value eval(Value env, Value args)
         Value a = car(args);
         Symbol sym;
         if (!value_is_symbol(a) || !syntax_respond_to((sym = value_to_symbol(a))))
-            break;
+            goto try_closure;
         args = cdr(args);
         switch (sym) {
         case SYM_IF: {
@@ -977,16 +978,34 @@ static Value eval(Value env, Value args)
             continue;
         }
         }
+    try_closure:
+        Value symproc = car(args);
+        pargs = cdr(args);
+        proc = eval(env, symproc);
+        CHECK_ERROR_LOCATED(proc, args);//
+        EXPECT(type, TYPE_PROC, proc);
+        ValueTag t = VALUE_TAG(proc);
+        if (t != TAG_SYNTAX) {
+            pargs = map_eval(env, pargs);
+            CHECK_ERROR_LOCATED(pargs, args);//
+        }
+        if (t != TAG_CLOSURE)
+            break;
+        Closure *cl = CLOSURE(proc);
+        int64_t arity = cl->proc.arity;
+        EXPECT(arity, arity, pargs);//
+        env = env_inherit(cl->env);
+        Value params = cl->params;
+        if (arity == -1)
+            env_put(env, params, pargs);
+        else {
+            for (Value pa = pargs, pp = params; pa != Qnil; pa = cdr(pa), pp = cdr(pp))
+                env_put(env, car(pp), car(pa));
+        }
+        args = eval_body_m1(env, cl->body);
+        CHECK_ERROR(args);//
     }
-    Value symproc = car(args), pargs = cdr(args);
-    Value proc = eval(env, symproc);
-    CHECK_ERROR_LOCATED(proc, args);
-    EXPECT(type, TYPE_PROC, proc);
-    if (!value_tag_is(proc, TAG_SYNTAX)) {
-        pargs = map_eval(env, pargs);
-        CHECK_ERROR_LOCATED(pargs, args);
-    }
-    Value ret = apply(env, proc, pargs);
+    ret = apply(env, proc, pargs);
     if (UNLIKELY(is_error(ret))) {
         const char *fname = get_func_name(proc);
         return push_stack_frame(ret, fname, args);
