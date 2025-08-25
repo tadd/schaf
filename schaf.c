@@ -794,8 +794,6 @@ static void prepend_cfunc_name(const char *name)
     snprintf(errmsg, sizeof(errmsg), "%s: %s", name, tmp);
 }
 
-static Value reverse(Value l);
-
 static void dump_stack_trace(StackFrame **call_stack)
 {
     size_t len = scary_length(call_stack);
