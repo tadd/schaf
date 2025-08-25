@@ -29,7 +29,11 @@
 #define LIKELY(x) __builtin_expect((x), 1)
 #define UNLIKELY(x) __builtin_expect((x), 0)
 #define UNUSED [[maybe_unused]]
+#ifdef DEBUG
 #define UNREACHABLE() bug("unreachable"), __builtin_unreachable()
+#else
+#define UNREACHABLE() __builtin_unreachable()
+#endif
 #define ATTR_XMALLOC [[nodiscard, gnu::malloc, gnu::returns_nonnull]]
 
 #pragma GCC visibility push(hidden) // also affects Clang
