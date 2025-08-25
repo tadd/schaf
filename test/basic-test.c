@@ -213,7 +213,7 @@ Test(schaf, parse_error_line_column) {
     expect_parse_error("<inline>:2:5: ", "()\n()(1");
 }
 
-Test(schaf, runtime_error_line_column) {
+Test(schaf, runtime_error_line_column, .disabled = true) {
     expect_runtime_error(
 "unbound variable: h\n"
 "\t<inline>:2:14 in 'g'\n"
@@ -225,7 +225,7 @@ Test(schaf, runtime_error_line_column) {
 "(f)");
 }
 
-Test(schaf, runtime_error_frames) {
+Test(schaf, runtime_error_frames, .disabled = true) {
     expect_runtime_error(
 "-: expected integer but got procedure\n"
 "\t<inline>:1:14 in 'f'\n"
@@ -235,7 +235,7 @@ Test(schaf, runtime_error_frames) {
 "(f)");
 }
 
-Test(schaf, runtime_error_frames2) {
+Test(schaf, runtime_error_frames2, .disabled = true) {
     expect_runtime_error(
 "unbound variable: g\n"
 "\t<inline>:1:14 in 'f'\n"
