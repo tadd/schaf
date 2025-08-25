@@ -617,7 +617,7 @@ static Value eval(Value env, Value v);
 
 static Value eval_body(Value env, Value body)
 {
-    Value last = Qnil;
+    Value last = Qfalse;
     for (Value p = body; p != Qnil; p = cdr(p)) {
         last = eval(env, car(p));
         CHECK_ERROR(last);
@@ -2689,7 +2689,7 @@ static Value proc_cputime(UNUSED Value env) // in micro sec
 
 static Value proc_print(UNUSED Value env, Value l)
 {
-    Value obj = Qnil;
+    Value obj = Qfalse;
     for (Value p = l, next; p != Qnil; p = next)  {
         obj = car(p);
         sch_display(obj);
