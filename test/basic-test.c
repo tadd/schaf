@@ -4,6 +4,7 @@
 #include <criterion/criterion.h>
 #include <criterion/new/assert.h>
 
+#include "bigint.h"
 #include "intern.h"
 #include "schaf.h"
 
@@ -371,4 +372,64 @@ Test(table, dup) {
         cr_expect(eq(int, i*17, table_get(u, i)));
 
     table_free(u);
+}
+
+Test(bigint, basic) {
+    BigInt *x = bigint_from_int(300);
+    BigInt *y = bigint_from_int(200);
+
+    cr_assert(eq(int, 1, bigint_cmp(x, y)));
+
+    bigint_free(y);
+    bigint_free(x);
+}
+
+Test(bigint, add) {
+    int64_t ix = (INT64_C(1) << 32U) - 10;
+    int64_t iy = (INT64_C(1) << 32U) - 20;
+    int64_t iz = ix + iy;
+    BigInt *x = bigint_from_int(ix);
+    BigInt *y = bigint_from_int(iy);
+    BigInt *exp = bigint_from_int(iz);
+    BigInt *z = bigint_add(x, y);
+
+    cr_assert(eq(int, true, bigint_eq(exp, z)));
+
+    bigint_free(exp);
+    bigint_free(z);
+    bigint_free(y);
+    bigint_free(x);
+}
+
+Test(bigint, add_negative) {
+    int64_t ix = (INT64_C(1) << 32U) - 10;
+    int64_t iy = -((INT64_C(1) << 32U) - 20);
+    int64_t iz = ix + iy;
+    BigInt *x = bigint_from_int(ix);
+    BigInt *y = bigint_from_int(iy);
+    BigInt *exp = bigint_from_int(iz);
+    BigInt *z = bigint_add(x, y);
+
+    cr_assert(eq(int, true, bigint_eq(exp, z)));
+
+    bigint_free(exp);
+    bigint_free(z);
+    bigint_free(y);
+    bigint_free(x);
+}
+
+Test(bigint, add_to_zero) {
+    int64_t ix = (INT64_C(1) << 32U) - 10;
+    int64_t iy = -ix;
+    BigInt *x = bigint_from_int(ix);
+    BigInt *y = bigint_from_int(iy);
+    BigInt *exp = bigint_from_int(0);
+    BigInt *z = bigint_add(x, y);
+
+    cr_assert(eq(int, true, bigint_eq(exp, z)));
+
+    bigint_free(exp);
+    bigint_free(z);
+    bigint_free(y);
+    bigint_free(x);
 }

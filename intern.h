@@ -3,6 +3,7 @@
 
 #include <setjmp.h>
 
+#include "bigint.h"
 #include "schaf.h"
 #include "utils.h"
 
@@ -66,6 +67,11 @@ typedef struct {
     Header header;
     char *body;
 } String;
+
+typedef struct {
+    Header header;
+    BigInt *body;
+} BigIntVal;
 
 typedef struct {
     Header header;
