@@ -1248,6 +1248,7 @@ static Value syn_lambda(Value env, Value args)
 }
 
 // 4.1.5. Conditionals
+#if 0
 //PTR
 static Value syn_if(Value env, Value args)
 {
@@ -1263,6 +1264,7 @@ static Value syn_if(Value env, Value args)
         return Qfalse;
     return eval(env, car(els));
 }
+#endif
 
 // 4.1.6. Assignments
 static Value iset(Value env, Value ident, Value val)
@@ -1294,6 +1296,7 @@ static Value cond_eval_recipient(Value env, Value test, Value recipients)
     return apply(env, recipient, list1(test));
 }
 
+#if 0
 //PTR
 static Value syn_cond(Value env, Value clauses)
 {
@@ -1318,6 +1321,7 @@ static Value syn_cond(Value env, Value clauses)
     }
     return Qfalse;
 }
+#endif
 
 static Value expect_list_head(Value v)
 {
@@ -1325,6 +1329,7 @@ static Value expect_list_head(Value v)
     return Qfalse;
 }
 
+#if 0
 //PTR
 static Value syn_case(Value env, Value args)
 {
@@ -1514,6 +1519,7 @@ static Value syn_do(Value env, Value args)
         return Qfalse;
     return eval_body(doenv, exprs);
 }
+#endif
 
 // 4.2.6. Quasiquotation
 static Value qq_list(Value env, Value datum, int64_t depth);
@@ -3191,23 +3197,23 @@ void sch_init(const uintptr_t *sp)
     // 4.1.4. Procedures
     define_syntax(e, "lambda", syn_lambda, -1);
     // 4.1.5. Conditionals
-    define_syntax(e, "if", syn_if, -1);
+    // define_syntax(e, "if", syn_if, -1);
     // 4.1.6. Assignments
     define_syntax(e, "set!", syn_set, 2);
     // 4.2. Derived expression types
     // 4.2.1. Conditionals
-    define_syntax(e, "cond", syn_cond, -1);
-    define_syntax(e, "case", syn_case, -1);
-    define_syntax(e, "and", syn_and, -1);
-    define_syntax(e, "or", syn_or, -1);
+    // define_syntax(e, "cond", syn_cond, -1);
+    // define_syntax(e, "case", syn_case, -1);
+    // define_syntax(e, "and", syn_and, -1);
+    // define_syntax(e, "or", syn_or, -1);
     // 4.2.2. Binding constructs
-    define_syntax(e, "let", syn_let, -1); // with named let in 4.2.4.
-    define_syntax(e, "let*", syn_let_star, -1);
-    define_syntax(e, "letrec", syn_letrec, -1);
+    // define_syntax(e, "let", syn_let, -1); // with named let in 4.2.4.
+    // define_syntax(e, "let*", syn_let_star, -1);
+    // define_syntax(e, "letrec", syn_letrec, -1);
     // 4.2.3. Sequencing
-    define_syntax(e, "begin", syn_begin, -1);
+    // define_syntax(e, "begin", syn_begin, -1);
     // 4.2.4. Iteration
-    define_syntax(e, "do", syn_do, -1);
+    // define_syntax(e, "do", syn_do, -1);
     // 4.2.5. Delayed evaluation
     //- delay
     // 4.2.6. Quasiquotation
