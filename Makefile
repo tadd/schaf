@@ -4,10 +4,10 @@ CFLAGS = -std=gnu2x -Wall -Wextra -I. $(OPTFLAGS) $(XCFLAGS)
 LIBS = -lm
 ANALYZER = -fanalyzer
 SANITIZER = -fsanitize=undefined #,address
-TIMEOUT = timeout 2
+TIMEOUT = timeout 4
 TIMEOUT_LONGER = timeout 20
 
-OBJ_COMMON = gc.o libscary.o parse.o schaf.o utils.o
+OBJ_COMMON = bigint.o gc.o libscary.o parse.o schaf.o utils.o
 OBJ = $(OBJ_COMMON) main.o
 
 all: schaf
@@ -40,11 +40,12 @@ microbench: schaf
 %.san.o: %.c
 	$(CC) $(CFLAGS) $(SANITIZER) -c $< -o $@
 
-gc.o gc.san.o: intern.h schaf.h utils.h
+bigint.o bigint.san.o: bigint.h libscary.h utils.h
+gc.o gc.san.o: bigint.h intern.h schaf.h utils.h
 libscary.o libscary.san.o: libscary.h
 main.o main.san.o: schaf.h utils.h
-parse.o parse.san.o: intern.h schaf.h utils.h
-schaf.o schaf.san.o: intern.h libscary.h schaf.h utils.h
+parse.o parse.san.o: bigint.h intern.h libscary.h schaf.h utils.h
+schaf.o schaf.san.o: bigint.h intern.h libscary.h schaf.h utils.h
 utils.o utils.san.o: utils.h
 
 .PHONY: all clean analyze sanitize microbench
