@@ -388,7 +388,7 @@
 (describe "quasiquote unquote" (lambda ()
   (expect eq? `,() '())
   (expect = `,10 10)
-  (expect eq? let `,let)
+  (expect eq? expect `,expect)
   (expect equal? `(,1 ,2 ,3) (list 1 2 3))
   (let ((x 40))
     (expect = `,(+ 2 x) 42)
