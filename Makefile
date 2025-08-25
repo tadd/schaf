@@ -7,7 +7,7 @@ SANITIZER = -fsanitize=undefined #,address
 TIMEOUT = timeout 2
 TIMEOUT_LONGER = timeout 20
 
-OBJ_COMMON = gc.o libscary.o parse.o schaf.o utils.o
+OBJ_COMMON = bigint.o gc.o libscary.o parse.o schaf.o utils.o
 OBJ = $(OBJ_COMMON) main.o
 OBJ_TEST = $(OBJ_COMMON) test/basic-test.o
 
@@ -41,6 +41,7 @@ microbench: schaf
 %.san.o: %.c
 	$(CC) $(CFLAGS) $(SANITIZER) -c $< -o $@
 
+bigint.o: libscary.h utils.h
 gc.o: intern.h schaf.h utils.h
 libscary.o: libscary.h
 main.o: schaf.h utils.h

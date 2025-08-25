@@ -67,6 +67,13 @@ typedef struct {
     char *body;
 } String;
 
+typedef struct RawBigInt RawBigInt;
+
+typedef struct {
+    Header header;
+    RawBigInt *body;
+} BigInt;
+
 typedef struct {
     Header header;
     int64_t arity;
