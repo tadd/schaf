@@ -389,10 +389,7 @@ typedef BigInt *BigIntPtr;
 
 static char *cr_user_BigIntPtr_tostr(const BigIntPtr *x)
 {
-    size_t len = 12; // strlen("0xffffeeeeddddcccc") + 2
-    char *s = xmalloc(len);
-    snprintf(s, len, "%p", *x);
-    return s;
+    return bigint_to_string(*x);
 }
 
 static int cr_user_BigIntPtr_eq(const BigIntPtr *x, const BigIntPtr *y)
@@ -590,4 +587,55 @@ Test(bigint, mul_large) {
     cr_expect(eq(u32[4], i4, a4_3->digits));
 
     bigint_free_all(a, a2, a3, a3_2, a4, a4_2, a4_3, NULL);
+}
+
+#define expect_bigint_string_eq(exp, x) do { \
+        char *s = bigint_to_string(x); \
+        cr_assert(eq(str, exp, s)); \
+        free(s); \
+    } while (0)
+#define expect_bigint_to_string(i) do { \
+        BigInt *x = bigint_from_int(INT64_C(i)); \
+        expect_bigint_string_eq(#i, x); \
+        bigint_free(x); \
+    } while (0)
+
+Test(bigint, to_string) {
+    expect_bigint_to_string(0);
+    expect_bigint_to_string(1);
+    expect_bigint_to_string(42);
+    expect_bigint_to_string(-1);
+    expect_bigint_to_string(-42);
+    expect_bigint_to_string(1000000000);
+    expect_bigint_to_string(-1000000000);
+    expect_bigint_to_string(12345678901);
+    expect_bigint_to_string(-12345678901);
+    expect_bigint_to_string(9223372036854775807); // MAX
+    expect_bigint_to_string(-9223372036854775807);// MIN+1
+}
+
+Test(bigint, to_string_larger) {
+    BigInt *a, *b, *c, *d, *na;
+
+    a = bigint_from_int(10000000000); // "0"*10
+    expect_bigint_string_eq("1""0000000000", a);
+    b = bigint_mul(a, a); // 20
+    expect_bigint_string_eq("1""0000000000""0000000000", b);
+    c = bigint_mul(b, a); // 30
+    expect_bigint_string_eq("1""0000000000""0000000000""0000000000", c);
+    d = bigint_mul(b, b); // 40
+    expect_bigint_string_eq("1""0000000000""0000000000""0000000000""0000000000", d);
+
+    bigint_free_all(b, c, d, NULL);
+
+    na = bigint_from_int(-10000000000); // -a
+    expect_bigint_string_eq("-1""0000000000", na);
+    b = bigint_mul(na, a);
+    expect_bigint_string_eq("-1""0000000000""0000000000", b);
+    c = bigint_mul(b, a);
+    expect_bigint_string_eq("-1""0000000000""0000000000""0000000000", c);
+    d = bigint_mul(c, a);
+    expect_bigint_string_eq("-1""0000000000""0000000000""0000000000""0000000000", d);
+
+    bigint_free_all(a, na, b, c, d, NULL);
 }

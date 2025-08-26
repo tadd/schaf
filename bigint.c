@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -12,8 +13,11 @@ struct BigInt {
 };
 
 enum {
-    RADIX = UINT32_C(0x1'0000'0000)
+    RADIX = UINT32_C(0x1'0000'0000),
+    NDIG10 = 9, // (floor (fllog10 UINT32_MAX))
+    RADIX10 = UINT32_C(1'000'000'000), // (expt 10 NDIG10)
 };
+static const double RADIX_RATIO = 4.294967296; // (/ RADIX RADIX10)
 
 static BigInt *bigint_new(void)
 {
@@ -266,4 +270,50 @@ BigInt *bigint_mul(const BigInt *x, const BigInt *y)
     dz[lx + ly - 1] += c;
     digits_pop_zeros(dz);
     return normalize(z);
+}
+
+UNUSED static void bigint_dump(const char *s, const uint32_t *a)
+{
+    size_t len = scary_length(a);
+    fprintf(stderr, "%s: len=%zu", s, len);
+    for (size_t i = 0; i < len; i++)
+        fprintf(stderr, ", %u", a[i]);
+    fprintf(stderr, "\n");
+}
+
+static uint32_t *convert_radix10(const uint32_t *src)
+{
+    size_t len = scary_length(src);
+    uint32_t *tmp = scary_dup((void *) src);
+    uint32_t *dst = scary_new(sizeof(uint32_t));
+    size_t max_len = ceil(len * RADIX_RATIO);
+    for (size_t i = 0; i < max_len && len > 0; i++) {
+        uint32_t r = 0;
+        for (ssize_t j = len - 1; j >= 0; j--) {
+            uint64_t t = tmp[j] + r * RADIX;
+            tmp[j] = t / RADIX10;
+            r = t % RADIX10;
+        }
+        scary_push(&dst, r);
+        while (len > 0 && tmp[len - 1] == 0)
+            len--;
+    }
+    scary_free(tmp);
+    return dst;
+}
+
+char *bigint_to_string(const BigInt *x)
+{
+    uint32_t *dig10 = convert_radix10(x->digits);
+    size_t dlen = scary_length(dig10);
+    size_t slen = NDIG10 * dlen + 2; // 2 for '-' and '\0'
+    char *s = xmalloc(slen), *p = s;
+    if (x->negative)
+        *p++ = '-';
+    ssize_t i = dlen - 1;
+    p += sprintf(p, "%u", dig10[i]);
+    while (--i >= 0)
+        p += sprintf(p, "%.*u", (int) NDIG10, dig10[i]);
+    scary_free(dig10);
+    return s;
 }

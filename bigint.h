@@ -17,3 +17,5 @@ bool bigint_ne(const BigInt *x, const BigInt *y); // !=
 BigInt *bigint_add(const BigInt *x, const BigInt *y);
 BigInt *bigint_sub(const BigInt *x, const BigInt *y);
 BigInt *bigint_mul(const BigInt *x, const BigInt *y);
+
+char *bigint_to_string(const BigInt *x);
