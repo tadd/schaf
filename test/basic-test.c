@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include <criterion/criterion.h>
+#include <criterion/parameterized.h>
 #include <criterion/new/assert.h>
 
 #include "bigint.h"
@@ -374,6 +375,13 @@ Test(table, dup) {
     table_free(u);
 }
 
+static void test_bigint_init(void)
+{
+    srand(42);
+}
+
+TestSuite(bigint, .init = test_bigint_init);
+
 // Terminate arguments with NULL
 static void bigint_free_all(BigInt *x, ...)
 {
@@ -638,4 +646,97 @@ Test(bigint, to_string_larger) {
     expect_bigint_string_eq("-1""0000000000""0000000000""0000000000""0000000000", d);
 
     bigint_free_all(a, na, b, c, d, NULL);
+}
+
+static int64_t rand_n(unsigned n)
+{
+    const uint64_t max = ~UINT64_C(0) >> (64U - n);
+    double drand = (double) rand() / RAND_MAX;
+    uint64_t r = lround(drand * max);
+    return r - max / 2 - 1;
+}
+
+enum {
+    NRAND = 16
+};
+
+#define RandomIntPairParameters(n, s, t) \
+ParameterizedTestParameters(s, t) { \
+    static int64_t pairs[2][NRAND]; \
+    for (size_t i = 0; i < NRAND; i++) { \
+        pairs[0][i] = rand_n(n); \
+        pairs[1][i] = rand_n(n); \
+    } \
+    return cr_make_param_array(int64_t[2], pairs, NRAND); \
+}
+
+RandomIntPairParameters(32, bigint, add_rand32)
+ParameterizedTest(int64_t p[2], bigint, add_rand32) {
+    int64_t ix = p[0], iy = p[1], iz = ix + iy;
+    BigInt *exp = bigint_from_int(iz);
+    BigInt *x = bigint_from_int(ix), *y = bigint_from_int(iy);
+    BigInt *z = bigint_add(x, y);
+
+    expect_bigint(eq, exp, z);
+
+    bigint_free_all(exp, x, y, z, NULL);
+}
+
+RandomIntPairParameters(32, bigint, sub_rand32)
+ParameterizedTest(int64_t p[2], bigint, sub_rand32) {
+    int64_t ix = p[0], iy = p[1], iz = ix - iy;
+    BigInt *exp = bigint_from_int(iz);
+    BigInt *x = bigint_from_int(ix), *y = bigint_from_int(iy);
+    BigInt *z = bigint_sub(x, y);
+
+    expect_bigint(eq, exp, z);
+
+    bigint_free_all(exp, x, y, z, NULL);
+}
+
+RandomIntPairParameters(32, bigint, mul_rand32)
+ParameterizedTest(int64_t p[2], bigint, mul_rand32) {
+    int64_t ix = p[0], iy = p[1], iz = ix * iy;
+    BigInt *exp = bigint_from_int(iz);
+    BigInt *x = bigint_from_int(ix), *y = bigint_from_int(iy);
+    BigInt *z = bigint_mul(x, y);
+
+    expect_bigint(eq, exp, z);
+
+    bigint_free_all(exp, x, y, z, NULL);
+}
+
+RandomIntPairParameters(63, bigint, add_rand63)
+ParameterizedTest(int64_t p[2], bigint, add_rand63) {
+    int64_t ix = p[0], iy = p[1], iz = ix + iy;
+    BigInt *exp = bigint_from_int(iz);
+    BigInt *x = bigint_from_int(ix), *y = bigint_from_int(iy);
+    BigInt *z = bigint_add(x, y);
+
+    expect_bigint(eq, exp, z);
+
+    bigint_free_all(exp, x, y, z, NULL);
+}
+
+RandomIntPairParameters(63, bigint, sub_rand63)
+ParameterizedTest(int64_t p[2], bigint, sub_rand63) {
+    int64_t ix = p[0], iy = p[1], iz = ix - iy;
+    BigInt *exp = bigint_from_int(iz);
+    BigInt *x = bigint_from_int(ix), *y = bigint_from_int(iy);
+    BigInt *z = bigint_sub(x, y);
+
+    expect_bigint(eq, exp, z);
+
+    bigint_free_all(exp, x, y, z, NULL);
+}
+
+RandomIntPairParameters(64, bigint, mul_rand64)
+ParameterizedTest(int64_t p[2], bigint, mul_rand64) {
+    int64_t ix = p[0], iy = p[1];
+    BigInt *x = bigint_from_int(ix), *y = bigint_from_int(iy);
+    BigInt *z1 = bigint_mul(x, y), *z2 = bigint_mul(y, x);
+
+    expect_bigint(eq, z1, z2);
+
+    bigint_free_all(x, y, z1, z2, NULL);
 }
