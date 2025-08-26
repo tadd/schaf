@@ -198,3 +198,52 @@ BigInt *bigint_sub(const BigInt *x, const BigInt *y)
 {
     return add_or_sub(x, y, true);
 }
+
+static void digits_ensure_length(uint32_t **d, size_t len)
+{
+    check_empty(*d);
+    for (size_t i = 0; i < len; i++)
+        scary_push(d, UINT32_C(0));
+}
+
+static void digits_pop_zeros(uint32_t *d)
+{
+    size_t len = scary_length(d);
+    for (ssize_t i = len - 1; i > 0 && d[i] == 0; i--)
+        scary_pop(d);
+}
+
+static bool is_zero(const BigInt *x)
+{
+    return scary_length(x->digits) == 1 && x->digits[0] == 0;
+}
+
+static BigInt *normalize(BigInt *x)
+{
+    if (x->negative && is_zero(x))
+        x->negative = false;
+    return x;
+}
+
+BigInt *bigint_mul(const BigInt *x, const BigInt *y)
+{
+    BigInt *z = bigint_new();
+    z->negative = x->negative != y->negative;
+    const uint32_t *dx = x->digits, *dy = y->digits;
+    size_t lx = scary_length(dx), ly = scary_length(dy);
+    uint32_t *dz = z->digits;
+    digits_ensure_length(&dz, lx + ly);
+    uint32_t c = 0;
+    for (size_t i = 0; i < ly; i++) {
+        c = 0;
+        for (size_t j = 0; j < lx; j++) {
+            uint64_t m = (uint64_t) dx[j] * dy[i] + c;
+            dz[i + j] += m & 0xFFFF'FFFFU;
+            c = m >> 32U;
+        }
+    }
+    if (c > 0)
+        dz[lx + ly - 1] += c;
+    digits_pop_zeros(z->digits);
+    return normalize(z);
+}
