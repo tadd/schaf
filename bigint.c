@@ -113,42 +113,29 @@ bool bigint_ne(const BigInt *x, const BigInt *y)
 #define check_empty(a) // nothing
 #endif
 
-static void digits_ensure_length(uint32_t **d, size_t len)
-{
-    check_empty(*d);
-    for (size_t i = 0; i < len; i++)
-        scary_push(d, UINT32_C(0));
-}
-void scary_set_length(void **p, size_t len);
-
 // assumes x > y
-static void abs_add(uint32_t **pz, const uint32_t *x, const uint32_t *y)
+static void abs_add(uint32_t **z, const uint32_t *x, const uint32_t *y)
 {
     size_t lx = scary_length(x), ly = scary_length(y);
-    digits_ensure_length(pz, lx + 1);
-    uint32_t *z = *pz;
     uint32_t c = 0;
     for (size_t i = 0; i < ly; i++) {
         uint64_t a = (uint64_t) x[i] + y[i] + c;
-        z[i] = (uint32_t) (a & 0xFFFF'FFFFU);
+        scary_push(z, (uint32_t) (a & 0xFFFF'FFFFU));
         c = a >> 32U;
     }
     for (size_t i = ly; i < lx; i++) {
         uint64_t a = (uint64_t) x[i] + c;
-        z[i] = (uint32_t) (a & 0xFFFF'FFFFU);
+        scary_push(z, (uint32_t) (a & 0xFFFF'FFFFU));
         c = a >> 32U;
     }
     if (c > 0)
-        z[lx] = c;
-    else
-        scary_pop(z); // decrease length
+        scary_push(z, c);
 }
 
 // assumes x > y
 static void abs_sub(uint32_t **z, const uint32_t *x, const uint32_t *y)
 {
     size_t lx = scary_length(x), ly = scary_length(y);
-    digits_ensure_length(z, lx);
     uint32_t c = 0;
     for (size_t i = 0; i < ly; i++) {
         uint32_t max, min, lc;
@@ -156,7 +143,7 @@ static void abs_sub(uint32_t **z, const uint32_t *x, const uint32_t *y)
             max = y[i], min = x[i], lc = 1;
         else
             max = x[i], min = y[i], lc = 0;
-        *z[i] = max - min - c;
+        scary_push(z, max - min - c);
         c = lc;
     }
     for (size_t i = ly; i < lx; i++) {
@@ -165,7 +152,7 @@ static void abs_sub(uint32_t **z, const uint32_t *x, const uint32_t *y)
             max = c, min = x[i], lc = 1;
         else
             max = x[i], min = c, lc = 0;
-        *z[i] = max - min;
+        scary_push(z, max - min);
         c = lc;
     }
 }
@@ -193,14 +180,12 @@ static BigInt *add_or_sub(const BigInt *x, const BigInt *y, bool sub)
     if (x->negative == yneg) {
         z->negative = x->negative;
         abs_add(&z->digits, dmax, dmin);
-        return z;
-    }
-    if (cmp == 0) {
+    } else if (cmp == 0)
         set_zero(z);
-        return z;
+    else {
+        z->negative = cmp > 0 ? x->negative : yneg;
+        abs_sub(&z->digits, dmax, dmin);
     }
-    z->negative = cmp > 0 ? x->negative : yneg;
-    abs_sub(&z->digits, dmax, dmin);
     return z;
 }
 
