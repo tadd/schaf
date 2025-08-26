@@ -104,12 +104,18 @@ bool bigint_ne(const BigInt *x, const BigInt *y)
     return !bigint_eq(x, y);
 }
 
+#ifdef DEBUG
+#define check_empty(a) do { \
+        if (scary_length(a) > 0) \
+            bug("length of digits was not 0"); \
+    } while (0)
+#else
+#define check_empty(a) // nothing
+#endif
+
 static void digits_ensure_length(uint32_t **d, size_t len)
 {
-#ifdef DEBUG
-    if (scary_length(*d) > 0)
-        bug("length of digits was not 0");
-#endif
+    check_empty(*d);
     for (size_t i = 0; i < len; i++)
         scary_push(d, UINT32_C(0));
 }
@@ -167,6 +173,7 @@ static void abs_sub(uint32_t **z, const uint32_t *x, const uint32_t *y)
 static void set_zero(BigInt *x)
 {
     x->negative = false;
+    check_empty(x->digits);
     scary_push(&x->digits, UINT32_C(0));
 }
 
