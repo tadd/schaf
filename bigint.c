@@ -1,5 +1,6 @@
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "bigint.h"
 #include "libscary.h"
@@ -57,18 +58,6 @@ static int abs_cmp(const uint32_t *x, const uint32_t *y)
     return 0;
 }
 
-static int abs_eq(const uint32_t *x, const uint32_t *y)
-{
-    size_t len = scary_length(x);
-    if (len != scary_length(y))
-        return false;
-    for (size_t i = 0; i < len; i++) {
-        if (x[i] != y[i])
-            return false;
-    }
-    return true;
-}
-
 int bigint_cmp(const BigInt *x, const BigInt *y)
 {
     if (x->negative != y->negative)
@@ -95,6 +84,13 @@ bool bigint_lt(const BigInt *x, const BigInt *y)
 bool bigint_le(const BigInt *x, const BigInt *y)
 {
     return bigint_cmp(x, y) <= 0;
+}
+
+static int abs_eq(const uint32_t *x, const uint32_t *y)
+{
+    size_t len = scary_length(x);
+    return len == scary_length(y) &&
+        memcmp(x, y, sizeof(uint32_t) * len) == 0;
 }
 
 bool bigint_eq(const BigInt *x, const BigInt *y)
