@@ -11,6 +11,10 @@ struct BigInt {
     uint32_t *digits; // use scary as little-endian
 };
 
+enum {
+    RADIX = UINT32_C(0x1'0000'0000)
+};
+
 static BigInt *bigint_new(void)
 {
     BigInt *b = xmalloc(sizeof(BigInt));
@@ -26,6 +30,16 @@ void bigint_free(BigInt *x)
     free(x);
 }
 
+static inline uint32_t raddiv(uint64_t x)
+{
+    return (uint32_t) (x / RADIX);
+}
+
+static inline uint32_t radmod(uint64_t x)
+{
+    return (uint32_t) (x % RADIX);
+}
+
 BigInt *bigint_from_int(int64_t x)
 {
     BigInt *b = bigint_new();
@@ -35,8 +49,8 @@ BigInt *bigint_from_int(int64_t x)
         b->negative = true;
         x = -(x + 1) + 1;
     }
-    scary_push(&b->digits, (uint32_t) (x & 0xFFFF'FFFFU)); // lower
-    uint32_t upper = x >> 32U;
+    scary_push(&b->digits, radmod(x)); // lower
+    uint32_t upper = raddiv(x);
     if (upper > 0)
         scary_push(&b->digits, upper);
     return b;
@@ -119,13 +133,13 @@ static void abs_add(uint32_t **z, const uint32_t *x, const uint32_t *y)
     uint32_t c = 0;
     for (size_t i = 0; i < ly; i++) {
         uint64_t a = (uint64_t) x[i] + y[i] + c;
-        scary_push(z, (uint32_t) (a & 0xFFFF'FFFFU));
-        c = a >> 32U;
+        scary_push(z, radmod(a));
+        c = raddiv(a);
     }
     for (size_t i = ly; i < lx; i++) {
         uint64_t a = (uint64_t) x[i] + c;
-        scary_push(z, (uint32_t) (a & 0xFFFF'FFFFU));
-        c = a >> 32U;
+        scary_push(z, radmod(a));
+        c = raddiv(a);
     }
     if (c > 0)
         scary_push(z, c);
@@ -238,8 +252,8 @@ BigInt *bigint_mul(const BigInt *x, const BigInt *y)
         c = 0;
         for (size_t j = 0; j < lx; j++) {
             uint64_t m = (uint64_t) xd[j] * yd[i] + c;
-            zd[i + j] += m & 0xFFFF'FFFFU;
-            c = m >> 32U;
+            zd[i + j] += radmod(m);
+            c = raddiv(m);
         }
     }
     if (c > 0)
