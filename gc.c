@@ -99,9 +99,6 @@ static HeapSlot *heap_slot_new(size_t size)
     HeapSlot *s = xmalloc(sizeof(HeapSlot));
     s->size = hsize;
     s->body = xmalloc(hsize);
-#if 0 //defined(__clang__) && __clang_major__ < 19 // XXX: ???
-    memset(s->body, 0, MIN(size, sizeof(GCHeader)));
-#endif
     GCHeader *h = GC_HEADER(s->body);
     init_header(h, size);
     h->next = NULL;
@@ -131,7 +128,6 @@ static void *allocate_from_chunk(GCHeader *prev, GCHeader *curr, size_t size)
         rest->next = next;
         next = rest;
         curr->size = size;
-        curr->next = NULL; //XXX
     }
     if (prev == NULL)
         free_list = next;
