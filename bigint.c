@@ -170,7 +170,7 @@ static void set_zero(BigInt *x)
     scary_push(&x->digits, UINT32_C(0));
 }
 
-BigInt *bigint_add(const BigInt *x, const BigInt *y)
+static BigInt *add_or_sub(const BigInt *x, const BigInt *y, bool sub)
 {
     BigInt *z = bigint_new();
     const uint32_t *dmax, *dmin;
@@ -182,7 +182,8 @@ BigInt *bigint_add(const BigInt *x, const BigInt *y)
         dmax = y->digits;
         dmin = x->digits;
     }
-    if (x->negative == y->negative) {
+    bool yneg = y->negative != sub;
+    if (x->negative == yneg) {
         z->negative = x->negative;
         abs_add(&z->digits, dmax, dmin);
         return z;
@@ -191,7 +192,17 @@ BigInt *bigint_add(const BigInt *x, const BigInt *y)
         set_zero(z);
         return z;
     }
-    z->negative = cmp > 0 ? x->negative : y->negative;
+    z->negative = cmp > 0 ? x->negative : yneg;
     abs_sub(&z->digits, dmax, dmin);
     return z;
+}
+
+BigInt *bigint_add(const BigInt *x, const BigInt *y)
+{
+    return add_or_sub(x, y, false);
+}
+
+BigInt *bigint_sub(const BigInt *x, const BigInt *y)
+{
+    return add_or_sub(x, y, true);
 }
