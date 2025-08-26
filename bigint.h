@@ -15,3 +15,4 @@ bool bigint_eq(const BigInt *x, const BigInt *y); // ==
 bool bigint_ne(const BigInt *x, const BigInt *y); // !=
 
 BigInt *bigint_add(const BigInt *x, const BigInt *y);
+BigInt *bigint_sub(const BigInt *x, const BigInt *y);
