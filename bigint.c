@@ -28,9 +28,12 @@ void bigint_free(BigInt *x)
 BigInt *bigint_from_int(int64_t x)
 {
     BigInt *b = bigint_new();
-    b->negative = x < 0;
-    if (x < 0)
-        x = -x;
+    if (x >= 0)
+        b->negative = false;
+    else {
+        b->negative = true;
+        x = -(x + 1) + 1;
+    }
     scary_push(&b->digits, (uint32_t) (x & 0xFFFF'FFFFU)); // lower
     uint32_t upper = x >> 32U;
     if (upper > 0)
