@@ -374,14 +374,24 @@ Test(table, dup) {
     table_free(u);
 }
 
+// Terminate arguments with NULL
+static void bigint_free_all(BigInt *x, ...)
+{
+    bigint_free(x);
+    va_list ap;
+    va_start(ap, x);
+    while ((x = va_arg(ap, BigInt *)) != NULL)
+        bigint_free(x);
+    va_end(ap);
+}
+
 Test(bigint, basic) {
     BigInt *x = bigint_from_int(300);
     BigInt *y = bigint_from_int(200);
 
     cr_assert(eq(int, 1, bigint_cmp(x, y)));
 
-    bigint_free(y);
-    bigint_free(x);
+    bigint_free_all(x, y, NULL);
 }
 
 Test(bigint, add) {
@@ -395,10 +405,7 @@ Test(bigint, add) {
 
     cr_assert(eq(int, true, bigint_eq(exp, z)));
 
-    bigint_free(exp);
-    bigint_free(z);
-    bigint_free(y);
-    bigint_free(x);
+    bigint_free_all(exp, x, y, z, NULL);
 }
 
 Test(bigint, add_negative) {
@@ -412,10 +419,7 @@ Test(bigint, add_negative) {
 
     cr_assert(eq(int, true, bigint_eq(exp, z)));
 
-    bigint_free(exp);
-    bigint_free(z);
-    bigint_free(y);
-    bigint_free(x);
+    bigint_free_all(exp, x, y, z, NULL);
 }
 
 Test(bigint, add_to_zero) {
@@ -428,10 +432,7 @@ Test(bigint, add_to_zero) {
 
     cr_assert(eq(int, true, bigint_eq(exp, z)));
 
-    bigint_free(exp);
-    bigint_free(z);
-    bigint_free(y);
-    bigint_free(x);
+    bigint_free_all(exp, x, y, z, NULL);
 }
 
 Test(bigint, sub) {
@@ -445,10 +446,7 @@ Test(bigint, sub) {
 
     cr_assert(eq(int, true, bigint_eq(exp, z)));
 
-    bigint_free(exp);
-    bigint_free(z);
-    bigint_free(y);
-    bigint_free(x);
+    bigint_free_all(exp, x, y, z, NULL);
 }
 
 Test(bigint, sub_negative) {
@@ -462,10 +460,7 @@ Test(bigint, sub_negative) {
 
     cr_assert(eq(int, true, bigint_eq(exp, z)));
 
-    bigint_free(exp);
-    bigint_free(z);
-    bigint_free(y);
-    bigint_free(x);
+    bigint_free_all(exp, x, y, z, NULL);
 }
 
 Test(bigint, sub_to_zero) {
@@ -477,10 +472,7 @@ Test(bigint, sub_to_zero) {
 
     cr_assert(eq(int, true, bigint_eq(exp, z)));
 
-    bigint_free(exp);
-    bigint_free(z);
-    bigint_free(y);
-    bigint_free(x);
+    bigint_free_all(exp, x, y, z, NULL);
 }
 
 Test(bigint, mul) {
@@ -494,10 +486,7 @@ Test(bigint, mul) {
 
     cr_assert(eq(int, true, bigint_eq(exp, z)));
 
-    bigint_free(exp);
-    bigint_free(z);
-    bigint_free(y);
-    bigint_free(x);
+    bigint_free_all(exp, x, y, z, NULL);
 }
 
 Test(bigint, mul_negative) {
@@ -511,10 +500,7 @@ Test(bigint, mul_negative) {
 
     cr_assert(eq(int, true, bigint_eq(exp, z)));
 
-    bigint_free(exp);
-    bigint_free(z);
-    bigint_free(y);
-    bigint_free(x);
+    bigint_free_all(exp, x, y, z, NULL);
 }
 
 Test(bigint, mul_to_zero) {
@@ -532,11 +518,5 @@ Test(bigint, mul_to_zero) {
     cr_assert(eq(int, true, bigint_eq(zero, z3)));
     cr_assert(eq(int, true, bigint_eq(zero, z4)));
 
-    bigint_free(zero);
-    bigint_free(z4);
-    bigint_free(z3);
-    bigint_free(z2);
-    bigint_free(z1);
-    bigint_free(x2);
-    bigint_free(x1);
+    bigint_free_all(zero, x1, x2, z1, z2, z3, z4, NULL);
 }
