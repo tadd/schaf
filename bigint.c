@@ -165,25 +165,26 @@ static void set_zero(BigInt *x)
 
 static BigInt *add_or_sub(const BigInt *x, const BigInt *y, bool sub)
 {
-    BigInt *z = bigint_new();
-    const uint32_t *dmax, *dmin;
-    int cmp = abs_cmp(x->digits, y->digits);
+    const uint32_t *xd = x->digits, *yd = y->digits;
+    const uint32_t *maxd, *mind;
+    int cmp = abs_cmp(xd, yd);
     if (cmp > 0) {
-        dmax = x->digits;
-        dmin = y->digits;
+        maxd = xd;
+        mind = yd;
     } else {
-        dmax = y->digits;
-        dmin = x->digits;
+        maxd = yd;
+        mind = xd;
     }
+    BigInt *z = bigint_new();
     bool yneg = y->negative != sub;
     if (x->negative == yneg) {
         z->negative = x->negative;
-        abs_add(&z->digits, dmax, dmin);
+        abs_add(&z->digits, maxd, mind);
     } else if (cmp == 0)
         set_zero(z);
     else {
         z->negative = cmp > 0 ? x->negative : yneg;
-        abs_sub(&z->digits, dmax, dmin);
+        abs_sub(&z->digits, maxd, mind);
     }
     return z;
 }
@@ -228,21 +229,21 @@ BigInt *bigint_mul(const BigInt *x, const BigInt *y)
 {
     BigInt *z = bigint_new();
     z->negative = x->negative != y->negative;
-    const uint32_t *dx = x->digits, *dy = y->digits;
-    size_t lx = scary_length(dx), ly = scary_length(dy);
-    uint32_t *dz = z->digits;
-    digits_ensure_length(&dz, lx + ly);
+    const uint32_t *xd = x->digits, *yd = y->digits;
+    size_t lx = scary_length(xd), ly = scary_length(yd);
+    digits_ensure_length(&z->digits, lx + ly);
+    uint32_t *zd = z->digits;
     uint32_t c = 0;
     for (size_t i = 0; i < ly; i++) {
         c = 0;
         for (size_t j = 0; j < lx; j++) {
-            uint64_t m = (uint64_t) dx[j] * dy[i] + c;
-            dz[i + j] += m & 0xFFFF'FFFFU;
+            uint64_t m = (uint64_t) xd[j] * yd[i] + c;
+            zd[i + j] += m & 0xFFFF'FFFFU;
             c = m >> 32U;
         }
     }
     if (c > 0)
-        dz[lx + ly - 1] += c;
-    digits_pop_zeros(z->digits);
+        zd[lx + ly - 1] += c;
+    digits_pop_zeros(zd);
     return normalize(z);
 }
