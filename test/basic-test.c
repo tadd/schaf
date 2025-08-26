@@ -482,3 +482,61 @@ Test(bigint, sub_to_zero) {
     bigint_free(y);
     bigint_free(x);
 }
+
+Test(bigint, mul) {
+    int64_t ix = (INT64_C(1) << 31U) - 10;
+    int64_t iy = (INT64_C(1) << 31U) - 20;
+    int64_t iz = ix * iy;
+    BigInt *x = bigint_from_int(ix);
+    BigInt *y = bigint_from_int(iy);
+    BigInt *exp = bigint_from_int(iz);
+    BigInt *z = bigint_mul(x, y);
+
+    cr_assert(eq(int, true, bigint_eq(exp, z)));
+
+    bigint_free(exp);
+    bigint_free(z);
+    bigint_free(y);
+    bigint_free(x);
+}
+
+Test(bigint, mul_negative) {
+    int64_t ix = (INT64_C(1) << 31U) - 10;
+    int64_t iy = -((INT64_C(1) << 31U) - 20);
+    int64_t iz = ix * iy;
+    BigInt *x = bigint_from_int(ix);
+    BigInt *y = bigint_from_int(iy);
+    BigInt *exp = bigint_from_int(iz);
+    BigInt *z = bigint_mul(x, y);
+
+    cr_assert(eq(int, true, bigint_eq(exp, z)));
+
+    bigint_free(exp);
+    bigint_free(z);
+    bigint_free(y);
+    bigint_free(x);
+}
+
+Test(bigint, mul_to_zero) {
+    int64_t ix = (INT64_C(1) << 31U) - 10;
+    BigInt *x1 = bigint_from_int(ix);
+    BigInt *x2 = bigint_from_int(-ix);
+    BigInt *zero = bigint_from_int(0);
+    BigInt *z1 = bigint_mul(x1, zero);
+    BigInt *z2 = bigint_mul(x2, zero);
+    BigInt *z3 = bigint_mul(zero, x1);
+    BigInt *z4 = bigint_mul(zero, x2);
+
+    cr_assert(eq(int, true, bigint_eq(zero, z1)));
+    cr_assert(eq(int, true, bigint_eq(zero, z2)));
+    cr_assert(eq(int, true, bigint_eq(zero, z3)));
+    cr_assert(eq(int, true, bigint_eq(zero, z4)));
+
+    bigint_free(zero);
+    bigint_free(z4);
+    bigint_free(z3);
+    bigint_free(z2);
+    bigint_free(z1);
+    bigint_free(x2);
+    bigint_free(x1);
+}
