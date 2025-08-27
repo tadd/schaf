@@ -385,29 +385,51 @@ static void bigint_free_all(BigInt *x, ...)
     va_end(ap);
 }
 
+typedef BigInt *BigIntPtr;
+
+static char *cr_user_BigIntPtr_tostr(const BigIntPtr *x)
+{
+    size_t len = 12; // strlen("0xffffeeeeddddcccc") + 2
+    char *s = xmalloc(len);
+    snprintf(s, len, "%p", *x);
+    return s;
+}
+
+static int cr_user_BigIntPtr_eq(const BigIntPtr *x, const BigIntPtr *y)
+{
+    return bigint_eq(*x, *y);
+}
+
+static int cr_user_BigIntPtr_lt(const BigIntPtr *x, const BigIntPtr *y)
+{
+    return bigint_lt(*x, *y);
+}
+
+#define expect_bigint(op, x, y) cr_expect(op(type(BigIntPtr), x, y))
+
 Test(bigint, basic) {
     BigInt *x = bigint_from_int(300);
     BigInt *y = bigint_from_int(200);
-    cr_expect(eq(int, 1, bigint_cmp(x, y)));
+    expect_bigint(gt, x, y);
 
     BigInt *z = bigint_from_int(INT64_MAX);
-    cr_expect(eq(int, 1, bigint_cmp(z, x)));
-    cr_expect(eq(int, 1, bigint_cmp(z, y)));
-    cr_expect(bigint_eq(z, z));
+    expect_bigint(gt, z, x);
+    expect_bigint(gt, z, y);
+    expect_bigint(eq, z, z);
 
     BigInt *a = bigint_from_int(INT64_MIN);
-    cr_expect(eq(int, -1, bigint_cmp(a, x)));
-    cr_expect(eq(int, -1, bigint_cmp(a, y)));
-    cr_expect(eq(int, -1, bigint_cmp(a, z)));
-    cr_expect(bigint_eq(a, a));
+    expect_bigint(lt, a, x);
+    expect_bigint(lt, a, y);
+    expect_bigint(lt, a, z);
+    expect_bigint(eq, a, a);
 
     BigInt *x2 = bigint_from_int(300);
-    cr_expect(bigint_eq(x, x2));
-    cr_expect(bigint_eq(x2, x));
+    expect_bigint(eq, x, x2);
+    expect_bigint(eq, x2, x);
 
     BigInt *a2 = bigint_from_int(INT64_MIN);
-    cr_expect(bigint_eq(a, a2));
-    cr_expect(bigint_eq(a2, a));
+    expect_bigint(eq, a, a2);
+    expect_bigint(eq, a2, a);
 
     bigint_free_all(x, y, z, a, x2, a2, NULL);
 }
@@ -421,7 +443,7 @@ Test(bigint, add) {
     BigInt *y = bigint_from_int(iy);
     BigInt *z = bigint_add(x, y);
 
-    cr_expect(bigint_eq(exp, z));
+    expect_bigint(eq, exp, z);
 
     bigint_free_all(exp, x, y, z, NULL);
 }
@@ -435,7 +457,7 @@ Test(bigint, add_negative) {
     BigInt *y = bigint_from_int(iy);
     BigInt *z = bigint_add(x, y);
 
-    cr_expect(bigint_eq(exp, z));
+    expect_bigint(eq, exp, z);
 
     bigint_free_all(exp, x, y, z, NULL);
 }
@@ -448,7 +470,7 @@ Test(bigint, add_to_zero) {
     BigInt *y = bigint_from_int(iy);
     BigInt *z = bigint_add(x, y);
 
-    cr_expect(bigint_eq(exp, z));
+    expect_bigint(eq, exp, z);
 
     bigint_free_all(exp, x, y, z, NULL);
 }
@@ -462,7 +484,7 @@ Test(bigint, sub) {
     BigInt *y = bigint_from_int(iy);
     BigInt *z = bigint_sub(x, y);
 
-    cr_expect(bigint_eq(exp, z));
+    expect_bigint(eq, exp, z);
 
     bigint_free_all(exp, x, y, z, NULL);
 }
@@ -476,7 +498,7 @@ Test(bigint, sub_negative) {
     BigInt *y = bigint_from_int(iy);
     BigInt *z = bigint_sub(x, y);
 
-    cr_expect(bigint_eq(exp, z));
+    expect_bigint(eq, exp, z);
 
     bigint_free_all(exp, x, y, z, NULL);
 }
@@ -488,7 +510,7 @@ Test(bigint, sub_to_zero) {
     BigInt *y = bigint_from_int(i);
     BigInt *z = bigint_sub(x, y);
 
-    cr_expect(bigint_eq(exp, z));
+    expect_bigint(eq, exp, z);
 
     bigint_free_all(exp, x, y, z, NULL);
 }
@@ -502,7 +524,7 @@ Test(bigint, mul) {
     BigInt *y = bigint_from_int(iy);
     BigInt *z = bigint_mul(x, y);
 
-    cr_expect(bigint_eq(exp, z));
+    expect_bigint(eq, exp, z);
 
     bigint_free_all(exp, x, y, z, NULL);
 }
@@ -516,7 +538,7 @@ Test(bigint, mul_negative) {
     BigInt *y = bigint_from_int(iy);
     BigInt *z = bigint_mul(x, y);
 
-    cr_expect(bigint_eq(exp, z));
+    expect_bigint(eq, exp, z);
 
     bigint_free_all(exp, x, y, z, NULL);
 }
@@ -531,10 +553,10 @@ Test(bigint, mul_to_zero) {
     BigInt *z3 = bigint_mul(zero, x1);
     BigInt *z4 = bigint_mul(zero, x2);
 
-    cr_expect(bigint_eq(zero, z1));
-    cr_expect(bigint_eq(zero, z2));
-    cr_expect(bigint_eq(zero, z3));
-    cr_expect(bigint_eq(zero, z4));
+    expect_bigint(eq, zero, z1);
+    expect_bigint(eq, zero, z2);
+    expect_bigint(eq, zero, z3);
+    expect_bigint(eq, zero, z4);
 
     bigint_free_all(zero, x1, x2, z1, z2, z3, z4, NULL);
 }
