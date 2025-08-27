@@ -241,6 +241,7 @@ static BigInt *normalize(BigInt *x)
     return x;
 }
 
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
 BigInt *bigint_mul(const BigInt *x, const BigInt *y)
 {
     BigInt *z = bigint_new();
@@ -248,15 +249,19 @@ BigInt *bigint_mul(const BigInt *x, const BigInt *y)
     const uint32_t *dx = x->digits, *dy = y->digits;
     size_t lx = scary_length(dx), ly = scary_length(dy);
     digits_ensure_length(&z->digits, lx + ly);
-    uint32_t *dz = z->digits;
-    uint32_t c = 0;
+    uint32_t *dz = z->digits, c = 0;
     for (size_t iy = 0; iy < ly; iy++) {
-        c = 0;
-        for (size_t ix = 0; ix < lx; ix++) {
-            uint64_t m = (uint64_t) dx[ix] * dy[iy] + c;
-            dz[iy + ix] += radmod(m);
+        uint32_t n = dy[iy];
+        size_t iz = iy;
+        uint64_t m;
+        for (size_t ix = 0; ix < lx; ix++, iz++) {
+            m = (uint64_t) dx[ix] * n + dz[iz] + c;
+            dz[iz] = radmod(m);
             c = raddiv(m);
         }
+        m = (uint64_t) dz[iz] + c;
+        dz[iz] = radmod(m);
+        c = raddiv(m);
     }
     dz[lx + ly - 1] += c;
     digits_pop_zeros(dz);
