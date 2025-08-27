@@ -7,6 +7,8 @@
 void *scary_new(size_t size);
 void scary_free(void *ary);
 size_t scary_length(const void *ary);
+void scary_pop(void *ary);
+
 #ifdef __APPLE__
 #define scary_push_archdep_pattern() unsigned long: scary_push_uint64,
 #else
@@ -57,7 +59,28 @@ void scary_push_uint16p(uint16_t ***, const uint16_t *);
 void scary_push_uint32p(uint32_t ***, const uint32_t *);
 void scary_push_uint64p(uint64_t ***, const uint64_t *);
 
-void scary_pop(void *ary);
-void *scary_dup(void *ary);
+#define scary_dup(p) \
+    _Generic(p, \
+        char *: scary_dup_char, \
+        int8_t *: scary_dup_int8, \
+        int16_t *: scary_dup_int16, \
+        int32_t *: scary_dup_int32, \
+        int64_t *: scary_dup_int64, \
+        uint8_t *: scary_dup_uint8, \
+        uint16_t *: scary_dup_uint16, \
+        uint32_t *: scary_dup_uint32, \
+        uint64_t *: scary_dup_uint64, \
+        void *: scary_dup_void)(p)
+
+char *scary_dup_char(const char *);
+void *scary_dup_void(const void *);
+int8_t *scary_dup_int8(const int8_t *);
+int16_t *scary_dup_int16(const int16_t *);
+int32_t *scary_dup_int32(const int32_t *);
+int64_t *scary_dup_int64(const int64_t *);
+uint8_t *scary_dup_uint8(const uint8_t *);
+uint16_t *scary_dup_uint16(const uint16_t *);
+uint32_t *scary_dup_uint32(const uint32_t *);
+uint64_t *scary_dup_uint64(const uint64_t *);
 
 #endif
