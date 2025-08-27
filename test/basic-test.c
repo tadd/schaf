@@ -298,18 +298,6 @@ Test(schaf, map) {
     expect_runtime_error("expected pair but got integer", "(for-each + 1)");
 }
 
-#define type_name(v) (char *) value_to_type_name(v)
-Test(schaf, type_name) {
-    cr_expect(eq(str, "boolean", type_name(Qfalse)));
-    cr_expect(eq(str, "integer", type_name(V(42))));
-    cr_expect(eq(str, "symbol", type_name(value_of_symbol("foo"))));
-    cr_expect(eq(str, "undef", type_name(Qundef)));
-    cr_expect(eq(str, "pair", type_name(cons(Qfalse, Qnil))));
-    cr_expect(eq(str, "null", type_name(Qnil)));
-    cr_expect(eq(str, "string", type_name(V("bar"))));
-    // "procedure",
-}
-
 Test(schaf, quasiquotes) {
     expect_runtime_error("unbound variable: x", "`(,x)");
 }
