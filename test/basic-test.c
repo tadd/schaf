@@ -388,18 +388,18 @@ static void bigint_free_all(BigInt *x, ...)
 Test(bigint, basic) {
     BigInt *x = bigint_from_int(300);
     BigInt *y = bigint_from_int(200);
-    cr_assert(eq(int, 1, bigint_cmp(x, y)));
+    cr_expect(eq(int, 1, bigint_cmp(x, y)));
 
     BigInt *z = bigint_from_int(INT64_MAX);
-    cr_assert(eq(int, 1, bigint_cmp(z, x)));
-    cr_assert(eq(int, 1, bigint_cmp(z, y)));
-    cr_assert(bigint_eq(z, z));
+    cr_expect(eq(int, 1, bigint_cmp(z, x)));
+    cr_expect(eq(int, 1, bigint_cmp(z, y)));
+    cr_expect(bigint_eq(z, z));
 
     BigInt *a = bigint_from_int(INT64_MIN);
-    cr_assert(eq(int, -1, bigint_cmp(a, x)));
-    cr_assert(eq(int, -1, bigint_cmp(a, y)));
-    cr_assert(eq(int, -1, bigint_cmp(a, z)));
-    cr_assert(bigint_eq(a, a));
+    cr_expect(eq(int, -1, bigint_cmp(a, x)));
+    cr_expect(eq(int, -1, bigint_cmp(a, y)));
+    cr_expect(eq(int, -1, bigint_cmp(a, z)));
+    cr_expect(bigint_eq(a, a));
 
     bigint_free_all(x, y, z, a, NULL);
 }
@@ -413,7 +413,7 @@ Test(bigint, add) {
     BigInt *exp = bigint_from_int(iz);
     BigInt *z = bigint_add(x, y);
 
-    cr_assert(eq(int, true, bigint_eq(exp, z)));
+    cr_expect(eq(int, true, bigint_eq(exp, z)));
 
     bigint_free_all(exp, x, y, z, NULL);
 }
@@ -427,7 +427,7 @@ Test(bigint, add_negative) {
     BigInt *exp = bigint_from_int(iz);
     BigInt *z = bigint_add(x, y);
 
-    cr_assert(eq(int, true, bigint_eq(exp, z)));
+    cr_expect(eq(int, true, bigint_eq(exp, z)));
 
     bigint_free_all(exp, x, y, z, NULL);
 }
@@ -440,7 +440,7 @@ Test(bigint, add_to_zero) {
     BigInt *exp = bigint_from_int(0);
     BigInt *z = bigint_add(x, y);
 
-    cr_assert(eq(int, true, bigint_eq(exp, z)));
+    cr_expect(eq(int, true, bigint_eq(exp, z)));
 
     bigint_free_all(exp, x, y, z, NULL);
 }
@@ -454,7 +454,7 @@ Test(bigint, sub) {
     BigInt *exp = bigint_from_int(iz);
     BigInt *z = bigint_sub(x, y);
 
-    cr_assert(eq(int, true, bigint_eq(exp, z)));
+    cr_expect(eq(int, true, bigint_eq(exp, z)));
 
     bigint_free_all(exp, x, y, z, NULL);
 }
@@ -468,7 +468,7 @@ Test(bigint, sub_negative) {
     BigInt *exp = bigint_from_int(iz);
     BigInt *z = bigint_sub(x, y);
 
-    cr_assert(eq(int, true, bigint_eq(exp, z)));
+    cr_expect(eq(int, true, bigint_eq(exp, z)));
 
     bigint_free_all(exp, x, y, z, NULL);
 }
@@ -480,7 +480,7 @@ Test(bigint, sub_to_zero) {
     BigInt *exp = bigint_from_int(0);
     BigInt *z = bigint_sub(x, y);
 
-    cr_assert(eq(int, true, bigint_eq(exp, z)));
+    cr_expect(eq(int, true, bigint_eq(exp, z)));
 
     bigint_free_all(exp, x, y, z, NULL);
 }
@@ -494,7 +494,7 @@ Test(bigint, mul) {
     BigInt *exp = bigint_from_int(iz);
     BigInt *z = bigint_mul(x, y);
 
-    cr_assert(eq(int, true, bigint_eq(exp, z)));
+    cr_expect(eq(int, true, bigint_eq(exp, z)));
 
     bigint_free_all(exp, x, y, z, NULL);
 }
@@ -508,7 +508,7 @@ Test(bigint, mul_negative) {
     BigInt *exp = bigint_from_int(iz);
     BigInt *z = bigint_mul(x, y);
 
-    cr_assert(eq(int, true, bigint_eq(exp, z)));
+    cr_expect(eq(int, true, bigint_eq(exp, z)));
 
     bigint_free_all(exp, x, y, z, NULL);
 }
@@ -523,10 +523,10 @@ Test(bigint, mul_to_zero) {
     BigInt *z3 = bigint_mul(zero, x1);
     BigInt *z4 = bigint_mul(zero, x2);
 
-    cr_assert(eq(int, true, bigint_eq(zero, z1)));
-    cr_assert(eq(int, true, bigint_eq(zero, z2)));
-    cr_assert(eq(int, true, bigint_eq(zero, z3)));
-    cr_assert(eq(int, true, bigint_eq(zero, z4)));
+    cr_expect(eq(int, true, bigint_eq(zero, z1)));
+    cr_expect(eq(int, true, bigint_eq(zero, z2)));
+    cr_expect(eq(int, true, bigint_eq(zero, z3)));
+    cr_expect(eq(int, true, bigint_eq(zero, z4)));
 
     bigint_free_all(zero, x1, x2, z1, z2, z3, z4, NULL);
 }
