@@ -388,10 +388,20 @@ static void bigint_free_all(BigInt *x, ...)
 Test(bigint, basic) {
     BigInt *x = bigint_from_int(300);
     BigInt *y = bigint_from_int(200);
-
     cr_assert(eq(int, 1, bigint_cmp(x, y)));
 
-    bigint_free_all(x, y, NULL);
+    BigInt *z = bigint_from_int(INT64_MAX);
+    cr_assert(eq(int, 1, bigint_cmp(z, x)));
+    cr_assert(eq(int, 1, bigint_cmp(z, y)));
+    cr_assert(bigint_eq(z, z));
+
+    BigInt *a = bigint_from_int(INT64_MIN);
+    cr_assert(eq(int, -1, bigint_cmp(a, x)));
+    cr_assert(eq(int, -1, bigint_cmp(a, y)));
+    cr_assert(eq(int, -1, bigint_cmp(a, z)));
+    cr_assert(bigint_eq(a, a));
+
+    bigint_free_all(x, y, z, a, NULL);
 }
 
 Test(bigint, add) {

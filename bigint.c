@@ -43,14 +43,16 @@ static inline uint32_t radmod(uint64_t x)
 BigInt *bigint_from_int(int64_t x)
 {
     BigInt *b = bigint_new();
-    if (x >= 0)
+    uint32_t upper;
+    if (x >= 0) {
         b->negative = false;
-    else {
+        upper = raddiv(x);
+    } else {
         b->negative = true;
-        x = -(x + 1) + 1;
+        x = -(x + RADIX);
+        upper = raddiv(x) + 1;
     }
     scary_push(&b->digits, radmod(x)); // lower
-    uint32_t upper = raddiv(x);
     if (upper > 0)
         scary_push(&b->digits, upper);
     return b;
