@@ -560,3 +560,34 @@ Test(bigint, mul_to_zero) {
 
     bigint_free_all(zero, x1, x2, z1, z2, z3, z4, NULL);
 }
+
+struct BigInt { // copied for inspection
+    bool negative;
+    uint32_t *digits;
+};
+
+Test(bigint, mul_large) {
+    int64_t i = (INT64_C(1) << 24U) + 1;
+    uint32_t i2[] = { 0x2000001U, 0x10000U };
+    uint32_t i3[] = { 0x3000001U, 0x30000U, 0x100U };
+    uint32_t i4[] = { 0x4000001U, 0x60000U, 0x400U, 0x1U };
+
+    BigInt *a = bigint_from_int(i);
+    cr_expect(eq(u32, i, a->digits[0]));
+    BigInt *a2 = bigint_mul(a, a);
+    cr_expect(eq(u32[2], i2, a2->digits));
+    BigInt *a3 = bigint_mul(a2, a);
+    cr_expect(eq(u32[3], i3, a3->digits));
+    BigInt *a3_2 = bigint_mul(a, a2);
+    cr_expect(eq(u32[3], i3, a3_2->digits));
+    expect_bigint(eq, a3, a3_2);
+
+    BigInt *a4 = bigint_mul(a2, a2);
+    cr_expect(eq(u32[4], i4, a4->digits));
+    BigInt *a4_2 = bigint_mul(a3, a);
+    cr_expect(eq(u32[4], i4, a4_2->digits));
+    BigInt *a4_3 = bigint_mul(a, a3);
+    cr_expect(eq(u32[4], i4, a4_3->digits));
+
+    bigint_free_all(a, a2, a3, a3_2, a4, a4_2, a4_3, NULL);
+}
