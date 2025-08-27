@@ -401,132 +401,140 @@ Test(bigint, basic) {
     cr_expect(eq(int, -1, bigint_cmp(a, z)));
     cr_expect(bigint_eq(a, a));
 
-    bigint_free_all(x, y, z, a, NULL);
+    BigInt *x2 = bigint_from_int(300);
+    cr_expect(bigint_eq(x, x2));
+    cr_expect(bigint_eq(x2, x));
+
+    BigInt *a2 = bigint_from_int(INT64_MIN);
+    cr_expect(bigint_eq(a, a2));
+    cr_expect(bigint_eq(a2, a));
+
+    bigint_free_all(x, y, z, a, x2, a2, NULL);
 }
 
 Test(bigint, add) {
-    int64_t ix = (INT64_C(1) << 32U) - 10;
-    int64_t iy = (INT64_C(1) << 32U) - 20;
+    int64_t ix = INT64_MAX / 2;
+    int64_t iy = INT64_MAX / 2 - 10;
     int64_t iz = ix + iy;
+    BigInt *exp = bigint_from_int(iz);
     BigInt *x = bigint_from_int(ix);
     BigInt *y = bigint_from_int(iy);
-    BigInt *exp = bigint_from_int(iz);
     BigInt *z = bigint_add(x, y);
 
-    cr_expect(eq(int, true, bigint_eq(exp, z)));
+    cr_expect(bigint_eq(exp, z));
 
     bigint_free_all(exp, x, y, z, NULL);
 }
 
 Test(bigint, add_negative) {
-    int64_t ix = (INT64_C(1) << 32U) - 10;
-    int64_t iy = -((INT64_C(1) << 32U) - 20);
+    int64_t ix = INT32_MAX;
+    int64_t iy = INT32_MIN;
     int64_t iz = ix + iy;
+    BigInt *exp = bigint_from_int(iz);
     BigInt *x = bigint_from_int(ix);
     BigInt *y = bigint_from_int(iy);
-    BigInt *exp = bigint_from_int(iz);
     BigInt *z = bigint_add(x, y);
 
-    cr_expect(eq(int, true, bigint_eq(exp, z)));
+    cr_expect(bigint_eq(exp, z));
 
     bigint_free_all(exp, x, y, z, NULL);
 }
 
 Test(bigint, add_to_zero) {
-    int64_t ix = (INT64_C(1) << 32U) - 10;
+    int64_t ix = INT64_MAX;
     int64_t iy = -ix;
+    BigInt *exp = bigint_from_int(0);
     BigInt *x = bigint_from_int(ix);
     BigInt *y = bigint_from_int(iy);
-    BigInt *exp = bigint_from_int(0);
     BigInt *z = bigint_add(x, y);
 
-    cr_expect(eq(int, true, bigint_eq(exp, z)));
+    cr_expect(bigint_eq(exp, z));
 
     bigint_free_all(exp, x, y, z, NULL);
 }
 
 Test(bigint, sub) {
-    int64_t ix = (INT64_C(1) << 32U) - 10;
-    int64_t iy = (INT64_C(1) << 32U) - 20;
+    int64_t ix = INT32_MAX;
+    int64_t iy = INT32_MAX - 1;
     int64_t iz = ix - iy;
+    BigInt *exp = bigint_from_int(iz);
     BigInt *x = bigint_from_int(ix);
     BigInt *y = bigint_from_int(iy);
-    BigInt *exp = bigint_from_int(iz);
     BigInt *z = bigint_sub(x, y);
 
-    cr_expect(eq(int, true, bigint_eq(exp, z)));
+    cr_expect(bigint_eq(exp, z));
 
     bigint_free_all(exp, x, y, z, NULL);
 }
 
 Test(bigint, sub_negative) {
-    int64_t ix = (INT64_C(1) << 32U) - 10;
-    int64_t iy = -((INT64_C(1) << 32U) - 20);
+    int64_t ix = INT32_MAX - 1;
+    int64_t iy = INT32_MIN;
     int64_t iz = ix - iy;
+    BigInt *exp = bigint_from_int(iz);
     BigInt *x = bigint_from_int(ix);
     BigInt *y = bigint_from_int(iy);
-    BigInt *exp = bigint_from_int(iz);
     BigInt *z = bigint_sub(x, y);
 
-    cr_expect(eq(int, true, bigint_eq(exp, z)));
+    cr_expect(bigint_eq(exp, z));
 
     bigint_free_all(exp, x, y, z, NULL);
 }
 
 Test(bigint, sub_to_zero) {
-    int64_t i = (INT64_C(1) << 32U) - 10;
+    BigInt *exp = bigint_from_int(0);
+    int64_t i = INT64_MAX;
     BigInt *x = bigint_from_int(i);
     BigInt *y = bigint_from_int(i);
-    BigInt *exp = bigint_from_int(0);
     BigInt *z = bigint_sub(x, y);
 
-    cr_expect(eq(int, true, bigint_eq(exp, z)));
+    cr_expect(bigint_eq(exp, z));
 
     bigint_free_all(exp, x, y, z, NULL);
 }
 
 Test(bigint, mul) {
-    int64_t ix = (INT64_C(1) << 31U) - 10;
-    int64_t iy = (INT64_C(1) << 31U) - 20;
+    int64_t ix = INT32_MAX;
+    int64_t iy = INT32_MAX - 1;
     int64_t iz = ix * iy;
+    BigInt *exp = bigint_from_int(iz);
     BigInt *x = bigint_from_int(ix);
     BigInt *y = bigint_from_int(iy);
-    BigInt *exp = bigint_from_int(iz);
     BigInt *z = bigint_mul(x, y);
 
-    cr_expect(eq(int, true, bigint_eq(exp, z)));
+    cr_expect(bigint_eq(exp, z));
 
     bigint_free_all(exp, x, y, z, NULL);
 }
 
 Test(bigint, mul_negative) {
-    int64_t ix = (INT64_C(1) << 31U) - 10;
-    int64_t iy = -((INT64_C(1) << 31U) - 20);
+    int64_t ix = INT32_MAX;
+    int64_t iy = INT32_MIN;
     int64_t iz = ix * iy;
+    BigInt *exp = bigint_from_int(iz);
     BigInt *x = bigint_from_int(ix);
     BigInt *y = bigint_from_int(iy);
-    BigInt *exp = bigint_from_int(iz);
     BigInt *z = bigint_mul(x, y);
 
-    cr_expect(eq(int, true, bigint_eq(exp, z)));
+    cr_expect(bigint_eq(exp, z));
 
     bigint_free_all(exp, x, y, z, NULL);
 }
 
 Test(bigint, mul_to_zero) {
-    int64_t ix = (INT64_C(1) << 31U) - 10;
+    BigInt *zero = bigint_from_int(0);
+    int64_t ix = INT64_MAX;
     BigInt *x1 = bigint_from_int(ix);
     BigInt *x2 = bigint_from_int(-ix);
-    BigInt *zero = bigint_from_int(0);
     BigInt *z1 = bigint_mul(x1, zero);
     BigInt *z2 = bigint_mul(x2, zero);
     BigInt *z3 = bigint_mul(zero, x1);
     BigInt *z4 = bigint_mul(zero, x2);
 
-    cr_expect(eq(int, true, bigint_eq(zero, z1)));
-    cr_expect(eq(int, true, bigint_eq(zero, z2)));
-    cr_expect(eq(int, true, bigint_eq(zero, z3)));
-    cr_expect(eq(int, true, bigint_eq(zero, z4)));
+    cr_expect(bigint_eq(zero, z1));
+    cr_expect(bigint_eq(zero, z2));
+    cr_expect(bigint_eq(zero, z3));
+    cr_expect(bigint_eq(zero, z4));
 
     bigint_free_all(zero, x1, x2, z1, z2, z3, z4, NULL);
 }
