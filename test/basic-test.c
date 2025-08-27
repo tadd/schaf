@@ -300,13 +300,13 @@ Test(schaf, map) {
 
 #define type_name(v) (char *) value_to_type_name(v)
 Test(schaf, type_name) {
-    cr_assert(eq(str, "boolean", type_name(Qfalse)));
-    cr_assert(eq(str, "integer", type_name(V(42))));
-    cr_assert(eq(str, "symbol", type_name(value_of_symbol("foo"))));
-    cr_assert(eq(str, "undef", type_name(Qundef)));
-    cr_assert(eq(str, "pair", type_name(cons(Qfalse, Qnil))));
-    cr_assert(eq(str, "null", type_name(Qnil)));
-    cr_assert(eq(str, "string", type_name(V("bar"))));
+    cr_expect(eq(str, "boolean", type_name(Qfalse)));
+    cr_expect(eq(str, "integer", type_name(V(42))));
+    cr_expect(eq(str, "symbol", type_name(value_of_symbol("foo"))));
+    cr_expect(eq(str, "undef", type_name(Qundef)));
+    cr_expect(eq(str, "pair", type_name(cons(Qfalse, Qnil))));
+    cr_expect(eq(str, "null", type_name(Qnil)));
+    cr_expect(eq(str, "string", type_name(V("bar"))));
     // "procedure",
 }
 
@@ -330,24 +330,24 @@ Test(schaf, case) {
 Test(table, get_put) {
     Table *t = table_new();
     table_put(t, 1, 100);
-    cr_assert(eq(llong, 100, table_get(t, 1)));
+    cr_expect(eq(llong, 100, table_get(t, 1)));
     table_put(t, 2, 200);
     table_put(t, 3, 300);
     table_put(t, 4, 400);
-    cr_assert(eq(llong, 100, table_get(t, 1)));
-    cr_assert(eq(llong, 200, table_get(t, 2)));
-    cr_assert(eq(llong, 300, table_get(t, 3)));
-    cr_assert(eq(llong, 400, table_get(t, 4)));
+    cr_expect(eq(llong, 100, table_get(t, 1)));
+    cr_expect(eq(llong, 200, table_get(t, 2)));
+    cr_expect(eq(llong, 300, table_get(t, 3)));
+    cr_expect(eq(llong, 400, table_get(t, 4)));
     table_put(t, 1, 42);
-    cr_assert(eq(llong, 42, table_get(t, 1)));
-    cr_assert(eq(llong, 200, table_get(t, 2)));
-    cr_assert(eq(llong, 300, table_get(t, 3)));
-    cr_assert(eq(llong, 400, table_get(t, 4)));
+    cr_expect(eq(llong, 42, table_get(t, 1)));
+    cr_expect(eq(llong, 200, table_get(t, 2)));
+    cr_expect(eq(llong, 300, table_get(t, 3)));
+    cr_expect(eq(llong, 400, table_get(t, 4)));
 
     for (int i = 1; i <= 17; i++)
         table_put(t, i, i*10000000);
     for (int i = 1; i <= 17; i++)
-        cr_assert(eq(llong, i*10000000, table_get(t, i)));
+        cr_expect(eq(llong, i*10000000, table_get(t, i)));
 
     table_free(t);
 }
@@ -366,7 +366,7 @@ Test(table, foreach) {
     uint64_t l = 1;
     table_foreach(t, tabforeach, &l);
 
-    cr_assert(eq(u64, 30030, l));
+    cr_expect(eq(u64, 30030, l));
 
     table_free(t);
 }
@@ -378,9 +378,9 @@ Test(table, dup) {
     Table *u = table_dup(t);
     table_free(t);
 
-    cr_assert(not(eq(ptr, t, u)));
+    cr_expect(not(eq(ptr, t, u)));
     for (long i = 1; i < 100; i++)
-        cr_assert(eq(int, i*17, table_get(u, i)));
+        cr_expect(eq(int, i*17, table_get(u, i)));
 
     table_free(u);
 }
