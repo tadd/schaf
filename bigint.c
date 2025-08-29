@@ -19,18 +19,20 @@ enum {
 };
 static const double RADIX_RATIO = 4.294967296; // (/ RADIX RADIX10)
 
+#define digits_new() scary_new(sizeof(uint32_t))
+#define digits_new_sized(n) scary_new_sized((n), sizeof(uint32_t))
 // digits are zero-cleared
 static BigInt *bigint_new_sized(size_t n)
 {
     BigInt *b = xmalloc(sizeof(BigInt));
-    b->digits = scary_new_sized(n, sizeof(uint32_t));
+    b->digits = digits_new_sized(n);
     return b;
 }
 
 static BigInt *bigint_new(void)
 {
     BigInt *b = xmalloc(sizeof(BigInt));
-    b->digits = scary_new(sizeof(uint32_t));
+    b->digits = digits_new();
     return b;
 }
 
@@ -131,26 +133,17 @@ bool bigint_ne(const BigInt *x, const BigInt *y)
     return !bigint_eq(x, y);
 }
 
-#ifdef DEBUG
-#define check_empty(a) do { \
-        if (scary_length(a) > 0) \
-            bug("length of digits was not 0"); \
-    } while (0)
-#else
-#define check_empty(a) // nothing
-#endif
-
 // assumes x > y
 static void abs_add(uint32_t **z, const uint32_t *x, const uint32_t *y)
 {
-    size_t lx = scary_length(x), ly = scary_length(y);
+    size_t i, lx = scary_length(x), ly = scary_length(y);
     uint32_t c = 0;
-    for (size_t i = 0; i < ly; i++) {
+    for (i = 0; i < ly; i++) {
         uint64_t a = (uint64_t) x[i] + y[i] + c;
         scary_push(z, radmod(a));
         c = raddiv(a);
     }
-    for (size_t i = ly; i < lx; i++) {
+    for (; i < lx; i++) {
         uint64_t a = (uint64_t) x[i] + c;
         scary_push(z, radmod(a));
         c = raddiv(a);
@@ -159,11 +152,15 @@ static void abs_add(uint32_t **z, const uint32_t *x, const uint32_t *y)
         scary_push(z, c);
 }
 
-static void digits_pop_zeros(uint32_t *d)
+static bool digits_pop_zeros(uint32_t *d)
 {
     size_t len = scary_length(d);
-    for (ssize_t i = len - 1; i > 0 && d[i] == 0; i--)
+    bool ret = false;
+    for (ssize_t i = len - 1; i > 0 && d[i] == 0; i--) {
         scary_pop(d);
+        ret = true;
+    }
+    return ret;
 }
 
 // assumes x > y
@@ -191,7 +188,6 @@ static void abs_sub(uint32_t **z, const uint32_t *x, const uint32_t *y)
 static void set_zero(BigInt *x)
 {
     x->negative = false;
-    check_empty(x->digits);
     scary_push(&x->digits, UINT32_C(0));
 }
 
@@ -243,6 +239,18 @@ static BigInt *normalize(BigInt *x)
     return x;
 }
 
+static void abs_mul_int(uint32_t *y, const uint32_t *x, uint32_t n, size_t xlen)
+{
+    uint32_t c = 0;
+    uint64_t m;
+    for (size_t i = 0; i < xlen; i++) {
+        m = (uint64_t) x[i] * n + y[i] + c;
+        y[i] = radmod(m);
+        c = raddiv(m);
+    }
+    y[xlen] += c;
+}
+
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 BigInt *bigint_mul(const BigInt *x, const BigInt *y)
 {
@@ -250,23 +258,189 @@ BigInt *bigint_mul(const BigInt *x, const BigInt *y)
     size_t lx = scary_length(dx), ly = scary_length(dy);
     BigInt *z = bigint_new_sized(lx + ly);
     z->negative = x->negative != y->negative;
-    uint32_t *dz = z->digits, c = 0;
-    for (size_t iy = 0; iy < ly; iy++) {
-        uint32_t n = dy[iy];
-        size_t iz = iy;
-        uint64_t m;
-        for (size_t ix = 0; ix < lx; ix++, iz++) {
-            m = (uint64_t) dx[ix] * n + dz[iz] + c;
-            dz[iz] = radmod(m);
-            c = raddiv(m);
-        }
-        m = (uint64_t) dz[iz] + c;
-        dz[iz] = radmod(m);
-        c = raddiv(m);
-    }
-    dz[lx + ly - 1] += c;
+    uint32_t *dz = z->digits;
+    for (size_t i = 0; i < ly; i++)
+        abs_mul_int(dz + i, dx, dy[i], lx);
     digits_pop_zeros(dz);
     return normalize(z);
+}
+
+static BigInt* bigdup(const BigInt *x)
+{
+    BigInt *y = bigint_new();
+    y->negative = x->negative;
+    y->digits = scary_dup(x->digits);
+    return y;
+}
+
+static uint64_t msb_to_u64(const uint32_t *x, size_t n)
+{
+    size_t i = scary_length(x) - 1;
+    if (n == 1)
+        return x[i];
+    return ((uint64_t) x[i] << 32U) | x[i-1];
+}
+
+static int check_div(const uint32_t *x, const uint32_t *y, uint32_t div,
+                     uint32_t **buf, size_t ylen)
+{
+    abs_mul_int(*buf, y, div, ylen);
+    bool poped = digits_pop_zeros(*buf);
+    if (abs_cmp(*buf, x) > 0) {
+        if (poped)
+            scary_push(buf, UINT32_C(0));
+        return 1;
+    }
+    uint32_t *mod = digits_new();
+    abs_sub(&mod, x, *buf);
+    int cmp = abs_cmp(mod, y);
+    scary_free(mod);
+    return cmp > 0 ? -1 : 0;
+}
+
+static uint32_t calc_div(const uint32_t *x, const uint32_t *y, uint32_t init)
+{
+    uint64_t div = init, upper = RADIX, lower = 0;
+    size_t len = scary_length(y);
+    uint32_t *buf = digits_new_sized(len + 1);
+    int c;
+    while ((c = check_div(x, y, div, &buf, len)) != 0) {
+        if (c > 0) {
+            upper = div - 1;
+            div = (div + lower) / 2;
+        } else {
+            lower = div + 1;
+            div = (div + upper) / 2 + 1;
+        }
+    }
+    scary_free(buf);
+    return div;
+}
+
+#define SET_PTR(ptr, val) do { \
+        if (ptr != NULL) \
+            *ptr = (val); \
+    } while (0)
+
+static uint32_t abs_divmod_single(const uint32_t *x, const uint32_t *y,
+                                  uint32_t **pmod)
+{
+    size_t lx = scary_length(x), ly = scary_length(y);
+    uint32_t div;
+    if (lx == 1) {
+        div = x[0] / y[0];
+        goto out;
+    }
+    size_t ny = lx > ly ? 1 : 2;
+    uint64_t x2 = msb_to_u64(x, 2), y2 = msb_to_u64(y, ny);
+    div = x2 / y2;
+    if (lx == 2)
+        goto out;
+    div = calc_div(x, y, div);
+ out:
+    uint32_t *mul = digits_new_sized(ly + 1);
+    abs_mul_int(mul, y, div, ly);
+    digits_pop_zeros(mul);
+    uint32_t *mod = digits_new();
+    abs_sub(&mod, x, mul);
+    scary_free(mul);
+    *pmod = mod;
+    return div;
+}
+
+
+static uint32_t *digits_rshift(const uint32_t *x, size_t n)
+{
+    uint32_t *y = digits_new();
+    for (ssize_t i = n, len = scary_length(x); i < len; i++)
+        scary_push(&y, x[i]);
+    return y;
+}
+
+static uint32_t *lshift1_add(const uint32_t *x, uint32_t a)
+{
+    if (is_zero(x)) {
+        uint32_t *y = digits_new();
+        scary_push(&y, a);
+        return y;
+    }
+    size_t len = scary_length(x);
+    if (x[len-1] == 0)
+        UNREACHABLE();
+    uint32_t *y = digits_new_sized(len + 1);
+    y[0] = a;
+    memcpy(y+1, x, sizeof(uint32_t) * len);
+    return y;
+}
+
+// assumes x > y
+static void abs_divmod(const uint32_t *x, const uint32_t *y,
+                       BigInt **pdiv, BigInt **pmod)
+{
+    size_t lx = scary_length(x), ly = scary_length(y);
+    size_t n = lx - ly;
+    BigInt *div = bigint_new_sized(n + 1);
+    uint32_t *ddiv = div->digits, *dmod = NULL;
+    uint32_t *x2 = digits_rshift(x, n);
+    for (ssize_t i = n; i >= 0; i--) {
+        ddiv[i] = abs_divmod_single(x2, y, &dmod);
+        scary_free(x2);
+        if (i > 0) {
+            x2 = lshift1_add(dmod, x[i-1]);
+            scary_free(dmod);
+        }
+    }
+    digits_pop_zeros(ddiv);
+    if (pdiv != NULL)
+        *pdiv = div;
+    else
+        bigint_free(div);
+    if (pmod != NULL) {
+        BigInt *mod = bigint_new();
+        scary_free(mod->digits);
+        mod->digits = dmod;
+        *pmod = mod;
+    } else
+        scary_free(dmod);
+}
+
+static void divmod(const BigInt *x, const BigInt *y, BigInt **pdiv, BigInt **pmod)
+{
+    const uint32_t *dx = x->digits, *dy = y->digits;
+    if (is_zero(dy)) { // div zero!
+        SET_PTR(pdiv, NULL);
+        SET_PTR(pmod, NULL);
+        return;
+    }
+    int cmp = abs_cmp(dx, dy);
+    bool neg = x->negative != y->negative;
+    if (cmp < 0) {
+        SET_PTR(pdiv, bigint_from_int(0));
+        SET_PTR(pmod, bigdup(x));
+    } else if (cmp == 0) {
+        SET_PTR(pdiv, bigint_from_int(neg ? -1 : 1));
+        SET_PTR(pmod, bigint_from_int(0));
+    } else {
+        abs_divmod(dx, dy, pdiv, pmod);
+        if (pdiv != NULL)
+            (*pdiv)->negative = neg;
+        if (pmod != NULL)
+            (*pmod)->negative = x->negative;
+    }
+}
+
+BigInt *bigint_div(const BigInt *x, const BigInt *y)
+{
+    BigInt *div;
+    divmod(x, y, &div, NULL);
+    return div;
+}
+
+BigInt *bigint_mod(const BigInt *x, const BigInt *y)
+{
+    BigInt *mod;
+    divmod(x, y, NULL, &mod);
+    return mod;
 }
 
 UNUSED static void bigint_dump(const char *s, const uint32_t *a)
@@ -282,7 +456,7 @@ static uint32_t *convert_radix10(const uint32_t *src)
 {
     size_t len = scary_length(src);
     uint32_t *tmp = scary_dup((void *) src);
-    uint32_t *dst = scary_new(sizeof(uint32_t));
+    uint32_t *dst = digits_new();
     size_t max_len = ceil(len * RADIX_RATIO);
     for (size_t i = 0; i < max_len && len > 0; i++) {
         uint32_t r = 0;
