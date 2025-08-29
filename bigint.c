@@ -245,21 +245,20 @@ BigInt *bigint_mul(const BigInt *x, const BigInt *y)
 {
     BigInt *z = bigint_new();
     z->negative = x->negative != y->negative;
-    const uint32_t *xd = x->digits, *yd = y->digits;
-    size_t lx = scary_length(xd), ly = scary_length(yd);
+    const uint32_t *dx = x->digits, *dy = y->digits;
+    size_t lx = scary_length(dx), ly = scary_length(dy);
     digits_ensure_length(&z->digits, lx + ly);
-    uint32_t *zd = z->digits;
+    uint32_t *dz = z->digits;
     uint32_t c = 0;
-    for (size_t i = 0; i < ly; i++) {
+    for (size_t iy = 0; iy < ly; iy++) {
         c = 0;
-        for (size_t j = 0; j < lx; j++) {
-            uint64_t m = (uint64_t) xd[j] * yd[i] + c;
-            zd[i + j] += radmod(m);
+        for (size_t ix = 0; ix < lx; ix++) {
+            uint64_t m = (uint64_t) dx[ix] * dy[iy] + c;
+            dz[iy + ix] += radmod(m);
             c = raddiv(m);
         }
     }
-    if (c > 0)
-        zd[lx + ly - 1] += c;
-    digits_pop_zeros(zd);
+    dz[lx + ly - 1] += c;
+    digits_pop_zeros(dz);
     return normalize(z);
 }
