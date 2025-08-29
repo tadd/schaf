@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -469,6 +470,39 @@ Test(bigint, mul) {
     expect_bigint_binop(mul, 0, INT64_MIN);
 }
 
+Test(bigint, div) {
+    expect_bigint_binop(div, INT64_MAX, INT64_MAX / 3);
+    expect_bigint_binop(div, 0, INT64_MAX);
+    expect_bigint_binop(div, 3, INT64_MAX);
+    expect_bigint_binop(div, -3, INT64_MAX);
+    expect_bigint_binop(div, INT64_MAX, 3);
+    expect_bigint_binop(div, INT64_MAX, -3);
+}
+
+Test(bigint, mod) {
+    expect_bigint_binop(mod, INT64_MAX, INT64_MAX / 3);
+    expect_bigint_binop(mod, 0, INT64_MAX);
+    expect_bigint_binop(mod, 3, INT64_MAX);
+    expect_bigint_binop(mod, -3, INT64_MAX);
+    expect_bigint_binop(mod, INT64_MAX, 3);
+    expect_bigint_binop(mod, INT64_MAX, -3);
+}
+
+Test(bigint, div_mod_divzero) {
+    autoptr(BigInt) *x = bigint_from_int(1);
+    autoptr(BigInt) *y = bigint_from_int(0);
+    autoptr(BigInt) *div = bigint_div(x, y);
+    autoptr(BigInt) *div2 = bigint_div(y, y);
+    autoptr(BigInt) *mod = bigint_mod(x, y);
+    autoptr(BigInt) *mod2 = bigint_mod(y, y);
+
+    cr_expect(eq(ptr, div, NULL));
+    cr_expect(eq(ptr, div2, NULL));
+    cr_expect(eq(ptr, mod, NULL));
+    cr_expect(eq(ptr, mod2, NULL));
+}
+
+
 struct BigInt { // copied for inspection
     bool negative;
     uint32_t *digits;
@@ -560,6 +594,8 @@ enum {
 };
 
 #define RandomIntPairParameters(n, s, t) \
+static_assert(n > 0); \
+static_assert(n <= 64); \
 ParameterizedTestParameters(s, t) { \
     static int64_t pairs[2][NRAND]; \
     for (size_t i = 0; i < NRAND; i++) { \
@@ -573,6 +609,7 @@ ParameterizedTestParameters(s, t) { \
 RandomIntPairParameters(n, bigint, op##_rand##n) \
 ParameterizedTest(int64_t p[2], bigint, op##_rand##n) { \
     int64_t ix = p[0], iy = p[1]; \
+    if (iy == 0) return; /* for div/mod */ \
     autoptr(BigInt) *x = bigint_from_int(ix), *y = bigint_from_int(iy); \
     autoptr(BigInt) *z1 = expf(op, ix, iy, x, y); \
     autoptr(BigInt) *z2 = bigint_##op(x, y); \
@@ -583,12 +620,25 @@ ParameterizedTest(int64_t p[2], bigint, op##_rand##n) { \
 #define BFUNC(op, ix, iy, x, y) bigint_##op((x), (y))
 #define BigIntBinopRandomTestSymRel(n, op) BigIntBinopRandomTest(n, op, BFUNC)
 
-BigIntBinopRandomTestC(32, add)
-BigIntBinopRandomTestC(32, sub)
-BigIntBinopRandomTestC(32, mul)
+#define BigIntDivmodRandomTest(n) \
+RandomIntPairParameters(n, bigint, divmod_rand##n) \
+ParameterizedTest(int64_t p[2], bigint, divmod_rand##n) { \
+    int64_t ix = p[0], iy = p[1]; \
+    if (iy == 0) return; \
+    autoptr(BigInt) *x = bigint_from_int(ix), *y = bigint_from_int(iy); \
+    autoptr(BigInt) *div = bigint_div(x, y), *mod = bigint_mod(x, y); \
+    autoptr(BigInt) *z1 = bigint_mul(y, div); \
+    autoptr(BigInt) *z = bigint_add(z1, mod); \
+    expect_bigint(eq, x, z); \
+}
 
 BigIntBinopRandomTestC(63, add)
 BigIntBinopRandomTestC(63, sub)
+BigIntBinopRandomTestC(32, mul)
+BigIntBinopRandomTestC(64, div)
+BigIntBinopRandomTestC(64, mod)
 
 BigIntBinopRandomTestSymRel(64, add)
 BigIntBinopRandomTestSymRel(64, mul)
+
+BigIntDivmodRandomTest(64)
