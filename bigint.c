@@ -181,26 +181,26 @@ static void set_zero(BigInt *x)
 
 static BigInt *add_or_sub(const BigInt *x, const BigInt *y, bool sub)
 {
-    const uint32_t *xd = x->digits, *yd = y->digits;
-    const uint32_t *maxd, *mind;
-    int cmp = abs_cmp(xd, yd);
+    const uint32_t *dx = x->digits, *dy = y->digits;
+    const uint32_t *dmax, *dmin;
+    int cmp = abs_cmp(dx, dy);
     if (cmp > 0) {
-        maxd = xd;
-        mind = yd;
+        dmax = dx;
+        dmin = dy;
     } else {
-        maxd = yd;
-        mind = xd;
+        dmax = dy;
+        dmin = dx;
     }
     BigInt *z = bigint_new();
     bool yneg = y->negative != sub;
     if (x->negative == yneg) {
         z->negative = x->negative;
-        abs_add(&z->digits, maxd, mind);
+        abs_add(&z->digits, dmax, dmin);
     } else if (cmp == 0)
         set_zero(z);
     else {
         z->negative = cmp > 0 ? x->negative : yneg;
-        abs_sub(&z->digits, maxd, mind);
+        abs_sub(&z->digits, dmax, dmin);
     }
     return z;
 }
@@ -229,14 +229,14 @@ static void digits_pop_zeros(uint32_t *d)
         scary_pop(d);
 }
 
-static bool is_zero(const BigInt *x)
+static bool is_zero(const uint32_t *d)
 {
-    return scary_length(x->digits) == 1 && x->digits[0] == 0;
+    return scary_length(d) == 1 && d[0] == 0;
 }
 
 static BigInt *normalize(BigInt *x)
 {
-    if (x->negative && is_zero(x))
+    if (x->negative && is_zero(x->digits))
         x->negative = false;
     return x;
 }
