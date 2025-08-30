@@ -454,8 +454,8 @@ Test(bigint, add) {
 }
 
 Test(bigint, add_negative) {
-    int64_t ix = INT32_MAX;
-    int64_t iy = INT32_MIN;
+    int64_t ix = INT64_MAX;
+    int64_t iy = INT64_MIN;
     int64_t iz = ix + iy;
     BigInt *exp = bigint_from_int(iz);
     BigInt *x = bigint_from_int(ix);
@@ -481,8 +481,8 @@ Test(bigint, add_to_zero) {
 }
 
 Test(bigint, sub) {
-    int64_t ix = INT32_MAX;
-    int64_t iy = INT32_MAX - 1;
+    int64_t ix = INT64_MAX;
+    int64_t iy = INT64_MAX - 1;
     int64_t iz = ix - iy;
     BigInt *exp = bigint_from_int(iz);
     BigInt *x = bigint_from_int(ix);
@@ -495,8 +495,8 @@ Test(bigint, sub) {
 }
 
 Test(bigint, sub_negative) {
-    int64_t ix = INT32_MAX - 1;
-    int64_t iy = INT32_MIN;
+    int64_t ix = 0;
+    int64_t iy = INT64_MIN + 1;
     int64_t iz = ix - iy;
     BigInt *exp = bigint_from_int(iz);
     BigInt *x = bigint_from_int(ix);
@@ -580,19 +580,22 @@ Test(bigint, mul_large) {
     BigInt *a = bigint_from_int(i);
     cr_expect(eq(u32, i, a->digits[0]));
     BigInt *a2 = bigint_mul(a, a);
-    cr_expect(eq(u32[2], i2, a2->digits));
+    cr_expect_arr_eq(i2, a2->digits, sizeof(uint32_t)*2);
     BigInt *a3 = bigint_mul(a2, a);
-    cr_expect(eq(u32[3], i3, a3->digits));
+    cr_expect_arr_eq(i3, a3->digits, sizeof(uint32_t)*3);
     BigInt *a3_2 = bigint_mul(a, a2);
-    cr_expect(eq(u32[3], i3, a3_2->digits));
+    cr_expect_arr_eq(i3, a3_2->digits, sizeof(uint32_t)*3);
     expect_bigint(eq, a3, a3_2);
 
     BigInt *a4 = bigint_mul(a2, a2);
-    cr_expect(eq(u32[4], i4, a4->digits));
+    cr_expect_arr_eq(i4, a4->digits, sizeof(uint32_t)*4);
     BigInt *a4_2 = bigint_mul(a3, a);
-    cr_expect(eq(u32[4], i4, a4_2->digits));
+    cr_expect_arr_eq(i4, a4_2->digits, sizeof(uint32_t)*4);
     BigInt *a4_3 = bigint_mul(a, a3);
-    cr_expect(eq(u32[4], i4, a4_3->digits));
+    cr_expect_arr_eq(i4, a4_3->digits, sizeof(uint32_t)*4);
+    expect_bigint(eq, a4, a4_2);
+    expect_bigint(eq, a4, a4_3);
+    expect_bigint(eq, a4_2, a4_3);
 
     bigint_free_all(a, a2, a3, a3_2, a4, a4_2, a4_3, NULL);
 }
