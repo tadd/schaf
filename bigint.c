@@ -161,16 +161,16 @@ static void digits_pop_zeros(uint32_t *d)
 // assumes x > y
 static void abs_sub(uint32_t **z, const uint32_t *x, const uint32_t *y)
 {
-    size_t lx = scary_length(x), ly = scary_length(y);
+    size_t i, lx = scary_length(x), ly = scary_length(y);
     uint32_t c = 0;
-    for (size_t i = 0; i < ly; i++) {
+    for (i = 0; i < ly; i++) {
         uint32_t xi = x[i], yi = y[i], lc = 0;
         if (xi < yi)
             xi += RADIX, lc = 1;
         scary_push(z, xi - yi - c);
         c = lc;
     }
-    for (size_t i = ly; i < lx; i++) {
+    for (; i < lx; i++) {
         uint32_t xi = x[i], lc = 0;
         if (xi < c)
             xi += RADIX, lc = 1;
