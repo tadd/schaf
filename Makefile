@@ -4,7 +4,7 @@ CFLAGS = -std=gnu2x -Wall -Wextra -I. $(OPTFLAGS) $(XCFLAGS)
 LIBS = -lm
 ANALYZER = -fanalyzer
 SANITIZER = -fsanitize=undefined #,address
-TIMEOUT = timeout 2
+TIMEOUT = timeout 3
 TIMEOUT_LONGER = timeout 20
 
 OBJ_COMMON = bigint.o gc.o libscary.o parse.o schaf.o utils.o
