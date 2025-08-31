@@ -44,6 +44,42 @@ void bigint_free(BigInt *x)
     free(x);
 }
 
+static BigInt* bigdup(const BigInt *x)
+{
+    BigInt *y = bigint_new();
+    y->negative = x->negative;
+    y->digits = scary_dup(x->digits);
+    return y;
+}
+
+static bool is_zero(const uint32_t *d)
+{
+    return scary_length(d) == 1 && d[0] == 0;
+}
+
+bool bigint_is_zero(const BigInt *x)
+{
+    return is_zero(x->digits);
+}
+
+bool bigint_is_positive(const BigInt *x)
+{
+    return !x->negative && !is_zero(x->digits);
+}
+
+bool bigint_is_negative(const BigInt *x)
+{
+    return x->negative;
+}
+
+BigInt *bigint_negate(const BigInt *x)
+{
+    BigInt *y = bigdup(x);
+    if (!is_zero(y->digits))
+        y->negative = !y->negative;
+    return y;
+}
+
 static inline uint32_t raddiv(uint64_t x)
 {
     return (uint32_t) (x / RADIX);
@@ -227,11 +263,6 @@ BigInt *bigint_sub(const BigInt *x, const BigInt *y)
     return add_or_sub(x, y, true);
 }
 
-static bool is_zero(const uint32_t *d)
-{
-    return scary_length(d) == 1 && d[0] == 0;
-}
-
 static BigInt *normalize(BigInt *x)
 {
     if (x->negative && is_zero(x->digits))
@@ -263,14 +294,6 @@ BigInt *bigint_mul(const BigInt *x, const BigInt *y)
         abs_mul_int(dz + i, dx, dy[i], lx);
     digits_pop_zeros(dz);
     return normalize(z);
-}
-
-static BigInt* bigdup(const BigInt *x)
-{
-    BigInt *y = bigint_new();
-    y->negative = x->negative;
-    y->digits = scary_dup(x->digits);
-    return y;
 }
 
 static uint64_t msb_to_u64(const uint32_t *x, size_t n)
