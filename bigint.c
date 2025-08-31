@@ -19,6 +19,14 @@ enum {
 };
 static const double RADIX_RATIO = 4.294967296; // (/ RADIX RADIX10)
 
+// digits are zero-cleared
+static BigInt *bigint_new_sized(size_t n)
+{
+    BigInt *b = xmalloc(sizeof(BigInt));
+    b->digits = scary_new_sized(n, sizeof(uint32_t));
+    return b;
+}
+
 static BigInt *bigint_new(void)
 {
     BigInt *b = xmalloc(sizeof(BigInt));
@@ -223,13 +231,6 @@ BigInt *bigint_sub(const BigInt *x, const BigInt *y)
     return add_or_sub(x, y, true);
 }
 
-static void digits_ensure_length(uint32_t **d, size_t len)
-{
-    check_empty(*d);
-    for (size_t i = 0; i < len; i++)
-        scary_push(d, UINT32_C(0));
-}
-
 static bool is_zero(const uint32_t *d)
 {
     return scary_length(d) == 1 && d[0] == 0;
@@ -245,11 +246,10 @@ static BigInt *normalize(BigInt *x)
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 BigInt *bigint_mul(const BigInt *x, const BigInt *y)
 {
-    BigInt *z = bigint_new();
-    z->negative = x->negative != y->negative;
     const uint32_t *dx = x->digits, *dy = y->digits;
     size_t lx = scary_length(dx), ly = scary_length(dy);
-    digits_ensure_length(&z->digits, lx + ly);
+    BigInt *z = bigint_new_sized(lx + ly);
+    z->negative = x->negative != y->negative;
     uint32_t *dz = z->digits, c = 0;
     for (size_t iy = 0; iy < ly; iy++) {
         uint32_t n = dy[iy];
