@@ -546,6 +546,42 @@ Test(bigint, div_mod_divzero) {
 }
 
 
+Test(bigint, from_string) {
+    autoptr(BigInt) *one = bigint_from_int(1);
+    autoptr(BigInt) *none = bigint_from_int(-1);
+    autoptr(BigInt) *max = bigint_from_int(INT64_MAX);
+    autoptr(BigInt) *min = bigint_from_int(INT64_MIN+1);
+
+    autoptr(BigInt) *a = bigint_from_string("0");
+    cr_expect(bigint_is_zero(a));
+
+    autoptr(BigInt) *b = bigint_from_string("-0");
+    cr_expect(bigint_is_zero(b));
+    cr_expect(not(bigint_is_negative(b)));
+
+    autoptr(BigInt) *c = bigint_from_string("1");
+    expect_bigint(eq, one, c);
+
+    autoptr(BigInt) *d = bigint_from_string("-1");
+    expect_bigint(eq, none, d);
+
+    autoptr(BigInt) *e = bigint_from_string("9223372036854775807");
+    expect_bigint(eq, max, e);
+
+    autoptr(BigInt) *f = bigint_from_string("-9223372036854775807");
+    expect_bigint(eq, min, f);
+
+    autoptr(BigInt) *r1 = bigint_from_int(INT64_C(1) << 32U);
+    autoptr(BigInt) *r2 = bigint_mul(r1, r1);
+    autoptr(BigInt) *r4 = bigint_mul(r2, r2);
+    autoptr(BigInt) *r8 = bigint_mul(r4, r4);
+    autoptr(BigInt) *r16 = bigint_mul(r8, r8);
+    autoptr(BigInt) *g = bigint_from_string("13407807929942597099574024"
+    "998205846127479365820592393377723561443721764030073546976801874298"
+    "166903427690031858186486050853753882811946569946433649006084096");
+    expect_bigint(eq, r16, g);
+}
+
 struct BigInt { // copied for inspection
     bool negative;
     uint32_t *digits;
