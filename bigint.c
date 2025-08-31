@@ -13,9 +13,9 @@ struct BigInt {
 };
 
 enum {
-    RADIX = UINT32_C(0x1'0000'0000),
+    RADIX = 0x1'0000'0000U,
     NDIG10 = 9, // (floor (fllog10 UINT32_MAX))
-    RADIX10 = UINT32_C(1'000'000'000), // (expt 10 NDIG10)
+    RADIX10 = 1'000'000'000U, // (expt 10 NDIG10)
 };
 static const double RADIX_RATIO = 4.294967296; // (/ RADIX RADIX10)
 
