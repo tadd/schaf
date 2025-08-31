@@ -6,6 +6,11 @@ typedef struct BigInt BigInt;
 BigInt *bigint_from_int(int64_t x);
 void bigint_free(BigInt *x);
 
+BigInt *bigint_negate(const BigInt *x); // -@
+bool bigint_is_zero(const BigInt *x); // == 0
+bool bigint_is_positive(const BigInt *x); // > 0
+bool bigint_is_negative(const BigInt *x); // < 0
+
 int bigint_cmp(const BigInt *x, const BigInt *y); // <=>
 bool bigint_gt(const BigInt *x, const BigInt *y); // >
 bool bigint_ge(const BigInt *x, const BigInt *y); // >=

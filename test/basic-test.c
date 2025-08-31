@@ -431,6 +431,49 @@ Test(bigint, basic) {
     expect_bigint(lt, y, z);
 }
 
+Test(bigint, signs) {
+    autoptr(BigInt) *a = bigint_from_int(1);
+    autoptr(BigInt) *b = bigint_from_int(-1);
+    autoptr(BigInt) *c = bigint_from_int(INT64_MAX);
+    autoptr(BigInt) *d = bigint_from_int(INT64_MIN);
+    autoptr(BigInt) *z = bigint_from_int(0);
+
+    cr_expect(bigint_is_positive(a));
+    cr_expect(not(bigint_is_negative(a)));
+    cr_expect(bigint_is_negative(b));
+    cr_expect(not(bigint_is_positive(b)));
+    cr_expect(bigint_is_positive(c));
+    cr_expect(not(bigint_is_negative(c)));
+    cr_expect(bigint_is_negative(d));
+    cr_expect(not(bigint_is_positive(d)));
+    cr_expect(not(bigint_is_positive(z)));
+    cr_expect(not(bigint_is_negative(z)));
+}
+
+Test(bigint, negate) {
+    autoptr(BigInt) *x = bigint_from_int(INT64_MAX);
+    autoptr(BigInt) *y = bigint_from_int(INT64_MIN+1);
+    autoptr(BigInt) *z = bigint_from_int(0);
+    autoptr(BigInt) *nx = bigint_from_int(-INT64_MAX);
+    autoptr(BigInt) *ny = bigint_from_int(-(INT64_MIN+1));
+
+    autoptr(BigInt) *nx2 = bigint_negate(x);
+    autoptr(BigInt) *ny2 = bigint_negate(y);
+    autoptr(BigInt) *nz2 = bigint_negate(z);
+
+    expect_bigint(eq, nx, nx2);
+    expect_bigint(eq, ny, ny2);
+    expect_bigint(eq, z, nz2);
+
+    autoptr(BigInt) *nx3 = bigint_negate(x);
+    autoptr(BigInt) *ny3 = bigint_negate(y);
+    autoptr(BigInt) *nz3 = bigint_negate(z);
+
+    expect_bigint(eq, nx2, nx3);
+    expect_bigint(eq, ny2, ny3);
+    expect_bigint(eq, z, nz3);
+}
+
 #define C_OP(x) C_OP_##x
 #define C_OP_add +
 #define C_OP_sub -
