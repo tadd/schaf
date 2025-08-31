@@ -1,3 +1,5 @@
+#include <ctype.h>
+#include <inttypes.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -17,7 +19,6 @@ enum {
     NDIG10 = 9, // (floor (fllog10 UINT32_MAX))
     RADIX10 = 1'000'000'000U, // (expt 10 NDIG10)
 };
-static const double RADIX_RATIO = 4.294967296; // (/ RADIX RADIX10)
 
 #define digits_new() scary_new(sizeof(uint32_t))
 #define digits_new_sized(n) scary_new_sized((n), sizeof(uint32_t))
@@ -78,6 +79,88 @@ BigInt *bigint_negate(const BigInt *x)
     if (!is_zero(y->digits))
         y->negative = !y->negative;
     return y;
+}
+
+static uint32_t scan_int_ndig(const char *s, size_t n)
+{
+    char buf[n + 1];
+    strncpy(buf, s, n);
+    buf[n] = '\0';
+    return strtoul(buf, NULL, 10);
+}
+
+static uint32_t *convert_radix(const uint32_t *src, size_t rad_src, size_t rad_dst)
+{
+    size_t len = scary_length(src);
+    uint32_t *tmp = scary_dup((void *) src);
+    uint32_t *dst = digits_new();
+    size_t max_len = ceil(len * log(rad_src) / log(rad_dst));
+    for (size_t i = 0; i < max_len && len > 0; i++) {
+        uint32_t r = 0;
+        for (ssize_t j = len - 1; j >= 0; j--) {
+            uint64_t t = tmp[j] + r * rad_src;
+            tmp[j] = t / rad_dst;
+            r = t % rad_dst;
+        }
+        scary_push(&dst, r);
+        while (len > 0 && tmp[len - 1] == 0)
+            len--;
+    }
+    scary_free(tmp);
+    return dst;
+}
+
+static bool digits_pop_zeros(uint32_t *d)
+{
+    size_t len = scary_length(d);
+    bool ret = false;
+    for (ssize_t i = len - 1; i > 0 && d[i] == 0; i--) {
+        scary_pop(d);
+        ret = true;
+    }
+    return ret;
+}
+
+static BigInt *normalize(BigInt *x)
+{
+    digits_pop_zeros(x->digits);
+    if (x->negative && is_zero(x->digits))
+        x->negative = false;
+    return x;
+}
+
+BigInt *bigint_from_string(const char *s)
+{
+    const char *p = s;
+    bool negative = false;
+    while (isspace(*p))
+        p++;
+    if (*p == '+')
+        p++;
+    else if (*p == '-') {
+        negative = true;
+        p++;
+    }
+    const char *dbeg = p;
+    while (isdigit(*p))
+        p++;
+    size_t len = p - dbeg;
+    if (len == 0)
+        return NULL;
+    size_t div = len / NDIG10, mod = len % NDIG10;
+    size_t ndig = div + (mod > 0 ? 1 : 0);
+    BigInt *b = bigint_new_sized(ndig);
+    b->negative = negative;
+    uint32_t *d = b->digits;
+    d[ndig-1] = scan_int_ndig(dbeg, mod);
+    p = dbeg + mod;
+    for (ssize_t i = ndig - 2; i >= 0; i--) {
+        d[i] = scan_int_ndig(p, NDIG10);
+        p += NDIG10;
+    }
+    b->digits = convert_radix(d, RADIX10, RADIX);
+    scary_free(d);
+    return normalize(b);
 }
 
 static inline uint32_t raddiv(uint64_t x)
@@ -188,17 +271,6 @@ static void abs_add(uint32_t **z, const uint32_t *x, const uint32_t *y)
         scary_push(z, c);
 }
 
-static bool digits_pop_zeros(uint32_t *d)
-{
-    size_t len = scary_length(d);
-    bool ret = false;
-    for (ssize_t i = len - 1; i > 0 && d[i] == 0; i--) {
-        scary_pop(d);
-        ret = true;
-    }
-    return ret;
-}
-
 // assumes x > y
 static void abs_sub(uint32_t **z, const uint32_t *x, const uint32_t *y)
 {
@@ -263,13 +335,6 @@ BigInt *bigint_sub(const BigInt *x, const BigInt *y)
     return add_or_sub(x, y, true);
 }
 
-static BigInt *normalize(BigInt *x)
-{
-    if (x->negative && is_zero(x->digits))
-        x->negative = false;
-    return x;
-}
-
 static void abs_mul_int(uint32_t *y, const uint32_t *x, uint32_t n, size_t xlen)
 {
     uint32_t c = 0;
@@ -292,7 +357,6 @@ BigInt *bigint_mul(const BigInt *x, const BigInt *y)
     uint32_t *dz = z->digits;
     for (size_t i = 0; i < ly; i++)
         abs_mul_int(dz + i, dx, dy[i], lx);
-    digits_pop_zeros(dz);
     return normalize(z);
 }
 
@@ -475,30 +539,9 @@ UNUSED static void bigint_dump(const char *s, const uint32_t *a)
     fprintf(stderr, "\n");
 }
 
-static uint32_t *convert_radix10(const uint32_t *src)
-{
-    size_t len = scary_length(src);
-    uint32_t *tmp = scary_dup((void *) src);
-    uint32_t *dst = digits_new();
-    size_t max_len = ceil(len * RADIX_RATIO);
-    for (size_t i = 0; i < max_len && len > 0; i++) {
-        uint32_t r = 0;
-        for (ssize_t j = len - 1; j >= 0; j--) {
-            uint64_t t = tmp[j] + r * RADIX;
-            tmp[j] = t / RADIX10;
-            r = t % RADIX10;
-        }
-        scary_push(&dst, r);
-        while (len > 0 && tmp[len - 1] == 0)
-            len--;
-    }
-    scary_free(tmp);
-    return dst;
-}
-
 char *bigint_to_string(const BigInt *x)
 {
-    uint32_t *dig10 = convert_radix10(x->digits);
+    uint32_t *dig10 = convert_radix(x->digits, RADIX, RADIX10);
     size_t dlen = scary_length(dig10);
     size_t slen = NDIG10 * dlen + 2; // 2 for '-' and '\0'
     char *s = xmalloc(slen), *p = s;

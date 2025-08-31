@@ -4,6 +4,7 @@
 typedef struct BigInt BigInt;
 
 BigInt *bigint_from_int(int64_t x);
+BigInt *bigint_from_string(const char *s);
 void bigint_free(BigInt *x);
 
 BigInt *bigint_negate(const BigInt *x); // -@
