@@ -170,18 +170,16 @@ static Token lex_dots(Parser *p)
 static int unescape_hex(Parser *p)
 {
     unsigned u;
-    int n = fscanf(p->in, "%x", &u);
+    int n = fscanf(p->in, "%x;", &u);
+    const char *exp = "hex escape in string literal";
     if (n == EOF)
-        parse_error(p, "hex escape in string literal", "EOF");
+        parse_error(p, exp, "EOF");
     if (n != 1)
-        parse_error(p, "hex escape in string literal", "invalid string");
-    int c = fgetc(p->in);
-    if (c != ';')
-        parse_error(p, "hex escape in string literal", "not a terminator: '%c' (need ';')", c);
+        parse_error(p, exp, "invalid string");
     if (u == 0)
-        parse_error(p, "hex escape in string literal", "NUL character which forbidden (as of now)");
-    if (u > 0xffu)
-        parse_error(p, "hex escape in string literal", "too large value: %u", u);
+        parse_error(p, exp, "NUL character which forbidden (as of now)");
+    if (u > 0xffU)
+        parse_error(p, exp, "too large value: %u", u);
     return u;
 }
 
@@ -224,61 +222,67 @@ static Token lex_string(Parser *p)
     return TOKEN_STRING(buf);
 }
 
-static int scan_binary_int(FILE *in, int64_t *pi)
+static Token lex_int_binary(Parser *p, int coeff)
 {
-    int64_t i = 0;
-    unsigned n = 0;
-    for (int c; n < 64U; n++) {
-        c = fgetc(in);
+    int64_t v = 0;
+    size_t i;
+    for (i = 0; i < 63; i++) {
+        int c = fgetc(p->in);
         if (c == '0')
-            i <<= 1U;
+            v <<= 1U;
         else if (c == '1')
-            i = (i << 1U) | 1U;
+            v = (v << 1U) | 1U;
         else {
-            ungetc(c, in);
+            ungetc(c, p->in);
             break;
         }
     }
-    if (n == 0 || n == 64U)
-        return 0; // invalid or too long
-    *pi = i;
-    return 1;
+    if (i == 0 || i == 63)
+        parse_error(p, "integer", "invalid string");
+    return TOKEN_INT(coeff * v);
 }
 
-static Token lex_int_prefixed(Parser *p, int cradix)
+static Token lex_int_with_radix(Parser *p, int coeff, unsigned radix)
 {
-    int c = fgetc(p->in), coeff = 1;
+    int64_t i;
+    const char *format;
+    switch (radix) {
+    case 2:
+        return lex_int_binary(p, coeff);
+    case 8:
+        format = "%"SCNo64;
+        break;
+    case 10:
+        format = "%"SCNd64;
+        break;
+    case 16:
+        format = "%"SCNx64;
+        break;
+    default:
+        bug("invalid radix");
+    }
+    int n = fscanf(p->in, format, &i);
+    if (n != 1)
+        parse_error(p, "integer", "invalid string");
+    return TOKEN_INT(coeff * i);
+}
+
+static Token lex_signed_int_with_radix(Parser *p, unsigned radix)
+{
+    int coeff = 1;
+    int c = fgetc(p->in);
     if (c == '+')
         ; // just ignore
     else if (c == '-')
         coeff = -1;
     else
         ungetc(c, p->in);
-    int n;
-    int64_t i;
-    switch (cradix) {
-    case 'b':
-        n = scan_binary_int(p->in, &i);
-        break;
-    case 'o':
-        n = fscanf(p->in, "%"SCNo64, &i);
-        break;
-    case 'd':
-        n = fscanf(p->in, "%"SCNd64, &i);
-        break;
-    case 'x':
-        n = fscanf(p->in, "%"SCNx64, &i);
-        break;
-    default:
-        bug("invalid radix");
-    }
-    if (n != 1)
-        parse_error(p, "prefixed integer", "invalid string");
-    return TOKEN_INT(coeff * i);
+    return lex_int_with_radix(p, coeff, radix);
 }
 
 static Token lex_constant(Parser *p)
 {
+    unsigned radix;
     int c = fgetc(p->in);
     switch (c) {
     case 't':
@@ -288,35 +292,38 @@ static Token lex_constant(Parser *p)
     case '(':
         return TOK_VECTOR_LPAREN;
     case 'b':
+        radix = 2;
+        break;
     case 'd':
+        radix = 10;
+        break;
     case 'o':
+        radix = 8;
+        break;
     case 'x':
-        return lex_int_prefixed(p, c);
+        radix = 16;
+        break;
     default:
         parse_error(p, "constants", "#%c", c);
     }
+    return lex_signed_int_with_radix(p, radix);
 }
 
-static Token lex_int(Parser *p, int c, int coeff)
+static Token lex_int(Parser *p, int coeff)
 {
-    ungetc(c, p->in);
-    int64_t i;
-    int n = fscanf(p->in, "%"SCNd64, &i);
-    if (n != 1)
-        parse_error(p, "integer", "invalid string");
-    return TOKEN_INT(coeff * i);
+    return lex_int_with_radix(p, coeff, 10);
 }
 
 static Token lex_after_sign(Parser *p, int csign)
 {
     int c = fgetc(p->in);
     int dig = isdigit(c);
+    ungetc(c, p->in);
     bool minus = csign == '-';
     if (dig) {
         int coeff = minus ? -1 : 1;
-        return lex_int(p, c, coeff);
+        return lex_int(p, coeff);
     }
-    ungetc(c, p->in);
     return minus ? TOK_IDENT_MINUS() : TOK_IDENT_PLUS();
 }
 
@@ -388,8 +395,10 @@ static Token lex(Parser *p)
     default:
         break;
     }
-    if (isdigit(c))
-        return lex_int(p, c, 1);
+    if (isdigit(c)) {
+        ungetc(c, p->in);
+        return lex_int(p, 1);
+    }
     if (is_initial(c))
         return lex_ident(p, c);
     parse_error(p, "valid char", "'%c'", c);
