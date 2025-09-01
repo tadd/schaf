@@ -463,9 +463,8 @@ static uint32_t abs_divmod_single(const uint32_t *x, const uint32_t *y,
     size_t ny = lx > ly ? 1 : 2;
     uint64_t x2 = msb_to_u64(x, 2), y2 = msb_to_u64(y, ny);
     div = x2 / y2;
-    if (lx == 2)
-        goto out;
-    div = calc_div(x, y, div);
+    if (lx > 2)
+        div = calc_div(x, y, div);
  out:
     uint32_t *mul = digits_new_sized(ly + 1);
     abs_mul_int(mul, y, div, ly);
@@ -510,14 +509,14 @@ static void abs_divmod(const uint32_t *x, const uint32_t *y,
     BigInt *div = bigint_new_sized(n + 1);
     uint32_t *ddiv = div->digits, *dmod = NULL;
     uint32_t *x2 = digits_rshift(x, n);
-    for (ssize_t i = n; i >= 0; i--) {
+    for (ssize_t i = n; i > 0; i--) {
         ddiv[i] = abs_divmod_single(x2, y, &dmod);
         scary_free(x2);
-        if (i > 0) {
-            x2 = lshift1_add(dmod, x[i-1]);
-            scary_free(dmod);
-        }
+        x2 = lshift1_add(dmod, x[i-1]);
+        scary_free(dmod);
     }
+    ddiv[0] = abs_divmod_single(x2, y, &dmod);
+    scary_free(x2);
     digits_pop_zeros(ddiv);
     if (pdiv != NULL)
         *pdiv = div;
