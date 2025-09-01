@@ -3,6 +3,7 @@
 
 #include <setjmp.h>
 
+#include "bigint.h"
 #include "schaf.h"
 #include "utils.h"
 
@@ -34,6 +35,7 @@ typedef enum {
 
 typedef enum {
     TAG_PAIR,
+    TAG_BIGNUM,
     TAG_STRING,
     TAG_CFUNC,
     TAG_SYNTAX, // almost a C Function
@@ -68,6 +70,11 @@ typedef struct {
     Header header;
     char *body;
 } String;
+
+typedef struct {
+    Header header;
+    BigInt *body;
+} Bignum;
 
 typedef struct {
     Header header;
@@ -146,6 +153,7 @@ typedef struct {
 #define VALUE_TAG(v) (HEADER(v)->tag)
 
 #define PAIR(v) ((Pair *) v)
+#define BIGNUM(v) (((Bignum *) v)->body)
 #define LOCATED_PAIR(v) ((LocatedPair *) v)
 #define STRING(v) (((String *) v)->body)
 #define PROCEDURE(v) ((Procedure *) v)
@@ -182,18 +190,21 @@ void gc_add_root(const Value *r);
 ATTR_XMALLOC void *gc_malloc(size_t size);
 
 bool sch_value_is_integer(Value v);
+bool sch_value_is_fixnum(Value v);
+bool sch_value_is_bignum(Value v);
 bool sch_value_is_symbol(Value v);
 bool sch_value_is_string(Value v);
 bool sch_value_is_pair(Value v);
 Type sch_value_type_of(Value v);
 
-int64_t sch_integer_to_cint(Value v);
+int64_t sch_fixnum_to_cint(Value v);
 const char *sch_symbol_to_cstr(Value v);
 const char *sch_string_to_cstr(Value v);
 Symbol sch_symbol_to_csymbol(Value v);
 const char *sch_value_to_type_name(Value v);
 
-Value sch_integer_new(int64_t i);
+Value sch_fixnum_new(int64_t i);
+Value sch_bignum_new(BigInt *b); // moves ownership
 Value sch_symbol_new(const char *s);
 Value sch_string_new(const char *s);
 
@@ -204,6 +215,9 @@ int64_t length(Value list);
 
 Value vector_new(void);
 Value vector_push(Value v, Value e);
+
+Value fixnum_normalize(int64_t x);
+Value bignum_normalize(BigInt *x);
 
 #pragma GCC visibility pop
 
