@@ -16,7 +16,11 @@ struct BigInt {
 
 enum {
     RADIX = 0x1'0000'0000U,
-    NDIG10 = 9, // (floor (fllog10 UINT32_MAX))
+    NDIG2 = 32,
+    NDIG8 = 10, // (floor (/ NDIG2 (fllog2 8)))
+    NDIG10 = 9, // (floor (fllog10 RADIX))
+    NDIG16 = 8, // (floor (/ NDIG2 (fllog2 16)))
+    RADIX8 =  1'073'741'824U, // (expt 8 NDIG8)
     RADIX10 = 1'000'000'000U, // (expt 10 NDIG10)
 };
 
@@ -81,12 +85,12 @@ BigInt *bigint_negate(const BigInt *x)
     return y;
 }
 
-static uint32_t scan_int_ndig(const char *s, size_t n)
+static uint32_t scan_int(const char *s, ssize_t n, unsigned radix)
 {
     char buf[n + 1];
     strncpy(buf, s, n);
     buf[n] = '\0';
-    return strtoul(buf, NULL, 10);
+    return strtoul(buf, NULL, radix);
 }
 
 static uint32_t *convert_radix(const uint32_t *src, size_t rad_src, size_t rad_dst)
@@ -129,7 +133,10 @@ static BigInt *normalize(BigInt *x)
     return x;
 }
 
-BigInt *bigint_from_string(const char *s)
+static BigInt *from_string(const char *s, unsigned radix,
+                           size_t radix_ndig,
+                           uint64_t inner_radix, // 0 means no conversion needed
+                           int (*is_acceptable)(int c))
 {
     const char *p = s;
     bool negative = false;
@@ -142,25 +149,60 @@ BigInt *bigint_from_string(const char *s)
         p++;
     }
     const char *dbeg = p;
-    while (isdigit(*p))
+    while (is_acceptable(*p))
         p++;
     size_t len = p - dbeg;
     if (len == 0)
         return NULL;
-    size_t div = len / NDIG10, mod = len % NDIG10;
+    size_t div = len / radix_ndig, mod = len % radix_ndig;
     size_t ndig = div + (mod > 0 ? 1 : 0);
     BigInt *b = bigint_new_sized(ndig);
     b->negative = negative;
     uint32_t *d = b->digits;
-    d[ndig-1] = scan_int_ndig(dbeg, mod);
-    p = dbeg + mod;
-    for (ssize_t i = ndig - 2; i >= 0; i--) {
-        d[i] = scan_int_ndig(p, NDIG10);
-        p += NDIG10;
+    if (mod > 0) {
+        d[ndig-1] = scan_int(dbeg, mod, radix);
+        ndig--;
     }
-    b->digits = convert_radix(d, RADIX10, RADIX);
-    scary_free(d);
+    p = dbeg + mod;
+    for (ssize_t i = ndig - 1; i >= 0; i--) {
+        d[i] = scan_int(p, radix_ndig, radix);
+        p += radix_ndig;
+    }
+    if (inner_radix > 0) {
+        b->digits = convert_radix(d, inner_radix, RADIX);
+        scary_free(d);
+    }
     return normalize(b);
+}
+
+static int is_binary(int c)
+{
+    return c == '0' || c == '1';
+}
+
+static int is_octal(int c)
+{
+    return c >= '0' && c <= '7';
+}
+
+BigInt *bigint_from_string(const char *s)
+{
+    return from_string(s, 10, NDIG10, RADIX10, isdigit);
+}
+
+BigInt *bigint_from_string_bin(const char *s)
+{
+    return from_string(s, 2, NDIG2, 0, is_binary);
+}
+
+BigInt *bigint_from_string_oct(const char *s)
+{
+    return from_string(s, 8, NDIG8, RADIX8, is_octal);
+}
+
+BigInt *bigint_from_string_hex(const char *s)
+{
+    return from_string(s, 16, NDIG16, 0, isxdigit);
 }
 
 static inline uint32_t raddiv(uint64_t x)
@@ -434,7 +476,6 @@ static uint32_t abs_divmod_single(const uint32_t *x, const uint32_t *y,
     *pmod = mod;
     return div;
 }
-
 
 static uint32_t *digits_rshift(const uint32_t *x, size_t n)
 {
