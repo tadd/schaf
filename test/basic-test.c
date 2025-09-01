@@ -18,7 +18,7 @@
 
 #define value_idfunc list
 #define V(x) \
-    _Generic(x, int: sch_integer_new, char *: sch_string_new, Value: value_idfunc)(x)
+    _Generic(x, int: sch_fixnum_new, char *: sch_string_new, Value: value_idfunc)(x)
 #define expect_value_eq(expected, actual) do { \
         Value vexp = expected, vact = actual; \
         if (sch_value_is_integer(vexp)) \
@@ -111,9 +111,9 @@ Test(schaf, printing) {
     expect_stringify("<undef>", Qundef);
     expect_stringify("()", Qnil);
 
-    expect_stringify("0", sch_integer_new(0));
-    expect_stringify("42", sch_integer_new(42));
-    expect_stringify("-42", sch_integer_new(-42));
+    expect_stringify("0", sch_fixnum_new(0));
+    expect_stringify("42", sch_fixnum_new(42));
+    expect_stringify("-42", sch_fixnum_new(-42));
 
     expect_stringify("foo", sch_symbol_new("foo"));
 

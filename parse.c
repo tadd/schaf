@@ -10,6 +10,13 @@
 #include "schaf.h"
 #include "utils.h"
 
+enum {
+    INT64_MAX_DIG2 = 63,
+    INT64_MAX_DIG8 = 21,
+    INT64_MAX_DIG10 = 18,
+    INT64_MAX_DIG16 = 15,
+};
+
 typedef enum {
     TOK_TYPE_LPAREN,
     TOK_TYPE_RPAREN,
@@ -63,9 +70,19 @@ DEF_CONST_TOKEN_FUNC(ident_plus, IDENT_PLUS, sch_symbol_new("+"))
 DEF_CONST_TOKEN_FUNC(ident_minus, IDENT_MINUS, sch_symbol_new("-"))
 
 // and ctor-s
-static inline Token TOKEN_INT(int64_t i)
+static inline Token TOKEN_INT_FIXNUM(int64_t i)
 {
-    return TOKEN_VAL(INT, sch_integer_new(i));
+    return TOKEN_VAL(INT, fixnum_normalize(i));
+}
+
+static inline Token TOKEN_INT_BIGNUM(BigInt *i, bool negative)
+{
+    if (negative) {
+        BigInt *tmp = bigint_negate(i);
+        bigint_free(i);
+        i = tmp;
+    }
+    return TOKEN_VAL(INT, bignum_normalize(i));
 }
 static inline Token TOKEN_STRING(const char *s)
 {
@@ -222,48 +239,49 @@ static Token lex_string(Parser *p)
     return TOKEN_STRING(buf);
 }
 
-static Token lex_int_binary(Parser *p, int coeff)
-{
-    int64_t v = 0;
-    size_t i;
-    for (i = 0; i < 63; i++) {
-        int c = fgetc(p->in);
-        if (c == '0')
-            v <<= 1U;
-        else if (c == '1')
-            v = (v << 1U) | 1U;
-        else if (isalnum(c)) // XXX
-            parse_error(p, "binary digits", "'%c'", c);
-        else {
-            ungetc(c, p->in);
-            break;
-        }
-    }
-    if (i == 0 || i == 63)
-        parse_error(p, "integer", "invalid string");
-    return TOKEN_INT(coeff * v);
-}
-
 static Token lex_int_with_radix(Parser *p, int coeff, unsigned radix)
 {
+    size_t max_dig;
+    BigInt *(*bigint_from_s)(const char *s);
     switch (radix) {
-    case 2: case 8: case 10: case 16:
+    case 2:
+        max_dig = INT64_MAX_DIG2;
+        bigint_from_s = bigint_from_string_bin;
+        break;
+    case 8:
+        max_dig = INT64_MAX_DIG8;
+        bigint_from_s = bigint_from_string_oct;
+        break;
+    case 10:
+        max_dig = INT64_MAX_DIG10;
+        bigint_from_s = bigint_from_string;
+        break;
+    case 16:
+        max_dig = INT64_MAX_DIG16;
+        bigint_from_s = bigint_from_string_hex;
         break;
     default:
         bug("invalid radix");
     }
-    if (radix == 2)
-        return lex_int_binary(p, coeff);
     char *s;
     int n = fscanf(p->in, "%m[0-9a-zA-Z]", &s);
     if (n != 1)
         parse_error(p, "integer digits", "nothing");
-    char *endp;
-    int64_t i = strtol(s, &endp, radix);
-    if (endp[0] != '\0')
-        parse_error(p, "integer digits", "'%s'", endp); // XXX
+    if (strlen(s) <= max_dig) {
+        char *endp;
+        int64_t i = strtol(s, &endp, radix);
+        if (endp[0] != '\0')
+            parse_error(p, "integer digits",
+                        "'%s' which invalid in radix %u", endp, radix); // XXX
+        free(s);
+        return TOKEN_INT_FIXNUM(coeff * i);
+    }
+    BigInt *b = bigint_from_s(s);
+    if (b == NULL)
+        parse_error(p, "integer digits",
+                    "'%s' which invalid in radix %u", s, radix); // XXX
     free(s);
-    return TOKEN_INT(coeff * i);
+    return TOKEN_INT_BIGNUM(b, coeff < 0);
 }
 
 static Token lex_signed_int_with_radix(Parser *p, unsigned radix)
@@ -310,11 +328,23 @@ static Token lex_constant(Parser *p)
 
 static Token lex_int(Parser *p, int coeff)
 {
-    int64_t i;
-    int n = fscanf(p->in, "%"PRId64, &i);
+    char *s;
+    int n = fscanf(p->in, "%m[0-9a-zA-Z]", &s);
     if (n != 1)
-        parse_error(p, "integer digits", "invalid string");
-    return TOKEN_INT(coeff * i);
+        parse_error(p, "integer digits", "nothing");
+    if (strlen(s) > INT64_MAX_DIG10) {
+        BigInt *b = bigint_from_string(s);
+        if (b == NULL)
+            parse_error(p, "integer digits", "'%s'", s);
+        free(s);
+        return TOKEN_INT_BIGNUM(b, coeff < 0);
+    }
+    char *endp;
+    int64_t i = strtol(s, &endp, 10);
+    if (endp[0] != '\0')
+        parse_error(p, "integer digits", "'%s'", endp);
+    free(s);
+    return TOKEN_INT_FIXNUM(coeff * i);
 }
 
 static Token lex_after_sign(Parser *p, int csign)
@@ -429,7 +459,9 @@ static const char *token_stringify(Token t)
     case TOK_TYPE_VECTOR_LPAREN:
         return "#(";
     case TOK_TYPE_INT:
-        snprintf(buf, sizeof(buf), "%"PRId64, sch_integer_to_cint(t.value));
+        if (!sch_value_is_fixnum(t.value))
+            return bigint_to_string(BIGNUM(t.value));
+        snprintf(buf, sizeof(buf), "%"PRId64, sch_fixnum_to_cint(t.value));
         break;
     case TOK_TYPE_IDENT:
         return sch_symbol_to_cstr(t.value);
