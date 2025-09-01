@@ -67,13 +67,15 @@ static Value inner_continuation = Qfalse;
 // Singletons
 static Value eof_object = Qfalse;
 static Value current_input_port = Qfalse, current_output_port = Qfalse;
+static BigInt *BIGINT_FIXNUM_MIN, *BIGINT_FIXNUM_MAX;
+static const int64_t INT_FIXNUM_MIN = INT64_MIN/2, INT_FIXNUM_MAX = INT64_MAX/2 + 1;
 #define INIT_SINGLETON(var, val) do { if ((var) == Qfalse) (var) = val; } while (0)
 
 //
 // value_is_*: Type Checks
 //
 
-inline bool sch_value_is_integer(Value v)
+inline bool sch_value_is_fixnum(Value v)
 {
     return v & FLAG_MASK_INT;
 }
@@ -91,6 +93,16 @@ static inline bool value_is_immediate(Value v)
 static inline bool value_tag_is(Value v, ValueTag expected)
 {
     return !value_is_immediate(v) && VALUE_TAG(v) == expected;
+}
+
+inline bool sch_value_is_bignum(Value v)
+{
+    return value_tag_is(v, TAG_BIGNUM);
+}
+
+inline bool sch_value_is_integer(Value v)
+{
+    return sch_value_is_fixnum(v) || sch_value_is_bignum(v);
 }
 
 inline bool sch_value_is_string(Value v)
@@ -111,6 +123,7 @@ static bool value_is_procedure(Value v)
     case TAG_CONTINUATION:
     case TAG_CFUNC_CLOSURE:
         return true;
+    case TAG_BIGNUM:
     case TAG_STRING:
     case TAG_PAIR:
     case TAG_VECTOR:
@@ -144,7 +157,7 @@ static Type immediate_type_of(Value v)
 {
     if (v == Qnil)
         return TYPE_NULL;
-    if (sch_value_is_integer(v))
+    if (sch_value_is_fixnum(v))
         return TYPE_INT;
     if (sch_value_is_symbol(v))
         return TYPE_SYMBOL;
@@ -160,6 +173,8 @@ Type sch_value_type_of(Value v)
     if (value_is_immediate(v))
         return immediate_type_of(v);
     switch (VALUE_TAG(v)) {
+    case TAG_BIGNUM:
+        return TYPE_INT;
     case TAG_STRING:
         return TYPE_STRING;
     case TAG_PAIR:
@@ -227,7 +242,7 @@ const char *sch_value_to_type_name(Value v)
 
 // *_to_<cdata>: Convert internal data to external plain C
 
-inline int64_t sch_integer_to_cint(Value x)
+inline int64_t sch_fixnum_to_cint(Value x)
 {
 #if __x86_64__
     return (int64_t) x >> FLAG_NBIT_INT;
@@ -274,10 +289,17 @@ CXRS(DEF_CXR)
 
 // *_new: Convert external plain C data to internal
 
-inline Value sch_integer_new(int64_t i)
+inline Value sch_fixnum_new(int64_t i)
 {
     Value v = i;
     return v << FLAG_NBIT_INT | FLAG_INT;
+}
+
+inline Value sch_bignum_new(BigInt *b)
+{
+    Bignum *v = obj_new(sizeof(Bignum), TAG_BIGNUM);
+    v->body = b;
+    return (Value) v;
 }
 
 // string->symbol
@@ -956,7 +978,7 @@ static Value iload(FILE *in, const char *filename)
         return Qundef;
     add_source(src);
     if (setjmp(jmp_exit) != 0)
-        return sch_integer_new(exit_status);
+        return sch_fixnum_new(exit_status);
     Value ret = eval_body(env_toplevel, src->ast);
     if (is_error(ret)) {
         dump_stack_trace(ERROR(ret));
@@ -1482,6 +1504,15 @@ static Value syn_define(Value env, Value args)
 
 // 6. Standard procedures
 // 6.1. Equivalence predicates
+static Value proc_eqv(UNUSED Value env, Value x, Value y)
+{
+    if (x == y)
+        return Qtrue;
+    if (sch_value_is_bignum(x) && sch_value_is_bignum(y))
+        return BOOL_VAL(bigint_eq(BIGNUM(x), BIGNUM(y)));
+    return Qfalse;
+}
+
 static Value proc_eq(UNUSED Value env, Value x, Value y)
 {
     return BOOL_VAL(x == y);
@@ -1501,6 +1532,8 @@ static bool vector_equal(const Value *x, const Value *y)
     return true;
 }
 
+static inline bool int_eq(Value x, Value y);
+
 static bool equal(Value x, Value y)
 {
     if (x == y)
@@ -1516,10 +1549,11 @@ static bool equal(Value x, Value y)
         return strcmp(STRING(x), STRING(y)) == 0;
     case TYPE_VECTOR:
         return vector_equal(VECTOR(x), VECTOR(y));
+    case TYPE_INT:
+        return int_eq(x, y);
     case TYPE_SYMBOL:
     case TYPE_NULL:
     case TYPE_BOOL:
-    case TYPE_INT:
     case TYPE_PROC:
     case TYPE_ENV:
     case TYPE_PORT:
@@ -1543,21 +1577,21 @@ static Value proc_integer_p(UNUSED Value env, Value obj)
     return BOOL_VAL(sch_value_is_integer(obj));
 }
 
+// generic integer functions
 #define get_int(x) ({ \
             Value X = x; \
             EXPECT(type, TYPE_INT, X); \
-            INT(X); \
+            X; \
         })
 
-typedef bool (*RelOpFunc)(int64_t x, int64_t y);
-static Value relop(RelOpFunc func, Value args)
+typedef bool (*RelOpFunc)(Value x, Value y);
+static Value int_relop(RelOpFunc func, Value args)
 {
     EXPECT(arity_min_2, args);
 
-    Value p = args;
-    int64_t x = get_int(car(p));
+    Value p = args, x = get_int(car(p));
     while ((p = cdr(p)) != Qnil) {
-        int64_t y = get_int(car(p));
+        Value y = get_int(car(p));
         if (!func(x, y))
             return Qfalse;
         x = y;
@@ -1565,113 +1599,331 @@ static Value relop(RelOpFunc func, Value args)
     return Qtrue;
 }
 
-static inline bool relop_eq(int64_t x, int64_t y) { return x == y; }
-static inline bool relop_lt(int64_t x, int64_t y) { return x <  y; }
-static inline bool relop_le(int64_t x, int64_t y) { return x <= y; }
-static inline bool relop_gt(int64_t x, int64_t y) { return x >  y; }
-static inline bool relop_ge(int64_t x, int64_t y) { return x >= y; }
+#define get_bigint(x) ({ \
+            Value X = x; \
+            if (!sch_value_is_bignum(X)) \
+                return false; \
+            BIGNUM(x); \
+        })
+
+static inline bool int_eq(Value x, Value y)
+{
+    return x == y || bigint_eq(get_bigint(x), get_bigint(y));
+}
+
+#define DEF_INT_RELOP_FUNC(name, x, op, y, ifeq, xifabs, yifabs) \
+static inline bool int_##name(Value x, Value y) \
+{ \
+    if (x == y) \
+        return ifeq; \
+    bool fx = sch_value_is_fixnum(x), fy = sch_value_is_fixnum(y); \
+    if (fx && fy) \
+        return sch_fixnum_to_cint(x) op sch_fixnum_to_cint(y); \
+    if (fy) \
+        return bigint_is_##xifabs(BIGNUM(x)); \
+    if (fx) \
+        return bigint_is_##yifabs(BIGNUM(y)); \
+    return bigint_##name(BIGNUM(x), BIGNUM(y)); \
+}
+DEF_INT_RELOP_FUNC(lt, x, <, y, false, negative, positive)
+DEF_INT_RELOP_FUNC(le, x, <=, y, true, negative, positive)
+DEF_INT_RELOP_FUNC(gt, x, >, y, false, positive, negative)
+DEF_INT_RELOP_FUNC(ge, x, >=, y, true, positive, negative)
+
+Value fixnum_normalize(int64_t x)
+{
+    if (x < INT_FIXNUM_MIN || INT_FIXNUM_MAX < x)
+        return sch_bignum_new(bigint_from_int(x));
+    return sch_fixnum_new(x);
+}
+
+Value bignum_normalize(BigInt *x)
+{
+    if (BIGINT_FIXNUM_MAX == NULL) { // init
+        int64_t fixnum_max = INT64_MAX >> 1U;
+        BIGINT_FIXNUM_MAX = bigint_from_int(fixnum_max);
+        BIGINT_FIXNUM_MIN = bigint_from_int(-fixnum_max);
+    }
+    if (bigint_ge(x, BIGINT_FIXNUM_MIN) && bigint_le(x, BIGINT_FIXNUM_MAX))
+        return sch_fixnum_new(bigint_to_int(x));
+    return sch_bignum_new(x);
+}
+
+static Value int_normalize(Value x)
+{
+    return sch_value_is_fixnum(x) ?
+        fixnum_normalize(sch_fixnum_to_cint(x)) : bignum_normalize(BIGNUM(x));
+}
+
+static BigInt *ensure_bigint(Value x)
+{
+    if (sch_value_is_bignum(x))
+        return BIGNUM(x);
+    return bigint_from_int(sch_fixnum_to_cint(x));
+}
+
+// warning: int_add/sub/mul/div frees 1st argument x if it's a bignum
+static Value int_add(Value x, Value y)
+{
+    bool fx = sch_value_is_fixnum(x), fy = sch_value_is_fixnum(y);
+    if (fx && fy) {
+        int64_t z = sch_fixnum_to_cint(x) + sch_fixnum_to_cint(y);
+        return fixnum_normalize(z);
+    }
+    BigInt *bx = ensure_bigint(x), *by = ensure_bigint(y);
+    Value z = bignum_normalize(bigint_add(bx, by));
+    if (fx)
+        bigint_free(bx);
+    else
+        bigint_free(BIGNUM(x)); // XXX: free_force
+    if (fy)
+        bigint_free(by);
+    return z;
+}
+
+static Value int_sub(Value x, Value y)
+{
+    bool fx = sch_value_is_fixnum(x), fy = sch_value_is_fixnum(y);
+    if (fx && fy) {
+        int64_t z = sch_fixnum_to_cint(x) - sch_fixnum_to_cint(y);
+        return fixnum_normalize(z);
+    }
+    BigInt *bx = ensure_bigint(x), *by = ensure_bigint(y);
+    Value z = bignum_normalize(bigint_sub(bx, by));
+    if (fx)
+        bigint_free(bx);
+    else
+        bigint_free(BIGNUM(x)); // XXX: free_force
+    if (fy)
+        bigint_free(by);
+    return z;
+}
+
+static bool fixnum_is_mul_safe(int64_t x, int64_t y)
+{
+    if (x == 0 || y == 0)
+        return true;
+    int64_t min = INT_FIXNUM_MIN / y, max = INT_FIXNUM_MAX / y;
+    return min <= x && x <= max;
+}
+
+static Value int_mul(Value x, Value y)
+{
+    bool fx = sch_value_is_fixnum(x), fy = sch_value_is_fixnum(y);
+    if (fx && fy) {
+        int64_t ix = sch_fixnum_to_cint(x), iy = sch_fixnum_to_cint(y);
+        if (fixnum_is_mul_safe(ix, iy))
+            return fixnum_normalize(ix * iy);
+    }
+    BigInt *bx = ensure_bigint(x), *by = ensure_bigint(y);
+    Value z = bignum_normalize(bigint_mul(bx, by));
+    if (fx)
+        bigint_free(bx);
+    else
+        bigint_free(BIGNUM(x)); // XXX: free_force
+    if (fy)
+        bigint_free(by);
+    return z;
+}
+
+static Value int_dup(Value x)
+{
+    return sch_value_is_fixnum(x) ? x :
+        sch_bignum_new(bigint_dup(BIGNUM(x)));
+}
+
+#define SET_DIVMOD(d, m) do { if (div != NULL) *div = (d); else *mod = (m); } while (0)
+static bool int_divmod_new(Value x, Value y, Value *div, Value *mod)
+{
+    bool fx = sch_value_is_fixnum(x), fy = sch_value_is_fixnum(y);
+    if (fy) {
+        int64_t iy = sch_fixnum_to_cint(y);
+        if (iy == 0)
+            return false; // divzero!
+        if (fx) {
+            int64_t ix = sch_fixnum_to_cint(x);
+            SET_DIVMOD(fixnum_normalize(ix / iy), fixnum_normalize(ix % iy));
+            return true;
+        }
+    }
+    if (fx && !fy) {
+        SET_DIVMOD(sch_fixnum_new(0), int_dup(x));
+        return true;
+    }
+    BigInt *bx = ensure_bigint(x), *by = ensure_bigint(y);
+    SET_DIVMOD(bignum_normalize(bigint_div(bx, by)),
+               bignum_normalize(bigint_mod(bx, by)));
+    if (fx)
+        bigint_free(bx);
+    // there's no bigint_free(BIGNUM(x)) here
+    if (fy)
+        bigint_free(by);
+    return true;
+}
+
+static Value int_div(Value x, Value y)
+{
+    Value div;
+    if (!int_divmod_new(x, y, &div, NULL))
+        return Qfalse; // divzero!
+    if (sch_value_is_bignum(x))
+        bigint_free(BIGNUM(x)); // XXX: free_force
+    return div;
+}
+
+static Value int_mod_new(Value x, Value y)
+{
+    Value mod;
+    if (!int_divmod_new(x, y, NULL, &mod))
+        return Qfalse; // divzero!
+    return mod;
+}
+
+static bool int_is_odd(Value x)
+{
+   return sch_value_is_fixnum(x) ?
+       (sch_fixnum_to_cint(x) % 2) != 0 : bigint_is_odd(BIGNUM(x));
+}
+
+static bool int_is_even(Value x)
+{
+    return sch_value_is_fixnum(x) ?
+        (sch_fixnum_to_cint(x) % 2) == 0 : bigint_is_even(BIGNUM(x));
+}
+
+static bool value_is_zero(Value x)
+{
+    return sch_value_is_fixnum(x) && sch_fixnum_to_cint(x) == 0;
+}
+
+static bool int_is_positive(Value x)
+{
+    return sch_value_is_fixnum(x) ?
+        sch_fixnum_to_cint(x) > 0 : bigint_is_positive(BIGNUM(x));
+}
+
+static bool int_is_negative(Value x)
+{
+    return sch_value_is_fixnum(x) ?
+        sch_fixnum_to_cint(x) < 0 : bigint_is_negative(BIGNUM(x));
+}
+
+static Value int_negate(Value x)
+{
+    if (sch_value_is_fixnum(x)) {
+        int64_t ix = sch_fixnum_to_cint(x);
+        return fixnum_normalize(-ix);
+    }
+    return bignum_normalize(bigint_negate(BIGNUM(x)));
+}
+
+// end of generic integer functions
 
 static Value proc_numeq(UNUSED Value env, Value args)
 {
-    return relop(relop_eq, args);
+    return int_relop(int_eq, args);
 }
 
 static Value proc_lt(UNUSED Value env, Value args)
 {
-    return relop(relop_lt, args);
+    return int_relop(int_lt, args);
 }
 
 static Value proc_gt(UNUSED Value env, Value args)
 {
-    return relop(relop_gt, args);
+    return int_relop(int_gt, args);
 }
 
 static Value proc_le(UNUSED Value env, Value args)
 {
-    return relop(relop_le, args);
+    return int_relop(int_le, args);
 }
 
 static Value proc_ge(UNUSED Value env, Value args)
 {
-    return relop(relop_ge, args);
+    return int_relop(int_ge, args);
 }
 
 static Value proc_zero_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) == 0);
+    return BOOL_VAL(value_is_zero(obj));
 }
 
 static Value proc_positive_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) > 0);
+    if (!sch_value_is_integer(obj))
+        return Qfalse;
+    return BOOL_VAL(int_is_positive(obj));
 }
 
 static Value proc_negative_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) < 0);
+    if (!sch_value_is_integer(obj))
+        return Qfalse;
+    return BOOL_VAL(int_is_negative(obj));
 }
 
 static Value proc_odd_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) % 2 != 0);
+    return BOOL_VAL(sch_value_is_integer(obj) && int_is_odd(obj));
 }
 
 static Value proc_even_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) % 2 == 0);
+    return BOOL_VAL(sch_value_is_integer(obj) && int_is_even(obj));
 }
 
 static Value proc_max(UNUSED Value env, Value args)
 {
     EXPECT(arity_min_1, args);
-    int64_t max = get_int(car(args));
+    Value max = get_int(car(args));
     for (Value p = cdr(args); p != Qnil; p = cdr(p)) {
-        int64_t x = get_int(car(p));
-        if (max < x)
+        Value x = get_int(car(p));
+        if (int_lt(max, x))
             max = x;
     }
-    return sch_integer_new(max);
+    return max;
 }
 
 static Value proc_min(UNUSED Value env, Value args)
 {
     EXPECT(arity_min_1, args);
-    int64_t min = get_int(car(args));
+    Value min = get_int(car(args));
     for (Value p = cdr(args); p != Qnil; p = cdr(p)) {
-        int64_t x = get_int(car(p));
-        if (min > x)
+        Value x = get_int(car(p));
+        if (int_gt(min, x))
             min = x;
     }
-    return sch_integer_new(min);
+    return min;
 }
 
 static Value proc_add(UNUSED Value env, Value args)
 {
-    int64_t y = 0;
-    for (Value p = args; p != Qnil; p = cdr(p))
-        y += get_int(car(p));
-    return sch_integer_new(y);
+    Value y = sch_fixnum_new(0);
+    for (Value p = args; p != Qnil; p = cdr(p)) 
+        y = int_add(y, get_int(car(p)));
+    return y;
 }
 
 static Value proc_sub(UNUSED Value env, Value args)
 {
     EXPECT(arity_min_1, args);
 
-    int64_t y = get_int(car(args));
+    Value y = get_int(car(args));
     Value p = cdr(args);
     if (p == Qnil)
-        return sch_integer_new(-y);
-    for (; p != Qnil; p = cdr(p))
-        y -= get_int(car(p));
-    return sch_integer_new(y);
+        return int_negate(y);
+    for (y = int_dup(y); p != Qnil; p = cdr(p))
+        y = int_sub(y, get_int(car(p)));
+    return y;
 }
 
 static Value proc_mul(UNUSED Value env, Value args)
 {
-    int64_t y = 1;
+    Value y = sch_fixnum_new(1);
     for (Value p = args; p != Qnil; p = cdr(p))
-        y *= get_int(car(p));
-    return sch_integer_new(y);
+        y = int_mul(y, get_int(car(p)));
+    return y;
 }
 
 static Value divzero_error(void)
@@ -1683,97 +1935,113 @@ static Value proc_div(UNUSED Value env, Value args)
 {
     EXPECT(arity_min_1, args);
 
-    int64_t y = get_int(car(args));
+    Value y = get_int(car(args));
     Value p = cdr(args);
     if (p == Qnil) {
-        if (y == 0)
+        if (sch_value_is_bignum(y))
+            return sch_fixnum_new(0);
+        int64_t n = sch_fixnum_to_cint(y);
+        if (n == 0)
             return divzero_error();
-        return sch_integer_new(1 / y); // 0, 1, -1
+        return sch_fixnum_new(1 / y); // 0, 1, -1
     }
-    for (; p != Qnil; p = cdr(p)) {
-        int64_t x = get_int(car(p));
-        if (x == 0)
+    for (y = int_dup(y); p != Qnil; p = cdr(p)) {
+        Value x = get_int(car(p));
+        if (value_is_zero(x))
             return divzero_error();
-        y /= x;
+        y = int_div(y, x);
     }
-    return sch_integer_new(y);
+    return y;
 }
 
 static Value proc_abs(UNUSED Value env, Value x)
 {
-    int64_t n = get_int(x);
-    return sch_integer_new(n < 0 ? -n : n);
+    if (sch_value_is_fixnum(x))
+        return fixnum_normalize(llabs(sch_fixnum_to_cint(x)));
+    return bignum_normalize(bigint_abs(BIGNUM(x)));
 }
 
 static Value proc_quotient(UNUSED Value env, Value x, Value y)
 {
-    int64_t a = get_int(x), b = get_int(y);
-    if (b == 0)
+    EXPECT(type_twin, TYPE_INT, x, y);
+    if (value_is_zero(y))
         return divzero_error();
-    return sch_integer_new(a / b);
+    bool fx = sch_value_is_fixnum(x), fy = sch_value_is_fixnum(y);
+    if (fx && fy) {
+        int64_t ix = sch_fixnum_to_cint(x), iy = sch_fixnum_to_cint(y);
+        return fixnum_normalize(ix / iy);
+    }
+    BigInt *bx = ensure_bigint(x), *by = ensure_bigint(y);
+    Value z = bignum_normalize(bigint_div(bx, by));
+    if (fx)
+        bigint_free(bx);
+    if (fy)
+        bigint_free(by);
+    return z;
 }
 
 static Value proc_remainder(UNUSED Value env, Value x, Value y)
 {
-    int64_t a = get_int(x), b = get_int(y);
-    if (b == 0)
+    EXPECT(type_twin, TYPE_INT, x, y);
+    if (value_is_zero(y))
         return divzero_error();
-    int64_t c = a % b;
-    return sch_integer_new(c);
+    return int_mod_new(x, y);
 }
 
 static Value proc_modulo(UNUSED Value env, Value x, Value y)
 {
-    int64_t a = get_int(x), b = get_int(y);
-    if (b == 0)
+    EXPECT(type_twin, TYPE_INT, x, y);
+    if (value_is_zero(y))
         return divzero_error();
-    int64_t c = a % b;
-    if ((a < 0 && b > 0) || (a > 0 && b < 0))
-        c += b;
-    return sch_integer_new(c);
-}
-
-static int64_t expt(int64_t x, int64_t y)
-{
-    int64_t z = 1;
-    while (y > 0) {
-        if ((y % 2) == 0) {
-            x *= x;
-            y /= 2;
-        } else {
-            z *= x;
-            y--;
-        }
-    }
+    Value z = int_mod_new(x, y);
+    if (int_is_negative(x) != int_is_negative(y))
+        z = int_add(z, y);
     return z;
 }
 
-#define get_non_negative_int(x) ({ \
-            int64_t N = get_int(x); \
-            if (UNLIKELY(N < 0)) \
+static Value expt(Value x0, Value y0)
+{
+    const Value one = sch_fixnum_new(1);
+    const Value two = sch_fixnum_new(2);
+    Value x = int_dup(x0), y = int_dup(y0);
+    Value z = sch_fixnum_new(1);
+    while (int_is_positive(y)) {
+        if (int_is_even(y)) {
+            x = int_mul(x, x);
+            y = int_div(y, two);
+        } else {
+            z = int_mul(z, x);
+            y = int_sub(y, one);
+        }
+    }
+    return int_normalize(z);
+}
+
+#define expect_non_negative_int(x) ({ \
+            Value N = x; \
+            if (UNLIKELY(int_is_negative(N))) \
                 return runtime_error("must be non-negative: %"PRId64, N); \
-            N; \
         })
 
 static Value proc_expt(UNUSED Value env, Value x, Value y)
 {
-    int64_t a = get_int(x), b = get_non_negative_int(y);
-    int64_t c;
-    if (b == 0)
-        c = 1;
-    else if (a == 0)
-        c = 0;
-    else
-        c = expt(a, b);
-    return sch_integer_new(c);
+    EXPECT(type_twin, TYPE_INT, x, y);
+    expect_non_negative_int(y);
+    if (value_is_zero(y))
+        return sch_fixnum_new(1);
+    if (x == 0)
+        return sch_fixnum_new(0);
+    return expt(x, y);
 }
 
 // 6.2.6. Numerical input and output
 static Value proc_number_to_string(UNUSED Value env, Value x)
 {
-    char buf[22]; // log10(UINT64_MAX)+2
     EXPECT(type, TYPE_INT, x);
-    int64_t n = INT(x);
+    if (sch_value_is_bignum(x))
+        return string_new_moved(bigint_to_string(BIGNUM(x)));
+    char buf[22]; // log10(UINT64_MAX)+2
+    int64_t n = sch_fixnum_to_cint(x);
     snprintf(buf, sizeof(buf), "%"PRId64, n);
     return sch_string_new(buf);
 }
@@ -1891,7 +2159,7 @@ int64_t length(Value l)
 static Value proc_length(UNUSED Value env, Value list)
 {
     EXPECT(list_head, list);
-    return sch_integer_new(length(list));
+    return sch_fixnum_new(length(list));
 }
 
 static Value dup_list(Value l, Value *plast)
@@ -1956,15 +2224,31 @@ static Value list_tail(Value list, int64_t k)
     return p;
 }
 
+#define get_cint(x) ({ \
+            Value X = x; \
+            if (!sch_value_is_fixnum(X)) \
+                return runtime_error("expected fixnum but got %s", \
+                                     sch_value_is_bignum(X) ? "bignum" : \
+                                     sch_value_to_type_name(X)); \
+            sch_fixnum_to_cint(x); \
+        })
+
+#define get_non_negative_cint(x) ({ \
+            int64_t N = get_cint(x); \
+            if (UNLIKELY(N < 0)) \
+                return runtime_error("must be non-negative: %"PRId64, N); \
+            N; \
+        })
+
 static Value proc_list_tail(UNUSED Value env, Value list, Value vk)
 {
-    int64_t k = get_non_negative_int(vk);
+    int64_t k = get_non_negative_cint(vk);
     return list_tail(list, k);
 }
 
 static Value proc_list_ref(UNUSED Value env, Value list, Value vk)
 {
-    int64_t k = get_non_negative_int(vk);
+    int64_t k = get_non_negative_cint(vk);
     Value tail = list_tail(list, k);
     if (tail == Qnil)
         return runtime_error("list is not longer than %"PRId64, INT(k));
@@ -2050,7 +2334,7 @@ static Value proc_string_p(UNUSED Value env, Value obj)
 static Value proc_string_length(UNUSED Value env, Value s)
 {
     EXPECT(type, TYPE_STRING, s);
-    return sch_integer_new(strlen(STRING(s)));
+    return sch_fixnum_new(strlen(STRING(s)));
 }
 
 static Value proc_string_eq(UNUSED Value env, Value s1, Value s2)
@@ -2063,7 +2347,7 @@ static Value proc_substring(UNUSED Value env, Value string, Value vstart, Value 
 {
     EXPECT(type, TYPE_STRING, string);
     const char *s = STRING(string);
-    int64_t start = get_non_negative_int(vstart), end = get_non_negative_int(vend);
+    int64_t start = get_non_negative_cint(vstart), end = get_non_negative_cint(vend);
     if (UNLIKELY(start > end))
         return runtime_error("start index %"PRId64" must be <= end index %"PRId64, start, end);
     size_t len = strlen(s);
@@ -2122,7 +2406,7 @@ static Value proc_vector(UNUSED Value env, Value args)
 static Value proc_make_vector(UNUSED Value env, Value args)
 {
     EXPECT(arity_range, 1, 2, args);
-    size_t k = get_non_negative_int(car(args));
+    size_t k = get_non_negative_cint(car(args));
     Value fill = Qfalse;
     if (cdr(args) != Qnil)
         fill = cadr(args);
@@ -2135,13 +2419,13 @@ static Value proc_make_vector(UNUSED Value env, Value args)
 static Value proc_vector_length(UNUSED Value env, Value v)
 {
     EXPECT(type, TYPE_VECTOR, v);
-    return sch_integer_new(scary_length(VECTOR(v)));
+    return sch_fixnum_new(scary_length(VECTOR(v)));
 }
 
 static Value proc_vector_ref(UNUSED Value env, Value o, Value k)
 {
     EXPECT(type, TYPE_VECTOR, o);
-    size_t i = get_non_negative_int(k);
+    size_t i = get_non_negative_cint(k);
     Value *v = VECTOR(o);
     if (i >= scary_length(v))
         return Qfalse;
@@ -2151,7 +2435,7 @@ static Value proc_vector_ref(UNUSED Value env, Value o, Value k)
 static Value proc_vector_set(UNUSED Value env, Value o, Value k, Value obj)
 {
     EXPECT(type, TYPE_VECTOR, o);
-    size_t i = get_non_negative_int(k);
+    size_t i = get_non_negative_cint(k);
     Value *v = VECTOR(o);
     if (i < scary_length(v))
         v[i] = obj;
@@ -2613,6 +2897,18 @@ static Value proc_eof_object_p(UNUSED Value env, Value obj)
 }
 
 // 6.6.3. Output
+static void display_integer(FILE *f, Value v)
+{
+    if (sch_value_is_fixnum(v))
+        fprintf(f, "%"PRId64, sch_fixnum_to_cint(v));
+    else {
+        BigInt *b = BIGNUM(v);
+        char *s = bigint_to_string(b);
+        fprintf(f, "%s", s);
+        free(s);
+    }
+}
+
 static const char *file_to_name(const FILE *fp)
 {
     return fp == stdin ? "stdin" :
@@ -2726,7 +3022,7 @@ static void fdisplay_single(FILE *f, Value v)
         fprintf(f, "%s", v == Qtrue ? "#t" : "#f");
         break;
     case TYPE_INT:
-        fprintf(f, "%"PRId64, INT(v));
+        display_integer(f, v);
         break;
     case TYPE_SYMBOL:
         fprintf(f, "%s", sch_symbol_to_cstr(v));
@@ -2824,7 +3120,7 @@ static Value read_string(size_t k, FILE *fp)
 static Value proc_read_string(UNUSED Value env, Value args)
 {
     EXPECT(arity_range, 1, 2, args);
-    size_t k = get_non_negative_int(car(args));
+    size_t k = get_non_negative_cint(car(args));
     Value port = arg_or_current_port(cdr(args), false);
     CHECK_ERROR(port);
     return read_string(k, PORT(port)->fp);
@@ -2894,7 +3190,7 @@ static Value proc_cputime(UNUSED Value env) // in micro sec
     struct timespec t;
     clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t);
     int64_t n = t.tv_sec * MICRO + lround(t.tv_nsec / 1000.0);
-    return sch_integer_new(n);
+    return sch_fixnum_new(n);
 }
 
 static Value print_foreach(Value l, ValuePrinter printer)
@@ -3059,7 +3355,7 @@ void sch_init(const uintptr_t *volatile sp)
     // 6. Standard procedures
 
     // 6.1. Equivalence predicates
-    define_procedure(e, "eqv?", proc_eq, 2); // alias
+    define_procedure(e, "eqv?", proc_eqv, 2);
     define_procedure(e, "eq?", proc_eq, 2);
     define_procedure(e, "equal?", proc_equal, 2);
     // 6.2. Numbers

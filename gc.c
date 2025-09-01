@@ -254,6 +254,7 @@ static void mark_val(Value v)
         mark_val(p->val);
         break;
     }
+    case TAG_BIGNUM:
     case TAG_STRING:
     case TAG_CFUNC:
     case TAG_SYNTAX:
@@ -327,6 +328,9 @@ static void free_val(Value v)
         break;
     case TAG_ERROR:
         scary_free(ERROR(v));
+        break;
+    case TAG_BIGNUM:
+        bigint_free(BIGNUM(v));
         break;
     case TAG_CFUNC:
     case TAG_SYNTAX:
