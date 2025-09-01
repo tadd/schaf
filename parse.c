@@ -232,6 +232,8 @@ static Token lex_int_binary(Parser *p, int coeff)
             v <<= 1U;
         else if (c == '1')
             v = (v << 1U) | 1U;
+        else if (isalnum(c)) // XXX
+            parse_error(p, "binary digits", "'%c'", c);
         else {
             ungetc(c, p->in);
             break;
@@ -244,26 +246,23 @@ static Token lex_int_binary(Parser *p, int coeff)
 
 static Token lex_int_with_radix(Parser *p, int coeff, unsigned radix)
 {
-    int64_t i;
-    const char *format;
     switch (radix) {
-    case 2:
-        return lex_int_binary(p, coeff);
-    case 8:
-        format = "%"SCNo64;
-        break;
-    case 10:
-        format = "%"SCNd64;
-        break;
-    case 16:
-        format = "%"SCNx64;
+    case 2: case 8: case 10: case 16:
         break;
     default:
         bug("invalid radix");
     }
-    int n = fscanf(p->in, format, &i);
+    if (radix == 2)
+        return lex_int_binary(p, coeff);
+    char *s;
+    int n = fscanf(p->in, "%m[0-9a-zA-Z]", &s);
     if (n != 1)
-        parse_error(p, "integer", "invalid string");
+        parse_error(p, "integer digits", "nothing");
+    char *endp;
+    int64_t i = strtol(s, &endp, radix);
+    if (endp[0] != '\0')
+        parse_error(p, "integer digits", "'%s'", endp); // XXX
+    free(s);
     return TOKEN_INT(coeff * i);
 }
 
@@ -311,7 +310,11 @@ static Token lex_constant(Parser *p)
 
 static Token lex_int(Parser *p, int coeff)
 {
-    return lex_int_with_radix(p, coeff, 10);
+    int64_t i;
+    int n = fscanf(p->in, "%"PRId64, &i);
+    if (n != 1)
+        parse_error(p, "integer digits", "invalid string");
+    return TOKEN_INT(coeff * i);
 }
 
 static Token lex_after_sign(Parser *p, int csign)
