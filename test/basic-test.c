@@ -18,7 +18,7 @@
 
 #define value_idfunc list
 #define V(x) \
-    _Generic(x, int: sch_integer_new, char *: sch_string_new, Value: value_idfunc)(x)
+    _Generic(x, int: sch_fixnum_new, char *: sch_string_new, Value: value_idfunc)(x)
 #define expect_value_eq(expected, actual) do { \
         Value vexp = expected, vact = actual; \
         if (sch_value_is_integer(vexp)) \
@@ -61,11 +61,28 @@
     } while (0)
 #define expect_x_eq_parsed(x, exp, act) expect_##x##_eq(exp, parse_expr_string(act))
 
-#define expect_vint_eq(exp, act) expect_vx_eq(TYPE_INT, integer, int, exp, act)
+typedef BigInt *BigIntPtr;
+static char *cr_user_BigIntPtr_tostr(const BigIntPtr *x);
+static int cr_user_BigIntPtr_eq(const BigIntPtr *x, const BigIntPtr *y);
+static int cr_user_BigIntPtr_lt(const BigIntPtr *x, const BigIntPtr *y);
+static void BigInt_clean(BigInt **x);
+#define autoptr(ty) __attribute__((cleanup(ty##_clean))) ty
+
+#define expect_bigint(op, x, y) cr_expect(op(type(BigIntPtr), x, y))
+
+#define expect_fixnum_eq(exp, act) expect_vx_eq(TYPE_INT, fixnum, int, exp, act)
 #define expect_vstr_eq(exp, act) expect_vx_eq(TYPE_STRING, string, str, exp, act)
 #define expect_vsym_eq(exp, act) expect_vx_eq(TYPE_SYMBOL, symbol, str, exp, act)
+#define expect_bignum_eq(exp, act) do { \
+        Value a = act; \
+        expect_no_error(a); \
+        expect_int_eq(TYPE_INT, sch_value_type_of(a)); \
+        cr_expect(sch_value_is_bignum(a)); \
+        expect_bigint(eq, exp, BIGNUM(a)); \
+    } while (0)
 
-#define expect_vint_eq_parsed(exp, act) expect_x_eq_parsed(vint, exp, act)
+#define expect_fixnum_eq_parsed(exp, act) expect_x_eq_parsed(fixnum, exp, act)
+#define expect_bignum_eq_parsed(exp, act) expect_x_eq_parsed(bignum, exp, act)
 #define expect_vstr_eq_parsed(exp, act) expect_x_eq_parsed(vstr, exp, act)
 #define expect_vsym_eq_parsed(exp, act) expect_x_eq_parsed(vsym, exp, act)
 #define expect_list_eq_parsed(exp, act) expect_x_eq_parsed(list, exp, act)
@@ -111,9 +128,9 @@ Test(schaf, printing) {
     expect_stringify("<undef>", Qundef);
     expect_stringify("()", Qnil);
 
-    expect_stringify("0", sch_integer_new(0));
-    expect_stringify("42", sch_integer_new(42));
-    expect_stringify("-42", sch_integer_new(-42));
+    expect_stringify("0", sch_fixnum_new(0));
+    expect_stringify("42", sch_fixnum_new(42));
+    expect_stringify("-42", sch_fixnum_new(-42));
 
     expect_stringify("foo", sch_symbol_new("foo"));
 
@@ -123,26 +140,32 @@ Test(schaf, printing) {
 }
 
 Test(schaf, parse_int) {
-    expect_vint_eq_parsed(42, "42");
-    expect_vint_eq_parsed(-42, "-42");
+    expect_fixnum_eq_parsed(42, "42");
+    expect_fixnum_eq_parsed(-42, "-42");
+
+    autoptr(BigInt) *i = bigint_from_string("9223372036854775807");
+    expect_bignum_eq_parsed(i, "9223372036854775807");
 }
 
 Test(schaf, parse_prefixed_int) {
-    expect_vint_eq_parsed(42, "#b101010");
-    expect_vint_eq_parsed(42, "#b+101010");
-    expect_vint_eq_parsed(-42, "#b-101010");
+    expect_fixnum_eq_parsed(42, "#b101010");
+    expect_fixnum_eq_parsed(42, "#b+101010");
+    expect_fixnum_eq_parsed(-42, "#b-101010");
 
-    expect_vint_eq_parsed(42, "#d42");
-    expect_vint_eq_parsed(42, "#d+42");
-    expect_vint_eq_parsed(-42, "#d-42");
+    expect_fixnum_eq_parsed(42, "#d42");
+    expect_fixnum_eq_parsed(42, "#d+42");
+    expect_fixnum_eq_parsed(-42, "#d-42");
 
-    expect_vint_eq_parsed(42, "#o52");
-    expect_vint_eq_parsed(42, "#o+52");
-    expect_vint_eq_parsed(-42, "#o-52");
+    expect_fixnum_eq_parsed(42, "#o52");
+    expect_fixnum_eq_parsed(42, "#o+52");
+    expect_fixnum_eq_parsed(-42, "#o-52");
 
-    expect_vint_eq_parsed(42, "#x2a");
-    expect_vint_eq_parsed(42, "#x+2a");
-    expect_vint_eq_parsed(-42, "#x-2a");
+    expect_fixnum_eq_parsed(42, "#x2a");
+    expect_fixnum_eq_parsed(42, "#x+2a");
+    expect_fixnum_eq_parsed(-42, "#x-2a");
+
+    autoptr(BigInt) *i = bigint_from_string_hex("abcdefabcdefabcdef");
+    expect_bignum_eq_parsed(i, "#xabcdefabcdefabcdef");
 }
 
 Test(schaf, parse_nil) {
@@ -169,7 +192,7 @@ Test(schaf, parse_string_list) {
 
 #define caaaar(x) (car(car(car(car(x)))))
 Test(schaf, cxr) {
-    expect_vint_eq(42, caaaar(parse_expr_string("((((42))))")));
+    expect_fixnum_eq(42, caaaar(parse_expr_string("((((42))))")));
 }
 
 #define expect_immutable_pair_error(s) \
@@ -196,8 +219,11 @@ Test(schaf, parse_dot) {
 }
 
 Test(schaf, parse_peculiar) {
-    expect_vint_eq_parsed(42, "+42");
+    expect_fixnum_eq_parsed(42, "+42");
     cr_expect(sch_value_is_symbol(parse_expr_string("+")));
+
+    autoptr(BigInt) *i = bigint_from_string("-9223372036854775807");
+    expect_bignum_eq_parsed(i, "-9223372036854775807");
 }
 
 Test(schaf, parse_lambda) {
@@ -384,7 +410,6 @@ static void test_bigint_init(void)
 }
 TestSuite(bigint, .init = test_bigint_init);
 
-typedef BigInt *BigIntPtr;
 static char *cr_user_BigIntPtr_tostr(const BigIntPtr *x)
 {
     return bigint_to_string(*x);
@@ -398,12 +423,10 @@ static int cr_user_BigIntPtr_lt(const BigIntPtr *x, const BigIntPtr *y)
     return bigint_lt(*x, *y);
 }
 
-#define expect_bigint(op, x, y) cr_expect(op(type(BigIntPtr), x, y))
 static void BigInt_clean(BigInt **x)
 {
     bigint_free(*x);
 }
-#define autoptr(ty) __attribute__((cleanup(ty##_clean))) ty
 
 Test(bigint, basic) {
     autoptr(BigInt) *x = bigint_from_int(INT64_MAX);
