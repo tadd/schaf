@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 void *scary_new(size_t size);
+void *scary_new_sized(size_t nmemb, size_t size);
 void scary_free(void *ary);
 size_t scary_length(const void *ary);
 void scary_pop(void *ary);

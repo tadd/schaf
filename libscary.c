@@ -52,14 +52,28 @@ static inline Scary *get(const void *p)
     return (Scary *) (bp - SCARY_OFFSET);
 }
 
-void *scary_new(size_t elem_size)
+static Scary *new_raw(size_t nmemb, size_t elem_size)
 {
-    size_t cap = elem_size * SCARY_INIT;
+    size_t cap = nmemb * elem_size;
     Scary *ary = xmalloc(sizeof(Scary) + cap);
     ary->capacity = cap;
     ary->length = 0;
     ary->elem_size = elem_size;
-    return opaque(ary);
+    return ary;
+ }
+
+void *scary_new(size_t elem_size)
+{
+    return opaque(new_raw(SCARY_INIT, elem_size));
+}
+
+void *scary_new_sized(size_t nmemb, size_t elem_size)
+{
+    Scary *ary = new_raw(nmemb, elem_size);
+    ary->length = nmemb;
+    void *p = opaque(ary);
+    memset(p, 0, nmemb * elem_size);
+    return p;
 }
 
 void scary_free(void *p)
