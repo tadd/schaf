@@ -722,7 +722,7 @@ ParameterizedTestParameters(s, t) { \
 RandomIntPairParameters(n, bigint, op##_rand##n) \
 ParameterizedTest(int64_t p[2], bigint, op##_rand##n) { \
     int64_t ix = p[0], iy = p[1]; \
-    if (iy == 0) return; /* for div/mod */ \
+    if (iy == 0) iy = 42; /* for div/mod */ \
     autoptr(BigInt) *x = bigint_from_int(ix), *y = bigint_from_int(iy); \
     autoptr(BigInt) *z1 = expf(op, ix, iy, x, y); \
     autoptr(BigInt) *z2 = bigint_##op(x, y); \
