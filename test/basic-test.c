@@ -545,7 +545,6 @@ Test(bigint, div_mod_divzero) {
     cr_expect(eq(ptr, mod2, NULL));
 }
 
-
 Test(bigint, from_string) {
     autoptr(BigInt) *one = bigint_from_int(1);
     autoptr(BigInt) *none = bigint_from_int(-1);
@@ -581,6 +580,41 @@ Test(bigint, from_string) {
     "166903427690031858186486050853753882811946569946433649006084096");
     expect_bigint(eq, r16, g);
 }
+
+#define expect_bigint_eq_from_strings(exp, suffix, str) do {       \
+        autoptr(BigInt) *x = bigint_from_string_##suffix(str); \
+        expect_bigint(eq, exp, x); \
+    } while (0)
+
+Test(bigint, from_string_nondecimal) {
+    autoptr(BigInt) *zero = bigint_from_int(0);
+    expect_bigint_eq_from_strings(zero, bin, "0");
+    expect_bigint_eq_from_strings(zero, oct, "0");
+    expect_bigint_eq_from_strings(zero, hex, "0");
+
+    autoptr(BigInt) *one = bigint_from_int(1);
+    expect_bigint_eq_from_strings(one, bin, "1");
+    expect_bigint_eq_from_strings(one, oct, "1");
+    expect_bigint_eq_from_strings(one, hex, "1");
+
+    autoptr(BigInt) *none = bigint_from_int(-1);
+    expect_bigint_eq_from_strings(none, bin, "-1");
+    expect_bigint_eq_from_strings(none, oct, "-1");
+    expect_bigint_eq_from_strings(none, hex, "-1");
+
+    autoptr(BigInt) *max = bigint_from_int(INT64_MAX);
+    expect_bigint_eq_from_strings(max, bin,
+    "111111111111111111111111111111111111111111111111111111111111111");
+    expect_bigint_eq_from_strings(max, oct, "777777777777777777777");
+    expect_bigint_eq_from_strings(max, hex, "7fffffffffffffff");
+
+    autoptr(BigInt) *min = bigint_from_int(INT64_MIN);
+    expect_bigint_eq_from_strings(min, bin,
+    "-1000000000000000000000000000000000000000000000000000000000000000");
+    expect_bigint_eq_from_strings(min, oct, "-1000000000000000000000");
+    expect_bigint_eq_from_strings(min, hex, "-8000000000000000");
+}
+
 
 struct BigInt { // copied for inspection
     bool negative;
