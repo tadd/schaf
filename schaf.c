@@ -2502,26 +2502,35 @@ static Value proc_eof_object_p(UNUSED Value env, Value obj)
     return OF_BOOL(value_tag_is(obj, TAG_EOF));
 }
 
-static void fdisplay_rec(FILE* f, Value v, Value record);
+static void fdisplay_rec(FILE* f, Value v, Value **record);
 
-static bool check_circular(FILE *f, Value p, Value record)
+static bool findval(Value *heystack, Value needle)
 {
-    bool circular = memq(p, record) != Qfalse;
+    for (size_t i = 0, len = scary_length(heystack); i < len; i++) {
+        if (heystack[i] == needle)
+            return true;
+    }
+    return false;
+}
+
+static bool check_circular(FILE *f, Value p, Value *record)
+{
+    bool circular = findval(record, p);
     if (circular)
         fprintf(f, "..");
     return circular;
 }
 
 // 6.6.3. Output
-static void display_list(FILE *f, Value l, Value record)
+static void display_list(FILE *f, Value l, Value **record)
 {
     fprintf(f, "(");
     for (Value p = l, next; p != Qnil; p = next) {
-        if (check_circular(f, p, record))
+        if (check_circular(f, p, *record))
             break;
-        record = cons(p, record);
+        scary_push(record, p);
         Value val = car(p);
-        if (!check_circular(f, val, record))
+        if (!check_circular(f, val, *record))
             fdisplay_rec(f, val, record);
         if ((next = cdr(p)) == Qnil)
             break;
@@ -2535,15 +2544,15 @@ static void display_list(FILE *f, Value l, Value record)
     fprintf(f, ")");
 }
 
-static void display_vector(FILE *f, const Value *v, Value record)
+static void display_vector(FILE *f, const Value *v, Value **record)
 {
     fprintf(f, "#(");
-    if (check_circular(f, (Value) v, record))
+    if (check_circular(f, (Value) v, *record))
         goto end;
-    record = cons((Value) v, record);
+    scary_push(record, (Value) v);
     for (int64_t i = 0, len = scary_length(v); i < len; i++) {
         Value e = v[i];
-        if (!check_circular(f, e, record))
+        if (!check_circular(f, e, *record))
             fdisplay_rec(f, e, record);
         if (i + 1 == len)
             break;
@@ -2580,7 +2589,7 @@ static void display_procedure(FILE *f, Value proc)
         fprintf(f, "<procedure>");
 }
 
-static void fdisplay_rec(FILE* f, Value v, Value record)
+static void fdisplay_rec(FILE* f, Value v, Value **record)
 {
     switch (sch_value_type_of(v)) {
     case TYPE_NULL:
@@ -2624,7 +2633,9 @@ static void fdisplay_rec(FILE* f, Value v, Value record)
 
 static void fdisplay(FILE* f, Value v)
 {
-    fdisplay_rec(f, v, Qnil);
+    Value *record = scary_new(sizeof(Value));
+    fdisplay_rec(f, v, &record);
+    scary_free(record);
 }
 
 char *sch_stringify(Value v)
