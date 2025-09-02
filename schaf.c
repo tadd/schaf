@@ -2422,57 +2422,7 @@ static Value proc_eof_object_p(UNUSED Value env, Value obj)
     return OF_BOOL(value_tag_is(obj, TAG_EOF));
 }
 
-static void fdisplay_rec(FILE* f, Value v, Value record);
-
-static bool check_circular(FILE *f, Value p, Value record)
-{
-    bool circular = memq(p, record) != Qfalse;
-    if (circular)
-        fprintf(f, "..");
-    return circular;
-}
-
 // 6.6.3. Output
-static void display_list(FILE *f, Value l, Value record)
-{
-    fprintf(f, "(");
-    for (Value p = l, next; p != Qnil; p = next) {
-        if (check_circular(f, p, record))
-            break;
-        record = cons(p, record);
-        Value val = car(p);
-        if (!check_circular(f, val, record))
-            fdisplay_rec(f, val, record);
-        if ((next = cdr(p)) == Qnil)
-            break;
-        fprintf(f, " ");
-        if (!value_is_pair(next)) {
-            fprintf(f, ". ");
-            fdisplay_rec(f, next, record);
-            break;
-        }
-    }
-    fprintf(f, ")");
-}
-
-static void display_vector(FILE *f, const Value *v, Value record)
-{
-    fprintf(f, "#(");
-    if (check_circular(f, (Value) v, record))
-        goto end;
-    record = cons((Value) v, record);
-    for (int64_t i = 0, len = scary_length(v); i < len; i++) {
-        Value e = v[i];
-        if (!check_circular(f, e, record))
-            fdisplay_rec(f, e, record);
-        if (i + 1 == len)
-            break;
-        fprintf(f, " ");
-    }
- end:
-    fprintf(f, ")");
-}
-
 static const char *file_to_name(const FILE *fp)
 {
     return fp == stdin ? "stdin" :
@@ -2500,7 +2450,84 @@ static void display_procedure(FILE *f, Value proc)
         fprintf(f, "<procedure>");
 }
 
-static void fdisplay_rec(FILE* f, Value v, Value record)
+static bool circular_check(FILE *f, Value p, Value record)
+{
+    bool circular = memq(p, record) != Qfalse;
+    if (circular)
+        fprintf(f, "..");
+    return circular;
+}
+
+typedef void (*ObjectPrinter)(FILE* f, Value v);
+static void visit_object(FILE* f, Value v, Value record, ObjectPrinter printer);
+
+static void visit_pair(FILE *f, Value l, Value record, ObjectPrinter printer)
+{
+    fprintf(f, "(");
+    for (Value p = l, next; p != Qnil; p = next) {
+        if (circular_check(f, p, record))
+            break;
+        record = cons(p, record);
+        Value val = car(p);
+        if (!circular_check(f, val, record))
+            visit_object(f, val, record, printer);
+        next = cdr(p);
+        if (next == Qnil)
+            break;
+        fprintf(f, " ");
+        if (!value_is_pair(next)) {
+            fprintf(f, ". ");
+            visit_object(f, next, record, printer);
+            break;
+        }
+    }
+    fprintf(f, ")");
+}
+
+static void visit_vector(FILE *f, Value val, Value record, ObjectPrinter printer)
+{
+    if (circular_check(f, val, record))
+        goto end;
+    fprintf(f, "#(");
+    record = cons(val, record);
+    const Value *v = VECTOR(val);
+    for (int64_t i = 0, len = scary_length(v); i < len; i++) {
+        Value e = v[i];
+        if (!circular_check(f, e, record))
+            visit_object(f, e, record, printer);
+        if (i + 1 == len)
+            break;
+        fprintf(f, " ");
+    }
+ end:
+    fprintf(f, ")");
+}
+
+static void visit_object(FILE* f, Value v, Value record, ObjectPrinter printer)
+{
+    switch (value_type_of(v)) {
+    case TYPE_PAIR:
+        visit_pair(f, v, record, printer);
+        return;
+    case TYPE_VECTOR:
+        visit_vector(f, v, record, printer);
+        return;
+    case TYPE_SYMBOL:
+    case TYPE_STRING:
+    case TYPE_NULL:
+    case TYPE_BOOL:
+    case TYPE_INT:
+    case TYPE_PROC:
+    case TYPE_UNDEF:
+    case TYPE_ENV:
+    case TYPE_PORT:
+    case TYPE_EOF:
+        printer(f, v);
+        break;
+    }
+}
+
+static void fdisplay_single(FILE* f, Value v)
 {
     switch (value_type_of(v)) {
     case TYPE_NULL:
@@ -2516,14 +2543,8 @@ static void fdisplay_rec(FILE* f, Value v, Value record)
     case TYPE_STRING:
         fprintf(f, "%s", value_to_string(v));
         break;
-    case TYPE_PAIR:
-        display_list(f, v, record);
-        break;
     case TYPE_PROC:
         display_procedure(f, v);
-        break;
-    case TYPE_VECTOR:
-        display_vector(f, VECTOR(v), record);
         break;
     case TYPE_ENV:
         fprintf(f, "<environment: %s>", ENV(v)->name);
@@ -2537,12 +2558,15 @@ static void fdisplay_rec(FILE* f, Value v, Value record)
     case TYPE_UNDEF:
         fprintf(f, "<undef>");
         break;
+    case TYPE_PAIR:
+    case TYPE_VECTOR:
+        UNREACHABLE();
     }
 }
 
 static void fdisplay(FILE* f, Value v)
 {
-    fdisplay_rec(f, v, Qnil);
+    visit_object(f, v, Qnil, fdisplay_single);
 }
 
 static FILE *mopen(char **pmem)
@@ -2690,12 +2714,14 @@ static Value proc_cputime(UNUSED Value env) // in micro sec
     return value_of_int(n);
 }
 
-static Value proc_print(UNUSED Value env, Value l)
+typedef void (*ValuePrinter)(FILE *fp, Value v);
+
+static Value print_foreach(Value l, ValuePrinter printer)
 {
     Value obj = Qfalse;
     for (Value p = l, next; p != Qnil; p = next)  {
         obj = car(p);
-        sch_display(obj);
+        printer(stdout, obj);
         next = cdr(p);
         if (next != Qnil)
             printf(" ");
@@ -2704,71 +2730,29 @@ static Value proc_print(UNUSED Value env, Value l)
     return obj;
 }
 
+
+static Value proc_print(UNUSED Value env, Value l)
+{
+    return print_foreach(l, fdisplay);
+}
+
 static Value proc_schaf_environment(UNUSED Value env)
 {
     return env_dup(NULL, env_default);
 }
 
-static void inspect(FILE *f, Value l, Value record);
-
-static void inspect_list(FILE *f, Value l, Value record)
-{
-    fprintf(f, "(");
-    for (Value p = l, next; p != Qnil; p = next) {
-        if (check_circular(f, p, record))
-            break;
-        record = cons(p, record);
-        Value val = car(p);
-        if (!check_circular(f, val, record))
-            inspect(f, val, record);
-        if ((next = cdr(p)) == Qnil)
-            break;
-        fprintf(f, " ");
-        if (!value_is_pair(next)) {
-            fprintf(f, ". ");
-            inspect(f, next, record);
-            break;
-        }
-    }
-    fprintf(f, ")");
-}
-
-static void inspect_vector(FILE *f, const Vector *v, Value record)
-{
-    fprintf(f, "#(");
-    if (check_circular(f, (Value) v, record))
-        goto end;
-    record = cons((Value) v, record);
-    for (int64_t i = 0, len = scary_length(v->body); i < len; i++) {
-        Value e = v->body[i];
-        if (!check_circular(f, e, record))
-            inspect(f, e, record);
-        if (i + 1 == len)
-            break;
-        fprintf(f, " ");
-    }
- end:
-    fprintf(f, ")");
-}
-
-static void inspect(FILE* f, Value v, Value record)
+static void inspect_single(FILE* f, Value v)
 {
     switch (value_type_of(v)) {
     case TYPE_SYMBOL:
         fprintf(f, "'");
-        fdisplay_rec(f, v, record);
+        fdisplay_single(f, v);
         break;
     case TYPE_STRING:
         fprintf(f, "\"");
-        fdisplay_rec(f, v, record);
+        fdisplay_single(f, v);
         fprintf(f, "\"");
         break;
-    case TYPE_PAIR:
-        inspect_list(f, v, record);
-        return;
-    case TYPE_VECTOR:
-        inspect_vector(f, VECTOR(v), record);
-        return;
     case TYPE_NULL:
     case TYPE_BOOL:
     case TYPE_INT:
@@ -2777,32 +2761,31 @@ static void inspect(FILE* f, Value v, Value record)
     case TYPE_ENV:
     case TYPE_PORT:
     case TYPE_EOF:
-        fdisplay_rec(f, v, record);
+        fdisplay_single(f, v);
         break;
+    case TYPE_PAIR:
+    case TYPE_VECTOR:
+        UNREACHABLE();
     }
+}
+
+static void inspect(FILE* f, Value v)
+{
+    visit_object(f, v, Qnil, inspect_single);
 }
 
 char *sch_inspect(Value v)
 {
     char *s;
     FILE *stream = mopen(&s);
-    inspect(stream, v, Qnil);
+    inspect(stream, v);
     fclose(stream);
     return s;
 }
 
 static Value proc_pp(UNUSED Value env, Value args)
 {
-    Value obj = Qfalse;
-    for (Value p = args, next; p != Qnil; p = next)  {
-        obj = car(p);
-        inspect(stdout, obj, Qnil);
-        next = cdr(p);
-        if (next != Qnil)
-            printf(" ");
-    }
-    puts("");
-    return obj;
+    return print_foreach(args, inspect);
 }
 
 //
