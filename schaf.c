@@ -2639,26 +2639,29 @@ static void display_procedure(FILE *f, Value proc)
         fprintf(f, "<procedure>");
 }
 
-static bool check_circular(FILE *f, Value p, Value record)
+static bool check_circular(FILE *f, Value p, Value *record)
 {
-    bool circular = memq(p, record) != Qfalse;
-    if (circular)
-        fprintf(f, "..");
-    return circular;
+    for (int64_t i = 0, len = scary_length(record); i < len; i++) {
+        if (p == record[0]) {
+            fprintf(f, "..");
+            return true;
+        }
+    }
+    return false;
 }
 
 typedef void (*ValuePrinter)(FILE *f, Value v);
-static void print_object(FILE *f, Value v, Value record, ValuePrinter printer);
+static void print_object(FILE *f, Value v, Value **record, ValuePrinter printer);
 
-static void print_pair(FILE *f, Value l, Value record, ValuePrinter printer)
+static void print_pair(FILE *f, Value l, Value **record, ValuePrinter printer)
 {
     fprintf(f, "(");
     for (Value p = l, next; p != Qnil; p = next) {
-        if (check_circular(f, p, record))
+        if (check_circular(f, p, *record))
             break;
-        record = cons(p, record);
+        scary_push(record, p);
         Value val = car(p);
-        if (!check_circular(f, val, record))
+        if (!check_circular(f, val, *record))
             print_object(f, val, record, printer);
         next = cdr(p);
         if (next == Qnil)
@@ -2673,16 +2676,16 @@ static void print_pair(FILE *f, Value l, Value record, ValuePrinter printer)
     fprintf(f, ")");
 }
 
-static void print_vector(FILE *f, Value val, Value record, ValuePrinter printer)
+static void print_vector(FILE *f, Value val, Value **record, ValuePrinter printer)
 {
-    if (check_circular(f, val, record))
+    if (check_circular(f, val, *record))
         goto end;
     fprintf(f, "#(");
-    record = cons(val, record);
+    scary_push(record, val);
     const Value *v = VECTOR(val);
     for (int64_t i = 0, len = scary_length(v); i < len; i++) {
         Value e = v[i];
-        if (!check_circular(f, e, record))
+        if (!check_circular(f, e, *record))
             print_object(f, e, record, printer);
         if (i + 1 < len)
             fprintf(f, " ");
@@ -2691,7 +2694,7 @@ static void print_vector(FILE *f, Value val, Value record, ValuePrinter printer)
     fprintf(f, ")");
 }
 
-static void print_object(FILE *f, Value v, Value record, ValuePrinter printer)
+static void print_object(FILE *f, Value v, Value **record, ValuePrinter printer)
 {
     switch (sch_value_type_of(v)) {
     case TYPE_SYMBOL:
@@ -2760,7 +2763,9 @@ static void fdisplay_single(FILE *f, Value v)
 
 static void fdisplay(FILE *f, Value v)
 {
-    print_object(f, v, Qnil, fdisplay_single);
+    Value *record = scary_new(sizeof(Value));
+    print_object(f, v, &record, fdisplay_single);
+    scary_free(record);
 }
 
 char *sch_stringify(Value v)
@@ -2951,7 +2956,9 @@ static void inspect_single(FILE *f, Value v)
 
 static void inspect(FILE *f, Value v)
 {
-    print_object(f, v, Qnil, inspect_single);
+    Value *record = scary_new(sizeof(Value));
+    print_object(f, v, &record, inspect_single);
+    scary_free(record);
 }
 
 char *sch_inspect(Value v)
