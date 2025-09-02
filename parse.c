@@ -434,7 +434,7 @@ static const char *token_stringify(Token t)
     case TOK_TYPE_IDENT:
         return value_to_string(t.value);
     case TOK_TYPE_STRING:
-        snprintf(buf, sizeof(buf), "\"%s\"", STRING(t.value)->body);
+        snprintf(buf, sizeof(buf), "\"%s\"", STRING(t.value));
         break;
     case TOK_TYPE_CONST_TRUE:
         return "#t";

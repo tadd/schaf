@@ -243,7 +243,7 @@ inline const char *value_to_string(Value v)
 {
     if (value_is_symbol(v))
         return unintern(value_to_symbol(v));
-    return STRING(v)->body;
+    return STRING(v);
 }
 
 // define caar, cadr, ... cddddr, 28 procedures, at once
@@ -480,7 +480,7 @@ const char *sch_error_message(void)
 #define CHECK_ERROR_LOCATED(v, l) do { \
         Value V = (v); \
         if (UNLIKELY(is_error(V))) { \
-            if (scary_length(ERROR(V)->call_stack) == 0) \
+            if (scary_length(ERROR(V)) == 0) \
                 push_stack_frame(V, NULL, (l)); \
             return V; \
         } \
@@ -646,9 +646,8 @@ static StackFrame *stack_frame_new(const char *name, Value loc)
 
 static Value push_stack_frame(Value ve, const char *name, Value loc)
 {
-    Error *e = ERROR(ve);
     StackFrame *f = stack_frame_new(name, loc);
-    scary_push((void ***) &e->call_stack, (void *) f);
+    scary_push((void ***) &ERROR(ve), (void *) f);
     return ve;
 }
 
@@ -815,7 +814,7 @@ static Value iload(FILE *in, const char *filename)
         return value_of_int(exit_status);
     Value ret = eval_body(env_toplevel, src->ast);
     if (is_error(ret)) {
-        dump_stack_trace(ERROR(ret)->call_stack);
+        dump_stack_trace(ERROR(ret));
         return Qundef;
     }
     return ret;
@@ -1329,13 +1328,13 @@ static Value proc_eq(UNUSED Value env, Value x, Value y)
 
 static bool equal(Value x, Value y);
 
-static bool vector_equal(const Vector *x, const Vector *y)
+static bool vector_equal(const Value *x, const Value *y)
 {
-    size_t len = scary_length(x->body);
-    if (len != scary_length(y->body))
+    size_t len = scary_length(x);
+    if (len != scary_length(y))
         return false;
     for (size_t i = 0; i < len; i++) {
-        if (!equal(x->body[i], y->body[i]))
+        if (!equal(x[i], y[i]))
             return false;
     }
     return true;
@@ -1353,7 +1352,7 @@ static bool equal(Value x, Value y)
         return equal(car(x), car(y)) &&
                equal(cdr(x), cdr(y));
     case TYPE_STRING:
-        return (strcmp(STRING(x)->body, STRING(y)->body) == 0);
+        return (strcmp(STRING(x), STRING(y)) == 0);
     case TYPE_VECTOR:
         return vector_equal(VECTOR(x), VECTOR(y));
     case TYPE_SYMBOL:
@@ -1881,19 +1880,19 @@ static Value proc_string_p(UNUSED Value env, Value obj)
 static Value proc_string_length(UNUSED Value env, Value s)
 {
     EXPECT(type, TYPE_STRING, s);
-    return value_of_int(strlen(STRING(s)->body));
+    return value_of_int(strlen(STRING(s)));
 }
 
 static Value proc_string_eq(UNUSED Value env, Value s1, Value s2)
 {
     EXPECT(type_twin, TYPE_STRING, s1, s2);
-    return OF_BOOL(strcmp(STRING(s1)->body, STRING(s2)->body) == 0);
+    return OF_BOOL(strcmp(STRING(s1), STRING(s2)) == 0);
 }
 
 static Value proc_substring(UNUSED Value env, Value string, Value vstart, Value vend)
 {
     EXPECT(type, TYPE_STRING, string);
-    const char *s = STRING(string)->body;
+    const char *s = STRING(string);
     int64_t start = get_non_negative_int(vstart), end = get_non_negative_int(vend);
     if (UNLIKELY(start > end))
         return runtime_error("start index %"PRId64" must be <= end index %"PRId64, start, end);
@@ -1914,12 +1913,12 @@ static Value proc_string_append(UNUSED Value env, Value args)
     for (Value p = args, v; p != Qnil; p = cdr(p)) {
         v = car(p);
         EXPECT(type, TYPE_STRING, v);
-        len += strlen(STRING(v)->body);
+        len += strlen(STRING(v));
     }
     char *s = xmalloc(len + 1);
     s[0] = '\0';
     for (Value p = args; p != Qnil; p = cdr(p))
-        strcat(s, STRING(car(p))->body);
+        strcat(s, STRING(car(p)));
     return value_of_string_moved(s);
 }
 
@@ -1933,7 +1932,7 @@ Value vector_new(void)
 
 Value vector_push(Value v, Value e)
 {
-    scary_push(&VECTOR(v)->body, e);
+    scary_push(&VECTOR(v), e);
     return v;
 }
 
@@ -1953,12 +1952,12 @@ static Value proc_vector(UNUSED Value env, Value args)
 static Value proc_make_vector(UNUSED Value env, Value args)
 {
     EXPECT(arity_range, 1, 2, args);
-    int64_t k = get_non_negative_int(car(args));
+    size_t k = get_non_negative_int(car(args));
     Value fill = Qfalse;
     if (cdr(args) != Qnil)
         fill = cadr(args);
     Value v = vector_new();
-    for (int64_t i = 0; i < k; i++)
+    for (size_t i = 0; i < k; i++)
         vector_push(v, fill);
     return v;
 }
@@ -1966,26 +1965,26 @@ static Value proc_make_vector(UNUSED Value env, Value args)
 static Value proc_vector_length(UNUSED Value env, Value v)
 {
     EXPECT(type, TYPE_VECTOR, v);
-    return value_of_int(scary_length(VECTOR(v)->body));
+    return value_of_int(scary_length(VECTOR(v)));
 }
 
 static Value proc_vector_ref(UNUSED Value env, Value o, Value k)
 {
     EXPECT(type, TYPE_VECTOR, o);
-    int64_t i = get_non_negative_int(k);
-    Vector *v = VECTOR(o);
-    if ((size_t) i >= scary_length(v->body))
+    size_t i = get_non_negative_int(k);
+    Value *v = VECTOR(o);
+    if (i >= scary_length(v))
         return Qfalse;
-    return v->body[i];
+    return v[i];
 }
 
 static Value proc_vector_set(UNUSED Value env, Value o, Value k, Value obj)
 {
     EXPECT(type, TYPE_VECTOR, o);
-    int64_t i = get_non_negative_int(k);
-    Vector *v = VECTOR(o);
-    if ((size_t) i < scary_length(v->body))
-        v->body[i] = obj;
+    size_t i = get_non_negative_int(k);
+    Value *v = VECTOR(o);
+    if (i < scary_length(v))
+        v[i] = obj;
     return Qfalse;
 }
 
@@ -2253,14 +2252,14 @@ static Value open_port(const char *path, bool output);
 static Value proc_call_with_input_file(Value env, Value path, Value thunk)
 {
     EXPECT(type, TYPE_STRING, path);
-    Value file = open_port(STRING(path)->body, false);
+    Value file = open_port(STRING(path), false);
     return apply(env, thunk, list1(file));
 }
 
 static Value proc_call_with_output_file(Value env, Value path, Value thunk)
 {
     EXPECT(type, TYPE_STRING, path);
-    Value file = open_port(STRING(path)->body, true);
+    Value file = open_port(STRING(path), true);
     return apply(env, thunk, list1(file));
 }
 
@@ -2326,13 +2325,13 @@ static Value open_port(const char *path, bool output)
 static Value proc_open_input_file(UNUSED Value env, Value path)
 {
     EXPECT(type, TYPE_STRING, path);
-    return open_port(STRING(path)->body, false);
+    return open_port(STRING(path), false);
 }
 
 static Value proc_open_output_file(UNUSED Value env, Value path)
 {
     EXPECT(type, TYPE_STRING, path);
-    return open_port(STRING(path)->body, true);
+    return open_port(STRING(path), true);
 }
 
 static void close_port(Port *p);
@@ -2341,7 +2340,7 @@ static Value proc_with_input_from_file(Value env, Value path, Value thunk)
 {
     EXPECT(type, TYPE_STRING, path);
     Value orig = current_input_port;
-    current_input_port = open_port(STRING(path)->body, false);
+    current_input_port = open_port(STRING(path), false);
     Value ret = apply(env, thunk, Qnil);
     close_port(PORT(current_input_port));
     current_input_port = orig;
@@ -2353,7 +2352,7 @@ static Value proc_with_output_to_file(Value env, Value path, Value thunk)
     EXPECT(type, TYPE_STRING, path);
     EXPECT(type, TYPE_PROC, thunk);
     Value orig = current_output_port;
-    current_output_port = open_port(STRING(path)->body, true);
+    current_output_port = open_port(STRING(path), true);
     Value ret = apply(env, thunk, Qnil);
     close_port(PORT(current_output_port));
     current_output_port = orig;
@@ -2456,14 +2455,14 @@ static void display_list(FILE *f, Value l, Value record)
     fprintf(f, ")");
 }
 
-static void display_vector(FILE *f, const Vector *v, Value record)
+static void display_vector(FILE *f, const Value *v, Value record)
 {
     fprintf(f, "#(");
     if (check_circular(f, (Value) v, record))
         goto end;
     record = cons((Value) v, record);
-    for (int64_t i = 0, len = scary_length(v->body); i < len; i++) {
-        Value e = v->body[i];
+    for (int64_t i = 0, len = scary_length(v); i < len; i++) {
+        Value e = v[i];
         if (!check_circular(f, e, record))
             fdisplay_rec(f, e, record);
         if (i + 1 == len)
@@ -2590,7 +2589,7 @@ static Value proc_load(UNUSED Value env, Value path)
 {
     EXPECT(type, TYPE_STRING, path);
     // Current spec: path is always relative
-    return load_inner(STRING(path)->body);
+    return load_inner(STRING(path));
 }
 
 //
@@ -2598,7 +2597,7 @@ static Value proc_load(UNUSED Value env, Value path)
 //
 
 // (scheme base)
-static Value read_string(int64_t k, FILE *fp)
+static Value read_string(size_t k, FILE *fp)
 {
     if (k == 0)
         return value_of_string("");
@@ -2612,7 +2611,7 @@ static Value read_string(int64_t k, FILE *fp)
 static Value proc_read_string(UNUSED Value env, Value args)
 {
     EXPECT(arity_range, 1, 2, args);
-    int64_t k = get_non_negative_int(car(args));
+    size_t k = get_non_negative_int(car(args));
     Value port = arg_or_current_port(cdr(args), false);
     CHECK_ERROR(port);
     return read_string(k, PORT(port)->fp);

@@ -141,16 +141,16 @@ typedef struct {
 
 #define PAIR(v) ((Pair *) v)
 #define LOCATED_PAIR(v) ((LocatedPair *) v)
-#define STRING(v) ((String *) v)
+#define STRING(v) (((String *) v)->body)
 #define PROCEDURE(v) ((Procedure *) v)
 #define CFUNC(v) ((CFunc *) v)
 #define CLOSURE(v) ((Closure *) v)
 #define CONTINUATION(v) ((Continuation *) v)
 #define CFUNC_CLOSURE(v) ((CFuncClosure *) v)
-#define VECTOR(v) ((Vector *) v)
+#define VECTOR(v) (((Vector *) v)->body)
 #define ENV(v) ((Env *) v)
 #define PORT(v) ((Port *) v)
-#define ERROR(v) ((Error *) v)
+#define ERROR(v) (((Error *) v)->call_stack)
 
 typedef struct {
     char *filename;
