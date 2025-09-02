@@ -175,20 +175,20 @@ void gc_fin(void);
 size_t gc_stack_get_size(uintptr_t *sp);
 ATTR_XMALLOC void *gc_malloc(size_t size);
 
-bool value_is_null(Value v);
-bool value_is_int(Value v);
-bool value_is_symbol(Value v);
-bool value_is_string(Value v);
-bool value_is_pair(Value v);
-Type value_type_of(Value v);
+bool sch_value_is_integer(Value v);
+bool sch_value_is_symbol(Value v);
+bool sch_value_is_string(Value v);
+bool sch_value_is_pair(Value v);
+Type sch_value_type_of(Value v);
 
-int64_t value_to_int(Value v);
-const char *value_to_string(Value v);
-const char *value_to_type_name(Value v);
+int64_t sch_integer_to_cint(Value v);
+const char *sch_symbol_to_cstr(Value v);
+const char *sch_string_to_cstr(Value v);
+const char *sch_value_to_type_name(Value v);
 
-Value value_of_int(int64_t i);
-Value value_of_symbol(const char *s);
-Value value_of_string(const char *s);
+Value sch_integer_new(int64_t i);
+Value sch_symbol_new(const char *s);
+Value sch_string_new(const char *s);
 
 Value cons(Value car, Value cdr);
 Value car(Value v);

@@ -15,32 +15,32 @@
 
 #define value_idfunc list
 #define V(x) \
-    _Generic(x, int: value_of_int, char *: value_of_string, Value: value_idfunc)(x)
+    _Generic(x, int: sch_integer_new, char *: sch_string_new, Value: value_idfunc)(x)
 #define expect_value_eq(expected, actual) do { \
         Value vexp = expected, vact = actual; \
-        if (value_is_int(vexp)) \
+        if (sch_value_is_integer(vexp)) \
             expect_int_eq(vexp, vact); \
-        else if (value_is_string(vexp)) \
-            expect_vstr_eq(value_to_string(vexp), vact); \
-        else if (value_is_symbol(vexp)) \
-            expect_vsym_eq(value_to_string(vexp), vact); \
+        else if (sch_value_is_string(vexp)) \
+            expect_vstr_eq(sch_string_to_cstr(vexp), vact); \
+        else if (sch_value_is_symbol(vexp)) \
+            expect_vsym_eq(sch_symbol_to_cstr(vexp), vact); \
     } while (0)
 #define expect_list_eq(expected, actual) do { \
         Value exp = expected, act = actual; \
-        cr_expect(value_is_pair(act)); \
+        cr_expect(sch_value_is_pair(act)); \
         expect_int_eq(length(exp), length(act)); \
         for (; exp != Qnil; exp = cdr(exp), act = cdr(act)) \
             expect_value_eq(car(exp), car(act)); \
     } while (0)
 #define expect_pair_eq(ecar, ecdr, act) do { \
         Value a = act; \
-        cr_expect(value_is_pair(a)); \
+        cr_expect(sch_value_is_pair(a)); \
         expect_value_eq(V(ecar), car(a)); \
         expect_value_eq(V(ecdr), cdr(a)); \
     } while (0)
 
 #define expect_int_eq(exp, act) cr_expect(eq(int, exp, act))
-#define expect_string_eq(exp, act) cr_expect_str_eq(act, exp)
+#define expect_str_eq(exp, act) cr_expect_str_eq(act, exp)
 #define expect_error(pattern, v) do { \
         expect_int_eq(Qundef, v); \
         char *m = strstr(sch_error_message(), pattern); \
@@ -50,17 +50,17 @@
 
 #define expect_no_error(v) \
     cr_expect_neq(v, Qundef, "got error with a message: '%s'", sch_error_message())
-#define expect_vx_eq(t, n, exp, act) do { \
+#define expect_vx_eq(t, from, to, exp, act) do { \
         Value a = act; \
         expect_no_error(a); \
-        expect_int_eq(t, value_type_of(a)); \
-        expect_##n##_eq(exp, value_to_##n(a)); \
+        expect_int_eq(t, sch_value_type_of(a)); \
+        expect_##to##_eq(exp, sch_##from##_to_c##to(a)); \
     } while (0)
 #define expect_x_eq_parsed(x, exp, act) expect_##x##_eq(exp, parse_expr_string(act))
 
-#define expect_vint_eq(exp, act) expect_vx_eq(TYPE_INT, int, exp, act)
-#define expect_vstr_eq(exp, act) expect_vx_eq(TYPE_STRING, string, exp, act)
-#define expect_vsym_eq(exp, act) expect_vx_eq(TYPE_SYMBOL, string, exp, act)
+#define expect_vint_eq(exp, act) expect_vx_eq(TYPE_INT, integer, int, exp, act)
+#define expect_vstr_eq(exp, act) expect_vx_eq(TYPE_STRING, string, str, exp, act)
+#define expect_vsym_eq(exp, act) expect_vx_eq(TYPE_SYMBOL, symbol, str, exp, act)
 
 #define expect_vint_eq_parsed(exp, act) expect_x_eq_parsed(vint, exp, act)
 #define expect_vstr_eq_parsed(exp, act) expect_x_eq_parsed(vstr, exp, act)
@@ -108,11 +108,11 @@ Test(schaf, printing) {
     expect_stringify("<undef>", Qundef);
     expect_stringify("()", Qnil);
 
-    expect_stringify("0", value_of_int(0));
-    expect_stringify("42", value_of_int(42));
-    expect_stringify("-42", value_of_int(-42));
+    expect_stringify("0", sch_integer_new(0));
+    expect_stringify("42", sch_integer_new(42));
+    expect_stringify("-42", sch_integer_new(-42));
 
-    expect_stringify("foo", value_of_symbol("foo"));
+    expect_stringify("foo", sch_symbol_new("foo"));
 
     expect_stringify("(1)", cons(V(1), Qnil));
     expect_stringify("(1 . 2)", cons(V(1), V(2)));
@@ -194,11 +194,11 @@ Test(schaf, parse_dot) {
 
 Test(schaf, parse_peculiar) {
     expect_vint_eq_parsed(42, "+42");
-    cr_expect(value_is_symbol(parse_expr_string("+")));
+    cr_expect(sch_value_is_symbol(parse_expr_string("+")));
 }
 
 Test(schaf, parse_lambda) {
-    expect_list_eq_parsed(list(value_of_symbol("lambda"), Qnil, V(42), Qundef),
+    expect_list_eq_parsed(list(sch_symbol_new("lambda"), Qnil, V(42), Qundef),
                           "(lambda () 42)");
 }
 

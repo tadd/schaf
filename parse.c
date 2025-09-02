@@ -57,23 +57,23 @@ static Token tok_ident_minus = TOKEN_C(IDENT);
             tok_##lower.value = val; \
         return tok_##lower; \
     }
-DEF_CONST_TOKEN_FUNC(ident_dot2, IDENT_DOT2, value_of_symbol(".."))
-DEF_CONST_TOKEN_FUNC(ident_dot3, IDENT_DOT3, value_of_symbol("..."))
-DEF_CONST_TOKEN_FUNC(ident_plus, IDENT_PLUS, value_of_symbol("+"))
-DEF_CONST_TOKEN_FUNC(ident_minus, IDENT_MINUS, value_of_symbol("-"))
+DEF_CONST_TOKEN_FUNC(ident_dot2, IDENT_DOT2, sch_symbol_new(".."))
+DEF_CONST_TOKEN_FUNC(ident_dot3, IDENT_DOT3, sch_symbol_new("..."))
+DEF_CONST_TOKEN_FUNC(ident_plus, IDENT_PLUS, sch_symbol_new("+"))
+DEF_CONST_TOKEN_FUNC(ident_minus, IDENT_MINUS, sch_symbol_new("-"))
 
 // and ctor-s
 static inline Token TOKEN_INT(int64_t i)
 {
-    return TOKEN_VAL(INT, value_of_int(i));
+    return TOKEN_VAL(INT, sch_integer_new(i));
 }
 static inline Token TOKEN_STRING(const char *s)
 {
-    return TOKEN_VAL(STRING, value_of_string(s));
+    return TOKEN_VAL(STRING, sch_string_new(s));
 }
 static inline Token TOKEN_IDENT(const char *s)
 {
-    return TOKEN_VAL(IDENT, value_of_symbol(s));
+    return TOKEN_VAL(IDENT, sch_symbol_new(s));
 }
 
 typedef struct {
@@ -429,10 +429,10 @@ static const char *token_stringify(Token t)
     case TOK_TYPE_VECTOR_LPAREN:
         return "#(";
     case TOK_TYPE_INT:
-        snprintf(buf, sizeof(buf), "%"PRId64, value_to_int(t.value));
+        snprintf(buf, sizeof(buf), "%"PRId64, sch_integer_to_cint(t.value));
         break;
     case TOK_TYPE_IDENT:
-        return value_to_string(t.value);
+        return sch_symbol_to_cstr(t.value);
     case TOK_TYPE_STRING:
         snprintf(buf, sizeof(buf), "\"%s\"", STRING(t.value));
         break;
@@ -487,7 +487,7 @@ static Value parse_list(Parser *p)
         Value e = parse_expr(p);
         bool first = (ret == last);
         Value l;
-        if (first && value_is_symbol(e))
+        if (first && sch_value_is_symbol(e))
             l = located_list1(e, pos);
         else
             l = list1_const(e);

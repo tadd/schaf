@@ -74,12 +74,12 @@ static Value current_input_port = Qfalse, current_output_port = Qfalse;
 // value_is_*: Type Checks
 //
 
-inline bool value_is_int(Value v)
+inline bool sch_value_is_integer(Value v)
 {
     return v & FLAG_MASK_INT;
 }
 
-inline bool value_is_symbol(Value v)
+inline bool sch_value_is_symbol(Value v)
 {
     return (v & FLAG_MASK_SYM) == FLAG_SYM;
 }
@@ -94,7 +94,7 @@ static inline bool value_tag_is(Value v, ValueTag expected)
     return !value_is_immediate(v) && VALUE_TAG(v) == expected;
 }
 
-inline bool value_is_string(Value v)
+inline bool sch_value_is_string(Value v)
 {
     return value_tag_is(v, TAG_STRING);
 }
@@ -123,7 +123,7 @@ static inline bool value_is_procedure(Value v)
     UNREACHABLE();
 }
 
-inline bool value_is_pair(Value v)
+inline bool sch_value_is_pair(Value v)
 {
     return value_tag_is(v, TAG_PAIR);
 }
@@ -137,9 +137,9 @@ static Type immediate_type_of(Value v)
 {
     if (v == Qnil)
         return TYPE_NULL;
-    if (value_is_int(v))
+    if (sch_value_is_integer(v))
         return TYPE_INT;
-    if (value_is_symbol(v))
+    if (sch_value_is_symbol(v))
         return TYPE_SYMBOL;
     if (v == Qtrue || v == Qfalse)
         return TYPE_BOOL;
@@ -148,7 +148,7 @@ static Type immediate_type_of(Value v)
     UNREACHABLE();
 }
 
-Type value_type_of(Value v)
+Type sch_value_type_of(Value v)
 {
     if (value_is_immediate(v))
         return immediate_type_of(v);
@@ -208,15 +208,15 @@ static inline const char *value_type_to_string(Type t)
     UNREACHABLE();
 }
 
-const char *value_to_type_name(Value v)
+const char *sch_value_to_type_name(Value v)
 {
-    Type t = value_type_of(v);
+    Type t = sch_value_type_of(v);
     return value_type_to_string(t);
 }
 
-// value_to_*: Convert internal data to external plain C
+// *_to_<cdata>: Convert internal data to external plain C
 
-inline int64_t value_to_int(Value x)
+inline int64_t sch_integer_to_cint(Value x)
 {
 #if __x86_64__
     return (int64_t) x >> FLAG_NBIT_INT;
@@ -226,11 +226,12 @@ inline int64_t value_to_int(Value x)
 #endif
 }
 
-inline static Symbol value_to_symbol(Value v)
+inline static Symbol vsymbol_to_symbol(Value v)
 {
     return (Symbol) v >> FLAG_NBIT_SYM;
 }
 
+// symbol->string
 static const char *unintern(Symbol sym)
 {
     size_t len = scary_length(symbol_names);
@@ -239,11 +240,14 @@ static const char *unintern(Symbol sym)
     return symbol_names[sym];
 }
 
-inline const char *value_to_string(Value v)
+inline const char *sch_string_to_cstr(Value v)
 {
-    if (value_is_symbol(v))
-        return unintern(value_to_symbol(v));
     return STRING(v);
+}
+
+inline const char *sch_symbol_to_cstr(Value v)
+{
+    return unintern(vsymbol_to_symbol(v));
 }
 
 // define caar, cadr, ... cddddr, 28 procedures, at once
@@ -257,14 +261,15 @@ inline const char *value_to_string(Value v)
     static Value c##x##y##r(Value v) { return c##x##r(c##y##r(v)); }
 CXRS(DEF_CXR)
 
-// value_of_*: Convert external plain C data to internal
+// *_new: Convert external plain C data to internal
 
-inline Value value_of_int(int64_t i)
+inline Value sch_integer_new(int64_t i)
 {
     Value v = i;
     return v << FLAG_NBIT_INT | FLAG_INT;
 }
 
+// string->symbol
 static Symbol intern(const char *name)
 {
     uint64_t i;
@@ -279,7 +284,7 @@ static Symbol intern(const char *name)
     return i;
 }
 
-inline Value value_of_symbol(const char *s)
+inline Value sch_symbol_new(const char *s)
 {
     Symbol sym = intern(s);
     return (Value) (sym << FLAG_NBIT_SYM | FLAG_SYM);
@@ -294,16 +299,16 @@ void *obj_new(size_t size, ValueTag t)
     return p;
 }
 
-static Value value_of_string_moved(char *s)
+static Value string_new_moved(char *s)
 {
     String *str = obj_new(sizeof(String), TAG_STRING);
     str->body = s; // move ownership and use as is
     return (Value) str;
 }
 
-Value value_of_string(const char *s)
+Value sch_string_new(const char *s)
 {
-    return value_of_string_moved(xstrdup(s));
+    return string_new_moved(xstrdup(s));
 }
 
 static void expect_cfunc_arity(int64_t actual)
@@ -367,7 +372,7 @@ static Value apply_cfunc_3(Value env, Value f, Value args)
     return CFUNC(f)->f3(env, car(args), cadr(args), caddr(args));
 }
 
-static Value cfunc_new(ValueTag tag, const char *name, void *cfunc, int64_t arity)
+static Value cfunc_new_internal(ValueTag tag, const char *name, void *cfunc, int64_t arity)
 {
     expect_cfunc_arity(arity);
     CFunc *f = obj_new(sizeof(CFunc), tag);
@@ -396,14 +401,14 @@ static Value cfunc_new(ValueTag tag, const char *name, void *cfunc, int64_t arit
     return (Value) f;
 }
 
-static Value value_of_cfunc(const char *name, void *cfunc, int64_t arity)
+static Value cfunc_new(const char *name, void *cfunc, int64_t arity)
 {
-    return cfunc_new(TAG_CFUNC, name, cfunc, arity);
+    return cfunc_new_internal(TAG_CFUNC, name, cfunc, arity);
 }
 
-static Value value_of_syntax(const char *name, void *cfunc, int64_t arity)
+static Value syntax_new(const char *name, void *cfunc, int64_t arity)
 {
-    return cfunc_new(TAG_SYNTAX, name, cfunc, arity);
+    return cfunc_new_internal(TAG_SYNTAX, name, cfunc, arity);
 }
 
 static Value apply_cfunc_closure_1(UNUSED Value env, Value f, Value args)
@@ -412,7 +417,7 @@ static Value apply_cfunc_closure_1(UNUSED Value env, Value f, Value args)
     return CFUNC(f)->f1(CFUNC_CLOSURE(f)->data, car(args));
 }
 
-static Value value_of_cfunc_closure(const char *name, void *cfunc,
+static Value cfunc_closure_new(const char *name, void *cfunc,
                                     int64_t arity, Value data)
 {
     expect_cfunc_arity(arity);
@@ -450,10 +455,10 @@ static Value apply_closure(UNUSED Value env, Value proc, Value args)
     return eval_body(clenv, cl->body);
 }
 
-static Value value_of_closure(Value env, Value params, Value body)
+static Value closure_new(Value env, Value params, Value body)
 {
     Closure *f = obj_new(sizeof(Closure), TAG_CLOSURE);
-    f->proc.arity = (params == Qnil || value_is_pair(params)) ? length(params) : -1;
+    f->proc.arity = (params == Qnil || sch_value_is_pair(params)) ? length(params) : -1;
     f->proc.apply = apply_closure;
     f->env = env;
     f->params = params;
@@ -461,7 +466,7 @@ static Value value_of_closure(Value env, Value params, Value body)
     return (Value) f;
 }
 
-// and `cons` is well-known name than "value_of_pair"
+// and `cons` is well-known name than `pair_new`
 
 //
 // Errors
@@ -477,7 +482,7 @@ void raise_error(jmp_buf buf, const char *fmt, ...)
     longjmp(buf, 1);
 }
 
-// value_of_error() or
+// error_new() or
 static Value runtime_error(const char *fmt, ...)
 {
     va_list ap;
@@ -497,7 +502,7 @@ const char *sch_error_message(void)
 
 static Value expect_type(Type expected, Value v)
 {
-    Type t = value_type_of(v);
+    Type t = sch_value_type_of(v);
     if (LIKELY(t == expected))
         return Qfalse;
     return runtime_error("type expected %s but got %s",
@@ -514,7 +519,7 @@ static Value expect_type_twin(Type expected, Value x, Value y)
 
 static Value expect_type_or(Type e1, Type e2, Value v)
 {
-    Type t = value_type_of(v);
+    Type t = sch_value_type_of(v);
     if (LIKELY(t == e1 || t == e2))
         return Qfalse;
     return runtime_error("type expected %s or %s but got %s",
@@ -627,14 +632,14 @@ static Value env_inherit(Value parent)
 
 static Value env_put(Value env, Value key, Value value)
 {
-    table_put(ENV(env)->table, value_to_symbol(key), value);
+    table_put(ENV(env)->table, vsymbol_to_symbol(key), value);
     return env;
 }
 
 // chained!
 static bool env_set(Value env, Value key, Value value)
 {
-    Symbol sym = value_to_symbol(key);
+    Symbol sym = vsymbol_to_symbol(key);
     for (Value p = env; p != Qfalse; p = ENV(p)->parent) {
         if (table_set(ENV(p)->table, sym, value))
             return true;
@@ -645,7 +650,7 @@ static bool env_set(Value env, Value key, Value value)
 // chained!!
 static Value env_get(const Value env, Value name)
 {
-    Symbol sym = value_to_symbol(name);
+    Symbol sym = vsymbol_to_symbol(name);
     for (Value p = env; p != Qfalse; p = ENV(p)->parent) {
         Value v = table_get(ENV(p)->table, sym);
         if (v != TABLE_NOT_FOUND)
@@ -657,12 +662,12 @@ static Value env_get(const Value env, Value name)
 // Note: Do not mistake this for "(define-syntax ...)" which related to macros
 static void define_syntax(Value env, const char *name, void *cfunc, int64_t arity)
 {
-    env_put(env, value_of_symbol(name), value_of_syntax(name, cfunc, arity));
+    env_put(env, sch_symbol_new(name), syntax_new(name, cfunc, arity));
 }
 
 static void define_procedure(Value env, const char *name, void *cfunc, int64_t arity)
 {
-    env_put(env, value_of_symbol(name), value_of_cfunc(name, cfunc, arity));
+    env_put(env, sch_symbol_new(name), cfunc_new(name, cfunc, arity));
 }
 
 //
@@ -741,15 +746,15 @@ static Value lookup_or_error(Value env, Value v)
 {
     Value p = env_get(env, v);
     if (p == Qundef)
-        return runtime_error("unbound variable: %s", value_to_string(v));
+        return runtime_error("unbound variable: %s", sch_symbol_to_cstr(v));
     return p;
 }
 
 static Value eval(Value env, Value v)
 {
-    if (value_is_symbol(v))
+    if (sch_value_is_symbol(v))
         return lookup_or_error(env, v);
-    if (v == Qnil || !value_is_pair(v))
+    if (v == Qnil || !sch_value_is_pair(v))
         return v;
     return eval_apply(env, v);
 }
@@ -792,10 +797,10 @@ static bool find_pair(Value tree, Value pair)
     for (Value p = tree; p != Qnil; p = cdr(p)) {
         if (p == pair)
             return true;
-        if (!value_is_pair(p))
+        if (!sch_value_is_pair(p))
             return false;
         Value v = car(p);
-        if (value_is_pair(v) && find_pair(v, pair))
+        if (sch_value_is_pair(v) && find_pair(v, pair))
             return true;
     }
     return false;
@@ -818,11 +823,11 @@ static void dump_callee_name(const StackFrame *next)
         return;
     }
     Value sym = car(next->loc);
-    if (!value_is_symbol(sym)) {
+    if (!sch_value_is_symbol(sym)) {
         append_error_message("<unknown>");
         return;
     }
-    const char *name = value_to_string(sym);
+    const char *name = sch_symbol_to_cstr(sym);
     append_error_message("'%s'", name);
 }
 
@@ -865,7 +870,7 @@ static Value iload(FILE *in, const char *filename)
         return Qundef;
     scary_push((void ***) &source_data, (void *) src);
     if (setjmp(jmp_exit) != 0)
-        return value_of_int(exit_status);
+        return sch_integer_new(exit_status);
     Value ret = eval_body(env_toplevel, src->ast);
     if (is_error(ret)) {
         dump_stack_trace(ERROR(ret));
@@ -952,7 +957,7 @@ static Value syn_lambda(Value env, Value args)
     if (params != Qnil)
         EXPECT(type_or, TYPE_PAIR, TYPE_SYMBOL, params);
     EXPECT(type, TYPE_PAIR, body);
-    return value_of_closure(env, params, body);
+    return closure_new(env, params, body);
 }
 
 // 4.1.5. Conditionals
@@ -977,7 +982,7 @@ static Value iset(Value env, Value ident, Value val)
 {
     bool found = env_set(env, ident, val);
     if (!found)
-        return runtime_error("unbound variable: %s", value_to_string(ident));
+        return runtime_error("unbound variable: %s", sch_symbol_to_cstr(ident));
     return Qfalse;
 }
 
@@ -1101,7 +1106,7 @@ static Value let(Value env, Value var, Value bindings, Value body)
         env_put(letenv, ident, val);
     }
     if (named) {
-        Value proc = value_of_closure(letenv, cdr(params), body);
+        Value proc = closure_new(letenv, cdr(params), body);
         env_put(letenv, var, proc); // letenv affects as proc->env
     }
     return eval_body(letenv, body);
@@ -1113,7 +1118,7 @@ static Value syn_let(Value env, Value args)
     EXPECT(arity_min_2, args);
     Value bind_or_var = car(args), body = cdr(args);
     Value var = Qfalse, bindings = bind_or_var;
-    if (value_is_symbol(bind_or_var)) {
+    if (sch_value_is_symbol(bind_or_var)) {
         var = bind_or_var;
         bindings = car(body);
         body = cdr(body);
@@ -1197,7 +1202,7 @@ static Value syn_do(Value env, Value args)
         Value var = car(b), init = cadr(b), step = cddr(b);
         EXPECT(type, TYPE_SYMBOL, var);
         if (memq(var, vars) != Qfalse)
-            return runtime_error("duplicated variable: %s", value_to_string(var));
+            return runtime_error("duplicated variable: %s", sch_symbol_to_cstr(var));
         vars = cons(var, vars);
         if (step != Qnil)
             steps = cons(cons(var, car(step)), steps);
@@ -1232,7 +1237,7 @@ static Value qq(Value env, Value datum, int64_t depth)
 {
     if (depth == 0)
         return eval(env, datum);
-    if (datum == Qnil || !value_is_pair(datum))
+    if (datum == Qnil || !sch_value_is_pair(datum))
         return datum;
     Value a = car(datum), d = cdr(datum);
     if (a == SYM_QUASIQUOTE) {
@@ -1278,7 +1283,7 @@ static Value qq_list(Value env, Value datum, int64_t depth)
 {
     Value ret = DUMMY_PAIR();
     for (Value last = ret, p = datum; p != Qnil; p = cdr(p)) {
-        bool is_simple = !value_is_pair(p);
+        bool is_simple = !sch_value_is_pair(p);
         if (is_simple || is_quoted_terminal(p)) {
             EXPECT(type, TYPE_PAIR, cdr(ret));
             if (!is_simple) {
@@ -1289,7 +1294,7 @@ static Value qq_list(Value env, Value datum, int64_t depth)
             break;
         }
         Value elem = car(p);
-        bool spliced = (value_is_pair(elem) && car(elem) == SYM_UNQUOTE_SPLICING);
+        bool spliced = (sch_value_is_pair(elem) && car(elem) == SYM_UNQUOTE_SPLICING);
         Value v = qq(env, elem, depth);
         CHECK_ERROR(v);
         if (!spliced)
@@ -1338,7 +1343,7 @@ static Value define_variable(Value env, Value ident, Value expr)
 static Value define_proc_internal(Value env, Value heads, Value body)
 {
     Value ident = car(heads), params = cdr(heads);
-    Value val = value_of_closure(env, params, body);
+    Value val = closure_new(env, params, body);
     return define_variable(env, ident, val);
 }
 
@@ -1347,7 +1352,7 @@ static Value syn_define(Value env, Value args)
     if (args == Qnil)
         return arity_error(">= ", 1, 0);
     Value head = car(args);
-    Type t = value_type_of(head);
+    Type t = sch_value_type_of(head);
     switch (t) {
     case TYPE_SYMBOL:
         EXPECT(arity_2, args);
@@ -1398,7 +1403,7 @@ static bool equal(Value x, Value y)
 {
     if (x == y)
         return true;
-    Type tx = value_type_of(x), ty = value_type_of(y);
+    Type tx = sch_value_type_of(x), ty = sch_value_type_of(y);
     if (tx != ty)
         return false;
     switch (tx) {
@@ -1432,13 +1437,13 @@ static Value proc_equal(UNUSED Value env, Value x, Value y)
 // 6.2.5. Numerical operations
 static Value proc_integer_p(UNUSED Value env, Value obj)
 {
-    return OF_BOOL(value_is_int(obj));
+    return OF_BOOL(sch_value_is_integer(obj));
 }
 
 #define get_int(x) ({ \
             Value X = x; \
             EXPECT(type, TYPE_INT, X); \
-            value_to_int(X); \
+            sch_integer_to_cint(X); \
         })
 
 typedef bool (*RelOpFunc)(int64_t x, int64_t y);
@@ -1489,27 +1494,27 @@ static Value proc_ge(UNUSED Value env, Value args)
 
 static Value proc_zero_p(UNUSED Value env, Value obj)
 {
-    return OF_BOOL(value_is_int(obj) && value_to_int(obj) == 0);
+    return OF_BOOL(sch_value_is_integer(obj) && sch_integer_to_cint(obj) == 0);
 }
 
 static Value proc_positive_p(UNUSED Value env, Value obj)
 {
-    return OF_BOOL(value_is_int(obj) && value_to_int(obj) > 0);
+    return OF_BOOL(sch_value_is_integer(obj) && sch_integer_to_cint(obj) > 0);
 }
 
 static Value proc_negative_p(UNUSED Value env, Value obj)
 {
-    return OF_BOOL(value_is_int(obj) && value_to_int(obj) < 0);
+    return OF_BOOL(sch_value_is_integer(obj) && sch_integer_to_cint(obj) < 0);
 }
 
 static Value proc_odd_p(UNUSED Value env, Value obj)
 {
-    return OF_BOOL(value_is_int(obj) && (value_to_int(obj) % 2) != 0);
+    return OF_BOOL(sch_value_is_integer(obj) && (sch_integer_to_cint(obj) % 2) != 0);
 }
 
 static Value proc_even_p(UNUSED Value env, Value obj)
 {
-    return OF_BOOL(value_is_int(obj) && (value_to_int(obj) % 2) == 0);
+    return OF_BOOL(sch_value_is_integer(obj) && (sch_integer_to_cint(obj) % 2) == 0);
 }
 
 static Value proc_max(UNUSED Value env, Value args)
@@ -1521,7 +1526,7 @@ static Value proc_max(UNUSED Value env, Value args)
         if (max < x)
             max = x;
     }
-    return value_of_int(max);
+    return sch_integer_new(max);
 }
 
 static Value proc_min(UNUSED Value env, Value args)
@@ -1533,7 +1538,7 @@ static Value proc_min(UNUSED Value env, Value args)
         if (min > x)
             min = x;
     }
-    return value_of_int(min);
+    return sch_integer_new(min);
 }
 
 static Value proc_add(UNUSED Value env, Value args)
@@ -1541,7 +1546,7 @@ static Value proc_add(UNUSED Value env, Value args)
     int64_t y = 0;
     for (Value p = args; p != Qnil; p = cdr(p))
         y += get_int(car(p));
-    return value_of_int(y);
+    return sch_integer_new(y);
 }
 
 static Value proc_sub(UNUSED Value env, Value args)
@@ -1551,10 +1556,10 @@ static Value proc_sub(UNUSED Value env, Value args)
     int64_t y = get_int(car(args));
     Value p = cdr(args);
     if (p == Qnil)
-        return value_of_int(-y);
+        return sch_integer_new(-y);
     for (; p != Qnil; p = cdr(p))
         y -= get_int(car(p));
-    return value_of_int(y);
+    return sch_integer_new(y);
 }
 
 static Value proc_mul(UNUSED Value env, Value args)
@@ -1562,7 +1567,7 @@ static Value proc_mul(UNUSED Value env, Value args)
     int64_t y = 1;
     for (Value p = args; p != Qnil; p = cdr(p))
         y *= get_int(car(p));
-    return value_of_int(y);
+    return sch_integer_new(y);
 }
 
 static Value proc_div(UNUSED Value env, Value args)
@@ -1572,20 +1577,20 @@ static Value proc_div(UNUSED Value env, Value args)
     int64_t y = get_int(car(args));
     Value p = cdr(args);
     if (p == Qnil)
-       return value_of_int(1 / y);
+       return sch_integer_new(1 / y);
     for (; p != Qnil; p = cdr(p)) {
         int64_t x = get_int(car(p));
         if (x == 0)
             return runtime_error("divided by zero");
         y /= x;
     }
-    return value_of_int(y);
+    return sch_integer_new(y);
 }
 
 static Value proc_abs(UNUSED Value env, Value x)
 {
     int64_t n = get_int(x);
-    return value_of_int(n < 0 ? -n : n);
+    return sch_integer_new(n < 0 ? -n : n);
 }
 
 static Value proc_quotient(UNUSED Value env, Value x, Value y)
@@ -1593,7 +1598,7 @@ static Value proc_quotient(UNUSED Value env, Value x, Value y)
     int64_t a = get_int(x), b = get_int(y);
     if (b == 0)
         return runtime_error("divided by zero");
-    return value_of_int(a / b);
+    return sch_integer_new(a / b);
 }
 
 static Value proc_remainder(UNUSED Value env, Value x, Value y)
@@ -1602,7 +1607,7 @@ static Value proc_remainder(UNUSED Value env, Value x, Value y)
     if (b == 0)
         return runtime_error("divided by zero");
     int64_t c = a % b;
-    return value_of_int(c);
+    return sch_integer_new(c);
 }
 
 static Value proc_modulo(UNUSED Value env, Value x, Value y)
@@ -1613,7 +1618,7 @@ static Value proc_modulo(UNUSED Value env, Value x, Value y)
     int64_t c = a % b;
     if ((a < 0 && b > 0) || (a > 0 && b < 0))
         c += b;
-    return value_of_int(c);
+    return sch_integer_new(c);
 }
 
 static int64_t expt(int64_t x, int64_t y)
@@ -1648,7 +1653,7 @@ static Value proc_expt(UNUSED Value env, Value x, Value y)
         c = 0;
     else
         c = expt(a, b);
-    return value_of_int(c);
+    return sch_integer_new(c);
 }
 
 // 6.2.6. Numerical input and output
@@ -1656,9 +1661,9 @@ static Value proc_number_to_string(UNUSED Value env, Value x)
 {
     char buf[22]; // log10(UINT64_MAX)+2
     EXPECT(type, TYPE_INT, x);
-    int64_t n = value_to_int(x);
+    int64_t n = sch_integer_to_cint(x);
     snprintf(buf, sizeof(buf), "%"PRId64, n);
-    return value_of_string(buf);
+    return sch_string_new(buf);
 }
 
 // 6.3. Other data types
@@ -1676,7 +1681,7 @@ static Value proc_boolean_p(UNUSED Value env, Value x)
 // 6.3.2. Pairs and lists
 static Value proc_pair_p(UNUSED Value env, Value o)
 {
-    return OF_BOOL(value_is_pair(o));
+    return OF_BOOL(sch_value_is_pair(o));
 }
 
 Value cons(Value car, Value cdr)
@@ -1740,11 +1745,6 @@ static Value proc_set_cdr(UNUSED Value env, Value pair, Value obj)
     }
 CXRS(DEF_CXR_BUILTIN)
 
-bool value_is_null(Value v)
-{
-    return v == Qnil;
-}
-
 static Value proc_null_p(UNUSED Value env, Value list)
 {
     return OF_BOOL(list == Qnil);
@@ -1753,7 +1753,7 @@ static Value proc_null_p(UNUSED Value env, Value list)
 static Value proc_list_p(UNUSED Value env, Value l)
 {
     for (Value p = l; p != Qnil; p = cdr(p)) {
-        if (!value_is_pair(p))
+        if (!sch_value_is_pair(p))
             return Qfalse;
     }
     return Qtrue;
@@ -1775,7 +1775,7 @@ int64_t length(Value l)
 static Value proc_length(UNUSED Value env, Value list)
 {
     EXPECT(list_head, list);
-    return value_of_int(length(list));
+    return sch_integer_new(length(list));
 }
 
 static Value dup_list(Value l, Value *plast)
@@ -1851,7 +1851,7 @@ static Value proc_list_ref(UNUSED Value env, Value list, Value vk)
     int64_t k = get_non_negative_int(vk);
     Value tail = list_tail(list, k);
     if (tail == Qnil)
-        return runtime_error("list is not longer than %"PRId64, value_to_int(k));
+        return runtime_error("list is not longer than %"PRId64, sch_integer_to_cint(k));
     return car(tail);
 }
 
@@ -1891,7 +1891,7 @@ static Value assq(Value key, Value l)
 {
     for (Value p = l; p != Qnil; p = cdr(p)) {
         Value e = car(p);
-        if (value_is_pair(e) && car(e) == key)
+        if (sch_value_is_pair(e) && car(e) == key)
             return e;
     }
     return Qfalse;
@@ -1907,7 +1907,7 @@ static Value assoc(Value key, Value l)
 {
     for (Value p = l; p != Qnil; p = cdr(p)) {
         Value e = car(p);
-        if (value_is_pair(e) && equal(car(e), key))
+        if (sch_value_is_pair(e) && equal(car(e), key))
             return e;
     }
     return Qfalse;
@@ -1922,19 +1922,19 @@ static Value proc_assoc(UNUSED Value env, Value obj, Value alist)
 // 6.3.3. Symbols
 static Value proc_symbol_p(UNUSED Value env, Value obj)
 {
-    return OF_BOOL(value_is_symbol(obj));
+    return OF_BOOL(sch_value_is_symbol(obj));
 }
 
 // 6.3.5. Strings
 static Value proc_string_p(UNUSED Value env, Value obj)
 {
-    return OF_BOOL(value_is_string(obj));
+    return OF_BOOL(sch_value_is_string(obj));
 }
 
 static Value proc_string_length(UNUSED Value env, Value s)
 {
     EXPECT(type, TYPE_STRING, s);
-    return value_of_int(strlen(STRING(s)));
+    return sch_integer_new(strlen(STRING(s)));
 }
 
 static Value proc_string_eq(UNUSED Value env, Value s1, Value s2)
@@ -1957,7 +1957,7 @@ static Value proc_substring(UNUSED Value env, Value string, Value vstart, Value 
     char buf[newlen+1];
     strncpy(buf, s + start, newlen);
     buf[newlen] = '\0';
-    return value_of_string(buf);
+    return sch_string_new(buf);
 }
 
 static Value proc_string_append(UNUSED Value env, Value args)
@@ -1973,7 +1973,7 @@ static Value proc_string_append(UNUSED Value env, Value args)
     s[0] = '\0';
     for (Value p = args; p != Qnil; p = cdr(p))
         strcat(s, STRING(car(p)));
-    return value_of_string_moved(s);
+    return string_new_moved(s);
 }
 
 // 6.3.6. Vectors
@@ -2019,7 +2019,7 @@ static Value proc_make_vector(UNUSED Value env, Value args)
 static Value proc_vector_length(UNUSED Value env, Value v)
 {
     EXPECT(type, TYPE_VECTOR, v);
-    return value_of_int(scary_length(VECTOR(v)));
+    return sch_integer_new(scary_length(VECTOR(v)));
 }
 
 static Value proc_vector_ref(UNUSED Value env, Value o, Value k)
@@ -2145,7 +2145,7 @@ static Value apply_continuation(UNUSED Value env, Value f, Value args)
     jump(cont);
 }
 
-static Value value_of_continuation(int64_t n)
+static Value continuation_new(int64_t n)
 {
     Continuation *c = obj_new(sizeof(Continuation), TAG_CONTINUATION);
     c->proc.arity = n; // call/cc: 1, call-with-values: -1
@@ -2172,7 +2172,7 @@ static bool continuation_set(Value c)
 // shared with dynamic-wind
 static Value callcc(Value env, Value proc)
 {
-    Value c = value_of_continuation(1);
+    Value c = continuation_new(1);
     if (continuation_set(c))
         return CONTINUATION(c)->retval;
     return apply(env, proc, list1(c));
@@ -2193,14 +2193,14 @@ static Value callcc_inner1(Value data, Value k)
     Value f = data;
     Value saved = inner_winders;
     Value nextdata = cons(k, list1(saved));
-    Value arg = value_of_cfunc_closure(".callcc-inner2", callcc_inner2, 1, nextdata);
+    Value arg = cfunc_closure_new(".callcc-inner2", callcc_inner2, 1, nextdata);
     return apply(Qfalse, f, list1(arg));
 }
 
 static Value proc_callcc(Value env, Value proc)
 {
     EXPECT(type, TYPE_PROC, proc);
-    Value inner = value_of_cfunc_closure(".callcc-inner1", callcc_inner1, 1, proc);
+    Value inner = cfunc_closure_new(".callcc-inner1", callcc_inner1, 1, proc);
     return callcc(env, inner);
 }
 
@@ -2215,7 +2215,7 @@ static Value proc_call_with_values(Value env, Value producer, Value consumer)
 {
     EXPECT(type_twin, TYPE_PROC, producer, consumer);
 
-    Value k = value_of_continuation(-1), origk = inner_continuation;
+    Value k = continuation_new(-1), origk = inner_continuation;
     Value args;
     if (continuation_set(k))
         args = CONTINUATION(k)->retval;
@@ -2283,14 +2283,14 @@ static Value proc_eval(UNUSED Value genv, Value expr, Value env)
 
 static Value proc_scheme_report_environment(UNUSED Value env, Value version)
 {
-    if (!value_is_int(version) || value_to_int(version) != 5)
+    if (!sch_value_is_integer(version) || sch_integer_to_cint(version) != 5)
         return runtime_error("only integer '5' is allowed for argument");
     return env_dup(NULL, env_r5rs);
 }
 
 static Value proc_null_environment(UNUSED Value env, Value version)
 {
-    if (!value_is_int(version) || value_to_int(version) != 5)
+    if (!sch_value_is_integer(version) || sch_integer_to_cint(version) != 5)
         return runtime_error("only integer '5' is allowed for argument");
     return env_dup(NULL, env_null);
 }
@@ -2303,18 +2303,20 @@ static Value proc_interaction_environment(UNUSED Value env)
 // 6.6. Input and output
 // 6.6.1. Ports
 static Value open_port(const char *path, bool output);
+#define open_input_port(path) open_port((path), false)
+#define open_output_port(path) open_port((path), true)
 
 static Value proc_call_with_input_file(Value env, Value path, Value thunk)
 {
     EXPECT(type, TYPE_STRING, path);
-    Value file = open_port(STRING(path), false);
+    Value file = open_input_port(STRING(path));
     return apply(env, thunk, list1(file));
 }
 
 static Value proc_call_with_output_file(Value env, Value path, Value thunk)
 {
     EXPECT(type, TYPE_STRING, path);
-    Value file = open_port(STRING(path), true);
+    Value file = open_output_port(STRING(path));
     return apply(env, thunk, list1(file));
 }
 
@@ -2333,7 +2335,7 @@ static Value proc_output_port_p(UNUSED Value env, Value port)
     return OF_BOOL(value_tag_is(port, TAG_PORT) && PORT(port)->output);
 }
 
-static Value value_of_port(FILE *fp, bool output)
+static Value port_new(FILE *fp, bool output)
 {
     Port *p = obj_new(sizeof(Port), TAG_PORT);
     p->fp = fp;
@@ -2342,18 +2344,20 @@ static Value value_of_port(FILE *fp, bool output)
     p->string_size = 0;
     return (Value) p;
 }
+#define input_port_new(path) port_new((path), false)
+#define output_port_new(path) port_new((path), true)
 
 static Value get_current_input_port(void)
 {
     if (current_input_port == Qfalse)
-        current_input_port = value_of_port(stdin, false);
+        current_input_port = input_port_new(stdin);
     return current_input_port;
 }
 
 static Value get_current_output_port(void)
 {
     if (current_output_port == Qfalse)
-        current_output_port = value_of_port(stdout, true);
+        current_output_port = output_port_new(stdout);
     return current_output_port;
 }
 
@@ -2374,19 +2378,18 @@ static Value open_port(const char *path, bool output)
     if (fp == NULL)
         return runtime_error("cannot open %s file: %s",
                              output ? "output" : "input", path);
-    return value_of_port(fp, output);
+    return port_new(fp, output);
 }
-
 static Value proc_open_input_file(UNUSED Value env, Value path)
 {
     EXPECT(type, TYPE_STRING, path);
-    return open_port(STRING(path), false);
+    return open_input_port(STRING(path));
 }
 
 static Value proc_open_output_file(UNUSED Value env, Value path)
 {
     EXPECT(type, TYPE_STRING, path);
-    return open_port(STRING(path), true);
+    return open_output_port(STRING(path));
 }
 
 static void close_port(Port *p);
@@ -2395,7 +2398,7 @@ static Value proc_with_input_from_file(Value env, Value path, Value thunk)
 {
     EXPECT(type, TYPE_STRING, path);
     Value orig = current_input_port;
-    current_input_port = open_port(STRING(path), false);
+    current_input_port = open_input_port(STRING(path));
     Value ret = apply(env, thunk, Qnil);
     close_port(PORT(current_input_port));
     current_input_port = orig;
@@ -2407,7 +2410,7 @@ static Value proc_with_output_to_file(Value env, Value path, Value thunk)
     EXPECT(type, TYPE_STRING, path);
     EXPECT(type, TYPE_PROC, thunk);
     Value orig = current_output_port;
-    current_output_port = open_port(STRING(path), true);
+    current_output_port = open_output_port(STRING(path));
     Value ret = apply(env, thunk, Qnil);
     close_port(PORT(current_output_port));
     current_output_port = orig;
@@ -2434,7 +2437,7 @@ static Value proc_close_port(UNUSED Value env, Value port)
 }
 
 // 6.6.2. Input
-static Value value_of_eof(void)
+static Value eof_new(void)
 {
     // an empty object
     return (Value) obj_new(sizeof(Header), TAG_EOF);
@@ -2443,7 +2446,7 @@ static Value value_of_eof(void)
 static Value get_eof_object(void)
 {
     if (eof_object == Qfalse)
-        eof_object = value_of_eof();
+        eof_object = eof_new();
     return eof_object;
 }
 
@@ -2501,7 +2504,7 @@ static void display_list(FILE *f, Value l, Value record)
         if ((next = cdr(p)) == Qnil)
             break;
         fprintf(f, " ");
-        if (!value_is_pair(next)) {
+        if (!sch_value_is_pair(next)) {
             fprintf(f, ". ");
             fdisplay_rec(f, next, record);
             break;
@@ -2557,7 +2560,7 @@ static void display_procedure(FILE *f, Value proc)
 
 static void fdisplay_rec(FILE* f, Value v, Value record)
 {
-    switch (value_type_of(v)) {
+    switch (sch_value_type_of(v)) {
     case TYPE_NULL:
         fprintf(f, "()");
         break;
@@ -2565,11 +2568,13 @@ static void fdisplay_rec(FILE* f, Value v, Value record)
         fprintf(f, "%s", v == Qtrue ? "#t" : "#f");
         break;
     case TYPE_INT:
-        fprintf(f, "%"PRId64, value_to_int(v));
+        fprintf(f, "%"PRId64, sch_integer_to_cint(v));
         break;
     case TYPE_SYMBOL:
+        fprintf(f, "%s", sch_symbol_to_cstr(v));
+        break;
     case TYPE_STRING:
-        fprintf(f, "%s", value_to_string(v));
+        fprintf(f, "%s", sch_string_to_cstr(v));
         break;
     case TYPE_PAIR:
         display_list(f, v, record);
@@ -2655,12 +2660,12 @@ static Value proc_load(UNUSED Value env, Value path)
 static Value read_string(size_t k, FILE *fp)
 {
     if (k == 0)
-        return value_of_string("");
+        return sch_string_new("");
     char buf[k + 1];
     char *p = fgets(buf, sizeof(buf), fp);
     if (p == NULL)
         return get_eof_object();
-    return value_of_string(buf);
+    return sch_string_new(buf);
 }
 
 static Value proc_read_string(UNUSED Value env, Value args)
@@ -2672,7 +2677,7 @@ static Value proc_read_string(UNUSED Value env, Value args)
     return read_string(k, PORT(port)->fp);
 }
 
-static Value value_of_string_port(void)
+static Value string_port_new(void)
 {
     Port *p = obj_new(sizeof(Port), TAG_PORT);
     p->output = true;
@@ -2688,7 +2693,7 @@ static Value value_of_string_port(void)
 
 static Value proc_open_output_string(UNUSED Value env)
 {
-    return value_of_string_port();
+    return string_port_new();
 }
 
 static Value proc_get_output_string(UNUSED Value env, Value p)
@@ -2698,8 +2703,8 @@ static Value proc_get_output_string(UNUSED Value env, Value p)
         return runtime_error("not a string port");
     fflush(PORT(p)->fp); // open_memstream() requires flushing
     if (PORT(p)->string_size == 0)
-        return value_of_string("");
-    return value_of_string(PORT(p)->string);
+        return sch_string_new("");
+    return sch_string_new(PORT(p)->string);
 }
 
 // (scheme process-context)
@@ -2711,8 +2716,8 @@ static Value proc_exit(UNUSED Value env, Value args)
         Value obj = car(args);
         if (obj == Qtrue)
             ; // use 0 for code as is
-        else if (value_is_int(obj))
-            exit_status = value_to_int(obj);
+        else if (sch_value_is_integer(obj))
+            exit_status = sch_integer_to_cint(obj);
         else // or #f too
             exit_status = 2; // something failed
     }
@@ -2725,7 +2730,7 @@ static Value proc_exit(UNUSED Value env, Value args)
 
 static Value syn_defined_p(Value env, Value name)
 {
-    if (!value_is_symbol(name))
+    if (!sch_value_is_symbol(name))
         return Qfalse;
     return OF_BOOL(env_get(env, name) != Qundef);
 }
@@ -2736,7 +2741,7 @@ static Value proc_cputime(UNUSED Value env) // in micro sec
     struct timespec t;
     clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t);
     int64_t n = t.tv_sec * MICRO + lround(t.tv_nsec / 1000.0);
-    return value_of_int(n);
+    return sch_integer_new(n);
 }
 
 static Value proc_print(UNUSED Value env, Value l)
@@ -2802,7 +2807,7 @@ void sch_init(uintptr_t *sp)
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
     symbol_names = scary_new(sizeof(char *));
-#define DEF_SYMBOL(var, name) SYM_##var = value_of_symbol(name)
+#define DEF_SYMBOL(var, name) SYM_##var = sch_symbol_new(name)
     DEF_SYMBOL(ELSE, "else");
     DEF_SYMBOL(QUOTE, "quote");
     DEF_SYMBOL(QUASIQUOTE, "quasiquote");
