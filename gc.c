@@ -86,7 +86,7 @@ static HeapSlot *heap_slot_new(size_t size)
     size = align(size);
     s->size = size;
     s->body = xmalloc(size);
-#ifdef __clang__ // XXX: ???
+#if defined(__clang__) && __clang_major__ < 19 // XXX: ???
     memset(s->body, 0, MIN(size, sizeof(Header)));
 #endif
     Header *h = HEADER(s->body);
