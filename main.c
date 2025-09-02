@@ -145,7 +145,7 @@ static int repl(void)
     char buf[BUFSIZ];
     for (;;) {
         printf("schaf$ ");
-        if (!fgets(buf, sizeof(buf), stdin)) // read,
+        if (fgets(buf, sizeof(buf), stdin) == NULL) // read,
             break;
         SchValue v = sch_eval_string(buf); // eval,
         if (v == SCH_UNDEF) {
