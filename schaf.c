@@ -314,6 +314,30 @@ static void expect_cfunc_arity(int64_t actual)
         CFUNCARG_MAX, actual);
 }
 
+// generic macros to handle errors and early-returns
+#define CHECK_ERROR_F(v, f) do { \
+        Value V = (v); \
+        if (UNLIKELY(f(V))) \
+            return V; \
+    } while (0)
+#define CHECK_ERROR(v) CHECK_ERROR_F(v, is_error)
+#define TRUTHY(v) ((v) != Qfalse)
+#define CHECK_ERROR_TRUTHY(v) CHECK_ERROR_F(v, TRUTHY)
+#define CHECK_ERROR_LOCATED(v, l) do { \
+        Value V = (v); \
+        if (UNLIKELY(is_error(V))) { \
+            if (scary_length(ERROR(V)) == 0) \
+                push_stack_frame(V, NULL, (l)); \
+            return V; \
+        } \
+    } while (0)
+#define EXPECT(f, ...) CHECK_ERROR(expect_##f(__VA_ARGS__))
+
+static Value expect_arity_0(Value args);
+static Value expect_arity_1(Value args);
+static Value expect_arity_2(Value args);
+static Value expect_arity_3(Value args);
+
 static Value apply_cfunc_v(Value env, Value f, Value args)
 {
     return CFUNC(f)->f1(env, args);
@@ -321,21 +345,25 @@ static Value apply_cfunc_v(Value env, Value f, Value args)
 
 static Value apply_cfunc_0(Value env, Value f, UNUSED Value args)
 {
+    EXPECT(arity_0, args);
     return CFUNC(f)->f0(env);
 }
 
 static Value apply_cfunc_1(Value env, Value f, Value args)
 {
+    EXPECT(arity_1, args);
     return CFUNC(f)->f1(env, car(args));
 }
 
 static Value apply_cfunc_2(Value env, Value f, Value args)
 {
+    EXPECT(arity_2, args);
     return CFUNC(f)->f2(env, car(args), cadr(args));
 }
 
 static Value apply_cfunc_3(Value env, Value f, Value args)
 {
+    EXPECT(arity_3, args);
     return CFUNC(f)->f3(env, car(args), cadr(args), caddr(args));
 }
 
@@ -380,6 +408,7 @@ static Value value_of_syntax(const char *name, void *cfunc, int64_t arity)
 
 static Value apply_cfunc_closure_1(UNUSED Value env, Value f, Value args)
 {
+    EXPECT(arity_1, args);
     return CFUNC(f)->f1(CFUNC_CLOSURE(f)->data, car(args));
 }
 
@@ -402,10 +431,12 @@ static Value value_of_cfunc_closure(const char *name, void *cfunc,
 static Value eval_body(Value env, Value body);
 static Value env_inherit(Value parent);
 static Value env_put(Value env, Value key, Value value);
+static Value expect_arity(int64_t expected, Value args);
 
 //PTR
 static Value apply_closure(UNUSED Value env, Value proc, Value args)
 {
+    EXPECT(arity, PROCEDURE(proc)->arity, args);
     Closure *cl = CLOSURE(proc);
     int64_t arity = cl->proc.arity;
     Value clenv = env_inherit(cl->env);
@@ -464,25 +495,6 @@ const char *sch_error_message(void)
     return errmsg;
 }
 
-// generic macros to handle errors and early-returns
-#define CHECK_ERROR_F(v, f) do { \
-        Value V = (v); \
-        if (UNLIKELY(f(V))) \
-            return V; \
-    } while (0)
-#define CHECK_ERROR(v) CHECK_ERROR_F(v, is_error)
-#define TRUTHY(v) ((v) != Qfalse)
-#define CHECK_ERROR_TRUTHY(v) CHECK_ERROR_F(v, TRUTHY)
-#define CHECK_ERROR_LOCATED(v, l) do { \
-        Value V = (v); \
-        if (UNLIKELY(is_error(V))) { \
-            if (scary_length(ERROR(V)) == 0) \
-                push_stack_frame(V, NULL, (l)); \
-            return V; \
-        } \
-    } while (0)
-#define EXPECT(f, ...) CHECK_ERROR(expect_##f(__VA_ARGS__))
-
 static Value expect_type(Type expected, Value v)
 {
     Type t = value_type_of(v);
@@ -510,31 +522,78 @@ static Value expect_type_or(Type e1, Type e2, Value v)
                          value_type_to_string(t));
 }
 
-static Value expect_arity_range(int64_t min, int64_t max, Value args)
+static bool length_in_range(Value l, int64_t min, int64_t max)
 {
-    int64_t actual = length(args);
-    if (LIKELY(min <= actual && actual <= max))
-        return Qfalse;
-    return runtime_error("wrong number of arguments: expected %"PRId64"..%"PRId64
-                         " but got %"PRId64, min, max, actual);
+    int64_t len = 0;
+    for (Value p = l; p != Qnil; p = cdr(p)) {
+        len++;
+        if (len > max)
+            return false;
+    }
+    return len >= min;
 }
 
-static Value expect_arity_min(int64_t min, Value args)
+static Value arity_error(const char *op, int64_t expected, int64_t actual)
 {
-    int64_t actual = length(args);
-    if (LIKELY(min <= actual))
+    return runtime_error("wrong number of arguments: expected %s%d but got %d",
+                         op, expected, actual);
+}
+
+static Value expect_arity_range(int64_t min, int64_t max, Value args)
+{
+    if (LIKELY(length_in_range(args, min, max)))
         return Qfalse;
-    return runtime_error("wrong number of arguments: expected >= %"PRId64" but got %"PRId64,
-                         min, actual);
+    return runtime_error("wrong number of arguments: expected %"PRId64"..%"PRId64
+                         " but got %"PRId64, min, max, length(args));
 }
 
 static Value expect_arity(int64_t expected, Value args)
 {
-    int64_t actual = length(args);
-    if (LIKELY(expected < 0 || expected == actual))
+    if (LIKELY(expected < 0 || length_in_range(args, expected, expected)))
         return Qfalse;
-    return runtime_error("wrong number of arguments: expected %"PRId64" but got %"PRId64,
-                         expected, actual);
+    return arity_error("", expected, length(args));
+}
+
+static Value expect_arity_min_1(Value args)
+{
+    if (LIKELY(args != Qnil))
+        return Qfalse;
+    return arity_error(">= ", 1, 0);
+}
+
+static Value expect_arity_min_2(Value args)
+{
+    if (LIKELY(args != Qnil && cdr(args) != Qnil))
+        return Qfalse;
+    return arity_error(">= ", 2, length(args));
+}
+
+static Value expect_arity_0(Value args)
+{
+    if (LIKELY(args == Qnil))
+        return Qfalse;
+    return arity_error("", 0, length(args));
+}
+
+static Value expect_arity_1(Value args)
+{
+    if (LIKELY(args != Qnil && cdr(args) == Qnil))
+        return Qfalse;
+    return arity_error("", 1, length(args));
+}
+
+static Value expect_arity_2(Value args)
+{
+    if (LIKELY(args != Qnil && cdr(args) != Qnil && cddr(args) == Qnil))
+        return Qfalse;
+    return arity_error("", 2, length(args));
+}
+
+static Value expect_arity_3(Value args)
+{
+    if (LIKELY(args != Qnil && cdr(args) != Qnil && cddr(args) != Qnil && cdddr(args) == Qnil))
+        return Qfalse;
+    return arity_error("", 3, length(args));
 }
 
 static Value env_new(const char *name)
@@ -649,7 +708,6 @@ static Value push_stack_frame(Value ve, const char *name, Value loc)
 
 static Value apply(Value env, Value proc, Value args)
 {
-    EXPECT(arity, PROCEDURE(proc)->arity, args);
     return PROCEDURE(proc)->apply(env, proc, args);
 }
 
@@ -947,7 +1005,7 @@ static Value cond_eval_recipient(Value env, Value test, Value recipients)
 //PTR
 static Value syn_cond(Value env, Value clauses)
 {
-    EXPECT(arity_min, 1, clauses);
+    EXPECT(arity_min_1, clauses);
 
     for (Value p = clauses; p != Qnil; p = cdr(p)) {
         Value clause = car(p);
@@ -980,7 +1038,7 @@ static Value memq(Value key, Value l);
 //PTR
 static Value syn_case(Value env, Value args)
 {
-    EXPECT(arity_min, 2, args);
+    EXPECT(arity_min_2, args);
     Value key = eval(env, car(args)), clauses = cdr(args);
     CHECK_ERROR(key);
     EXPECT(list_head, clauses);
@@ -1052,7 +1110,7 @@ static Value let(Value env, Value var, Value bindings, Value body)
 //PTR
 static Value syn_let(Value env, Value args)
 {
-    EXPECT(arity_min, 2, args);
+    EXPECT(arity_min_2, args);
     Value bind_or_var = car(args), body = cdr(args);
     Value var = Qfalse, bindings = bind_or_var;
     if (value_is_symbol(bind_or_var)) {
@@ -1085,14 +1143,14 @@ static Value let_star(Value env, Value bindings, Value body)
 //PTR
 static Value syn_let_star(Value env, Value args)
 {
-    EXPECT(arity_min, 2, args);
+    EXPECT(arity_min_2, args);
     return let_star(env, car(args), cdr(args));
 }
 
 //PTR
 static Value syn_letrec(Value env, Value args)
 {
-    EXPECT(arity_min, 2, args);
+    EXPECT(arity_min_2, args);
     Value bindings = car(args);
     Value body = cdr(args);
     EXPECT(list_head, bindings);
@@ -1122,7 +1180,7 @@ static Value syn_begin(Value env, Value body)
 //PTR
 static Value syn_do(Value env, Value args)
 {
-    EXPECT(arity_min, 2, args);
+    EXPECT(arity_min_2, args);
 
     Value bindings = car(args), tests = cadr(args), body = cddr(args);
     EXPECT(list_head, bindings);
@@ -1287,12 +1345,12 @@ static Value define_proc_internal(Value env, Value heads, Value body)
 static Value syn_define(Value env, Value args)
 {
     if (args == Qnil)
-        return runtime_error("wrong number of arguments: expected >= 1 but got 0");
+        return arity_error(">= ", 1, 0);
     Value head = car(args);
     Type t = value_type_of(head);
     switch (t) {
     case TYPE_SYMBOL:
-        EXPECT(arity, 2, args);
+        EXPECT(arity_2, args);
         return define_variable(env, head, cadr(args));
     case TYPE_PAIR:
         return define_proc_internal(env, head, cdr(args));
@@ -1386,7 +1444,7 @@ static Value proc_integer_p(UNUSED Value env, Value obj)
 typedef bool (*RelOpFunc)(int64_t x, int64_t y);
 static Value relop(RelOpFunc func, Value args)
 {
-    EXPECT(arity_min, 2, args);
+    EXPECT(arity_min_2, args);
 
     int64_t x = get_int(car(args));
     while ((args = cdr(args)) != Qnil) {
@@ -1456,7 +1514,7 @@ static Value proc_even_p(UNUSED Value env, Value obj)
 
 static Value proc_max(UNUSED Value env, Value args)
 {
-    EXPECT(arity_min, 1, args);
+    EXPECT(arity_min_1, args);
     int64_t max = get_int(car(args));
     for (Value p = cdr(args); p != Qnil; p = cdr(p)) {
         int64_t x = get_int(car(p));
@@ -1468,7 +1526,7 @@ static Value proc_max(UNUSED Value env, Value args)
 
 static Value proc_min(UNUSED Value env, Value args)
 {
-    EXPECT(arity_min, 1, args);
+    EXPECT(arity_min_1, args);
     int64_t min = get_int(car(args));
     for (Value p = cdr(args); p != Qnil; p = cdr(p)) {
         int64_t x = get_int(car(p));
@@ -1488,7 +1546,7 @@ static Value proc_add(UNUSED Value env, Value args)
 
 static Value proc_sub(UNUSED Value env, Value args)
 {
-    EXPECT(arity_min, 1, args);
+    EXPECT(arity_min_1, args);
 
     int64_t y = get_int(car(args));
     Value p = cdr(args);
@@ -1509,7 +1567,7 @@ static Value proc_mul(UNUSED Value env, Value args)
 
 static Value proc_div(UNUSED Value env, Value args)
 {
-    EXPECT(arity_min, 1, args);
+    EXPECT(arity_min_1, args);
 
     int64_t y = get_int(car(args));
     Value p = cdr(args);
@@ -2003,7 +2061,7 @@ static Value build_apply_args(Value args)
 
 static Value proc_apply(Value env, Value args)
 {
-    EXPECT(arity_min, 2, args);
+    EXPECT(arity_min_2, args);
 
     Value proc = car(args);
     EXPECT(type, TYPE_PROC, proc);
@@ -2034,7 +2092,7 @@ static bool cars_cdrs(Value ls, Value *pcars, Value *pcdrs, Value *perr)
 
 static Value proc_map(Value env, Value args)
 {
-    EXPECT(arity_min, 2, args);
+    EXPECT(arity_min_2, args);
 
     Value proc = car(args);
     EXPECT(type, TYPE_PROC, proc);
@@ -2051,7 +2109,7 @@ static Value proc_map(Value env, Value args)
 
 static Value proc_for_each(Value env, Value args)
 {
-    EXPECT(arity_min, 2, args);
+    EXPECT(arity_min_2, args);
 
     Value proc = car(args), e = Qfalse;
     EXPECT(type, TYPE_PROC, proc);
@@ -2072,10 +2130,11 @@ static void jump(Continuation *cont)
 
 #define GET_SP(p) uintptr_t v##p = 0, *p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
 
-[[gnu::noreturn, gnu::noinline]]
+[[gnu::noinline]]
 static Value apply_continuation(UNUSED Value env, Value f, Value args)
 {
     GET_SP(sp);
+    EXPECT(arity, PROCEDURE(f)->arity, args);
     Continuation *cont = CONTINUATION(f);
     cont->retval = PROCEDURE(f)->arity == 1 ? car(args) : args;
     int64_t d = sp - cont->sp;
