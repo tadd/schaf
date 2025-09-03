@@ -913,7 +913,7 @@ static FILE *open_loadable(const char *path)
 Value sch_load(const char *path)
 {
     FILE *in = open_loadable(path);
-    if (in == NULL)
+    if (UNLIKELY(in == NULL))
         error("load: can't open file: %s", path);
     Value retval = iload(in, path);
     fclose(in);

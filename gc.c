@@ -169,7 +169,7 @@ void *gc_malloc(size_t size)
         gc();
         p = allocate(size);
     }
-    if (p == NULL)
+    if (UNLIKELY(p == NULL))
         error("out of memory; heap (~%zu MiB) exhausted",
               heaps_size() / MiB);
     return p;

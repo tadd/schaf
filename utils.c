@@ -23,7 +23,7 @@ void error(const char *fmt, ...)
 void *xmalloc(size_t size)
 {
     void *p = malloc(size);
-    if (p == NULL)
+    if (UNLIKELY(p == NULL))
         error("malloc(%zu) failed", size);
     return p;
 }
@@ -31,7 +31,7 @@ void *xmalloc(size_t size)
 void *xcalloc(size_t nmem, size_t memsize)
 {
     void *p = calloc(nmem, memsize);
-    if (p == NULL)
+    if (UNLIKELY(p == NULL))
         error("calloc(%zu, %zu) failed", nmem, memsize);
     return p;
 }
@@ -39,7 +39,7 @@ void *xcalloc(size_t nmem, size_t memsize)
 void *xrealloc(void *orig, size_t size)
 {
     void *p = realloc(orig, size);
-    if (p == NULL)
+    if (UNLIKELY(p == NULL))
         error("realloc(%p, %zu) failed", orig, size);
     return p;
 }

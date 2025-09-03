@@ -636,7 +636,7 @@ Value parse_datum(FILE *in, const char *filename)
 Value sch_parse(const char *path)
 {
     FILE *in = fopen(path, "r");
-    if (in == NULL)
+    if (UNLIKELY(in == NULL))
         error("parse: can't open file: %s", path);
     Value ast = iparse_ast(in, path);
     fclose(in);
