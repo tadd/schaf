@@ -220,25 +220,28 @@ static uintptr_t bitmap_index(const void *p)
     return (n - beg) / sizeof(SchObject);
 }
 
-static bool mark_living(void *p)
+static uint8_t locate_bitmap(void *p, uint8_t **loc)
 {
     uintptr_t index = bitmap_index(p);
     uint8_t offset = index % 8U;
     index /= 8U;
-    uint8_t mask = 1UL << offset;
-    bool orig = heap.bitmap[index] & mask;
-    heap.bitmap[index] |= mask;
+    *loc = &heap.bitmap[index];
+    return 1UL << offset;
+}
+
+static bool mark_living(void *p)
+{
+    uint8_t *loc, mask = locate_bitmap(p, &loc);
+    bool orig = *loc & mask;
+    *loc |= mask;
     return orig;
 }
 
 static bool unmark_living(void *p)
 {
-    uintptr_t index = bitmap_index(p);
-    uint8_t offset = index % 8U;
-    index /= 8U;
-    uint8_t mask = 1UL << offset;
-    bool orig = heap.bitmap[index] & mask;
-    heap.bitmap[index] &= ~mask;
+    uint8_t *loc, mask = locate_bitmap(p, &loc);
+    bool orig = *loc & mask;
+    *loc &= ~mask;
     return orig;
 }
 
