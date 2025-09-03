@@ -1,8 +1,17 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#endif
+
 #include <criterion/criterion.h>
 #include <criterion/new/assert.h>
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 #include "intern.h"
 #include "schaf.h"
@@ -368,7 +377,7 @@ Test(table, dup) {
     Table *u = table_dup(t);
     table_free(t);
 
-    cr_expect(not(eq(ptr, t, u)));
+    cr_expect_neq(t, u);
     for (long i = 1; i < 100; i++)
         cr_expect(eq(int, i*17, table_get(u, i)));
 

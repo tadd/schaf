@@ -9,26 +9,15 @@ on:
       - '**wip**'
 
 jobs:
-  build:
+  build-ubuntu:
     if: ${{ ! startsWith(github.event.head_commit.message, 'WIP') }}
-    strategy:
-      matrix:
-        os: [ ubuntu-latest ] #, macos-latest
-    runs-on: ${{ matrix.os }}
-
+    runs-on: ubuntu-latest
     steps:
     - name: Checkout
       uses: actions/checkout@v6
-    - if: runner.os == 'Linux'
-      name: Install native packages in Linux
+    - name: Install native packages
       run: |
         sudo apt install -U --no-install-recommends libcriterion-dev valgrind
-    - if: runner.os == 'macOS'
-      name: Install native packages in macOS
-      run: |
-        brew install criterion coreutils
-        echo CPATH="/opt/homebrew/include:$CPATH" >> "$GITHUB_ENV"
-        echo LIBRARY_PATH="/opt/homebrew/lib:$LIBRARY_PATH" >> "$GITHUB_ENV"
     - name: Setup environmental variables
       run: |
         echo OPTFLAGS='-Og -ggdb3 -DDEBUG' >> "$GITHUB_ENV"
@@ -61,3 +50,33 @@ jobs:
       run: make -j4 sanitize CC=clang OPTFLAGS='-O3 -flto=auto'
     - name: Clang - Test optimized with stress
       run: make test-stress CC=clang OPTFLAGS='-O3 -flto=auto'
+
+  build-macos:
+    if: ${{ ! startsWith(github.event.head_commit.message, 'WIP') }}
+    runs-on: macos-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Install native packages
+      run: |
+        brew install criterion coreutils
+        echo CPATH="/opt/homebrew/include:$CPATH" >> "$GITHUB_ENV"
+        echo LIBRARY_PATH="/opt/homebrew/lib:$LIBRARY_PATH" >> "$GITHUB_ENV"
+    - name: Setup environmental variables
+      run: |
+        echo OPTFLAGS='-Og -ggdb3 -DDEBUG' >> "$GITHUB_ENV"
+        echo XCFLAGS=-Werror >> "$GITHUB_ENV"
+    - name: Make binaries
+      run: make clean && make -j3 schaf{,-san} test/basic-test{,-san}
+    - name: Test
+      run: make test
+    - name: Test with Santizer
+      run: make sanitize
+    - name: Test with stress
+      run: make test-stress
+    - name: Test optimized
+      run: make clean && make -j3 test OPTFLAGS='-O3 -flto=auto'
+    - name: Test optimized with Sanitizer
+      run: make -j3 sanitize OPTFLAGS='-O3 -flto=auto'
+    - name: Test optimized with stress
+      run: make test-stress OPTFLAGS='-O3 -flto=auto'
