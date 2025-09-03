@@ -244,6 +244,8 @@ static Token lex_int_binary(Parser *p, int coeff)
     return token_int(coeff * v);
 }
 
+#define s_(v) #v
+#define s(v) s_(v)
 static Token lex_int_with_radix(Parser *p, int coeff, unsigned radix)
 {
     switch (radix) {
@@ -254,15 +256,14 @@ static Token lex_int_with_radix(Parser *p, int coeff, unsigned radix)
     }
     if (radix == 2)
         return lex_int_binary(p, coeff);
-    char *s;
-    int n = fscanf(p->in, "%m[0-9a-zA-Z]", &s);
+    char s[BUFSIZ+1];
+    int n = fscanf(p->in, "%"s(BUFSIZ)"[0-9a-zA-Z]", s);
     if (n != 1)
         parse_error(p, "integer digits", "nothing");
     char *endp;
     int64_t i = strtol(s, &endp, radix);
     if (endp[0] != '\0')
         parse_error(p, "integer digits", "'%s'", endp); // XXX
-    free(s);
     return token_int(coeff * i);
 }
 

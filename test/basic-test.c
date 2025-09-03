@@ -366,7 +366,7 @@ Test(table, dup) {
     Table *u = table_dup(t);
     table_free(t);
 
-    cr_expect(not(eq(ptr, t, u)));
+    cr_expect_neq(t, u);
     for (long i = 1; i < 100; i++)
         cr_expect(eq(int, i*17, table_get(u, i)));
 
