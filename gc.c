@@ -220,15 +220,25 @@ static uintptr_t bitmap_index(const void *p)
     return (n - beg) / sizeof(SchObject);
 }
 
-static bool mark_living_unless(void *p, bool b)
+static bool mark_living(void *p)
 {
     uintptr_t index = bitmap_index(p);
     uint8_t offset = index % 8U;
     index /= 8U;
     uint8_t mask = 1UL << offset;
     bool orig = heap.bitmap[index] & mask;
-    if (orig != b)
-        heap.bitmap[index] ^= mask;
+    heap.bitmap[index] |= mask;
+    return orig;
+}
+
+static bool unmark_living(void *p)
+{
+    uintptr_t index = bitmap_index(p);
+    uint8_t offset = index % 8U;
+    index /= 8U;
+    uint8_t mask = 1UL << offset;
+    bool orig = heap.bitmap[index] & mask;
+    heap.bitmap[index] &= ~mask;
     return orig;
 }
 
@@ -237,7 +247,7 @@ static void mark_val(Value v)
     if (!is_valid_pointer(v))
         return;
     GCHeader *h = GC_HEADER_FROM_VAL(v);
-    if (mark_living_unless(h, true)) // mark it!
+    if (mark_living(h)) // mark it!
         return;
     switch (VALUE_TAG(v)) {
     case TAG_PAIR: {
@@ -521,7 +531,7 @@ static void sweep_slot(HeapSlot *slot)
         offset = h->size + GC_HEADER_OFFSET;
         if (!h->used)
             continue;
-        if (mark_living_unless(h, false))
+        if (unmark_living(h))
             continue;
         free_chunk(h);
     }
