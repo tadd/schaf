@@ -149,28 +149,12 @@ void sch_gc_mark(Value v)
     mark_val(v);
 }
 
-#if 0
-static bool in_heap_slot(const HeapSlot *slot, const uint8_t *p)
-{
-    const uint8_t *beg = slot->body, *end = beg + slot->size;
-    return p >= beg && p < end;
-}
-#endif
-
 bool in_heap_range(volatile uintptr_t v)
 {
     const uint8_t *volatile p = (uint8_t *volatile) v;
     if (p < heap_low || p >= heap_high)
         return false;
-#if 0// left for a while
-    for (size_t i = 0; i < heap.size; i++) {
-        if (in_heap_slot(heap.slot[i], p))
-            return true;
-    }
-    return false;
-#else
     return true;
-#endif
 }
 
 static bool is_valid_tag(ValueTag t)
