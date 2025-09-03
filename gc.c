@@ -139,7 +139,7 @@ static void heap_print_stat(const char *header)
 
 static void gc(void)
 {
-    if (in_gc)
+    if (UNLIKELY(in_gc))
         bug("nested GC detected");
     in_gc = true;
     if (print_stat)

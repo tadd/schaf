@@ -206,7 +206,7 @@ static inline bool table_too_many_elements(const Table *t)
 // `value` can't be TABLE_NOT_FOUND
 Table *table_put(Table *t, uint64_t key, uint64_t value)
 {
-    if (value == TABLE_NOT_FOUND)
+    if (UNLIKELY(value == TABLE_NOT_FOUND))
         bug("got invalid value == TABLE_NOT_FOUND");
     if (table_too_many_elements(t))
         table_resize(t);
@@ -234,7 +234,7 @@ uint64_t table_get(const Table *t, uint64_t key)
 
 bool table_set(Table *t, uint64_t key, uint64_t value)
 {
-    if (value == TABLE_NOT_FOUND)
+    if (UNLIKELY(value == TABLE_NOT_FOUND))
         bug("got invalid value == TABLE_NOT_FOUND");
     List *p = find(t, key);
     if (p == NULL)

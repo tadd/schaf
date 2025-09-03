@@ -234,7 +234,7 @@ inline static Symbol value_to_symbol(Value v)
 static const char *unintern(Symbol sym)
 {
     size_t len = scary_length(symbol_names);
-    if (sym >= len) // fatal; every known symbols should have a name
+    if (UNLIKELY(sym >= len)) // fatal; every known symbols should have a name
         bug("symbol %lu not found", sym);
     return symbol_names[sym];
 }
@@ -308,7 +308,7 @@ Value value_of_string(const char *s)
 
 static void expect_cfunc_arity(int64_t actual)
 {
-    if (actual <= CFUNCARG_MAX)
+    if (LIKELY(actual <= CFUNCARG_MAX))
         return;
     bug("arity too large: expected ..%"PRId64" but got %"PRId64,
         CFUNCARG_MAX, actual);
@@ -393,13 +393,9 @@ static Value value_of_cfunc_closure(const char *name, void *cfunc,
     f->proc.arity = arity;
     f->name = xstrdup(name);
     f->cfunc = cfunc;
-    switch (arity) {
-    case 1:
-        f->proc.apply = apply_cfunc_closure_1;
-        break;
-    default:
+    if (UNLIKELY(arity != 1))
         bug("invalid arity: %"PRId64, arity);
-    }
+    f->proc.apply = apply_cfunc_closure_1;
     return (Value) cc;
 }
 
@@ -552,7 +548,7 @@ static Value env_new(const char *name)
 
 static Value env_dup(const char *name, const Value orig)
 {
-    if (ENV(orig)->parent != Qfalse)
+    if (UNLIKELY(ENV(orig)->parent != Qfalse))
         bug("duplication of chained environment not permitted");
     Env *e = obj_new(sizeof(Env), TAG_ENV);
     if (name == NULL)
