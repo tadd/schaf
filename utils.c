@@ -40,7 +40,7 @@ void *xrealloc(void *orig, size_t size)
 {
     void *p = realloc(orig, size);
     if (UNLIKELY(p == NULL))
-        error("realloc(%p, %zu) failed", orig, size);
+        error("realloc(.., %zu) failed", size);
     return p;
 }
 
