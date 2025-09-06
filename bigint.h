@@ -17,6 +17,8 @@ ATTR_XMALLOC BigInt *bigint_negate(const BigInt *x); // -@
 bool bigint_is_zero(const BigInt *x); // == 0
 bool bigint_is_positive(const BigInt *x); // > 0
 bool bigint_is_negative(const BigInt *x); // < 0
+bool bigint_is_even(const BigInt *x); // % 2 == 0
+bool bigint_is_odd(const BigInt *x); // % 2 != 0
 
 int bigint_cmp(const BigInt *x, const BigInt *y); // <=>
 bool bigint_gt(const BigInt *x, const BigInt *y); // >
