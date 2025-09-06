@@ -156,7 +156,7 @@ class ValuePrinter(MyPrinter):
     def type_name(self):
         if self.is_self_format:
             return self.TAG_TO_TYPE[self.tag_name]
-        return cfuncall('value_to_type_name', self.val).string().title()
+        return cfuncall('sch_value_to_type_name', self.val).string().title()
 
     def stringify(self):
         s = cfuncall('sch_stringify', self.val).string()
