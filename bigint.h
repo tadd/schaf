@@ -28,6 +28,7 @@ bool bigint_le(const BigInt *x, const BigInt *y); // <=
 bool bigint_eq(const BigInt *x, const BigInt *y); // ==
 bool bigint_ne(const BigInt *x, const BigInt *y); // !=
 
+ATTR_XMALLOC BigInt *bigint_abs(const BigInt *x); // |x|
 ATTR_XMALLOC BigInt *bigint_add(const BigInt *x, const BigInt *y); // +
 ATTR_XMALLOC BigInt *bigint_sub(const BigInt *x, const BigInt *y); // -
 ATTR_XMALLOC BigInt *bigint_mul(const BigInt *x, const BigInt *y); // *
