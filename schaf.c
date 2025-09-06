@@ -1451,9 +1451,10 @@ static Value relop(RelOpFunc func, Value args)
 {
     EXPECT(arity_min_2, args);
 
-    int64_t x = get_int(car(args));
-    while ((args = cdr(args)) != Qnil) {
-        int64_t y = get_int(car(args));
+    Value p = args;
+    int64_t x = get_int(car(p));
+    while ((p = cdr(p)) != Qnil) {
+        int64_t y = get_int(car(p));
         if (!func(x, y))
             return Qfalse;
         x = y;
