@@ -161,6 +161,7 @@ typedef struct {
 #pragma GCC visibility push(hidden) // also affects Clang
 
 extern Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
+extern void *(*gc_malloc)(size_t size); // for modular GC
 
 Source *iparse(FILE *in, const char *filename);
 Value parse_datum(FILE *in, const char *filename);
@@ -173,7 +174,6 @@ void gc_init(uintptr_t *base_sp);
 void gc_fin(void);
 
 size_t gc_stack_get_size(uintptr_t *sp);
-ATTR_XMALLOC void *gc_malloc(size_t size);
 
 bool sch_value_is_integer(Value v);
 bool sch_value_is_symbol(Value v);
