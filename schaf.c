@@ -1635,6 +1635,13 @@ static Value int_div(Value x, Value y)
     return z;
 }
 
+static bool value_is_zero(Value x)
+{
+    return sch_value_is_fixnum(x) && sch_fixnum_to_cint(x) == 0;
+}
+
+// end of generic integer functions
+
 static Value proc_numeq(UNUSED Value env, Value args)
 {
     return int_relop(int_eq, args);
@@ -1662,7 +1669,7 @@ static Value proc_ge(UNUSED Value env, Value args)
 
 static Value proc_zero_p(UNUSED Value env, Value obj)
 {
-    return OF_BOOL(sch_value_is_fixnum(obj) && sch_fixnum_to_cint(obj) == 0);
+    return OF_BOOL(value_is_zero(obj));
 }
 
 static Value proc_positive_p(UNUSED Value env, Value obj)
@@ -1786,10 +1793,19 @@ static Value proc_abs(UNUSED Value env, Value x)
 
 static Value proc_quotient(UNUSED Value env, Value x, Value y)
 {
-    int64_t a = get_cint(x), b = get_cint(y);
-    if (b == 0)
+    Value a = get_int(x), b = get_int(y);
+    if (value_is_zero(b))
         return runtime_error("divided by zero");
-    return sch_fixnum_new(a / b);
+    bool fx = sch_value_is_fixnum(a), fy = sch_value_is_fixnum(b);
+    if (fx && fy)
+        return fixnum_normalize(a / b);
+    BigInt *bx = ensure_bigint(x), *by = ensure_bigint(y);
+    Value z = bignum_normalize(bigint_div(bx, by));
+    if (fx)
+        bigint_free(bx);
+    if (fy)
+        bigint_free(by);
+    return z;
 }
 
 static Value proc_remainder(UNUSED Value env, Value x, Value y)
