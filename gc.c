@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "intern.h"
+#include "schaf.h"
 #include "utils.h"
 
 #ifdef DEBUG
@@ -34,6 +35,20 @@ typedef struct {
     size_t size, used;
 } HeapStat;
 
+typedef struct {
+    void *(*alloc)(size_t size);
+    void (*init)(uintptr_t *volatile sp);
+    void (*fin)(void);
+} GCFunctions;
+
+ATTR_XMALLOC static void *eps_gc_malloc(size_t size);
+static void eps_gc_init(uintptr_t *volatile sp);
+static void eps_gc_fin(void);
+
+static const GCFunctions GC_FUNCS_EPSILON = {
+    eps_gc_malloc, eps_gc_init, eps_gc_fin
+};
+
 static size_t init_size = 1 * MiB;
 static Heap heap; // singleton
 
@@ -41,6 +56,8 @@ static uintptr_t *volatile stack_base;
 
 static bool stress, print_stat;
 static bool in_gc;
+
+static GCFunctions funcs = GC_FUNCS_EPSILON;
 
 void sch_set_gc_init_size(double init_mib)
 {
@@ -57,6 +74,17 @@ void sch_set_gc_print_stat(bool b)
     print_stat = b;
 }
 
+void sch_set_gc_strategy(SchGCStrategy s)
+{
+    switch (s) {
+    case GC_STRATEGY_EPSILON:
+        funcs = GC_FUNCS_EPSILON;
+        break;
+    default:
+        UNREACHABLE();
+    }
+}
+
 static inline size_t align(size_t size)
 {
     return (size + 15U) / 16U * 16U;
@@ -71,7 +99,20 @@ static HeapSlot *heap_slot_new(size_t size)
     return h;
 }
 
-void gc_fin(void)
+static void eps_gc_init(uintptr_t *volatile sp)
+{
+    stack_base = sp;
+    heap.slot[0] = heap_slot_new(init_size);
+    heap.size = 1;
+}
+
+
+void gc_init(uintptr_t *volatile sp)
+{
+    funcs.init(sp);
+}
+
+static void eps_gc_fin(void)
 {
     for (size_t i = 0; i < heap.size; i++) {
         free(heap.slot[i]->body);
@@ -79,11 +120,9 @@ void gc_fin(void)
     }
 }
 
-void gc_init(uintptr_t *volatile sp)
+void gc_fin(void)
 {
-    stack_base = sp;
-    heap.slot[0] = heap_slot_new(init_size);
-    heap.size = 1;
+    funcs.fin();
 }
 
 static void *allocate(size_t size)
@@ -158,7 +197,7 @@ static size_t heap_size(void)
     return stat.size;
 }
 
-void *gc_malloc(size_t size)
+static void *eps_gc_malloc(size_t size)
 {
     if (stress)
         gc();
@@ -171,4 +210,9 @@ void *gc_malloc(size_t size)
     if (UNLIKELY(p == NULL))
         error("out of memory; heap (~%zu MiB) exhausted", heap_size() / MiB);
     return p;
+}
+
+void *gc_malloc(size_t size)
+{
+    return funcs.alloc(size);
 }
