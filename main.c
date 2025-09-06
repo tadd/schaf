@@ -9,19 +9,81 @@
 #include "schaf.h"
 #include "utils.h"
 
+typedef struct {
+    const char *name;
+    bool has_arg;
+} OptLonger;
+
+typedef struct {
+    const char *name;
+    const char *value;
+} OptLongerData;
+
+#define eprintf(fmt, ...) fprintf(stderr, "error: " fmt "\n" __VA_OPT__(,) __VA_ARGS__)
+
+static int getopt_longer(int argc, char *const *argv, const char *optstrorig,
+                         const OptLonger longopts[], OptLongerData *val)
+{
+    if (longopts == NULL)
+        return getopt(argc, argv, optstrorig);
+    static char optstring[0x100] = { '\0', };
+    if (optstring[0] == '\0') {
+        if (strlen(optstrorig) >= sizeof(optstring) - 2 ||
+            strchr(optstrorig, '-') != NULL)
+            return '?';
+        strcpy(optstring, optstrorig);
+        strcat(optstring, "-:");
+    }
+
+    int opt = getopt(argc, argv, optstring);
+    if (opt != '-')
+        return opt; // as is
+    const char *flag = argv[optind-1];
+    if (strncmp(flag, "--", 2) != 0) {
+        eprintf("invalid option -- '%s'", flag);
+        return '?';
+    }
+    const char *name = flag + 2;
+    for (size_t i = 0; longopts[i].name != NULL; i++) {
+        const OptLonger *e = &longopts[i];
+        if (!e->has_arg && strcmp(e->name, name) == 0) {
+            *val = (OptLongerData) { .name = name, .value = NULL };
+            return 0;
+        } else if (e->has_arg) {
+            size_t len = strlen(e->name);
+            if (strncmp(e->name, name, len) != 0 || (name[len] != '\0' && name[len] != '='))
+                continue;
+            if (name[len] == '\0' || strcmp(name + len, "=") == 0) {
+                eprintf("option requires an argument '%s'", argv[optind - 1]);
+                return '?';
+            }
+            const char *value = name + len + 1;
+            *val = (OptLongerData) { .name = e->name, .value = value };
+            return 0;
+        }
+    }
+    eprintf("invalid option '%s'", argv[optind - 1]);
+    return '?';
+}
+
+static void usage_opt(FILE* out, const char *opt, const char *desc)
+{
+    fprintf(out, "  %-16s%s\n", opt, desc);
+}
+
 [[gnu::noreturn]]
 static void usage(FILE *out)
 {
     fprintf(out, "Usage: schaf [-e <source>] [-pPTMh] <file>\n");
-    fprintf(out, "  -e <source>\tevaluate <source> directly instead of <file>\n");
-    fprintf(out, "  -H <MiB>\tspecify initial heap size\n");
-    fprintf(out, "  -M\t\tprint memory usage (VmHWM) at exit\n");
-    fprintf(out, "  -p\t\tprint last expression in the input\n");
-    fprintf(out, "  -P\t\tonly parse then exit before evaluation. implies -p\n");
-    fprintf(out, "  -S\t\tput stress on GC\n");
-    fprintf(out, "  -s\t\tprint heap statistics before/after GC\n");
-    fprintf(out, "  -T\t\tprint consumed CPU time at exit\n");
-    fprintf(out, "  -h\t\tprint this help\n");
+    usage_opt(out, "-e <source>", "evaluate <source> string directly instead of <file>");
+    usage_opt(out, "-H <MiB>", "specify initial heap size");
+    usage_opt(out, "-M", "print memory usage (VmHWM) at exit");
+    usage_opt(out, "-p", "print last expression in the input");
+    usage_opt(out, "-P", "only parse then exit before evaluation. implies -p");
+    usage_opt(out, "-S", "put stress on GC");
+    usage_opt(out, "-s", "print heap statistics before/after GC");
+    usage_opt(out, "-T", "print consumed CPU time at exit");
+    usage_opt(out, "-h", "print this help");
     exit(out == stdout ? 0 : 2);
 }
 
@@ -41,7 +103,7 @@ typedef struct {
     double init_heap_size_mib;
     bool stress_gc;
     bool interacitve;
-} Option;
+} SchOption;
 
 static double parse_posnum(const char *s)
 {
@@ -52,22 +114,18 @@ static double parse_posnum(const char *s)
     return val;
 }
 
-static Option parse_opt(int argc, char *const *argv)
+static void option_init(SchOption *o)
 {
-    Option o = {
-        .path = NULL,
-        .script = NULL,
-        .print = false,
-        .parse_only = false,
-        .cputime = false,
-        .memory = false,
-        .heap_stat = false,
-        .init_heap_size_mib = 0.0,
-        .stress_gc = false,
-        .interacitve = false,
-    };
+    memset(o, 0, sizeof(SchOption));
+    o->init_heap_size_mib = 0.0;
+}
+
+static SchOption parse_opt(int argc, char *const *argv)
+{
+    SchOption o;
+    option_init(&o);
     int opt;
-    while ((opt = getopt(argc, argv, "e:H:MPpSsTh")) != -1) {
+    while ((opt = getopt_longer(argc, argv, "e:H:MPpSsTh", NULL, NULL)) != -1) {
         switch (opt) {
         case 'e':
             o.script = optarg;
@@ -189,7 +247,7 @@ static int repl(void)
 
 int main(int argc, char **argv)
 {
-    Option o = parse_opt(argc, argv);
+    SchOption o = parse_opt(argc, argv);
     sch_set_gc_stress(o.stress_gc);
     sch_set_gc_print_stat(o.heap_stat);
     if (o.init_heap_size_mib > 0.0)
