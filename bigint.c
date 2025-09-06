@@ -594,3 +594,25 @@ char *bigint_to_string(const BigInt *x)
     scary_free(dig10);
     return s;
 }
+
+static bool is_int_convertible(const BigInt *x)
+{
+    const uint64_t U_MAX = (uint64_t) INT32_MAX;
+    size_t len = scary_length(x);
+    if (len > 2)
+        return false;
+    if (len < 2)
+        return true;
+    uint64_t u = x->digits[1], l = x->digits[0];
+    if (x->negative)
+        return u <= U_MAX || (u == U_MAX + 1 && l == 0);
+    return u < U_MAX || (u == U_MAX && l <= UINT32_MAX);
+}
+
+int64_t bigint_to_int(const BigInt *x)
+{
+    if (!is_int_convertible(x))
+        return INT64_MIN;
+    int64_t i = x->digits[0] + x->digits[1] * (INT64_C(1) << 32U);
+    return x->negative ? -i : i;
+}
