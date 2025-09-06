@@ -694,6 +694,25 @@ Test(bigint, to_string_larger) {
     expect_bigint_string_eq("-1""0000000000""0000000000""0000000000""0000000000", nd);
 }
 
+#define expect_bigint_to_int(i) do { \
+        autoptr(BigInt) *x = bigint_from_int(i); \
+        cr_expect(eq(i64, i, bigint_to_int(x))); \
+    } while (0)
+
+Test(bigint, to_int) {
+    expect_bigint_to_int(INT64_C(0));
+    expect_bigint_to_int(INT64_C(1));
+    expect_bigint_to_int(INT64_C(42));
+    expect_bigint_to_int(INT64_C(-1));
+    expect_bigint_to_int(INT64_C(-42));
+    expect_bigint_to_int(INT64_C(1000000000));
+    expect_bigint_to_int(INT64_C(-1000000000));
+    expect_bigint_to_int(INT64_C(12345678901));
+    expect_bigint_to_int(INT64_C(-12345678901));
+    expect_bigint_to_int(INT64_MAX);
+    expect_bigint_to_int(INT64_MIN+1);
+}
+
 static int64_t rand_n(unsigned n)
 {
     const uint64_t max = ~UINT64_C(0) >> (64U - n);
