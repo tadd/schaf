@@ -77,6 +77,16 @@ bool bigint_is_negative(const BigInt *x)
     return x->negative;
 }
 
+bool bigint_is_even(const BigInt *x)
+{
+    return x->digits[0] % 2 == 0;
+}
+
+bool bigint_is_odd(const BigInt *x)
+{
+    return x->digits[0] % 2 != 0;
+}
+
 BigInt *bigint_negate(const BigInt *x)
 {
     BigInt *y = bigdup(x);

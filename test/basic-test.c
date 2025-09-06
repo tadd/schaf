@@ -450,6 +450,26 @@ Test(bigint, signs) {
     cr_expect(not(bigint_is_negative(z)));
 }
 
+Test(bigint, even_odd) {
+    autoptr(BigInt) *a = bigint_from_int(1);
+    autoptr(BigInt) *b = bigint_from_int(-1);
+    autoptr(BigInt) *c = bigint_from_int(INT64_MAX);
+    autoptr(BigInt) *d = bigint_from_int(INT64_MIN);
+    autoptr(BigInt) *z = bigint_from_int(0);
+
+    cr_expect(bigint_is_odd(a));
+    cr_expect(bigint_is_odd(b));
+    cr_expect(bigint_is_odd(c));
+    cr_expect(not(bigint_is_odd(d)));
+    cr_expect(not(bigint_is_odd(z)));
+    cr_expect(not(bigint_is_even(a)));
+    cr_expect(not(bigint_is_even(b)));
+    cr_expect(not(bigint_is_even(c)));
+    cr_expect(bigint_is_even(d));
+    cr_expect(bigint_is_even(z));
+}
+
+
 Test(bigint, negate) {
     autoptr(BigInt) *x = bigint_from_int(INT64_MAX);
     autoptr(BigInt) *y = bigint_from_int(INT64_MIN+1);
