@@ -81,6 +81,7 @@ static void usage(FILE *out)
     usage_opt(out, "-p", "Print last expression before exit.");
     usage_opt(out, "-P", "Only parse and print syntax list without evaluation.");
     usage_opt(out, "-s", "Print heap statistics before/after GC.");
+    usage_opt(out, "--gc=<algorithm>", "Specify GC algorithm from: epsilon.");
     usage_opt(out, "-S, --gc-stress", "Put stress on GC.");
     usage_opt(out, "-T", "Print consumed CPU time at exit.");
     usage_opt(out, "-h, --help", "Print this help.");
@@ -96,6 +97,7 @@ typedef struct {
     const char *path;
     const char *script;
     double init_heap_size_mib;
+    SchGCAlgorithm gc_algorithm;
     bool print;
     bool parse_only;
     bool cputime;
@@ -104,6 +106,23 @@ typedef struct {
     bool stress_gc;
     bool interacitve;
 } SchOption;
+
+static SchGCAlgorithm get_gc_algorithm(const char *s)
+{
+    if (strcmp(s, "epsilon") == 0)
+        return GC_ALGORITHM_EPSILON;
+    return 0;
+}
+
+static void parse_opt_longer(SchOption *o, const char *name, const char *value)
+{
+    if (strcmp(name, "gc") == 0) {
+        SchGCAlgorithm s = get_gc_algorithm(value);
+        if (s == 0)
+            opt_error("invalid value for --gc: %s", value);
+        o->gc_algorithm = s;
+    }
+}
 
 static double parse_posnum(const char *s)
 {
@@ -118,14 +137,17 @@ static SchOption parse_opt(int argc, char *const *argv)
 {
     const OptLonger opts[] = {
         { "help", 'h', false },
+        { "gc", 0, true },
         { "gc-stress", 'S', false },
         {}
     };
     SchOption o = {
         .init_heap_size_mib = 0.0,
+        .gc_algorithm = -1,
     };
+    OptLongerData data = { 0 };
     int opt;
-    while ((opt = getopt_longer(argc, argv, "e:H:MPpSsTh", opts, NULL)) != -1) {
+    while ((opt = getopt_longer(argc, argv, "e:H:MPpSsTh", opts, &data)) != -1) {
         switch (opt) {
         case 'e':
             o.script = optarg;
@@ -153,6 +175,9 @@ static SchOption parse_opt(int argc, char *const *argv)
             break;
         case 'h':
             usage(stdout);
+        case 0:
+            parse_opt_longer(&o, data.name, data.value);
+            break;
         case '?':
             usage(stderr);
         }

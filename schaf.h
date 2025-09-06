@@ -6,6 +6,10 @@
 
 typedef uintptr_t SchValue;
 
+typedef enum {
+    GC_ALGORITHM_EPSILON = 1
+} SchGCAlgorithm;
+
 extern const SchValue SCH_NULL, SCH_UNDEF, SCH_FALSE, SCH_TRUE;
 
 void sch_init(const uintptr_t *volatile base);
@@ -27,5 +31,6 @@ const char *sch_error_message(void);
 void sch_set_gc_init_size(double mib);
 void sch_set_gc_stress(bool b);
 void sch_set_gc_print_stat(bool b);
+void sch_set_gc_algorithm(SchGCAlgorithm s);
 
 #endif
