@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "intern.h"
+#include "schaf.h"
 #include "utils.h"
 
 enum {
@@ -38,6 +39,8 @@ static uintptr_t *stack_base;
 static bool stress, print_stat;
 static bool in_gc;
 
+void *(*gc_malloc)(size_t size);
+
 void sch_set_gc_init_size(double init_mib)
 {
     init_size = round(init_mib * MiB);
@@ -51,6 +54,19 @@ void sch_set_gc_stress(bool b)
 void sch_set_gc_print_stat(bool b)
 {
     print_stat = b;
+}
+
+ATTR_XMALLOC static void *eps_gc_malloc(size_t size);
+
+void sch_set_gc_strategy(GCStrategy s)
+{
+    switch (s) {
+    case GC_STRATEGY_EPSILON:
+        gc_malloc = eps_gc_malloc;
+        break;
+    default:
+        UNREACHABLE();
+    }
 }
 
 static inline size_t align(size_t size)
@@ -85,6 +101,7 @@ void gc_init(uintptr_t *sp)
     init_size = align(init_size);
     heap.slot[0] = heap_slot_new(init_size);
     heap.size = 1;
+    gc_malloc = eps_gc_malloc;
 }
 
 static void *allocate(size_t size)
@@ -159,7 +176,7 @@ static size_t heaps_size(void)
     return stat.size;
 }
 
-void *gc_malloc(size_t size)
+static void *eps_gc_malloc(size_t size)
 {
     if (stress)
         gc();

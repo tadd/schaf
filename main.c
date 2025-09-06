@@ -80,6 +80,7 @@ static void usage(FILE *out)
     usage_opt(out, "-M", "print memory usage (VmHWM) at exit");
     usage_opt(out, "-p", "print last expression in the input");
     usage_opt(out, "-P", "only parse then exit before evaluation. implies -p");
+    usage_opt(out, "--gc=<strategy>", "specify GC strategy (algorithm) from: epsilon");
     usage_opt(out, "-S", "put stress on GC");
     usage_opt(out, "-s", "print heap statistics before/after GC");
     usage_opt(out, "-T", "print consumed CPU time at exit");
@@ -95,6 +96,7 @@ static void usage(FILE *out)
 typedef struct {
     const char *path;
     const char *script;
+    GCStrategy gc_strategy;
     bool print;
     bool parse_only;
     bool cputime;
@@ -104,6 +106,25 @@ typedef struct {
     bool stress_gc;
     bool interacitve;
 } SchOption;
+
+static GCStrategy get_gc_strategy(const char *s)
+{
+    if (strcmp(s, "epsilon") == 0)
+        return GC_STRATEGY_EPSILON;
+    return -1;
+}
+
+static void parse_opt_longer(SchOption *o, OptLongerData data)
+{
+    if (strcmp(data.name, "gc") == 0) {
+        GCStrategy s = get_gc_strategy(data.value);
+        if (s < 0) {
+            opt_error("invalid value for --gc: %s", data.value);
+            usage(stderr);
+        }
+        o->gc_strategy = s;
+    }
+}
 
 static double parse_posnum(const char *s)
 {
@@ -118,14 +139,21 @@ static void option_init(SchOption *o)
 {
     memset(o, 0, sizeof(SchOption));
     o->init_heap_size_mib = 0.0;
+    o->gc_strategy = -1;
 }
 
 static SchOption parse_opt(int argc, char *const *argv)
 {
+    const OptLonger opts[] = {
+        { "gc",  true },
+        { NULL, false }
+    };
+
     SchOption o;
     option_init(&o);
     int opt;
-    while ((opt = getopt_longer(argc, argv, "e:H:MPpSsTh", NULL, NULL)) != -1) {
+    OptLongerData data = { 0, };
+    while ((opt = getopt_longer(argc, argv, "e:H:MPpSsTh", opts, &data)) != -1) {
         switch (opt) {
         case 'e':
             o.script = optarg;
@@ -153,6 +181,10 @@ static SchOption parse_opt(int argc, char *const *argv)
             break;
         case 'h':
             usage(stdout);
+            break;
+        case 0:
+            parse_opt_longer(&o, data);
+            break;
         case '?':
         default:
             usage(stderr);
