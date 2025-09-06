@@ -304,6 +304,13 @@ bool bigint_ne(const BigInt *x, const BigInt *y)
     return !bigint_eq(x, y);
 }
 
+BigInt *bigint_abs(const BigInt *x)
+{
+    if (x->negative)
+        return bigint_negate(x);
+    return bigdup(x);
+}
+
 // assumes x > y
 static void abs_add(uint32_t **z, const uint32_t *x, const uint32_t *y)
 {
