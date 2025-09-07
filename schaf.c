@@ -505,7 +505,7 @@ static Value expect_type(Type expected, Value v)
     Type t = sch_value_type_of(v);
     if (LIKELY(t == expected))
         return Qfalse;
-    return runtime_error("type expected %s but got %s",
+    return runtime_error("expected %s but got %s",
                          value_type_to_string(expected), value_type_to_string(t));
 }
 
@@ -522,7 +522,7 @@ static Value expect_type_or(Type e1, Type e2, Value v)
     Type t = sch_value_type_of(v);
     if (LIKELY(t == e1 || t == e2))
         return Qfalse;
-    return runtime_error("type expected %s or %s but got %s",
+    return runtime_error("expected %s or %s but got %s",
                          value_type_to_string(e1), value_type_to_string(e2),
                          value_type_to_string(t));
 }
