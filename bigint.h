@@ -11,6 +11,10 @@ ATTR_MALLOC BigInt *bigint_from_string(const char *s); // NULL on invalid string
 ATTR_MALLOC BigInt *bigint_from_string_bin(const char *s);
 ATTR_MALLOC BigInt *bigint_from_string_oct(const char *s);
 ATTR_MALLOC BigInt *bigint_from_string_hex(const char *s);
+ATTR_MALLOC BigInt *bigint_from_file(FILE *fp); // NULL on invalid input
+ATTR_MALLOC BigInt *bigint_from_file_bin(FILE *fp);
+ATTR_MALLOC BigInt *bigint_from_file_oct(FILE *fp);
+ATTR_MALLOC BigInt *bigint_from_file_hex(FILE *fp);
 void bigint_free(BigInt *x);
 
 ATTR_XMALLOC BigInt *bigint_negate(const BigInt *x); // -@

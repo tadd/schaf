@@ -635,6 +635,68 @@ Test(bigint, from_string_nondecimal) {
     expect_bigint_eq_from_strings(min, hex, "-8000000000000000");
 }
 
+#define expect_bigint_eq_from_file_of_string(exp, str) do { \
+        FILE *f = fmemopen((char *) str, strlen(str), "r"); \
+        autoptr(BigInt) *x = bigint_from_file(f); \
+        fclose(f); \
+        expect_bigint(eq, exp, x); \
+    } while (0)
+
+Test(bigint, from_file) {
+    autoptr(BigInt) *one = bigint_from_int(1);
+    autoptr(BigInt) *none = bigint_from_int(-1);
+    autoptr(BigInt) *zero = bigint_from_int(0);
+    autoptr(BigInt) *max = bigint_from_int(INT64_MAX);
+    autoptr(BigInt) *min = bigint_from_int(INT64_MIN+1);
+
+    expect_bigint_eq_from_file_of_string(zero, "0");
+    expect_bigint_eq_from_file_of_string(zero, "-0");
+    expect_bigint_eq_from_file_of_string(one, "1");
+    expect_bigint_eq_from_file_of_string(none, "-1");
+    expect_bigint_eq_from_file_of_string(max, "9223372036854775807");
+    expect_bigint_eq_from_file_of_string(min, "-9223372036854775807");
+    const char *s = "13407807929942597099574024998"
+        "205846127479365820592393377723561443721764030073546976801874298"
+        "166903427690031858186486050853753882811946569946433649006084096";
+    autoptr(BigInt) *huge = bigint_from_string(s);
+    expect_bigint_eq_from_file_of_string(huge, s);
+}
+
+#define expect_bigint_eq_from_file_of_strings(exp, suffix, str) do { \
+        FILE *f = fmemopen((char *) str, strlen(str), "r"); \
+        autoptr(BigInt) *x = bigint_from_file_##suffix(f); \
+        fclose(f); \
+        expect_bigint(eq, exp, x); \
+    } while (0)
+
+Test(bigint, from_file_nondecimal) {
+    autoptr(BigInt) *zero = bigint_from_int(0);
+    expect_bigint_eq_from_file_of_strings(zero, bin, "0");
+    expect_bigint_eq_from_file_of_strings(zero, oct, "0");
+    expect_bigint_eq_from_file_of_strings(zero, hex, "0");
+
+    autoptr(BigInt) *one = bigint_from_int(1);
+    expect_bigint_eq_from_file_of_strings(one, bin, "1");
+    expect_bigint_eq_from_file_of_strings(one, oct, "1");
+    expect_bigint_eq_from_file_of_strings(one, hex, "1");
+
+    autoptr(BigInt) *none = bigint_from_int(-1);
+    expect_bigint_eq_from_file_of_strings(none, bin, "-1");
+    expect_bigint_eq_from_file_of_strings(none, oct, "-1");
+    expect_bigint_eq_from_file_of_strings(none, hex, "-1");
+
+    autoptr(BigInt) *max = bigint_from_int(INT64_MAX);
+    expect_bigint_eq_from_file_of_strings(max, bin,
+    "111111111111111111111111111111111111111111111111111111111111111");
+    expect_bigint_eq_from_file_of_strings(max, oct, "777777777777777777777");
+    expect_bigint_eq_from_file_of_strings(max, hex, "7fffffffffffffff");
+
+    autoptr(BigInt) *min = bigint_from_int(INT64_MIN);
+    expect_bigint_eq_from_file_of_strings(min, bin,
+    "-1000000000000000000000000000000000000000000000000000000000000000");
+    expect_bigint_eq_from_file_of_strings(min, oct, "-1000000000000000000000");
+    expect_bigint_eq_from_file_of_strings(min, hex, "-8000000000000000");
+}
 
 struct BigInt { // copied for inspection
     bool negative;

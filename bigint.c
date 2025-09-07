@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "bigint.h"
@@ -15,14 +16,14 @@ struct BigInt {
 };
 
 enum {
-    RADIX = 0x1'0000'0000U,
-    NDIG2 = 32,
-    NDIG8 = 10, // (floor (/ NDIG2 (fllog2 8)))
-    NDIG10 = 9, // (floor (fllog10 RADIX))
-    NDIG16 = 8, // (floor (/ NDIG2 (fllog2 16)))
-    RADIX8 =  1'073'741'824U, // (expt 8 NDIG8)
-    RADIX10 = 1'000'000'000U, // (expt 10 NDIG10)
+    RADIX = UINT64_C(0x1'0000'0000),
+    RADIX8 =  UINT64_C(1'073'741'824), // (expt 8 NDIG8)
+    RADIX10 = UINT64_C(1'000'000'000), // (expt 10 NDIG10)
 };
+#define NDIG2 32
+#define NDIG8 10 // (floor (/ NDIG2 (fllog2 8)))
+#define NDIG10 9 // (floor (fllog10 RADIX))
+#define NDIG16 8 // (floor (/ NDIG2 (fllog2 16)))
 
 #define digits_new() scary_new(sizeof(uint32_t))
 #define digits_new_sized(n) scary_new_sized((n), sizeof(uint32_t))
@@ -95,14 +96,6 @@ BigInt *bigint_negate(const BigInt *x)
     return y;
 }
 
-static uint32_t scan_int(const char *s, ssize_t n, unsigned radix)
-{
-    char buf[n + 1];
-    strncpy(buf, s, n);
-    buf[n] = '\0';
-    return strtoul(buf, NULL, radix);
-}
-
 static uint32_t *convert_radix(const uint32_t *src, size_t rad_src, size_t rad_dst)
 {
     size_t len = scary_length(src);
@@ -143,76 +136,112 @@ static BigInt *normalize(BigInt *x)
     return x;
 }
 
-static BigInt *from_string(const char *s, unsigned radix,
-                           size_t radix_ndig,
-                           uint64_t inner_radix, // 0 means no conversion needed
-                           int (*is_acceptable)(int c))
+static void be_to_le(uint32_t *dst, const uint32_t *src,
+                     unsigned radix, unsigned dig_max, unsigned dig_used)
 {
-    const char *p = s;
+    size_t len = scary_length(src);
+    for (size_t i = 0; i < len; i++)
+        dst[len - i - 1] = src[i];
+    if (len == 1 || dig_used == 0)
+        return;
+    unsigned diff = dig_max - dig_used;
+    uint32_t div = (uint32_t) pow(radix, diff);
+    uint32_t mul = (uint32_t) pow(radix, dig_used);
+    for (size_t i = 0; i < len - 1; i++) {
+        dst[i] += (dst[i+1] % div) * mul;
+        dst[i+1] /= div;
+    }
+#ifdef DEBUG
+    if (dst[len-1] == 0)
+        UNREACHABLE();
+#endif
+}
+
+static BigInt *from_file(FILE *fp, unsigned radix, size_t radix_ndig,
+                         uint64_t inner_radix, // 0 means no conversion needed
+                         const char *format)
+{
     bool negative = false;
-    while (isspace(*p))
-        p++;
-    if (*p == '+')
-        p++;
-    else if (*p == '-') {
+    int c;
+    while (isspace(c = fgetc(fp)))
+        ;
+    if (c == '+')
+        ;
+    else if (c == '-')
         negative = true;
-        p++;
+    else
+        ungetc(c, fp);
+    uint32_t *d = digits_new(), d1 = 0;
+    char *p, *prev = NULL;
+    while (fscanf(fp, format, &p) == 1) {
+        d1 = strtoul(p, NULL, radix);
+        scary_push(&d, d1);
+        free(prev);
+        prev = p;
     }
-    const char *dbeg = p;
-    while (is_acceptable(*p))
-        p++;
-    size_t len = p - dbeg;
-    if (len == 0)
-        return NULL;
-    size_t div = len / radix_ndig, mod = len % radix_ndig;
-    size_t ndig = div + (mod > 0 ? 1 : 0);
-    BigInt *b = bigint_new_sized(ndig);
+    size_t i = strlen(prev);
+    free(prev);
+    size_t len = scary_length(d);
+    BigInt *b = bigint_new_sized(len);
     b->negative = negative;
-    uint32_t *d = b->digits;
-    if (mod > 0) {
-        d[ndig-1] = scan_int(dbeg, mod, radix);
-        ndig--;
-    }
-    p = dbeg + mod;
-    for (ssize_t i = ndig - 1; i >= 0; i--) {
-        d[i] = scan_int(p, radix_ndig, radix);
-        p += radix_ndig;
-    }
+    be_to_le(b->digits, d, radix, radix_ndig, i);
+    scary_free(d);
     if (inner_radix > 0) {
+        d = b->digits;
         b->digits = convert_radix(d, inner_radix, RADIX);
         scary_free(d);
     }
     return normalize(b);
 }
 
-static int is_binary(int c)
+#define DIGFORMAT(n, pat) "%"S(n)"m["pat"]"
+#define S(n) #n // for macro expansion
+BigInt *bigint_from_file(FILE *fp)
 {
-    return c == '0' || c == '1';
+    return from_file(fp, 10, NDIG10, RADIX10, DIGFORMAT(NDIG10, "0-9"));
 }
 
-static int is_octal(int c)
+BigInt *bigint_from_file_bin(FILE *fp)
 {
-    return c >= '0' && c <= '7';
+    return from_file(fp, 2, NDIG2, 0, DIGFORMAT(NDIG2, "01"));
 }
 
+BigInt *bigint_from_file_oct(FILE *fp)
+{
+    return from_file(fp, 8, NDIG8, RADIX8, DIGFORMAT(NDIG8, "0-7"));
+}
+
+BigInt *bigint_from_file_hex(FILE *fp)
+{
+    return from_file(fp, 16, NDIG16, 0, DIGFORMAT(NDIG16, "0-9a-fA-F"));
+}
+
+static BigInt *from_string(const char *s, BigInt *(*from_file)(FILE *fp))
+{
+    FILE *fp = fmemopen((char *) s, strlen(s), "r");
+    BigInt *ret = from_file(fp);
+    fclose(fp);
+    return ret;
+}
+ 
 BigInt *bigint_from_string(const char *s)
 {
-    return from_string(s, 10, NDIG10, RADIX10, isdigit);
+    return from_string(s, bigint_from_file);
 }
 
 BigInt *bigint_from_string_bin(const char *s)
 {
-    return from_string(s, 2, NDIG2, 0, is_binary);
+    return from_string(s, bigint_from_file_bin);
 }
 
 BigInt *bigint_from_string_oct(const char *s)
 {
-    return from_string(s, 8, NDIG8, RADIX8, is_octal);
+    return from_string(s, bigint_from_file_oct);
 }
 
 BigInt *bigint_from_string_hex(const char *s)
 {
-    return from_string(s, 16, NDIG16, 0, isxdigit);
+    return from_string(s, bigint_from_file_hex);
 }
 
 static inline uint32_t raddiv(uint64_t x)
@@ -509,8 +538,10 @@ static uint32_t *lshift1_add(const uint32_t *x, uint32_t a)
         return y;
     }
     size_t len = scary_length(x);
+#ifdef DEBUG
     if (x[len-1] == 0)
         UNREACHABLE();
+#endif
     uint32_t *y = digits_new_sized(len + 1);
     y[0] = a;
     memcpy(y+1, x, sizeof(uint32_t) * len);
