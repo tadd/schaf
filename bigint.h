@@ -7,6 +7,7 @@
 typedef struct BigInt BigInt;
 
 ATTR_XMALLOC BigInt *bigint_from_int(int64_t x);
+ATTR_XMALLOC BigInt *bigint_dup(const BigInt *x);
 ATTR_MALLOC BigInt *bigint_from_string(const char *s); // NULL on invalid string
 ATTR_MALLOC BigInt *bigint_from_string_bin(const char *s);
 ATTR_MALLOC BigInt *bigint_from_string_oct(const char *s);
