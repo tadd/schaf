@@ -31,7 +31,7 @@ typedef struct {
 } HeapStat;
 
 static size_t init_size = 1 * MiB;
-static Heap heap;
+static Heap heap; // singleton
 
 static uintptr_t *stack_base;
 
@@ -152,7 +152,7 @@ static void gc(void)
     in_gc = false;
 }
 
-static size_t heaps_size(void)
+static size_t heap_size(void)
 {
     HeapStat stat;
     heap_stat(&stat);
@@ -170,7 +170,6 @@ void *gc_malloc(size_t size)
         p = allocate(size);
     }
     if (UNLIKELY(p == NULL))
-        error("out of memory; heap (~%zu MiB) exhausted",
-              heaps_size() / MiB);
+        error("out of memory; heap (~%zu MiB) exhausted", heap_size() / MiB);
     return p;
 }
