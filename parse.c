@@ -326,25 +326,24 @@ static Token lex_constant(Parser *p)
     return lex_signed_int_with_radix(p, radix);
 }
 
+#define MAXDIG 18
+#define S(n) S_(n)
+#define S_(n) #n
 static Token lex_int(Parser *p, int coeff)
 {
-    char *s;
-    int n = fscanf(p->in, "%m[0-9a-zA-Z]", &s);
+    int64_t i;
+    int n = fscanf(p->in, "%"S(MAXDIG)SCNd64, &i);
     if (n != 1)
-        parse_error(p, "integer digits", "nothing");
-    if (strlen(s) > INT64_MAX_DIG10) {
-        BigInt *b = bigint_from_string(s);
-        if (b == NULL)
-            parse_error(p, "integer digits", "'%s'", s);
-        free(s);
-        return TOKEN_INT_BIGNUM(b, coeff < 0);
-    }
-    char *endp;
-    int64_t i = strtol(s, &endp, 10);
-    if (endp[0] != '\0')
-        parse_error(p, "integer digits", "'%s'", endp);
-    free(s);
-    return TOKEN_INT_FIXNUM(coeff * i);
+        parse_error(p, "integer", "invalid digits");
+    int c = fgetc(p->in);
+    ungetc(c, p->in);
+    if (!isalnum(c))
+        return TOKEN_INT_FIXNUM(coeff * i);
+    BigInt *b0 = bigint_from_file(p->in);
+    if (b0 == NULL)
+        parse_error(p, "integer", "invalid digits");
+    
+    return TOKEN_INT_BIGNUM(b, coeff < 0);
 }
 
 static Token lex_after_sign(Parser *p, int csign)
