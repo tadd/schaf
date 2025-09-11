@@ -49,7 +49,7 @@ void bigint_free(BigInt *x)
     free(x);
 }
 
-static BigInt* bigdup(const BigInt *x)
+BigInt* bigint_dup(const BigInt *x)
 {
     BigInt *y = bigint_new();
     y->negative = x->negative;
@@ -89,7 +89,7 @@ bool bigint_is_odd(const BigInt *x)
 
 BigInt *bigint_negate(const BigInt *x)
 {
-    BigInt *y = bigdup(x);
+    BigInt *y = bigint_dup(x);
     if (!is_zero(y->digits))
         y->negative = !y->negative;
     return y;
@@ -308,7 +308,7 @@ BigInt *bigint_abs(const BigInt *x)
 {
     if (x->negative)
         return bigint_negate(x);
-    return bigdup(x);
+    return bigint_dup(x);
 }
 
 // assumes x > y
@@ -560,7 +560,7 @@ static void divmod(const BigInt *x, const BigInt *y, BigInt **pdiv, BigInt **pmo
     bool neg = x->negative != y->negative;
     if (cmp < 0) {
         SET_PTR(pdiv, bigint_from_int(0));
-        SET_PTR(pmod, bigdup(x));
+        SET_PTR(pmod, bigint_dup(x));
     } else if (cmp == 0) {
         SET_PTR(pdiv, bigint_from_int(neg ? -1 : 1));
         SET_PTR(pmod, bigint_from_int(0));
