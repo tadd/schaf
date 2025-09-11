@@ -8,6 +8,10 @@
 #include "intern.h"
 #include "utils.h"
 
+#ifdef DEBUG
+#define xmalloc(size) xcalloc(1, size);
+#endif
+
 enum {
     MiB = 1024 * 1024,
     HEAP_RATIO = 2,
@@ -63,11 +67,7 @@ static HeapSlot *heap_slot_new(size_t size)
     HeapSlot *h = xmalloc(sizeof(HeapSlot));
     h->size = size;
     h->used = 0;
-#ifdef DEBUG
-    h->body = xcalloc(1, size);
-#else
     h->body = xmalloc(size);
-#endif
     return h;
 }
 
