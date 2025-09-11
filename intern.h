@@ -169,9 +169,9 @@ void pos_to_line_col(int64_t pos, int64_t *newline_pos, int64_t *line, int64_t *
 void *obj_new(size_t size, ValueTag t);
 void source_free(Source *s);
 
-void gc_init(uintptr_t *base_sp);
+void gc_init(uintptr_t *volatile base_sp);
 void gc_fin(void);
-size_t gc_stack_get_size(uintptr_t *sp);
+size_t gc_stack_get_size(uintptr_t *volatile sp);
 ATTR_XMALLOC void *gc_malloc(size_t size);
 
 bool sch_value_is_integer(Value v);

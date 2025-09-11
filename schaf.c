@@ -2129,7 +2129,7 @@ static void jump(Continuation *cont)
     longjmp(cont->state, 1);
 }
 
-#define GET_SP(p) uintptr_t v##p = 0, *p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
+#define GET_SP(p) uintptr_t v##p = 0, *volatile p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
 
 [[gnu::noinline]]
 static Value apply_continuation(UNUSED Value env, Value f, Value args)
