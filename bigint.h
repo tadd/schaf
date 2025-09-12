@@ -1,3 +1,6 @@
+#ifndef BIGINT_H
+#define BIGINT_H
+
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -38,3 +41,5 @@ ATTR_MALLOC BigInt *bigint_mod(const BigInt *x, const BigInt *y); // %, NULL on 
 
 ATTR_XMALLOC char *bigint_to_string(const BigInt *x);
 int64_t bigint_to_int(const BigInt *x);
+
+#endif
