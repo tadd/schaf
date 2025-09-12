@@ -77,11 +77,8 @@ static inline Token token_int_fixnum(int64_t i)
 
 static inline Token token_int_bignum(BigInt *i, bool negative)
 {
-    if (negative) {
-        BigInt *tmp = bigint_negate(i);
-        bigint_free(i);
-        i = tmp;
-    }
+    if (negative)
+        bigint_negate(i, i);
     return TOKEN_VAL(INT, bignum_normalize(i));
 }
 static inline Token token_string(const char *s)

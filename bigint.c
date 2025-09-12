@@ -9,11 +9,6 @@
 #include "libscary.h"
 #include "utils.h"
 
-struct BigInt {
-    bool negative;
-    uint32_t *digits; // use scary as little-endian
-};
-
 enum {
     RADIX = 0x1'0000'0000U,
     NDIG2 = 32,
@@ -34,10 +29,20 @@ static BigInt *bigint_new_sized(size_t n)
     return b;
 }
 
+void bigint_init(BigInt *x)
+{
+    x->digits = digits_new();
+}
+
+void bigint_fin(BigInt *x)
+{
+    scary_free(x->digits);
+}
+
 static BigInt *bigint_new(void)
 {
     BigInt *b = xmalloc(sizeof(BigInt));
-    b->digits = digits_new();
+    bigint_init(b);
     return b;
 }
 
@@ -45,7 +50,7 @@ void bigint_free(BigInt *x)
 {
     if (x == NULL)
         return;
-    scary_free(x->digits);
+    bigint_fin(x);
     free(x);
 }
 
@@ -55,6 +60,35 @@ BigInt* bigint_dup(const BigInt *x)
     y->negative = x->negative;
     y->digits = scary_dup(x->digits);
     return y;
+}
+
+static void digits_ensure_length(uint32_t **x, size_t n)
+{
+    size_t len = scary_length(*x);
+    if (len < n) {
+        size_t d = n - len;
+        for (size_t i = 0; i < d; i++)
+            scary_push(x, UINT32_C(0));
+    } else if (len > n) {
+        size_t d = len - n;
+        for (size_t i = 0; i < d; i++)
+            scary_pop(*x);
+    }
+}
+
+static void digits_set(uint32_t **y, const uint32_t *x)
+{
+    if (*y == x)
+        return;
+    size_t len = scary_length(x);
+    digits_ensure_length(y, len);
+    memcpy(*y, x, sizeof(uint32_t) * len);
+}
+
+void bigint_set(BigInt *y, const BigInt *x)
+{
+    y->negative = x->negative;
+    digits_set(&y->digits, x->digits);
 }
 
 static bool is_zero(const uint32_t *d)
@@ -82,12 +116,13 @@ bool bigint_is_odd(const BigInt *x)
     return x->digits[0] % 2 != 0;
 }
 
-BigInt *bigint_negate(const BigInt *x)
+void bigint_negate(BigInt *y, const BigInt *x)
 {
-    BigInt *y = bigint_dup(x);
-    if (!is_zero(y->digits))
-        y->negative = !y->negative;
-    return y;
+    digits_set(&y->digits, x->digits);
+    if (is_zero(y->digits))
+        y->negative = false;
+    else
+        y->negative = !x->negative;
 }
 
 static uint32_t scan_int(const char *s, ssize_t n, unsigned radix)
@@ -303,26 +338,28 @@ bool bigint_ne(const BigInt *x, const BigInt *y)
     return !bigint_eq(x, y);
 }
 
-BigInt *bigint_abs(const BigInt *x)
+void bigint_abs(BigInt *y, const BigInt *x)
 {
     if (x->negative)
-        return bigint_negate(x);
-    return bigint_dup(x);
+        bigint_negate(y, x);
+    else
+        bigint_set(y, x);
 }
 
 // assumes x > y
 static void abs_add(uint32_t **z, const uint32_t *x, const uint32_t *y)
 {
     size_t i, lx = scary_length(x), ly = scary_length(y);
+    digits_ensure_length(z, lx);
     uint32_t c = 0;
     for (i = 0; i < ly; i++) {
         uint64_t a = (uint64_t) x[i] + y[i] + c;
-        scary_push(z, radmod(a));
+        (*z)[i] = radmod(a);
         c = raddiv(a);
     }
     for (; i < lx; i++) {
         uint64_t a = (uint64_t) x[i] + c;
-        scary_push(z, radmod(a));
+        (*z)[i] = radmod(a);
         c = raddiv(a);
     }
     if (c > 0)
@@ -333,73 +370,74 @@ static void abs_add(uint32_t **z, const uint32_t *x, const uint32_t *y)
 static void abs_sub(uint32_t **z, const uint32_t *x, const uint32_t *y)
 {
     size_t i, lx = scary_length(x), ly = scary_length(y);
+    digits_ensure_length(z, lx + 1);
     uint32_t c = 0;
     for (i = 0; i < ly; i++) {
         uint64_t xi = x[i], yi = y[i], lc = 0;
         if (xi < yi + c)
             xi += RADIX, lc = 1;
-        scary_push(z, (uint32_t)(xi - yi - c));
+        (*z)[i] = xi - yi - c;
         c = lc;
     }
     for (; i < lx; i++) {
         uint64_t xi = x[i], lc = 0;
         if (xi < c)
             xi += RADIX, lc = 1;
-        scary_push(z, (uint32_t)(xi - c));
+        (*z)[i] = xi - c;
         c = lc;
     }
     digits_pop_zeros(*z);
 }
 
-static BigInt *zero(void)
+static void set_int(BigInt *x, int32_t i)
 {
-    BigInt *x = bigint_new();
-    x->negative = false;
-    scary_push(&x->digits, UINT32_C(0));
-    return x;
+    x->negative = i < 0;
+    digits_ensure_length(&x->digits, 1);
+    x->digits[0] = i;
 }
 
-static BigInt *add(const BigInt *x, const BigInt *y)
+static void set_zero(BigInt *x)
+{
+    set_int(x, 0);
+}
+
+static void add(BigInt *z, const BigInt *x, const BigInt *y)
 {
     const uint32_t *dx = x->digits, *dy = y->digits, *tmp;
     if (scary_length(dx) < scary_length(dy))
         tmp = dx, dx = dy, dy = tmp;
-    BigInt *z = bigint_new();
     z->negative = x->negative;
     abs_add(&z->digits, dx, dy);
-    return z;
 }
 
-static BigInt *sub(const BigInt *x, const BigInt *y)
+static void sub(BigInt *z, const BigInt *x, const BigInt *y)
 {
     const uint32_t *dx = x->digits, *dy = y->digits, *tmp;
     int cmp = abs_cmp(dx, dy);
     if (cmp == 0)
-        return zero();
-    BigInt *z = bigint_new();
+        return set_zero(z);
     z->negative = x->negative;
     if (cmp < 0) {
         tmp = dx, dx = dy, dy = tmp;
         z->negative = !x->negative;
     }
     abs_sub(&z->digits, dx, dy);
-    return z;
 }
 
-static BigInt *add_or_sub(const BigInt *x, const BigInt *y, bool is_sub)
+static void add_or_sub(BigInt *z, const BigInt *x, const BigInt *y, bool is_sub)
 {
     bool yneg = y->negative != is_sub;
-    return x->negative == yneg ? add(x, y) : sub(x, y);
+    x->negative == yneg ? add(z, x, y) : sub(z, x, y);
 }
 
-BigInt *bigint_add(const BigInt *x, const BigInt *y)
+void bigint_add(BigInt *z, const BigInt *x, const BigInt *y)
 {
-    return add_or_sub(x, y, false);
+    add_or_sub(z, x, y, false);
 }
 
-BigInt *bigint_sub(const BigInt *x, const BigInt *y)
+void bigint_sub(BigInt *z, const BigInt *x, const BigInt *y)
 {
-    return add_or_sub(x, y, true);
+    add_or_sub(z, x, y, true);
 }
 
 static void abs_mul_int(uint32_t *z, const uint32_t *x, size_t xlen, uint32_t y)
@@ -414,16 +452,27 @@ static void abs_mul_int(uint32_t *z, const uint32_t *x, size_t xlen, uint32_t y)
     z[xlen] += c;
 }
 
-BigInt *bigint_mul(const BigInt *x, const BigInt *y)
+void bigint_mul(BigInt *z, const BigInt *x, const BigInt *y)
 {
     const uint32_t *dx = x->digits, *dy = y->digits;
-    size_t lx = scary_length(dx), ly = scary_length(dy);
-    BigInt *z = bigint_new_sized(lx + ly);
+    size_t lx = scary_length(dx), ly = scary_length(dy), lz = lx + ly;
+    bool overwrap = z == x || z == y;
+    uint32_t *dz;
+    if (overwrap)
+        dz = digits_new_sized(lz);
+    else {
+        digits_ensure_length(&z->digits, lz);
+        memset(z->digits, 0, sizeof(uint32_t) * lz);
+        dz = z->digits;
+    }
     z->negative = x->negative != y->negative;
-    uint32_t *dz = z->digits;
     for (size_t i = 0; i < ly; i++)
         abs_mul_int(dz + i, dx, lx, dy[i]);
-    return normalize(z);
+    if (overwrap) {
+        digits_set(&z->digits, dz);
+        scary_free(dz);
+    }
+    normalize(z);
 }
 
 static uint64_t msb_to_u64(const uint32_t *x, size_t n)
@@ -470,9 +519,9 @@ static uint32_t calc_div(const uint32_t *x, const uint32_t *y, uint32_t init)
     return div;
 }
 
-#define SET_PTR(ptr, val) do { \
+#define SET_PTR(ptr, f) do { \
         if (ptr != NULL) \
-            *ptr = (val); \
+            f; \
     } while (0)
 
 static uint32_t abs_divmod_single(const uint32_t *x, const uint32_t *y,
@@ -493,10 +542,8 @@ static uint32_t abs_divmod_single(const uint32_t *x, const uint32_t *y,
     uint32_t *mul = digits_new_sized(ly + 1);
     abs_mul_int(mul, y, ly, div);
     digits_pop_zeros(mul);
-    uint32_t *mod = digits_new();
-    abs_sub(&mod, x, mul);
+    abs_sub(pmod, x, mul);
     scary_free(mul);
-    *pmod = mod;
     return div;
 }
 
@@ -508,88 +555,69 @@ static uint32_t *digits_rshift(const uint32_t *x, size_t n)
     return y;
 }
 
-static uint32_t *lshift1_add(const uint32_t *x, uint32_t a)
+static void lshift1_add(uint32_t **y, const uint32_t *x, uint32_t a)
 {
     if (is_zero(x)) {
-        uint32_t *y = digits_new();
-        scary_push(&y, a);
-        return y;
+        digits_ensure_length(y, 1);
+        (*y)[0] = a;
+        return;
     }
     size_t len = scary_length(x);
-    uint32_t *y = digits_new_sized(len + 1);
-    y[0] = a;
-    memcpy(y+1, x, sizeof(uint32_t) * len);
-    return y;
+    digits_ensure_length(y, len + 1);
+    (*y)[0] = a;
+    memcpy(*y + 1, x, sizeof(uint32_t) * len);
 }
 
 // assumes x > y
 static void abs_divmod(const uint32_t *x, const uint32_t *y,
-                       BigInt **pdiv, BigInt **pmod)
+                       BigInt *div, BigInt *mod)
 {
     size_t lx = scary_length(x), ly = scary_length(y);
     size_t n = lx - ly;
-    BigInt *div = bigint_new_sized(n + 1);
-    uint32_t *ddiv = div->digits, *dmod = NULL;
+    uint32_t *ddiv = digits_new_sized(n + 1), *dmod = digits_new_sized(n + 1);
     uint32_t *x2 = digits_rshift(x, n);
     for (ssize_t i = n; i > 0; i--) {
         ddiv[i] = abs_divmod_single(x2, y, &dmod);
-        scary_free(x2);
-        x2 = lshift1_add(dmod, x[i-1]);
-        scary_free(dmod);
+        lshift1_add(&x2, dmod, x[i-1]);
     }
     ddiv[0] = abs_divmod_single(x2, y, &dmod);
     scary_free(x2);
     digits_pop_zeros(ddiv);
-    if (pdiv != NULL)
-        *pdiv = div;
-    else
-        bigint_free(div);
-    if (pmod != NULL) {
-        BigInt *mod = bigint_new();
-        scary_free(mod->digits);
-        mod->digits = dmod;
-        *pmod = mod;
-    } else
-        scary_free(dmod);
+    SET_PTR(div, digits_set(&div->digits, ddiv));
+    SET_PTR(mod, digits_set(&mod->digits, dmod));
+    scary_free(ddiv);
+    scary_free(dmod);
 }
 
-static void divmod(const BigInt *x, const BigInt *y, BigInt **pdiv, BigInt **pmod)
+static bool divmod(const BigInt *x, const BigInt *y, BigInt *div, BigInt *mod)
 {
     const uint32_t *dx = x->digits, *dy = y->digits;
-    if (is_zero(dy)) { // div zero!
-        SET_PTR(pdiv, NULL);
-        SET_PTR(pmod, NULL);
-        return;
-    }
+    if (is_zero(dy)) // div zero!
+        return false;
     int cmp = abs_cmp(dx, dy);
     bool neg = x->negative != y->negative;
     if (cmp < 0) {
-        SET_PTR(pdiv, bigint_from_int(0));
-        SET_PTR(pmod, bigint_dup(x));
+        SET_PTR(div, set_zero(div));
+        SET_PTR(mod, bigint_set(mod, x));
     } else if (cmp == 0) {
-        SET_PTR(pdiv, bigint_from_int(neg ? -1 : 1));
-        SET_PTR(pmod, bigint_from_int(0));
+        SET_PTR(div, set_int(div, neg ? -1 : 1));
+        SET_PTR(mod, set_zero(mod));
     } else {
-        abs_divmod(dx, dy, pdiv, pmod);
-        if (pdiv != NULL)
-            (*pdiv)->negative = neg;
-        if (pmod != NULL)
-            (*pmod)->negative = x->negative;
+        abs_divmod(dx, dy, div, mod);
+        SET_PTR(div, div->negative = neg);
+        SET_PTR(mod, mod->negative = x->negative);
     }
+    return true;
 }
 
-BigInt *bigint_div(const BigInt *x, const BigInt *y)
+bool bigint_div(BigInt *z, const BigInt *x, const BigInt *y)
 {
-    BigInt *div;
-    divmod(x, y, &div, NULL);
-    return div;
+    return divmod(x, y, z, NULL);
 }
 
-BigInt *bigint_mod(const BigInt *x, const BigInt *y)
+bool bigint_mod(BigInt *z, const BigInt *x, const BigInt *y)
 {
-    BigInt *mod;
-    divmod(x, y, NULL, &mod);
-    return mod;
+    return divmod(x, y, NULL, z);
 }
 
 UNUSED static void bigint_dump(const char *s, const uint32_t *a)

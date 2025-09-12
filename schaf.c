@@ -1572,13 +1572,10 @@ static Value int_add(Value x, Value y)
         return fixnum_normalize(z);
     }
     BigInt *bx = ensure_bigint(x), *by = ensure_bigint(y);
-    Value z = bignum_normalize(bigint_add(bx, by));
-    if (fx)
-        bigint_free(bx);
-    else
-        bigint_free(BIGNUM(x)); // XXX: free_force
+    bigint_add(bx, bx, by);
+    Value z = bignum_normalize(bx);
     if (fy)
-        bigint_free(by);
+        bigint_fin(by);
     return z;
 }
 
@@ -1590,11 +1587,8 @@ static Value int_sub(Value x, Value y)
         return fixnum_normalize(z);
     }
     BigInt *bx = ensure_bigint(x), *by = ensure_bigint(y);
-    Value z = bignum_normalize(bigint_sub(bx, by));
-    if (fx)
-        bigint_free(bx);
-    else
-        bigint_free(BIGNUM(x)); // XXX: free_force
+    bigint_sub(bx, bx, by);
+    Value z = bignum_normalize(bx);
     if (fy)
         bigint_free(by);
     return z;
@@ -1617,14 +1611,11 @@ static Value int_mul(Value x, Value y)
             return fixnum_normalize(ix * iy);
     }
     BigInt *bx = ensure_bigint(x), *by = ensure_bigint(y);
-    Value z = bignum_normalize(bigint_mul(bx, by));
-    if (fx)
-        bigint_free(bx);
-    else
-        bigint_free(BIGNUM(x)); // XXX: free_force
+    bigint_mul(bx, bx, by);
+    x = bignum_normalize(bx);
     if (fy)
         bigint_free(by);
-    return z;
+    return x;
 }
 
 static Value int_dup(Value x)
@@ -1646,17 +1637,22 @@ static bool int_divmod_new(Value x, Value y, Value *div, Value *mod)
             SET_DIVMOD(fixnum_normalize(ix / iy), fixnum_normalize(ix % iy));
             return true;
         }
-    }
-    if (fx && !fy) {
+    } else if (fx) {
         SET_DIVMOD(sch_fixnum_new(0), int_dup(x));
         return true;
     }
     BigInt *bx = ensure_bigint(x), *by = ensure_bigint(y);
-    SET_DIVMOD(bignum_normalize(bigint_div(bx, by)),
-               bignum_normalize(bigint_mod(bx, by)));
+    BigInt *bz = bigint_from_int(0);
+    if (div != NULL) {
+        bigint_div(bz, bx, by);
+        *div = bignum_normalize(bz);
+    }
+    if (mod != NULL) {
+        bigint_mod(bz, bx, by);
+        *mod = bignum_normalize(bz);
+    }
     if (fx)
         bigint_free(bx);
-    // there's no bigint_free(BIGNUM(x)) here
     if (fy)
         bigint_free(by);
     return true;
@@ -1675,9 +1671,7 @@ static Value int_div(Value x, Value y)
 static Value int_mod_new(Value x, Value y)
 {
     Value mod;
-    if (!int_divmod_new(x, y, NULL, &mod))
-        return Qfalse; // divzero!
-    return mod;
+    return int_divmod_new(x, y, NULL, &mod) ? mod : Qfalse;
 }
 
 static bool int_is_odd(Value x)
@@ -1709,13 +1703,15 @@ static bool int_is_negative(Value x)
         sch_fixnum_to_cint(x) < 0 : bigint_is_negative(BIGNUM(x));
 }
 
-static Value int_negate(Value x)
+static Value int_negate_new(Value x)
 {
     if (sch_value_is_fixnum(x)) {
         int64_t ix = sch_fixnum_to_cint(x);
         return fixnum_normalize(-ix);
     }
-    return bignum_normalize(bigint_negate(BIGNUM(x)));
+    BigInt *b = bigint_from_int(0);
+    bigint_negate(b, BIGNUM(x));
+    return bignum_normalize(b);
 }
 
 // end of generic integer functions
@@ -1817,7 +1813,7 @@ static Value proc_sub(UNUSED Value env, Value args)
     Value y = get_int(car(args));
     Value p = cdr(args);
     if (p == Qnil)
-        return int_negate(y);
+        return int_negate_new(y);
     for (y = int_dup(y); p != Qnil; p = cdr(p))
         y = int_sub(y, get_int(car(p)));
     return y;
@@ -1863,7 +1859,9 @@ static Value proc_abs(UNUSED Value env, Value x)
 {
     if (sch_value_is_fixnum(x))
         return fixnum_normalize(llabs(sch_fixnum_to_cint(x)));
-    return bignum_normalize(bigint_abs(BIGNUM(x)));
+    BigInt *b = bigint_from_int(0);
+    bigint_abs(b, BIGNUM(x));
+    return bignum_normalize(b);
 }
 
 static Value proc_quotient(UNUSED Value env, Value x, Value y)
@@ -1877,7 +1875,9 @@ static Value proc_quotient(UNUSED Value env, Value x, Value y)
         return fixnum_normalize(ix / iy);
     }
     BigInt *bx = ensure_bigint(x), *by = ensure_bigint(y);
-    Value z = bignum_normalize(bigint_div(bx, by));
+    BigInt *bz = bigint_from_int(0);
+    bigint_div(bz, bx, by);
+    Value z = bignum_normalize(bz);
     if (fx)
         bigint_free(bx);
     if (fy)
