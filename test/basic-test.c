@@ -66,7 +66,9 @@ static char *cr_user_BigIntPtr_tostr(const BigIntPtr *x);
 static int cr_user_BigIntPtr_eq(const BigIntPtr *x, const BigIntPtr *y);
 static int cr_user_BigIntPtr_lt(const BigIntPtr *x, const BigIntPtr *y);
 static void BigInt_clean(BigInt **x);
+static void BigInt_val_clean(BigInt *x);
 #define autoptr(ty) __attribute__((cleanup(ty##_clean))) ty
+#define autoval(ty) __attribute__((cleanup(ty##_val_clean))) ty
 
 #define expect_bigint(op, x, y) cr_expect(op(type(BigIntPtr), x, y))
 
@@ -423,6 +425,11 @@ static int cr_user_BigIntPtr_lt(const BigIntPtr *x, const BigIntPtr *y)
     return bigint_lt(*x, *y);
 }
 
+static void BigInt_val_clean(BigInt *x)
+{
+    bigint_fin(x);
+}
+
 static void BigInt_clean(BigInt **x)
 {
     bigint_free(*x);
@@ -500,21 +507,31 @@ Test(bigint, negate) {
     autoptr(BigInt) *nx = bigint_from_int(-INT64_MAX);
     autoptr(BigInt) *ny = bigint_from_int(-(INT64_MIN+1));
 
-    autoptr(BigInt) *nx2 = bigint_negate(x);
-    autoptr(BigInt) *ny2 = bigint_negate(y);
-    autoptr(BigInt) *nz2 = bigint_negate(z);
+    autoval(BigInt) nx2, ny2, nz2;
+    bigint_init(&nx2);
+    bigint_init(&ny2);
+    bigint_init(&nz2);
 
-    expect_bigint(eq, nx, nx2);
-    expect_bigint(eq, ny, ny2);
-    expect_bigint(eq, z, nz2);
+    bigint_negate(&nx2, x);
+    bigint_negate(&ny2, y);
+    bigint_negate(&nz2, z);
 
-    autoptr(BigInt) *nx3 = bigint_negate(x);
-    autoptr(BigInt) *ny3 = bigint_negate(y);
-    autoptr(BigInt) *nz3 = bigint_negate(z);
+    expect_bigint(eq, nx, &nx2);
+    expect_bigint(eq, ny, &ny2);
+    expect_bigint(eq, z, &nz2);
 
-    expect_bigint(eq, nx2, nx3);
-    expect_bigint(eq, ny2, ny3);
-    expect_bigint(eq, z, nz3);
+    autoval(BigInt) nx3, ny3, nz3;
+    bigint_init(&nx3);
+    bigint_init(&ny3);
+    bigint_init(&nz3);
+
+    bigint_negate(&nx3, x);
+    bigint_negate(&ny3, y);
+    bigint_negate(&nz3, z);
+
+    expect_bigint(eq, &nx2, &nx3);
+    expect_bigint(eq, &ny2, &ny3);
+    expect_bigint(eq, z, &nz3);
 }
 
 #define C_OP(x) C_OP_##x
@@ -527,8 +544,9 @@ Test(bigint, negate) {
         autoptr(BigInt) *exp = bigint_from_int((int64_t)(ix) C_OP(op) (iy)); \
         autoptr(BigInt) *x = bigint_from_int(ix); \
         autoptr(BigInt) *y = bigint_from_int(iy); \
-        autoptr(BigInt) *z = bigint_##op(x, y); \
-        expect_bigint(eq, exp, z); \
+        autoval(BigInt) z; bigint_init(&z); \
+        bigint_##op(&z, x, y); \
+        expect_bigint(eq, exp, &z); \
     } while (0)
 
 Test(bigint, add) {
@@ -577,15 +595,17 @@ Test(bigint, mod) {
 Test(bigint, div_mod_divzero) {
     autoptr(BigInt) *x = bigint_from_int(1);
     autoptr(BigInt) *y = bigint_from_int(0);
-    autoptr(BigInt) *div = bigint_div(x, y);
-    autoptr(BigInt) *div2 = bigint_div(y, y);
-    autoptr(BigInt) *mod = bigint_mod(x, y);
-    autoptr(BigInt) *mod2 = bigint_mod(y, y);
 
-    cr_expect(eq(ptr, div, NULL));
-    cr_expect(eq(ptr, div2, NULL));
-    cr_expect(eq(ptr, mod, NULL));
-    cr_expect(eq(ptr, mod2, NULL));
+    autoval(BigInt) div, div2, mod, mod2;
+    bigint_init(&div);
+    bigint_init(&div2);
+    bigint_init(&mod);
+    bigint_init(&mod2);
+
+    cr_expect(not(bigint_div(&div, x, y)));
+    cr_expect(not(bigint_div(&div2, y, y)));
+    cr_expect(not(bigint_mod(&mod, x, y)));
+    cr_expect(not(bigint_mod(&mod2, y, y)));
 }
 
 Test(bigint, from_string) {
@@ -614,15 +634,13 @@ Test(bigint, from_string) {
     autoptr(BigInt) *f = bigint_from_string("-9223372036854775807");
     expect_bigint(eq, min, f);
 
-    autoptr(BigInt) *r1 = bigint_from_int(INT64_C(1) << 32U);
-    autoptr(BigInt) *r2 = bigint_mul(r1, r1);
-    autoptr(BigInt) *r4 = bigint_mul(r2, r2);
-    autoptr(BigInt) *r8 = bigint_mul(r4, r4);
-    autoptr(BigInt) *r16 = bigint_mul(r8, r8);
+    autoptr(BigInt) *r = bigint_from_int(INT64_C(1) << 32U);
+    for (size_t i = 0; i < 4; i++)
+        bigint_mul(r, r, r);
     autoptr(BigInt) *g = bigint_from_string("13407807929942597099574024"
     "998205846127479365820592393377723561443721764030073546976801874298"
     "166903427690031858186486050853753882811946569946433649006084096");
-    expect_bigint(eq, r16, g);
+    expect_bigint(eq, r, g);
 }
 
 #define expect_bigint_eq_from_strings(exp, suffix, str) do {       \
@@ -673,19 +691,24 @@ Test(bigint, mul_large) {
 
     autoptr(BigInt) *a = bigint_from_int(i);
     cr_expect(eq(u32, i, a->digits[0]));
-    autoptr(BigInt) *a2 = bigint_mul(a, a);
+    autoptr(BigInt) *a2 = bigint_from_int(0);
+    bigint_mul(a2, a, a);
     cr_expect_arr_eq(i2, a2->digits, sizeof(uint32_t)*2);
-    autoptr(BigInt) *a3 = bigint_mul(a2, a);
+    autoptr(BigInt) *a3 = bigint_from_int(0);
+    bigint_mul(a3, a2, a);
     cr_expect_arr_eq(i3, a3->digits, sizeof(uint32_t)*3);
-    autoptr(BigInt) *a3_2 = bigint_mul(a, a2);
-    cr_expect_arr_eq(i3, a3_2->digits, sizeof(uint32_t)*3);
-    expect_bigint(eq, a3, a3_2);
+    bigint_mul(a3, a, a2);
+    cr_expect_arr_eq(i3, a3->digits, sizeof(uint32_t)*3);
 
-    autoptr(BigInt) *a4 = bigint_mul(a2, a2);
+    autoptr(BigInt) *a4 = bigint_from_int(0);
+    autoptr(BigInt) *a4_2 = bigint_from_int(0);
+    autoptr(BigInt) *a4_3 = bigint_from_int(0);
+
+    bigint_mul(a4, a2, a2);
     cr_expect_arr_eq(i4, a4->digits, sizeof(uint32_t)*4);
-    autoptr(BigInt) *a4_2 = bigint_mul(a3, a);
+    bigint_mul(a4_2, a3, a);
     cr_expect_arr_eq(i4, a4_2->digits, sizeof(uint32_t)*4);
-    autoptr(BigInt) *a4_3 = bigint_mul(a, a3);
+    bigint_mul(a4_3, a, a3);
     cr_expect_arr_eq(i4, a4_3->digits, sizeof(uint32_t)*4);
     expect_bigint(eq, a4, a4_2);
     expect_bigint(eq, a4, a4_3);
@@ -717,25 +740,27 @@ Test(bigint, to_string) {
 }
 
 Test(bigint, to_string_larger) {
-    autoptr(BigInt) *a, *b, *c, *d;
+    autoptr(BigInt) *a, *b;
     a = bigint_from_int(10000000000); // "0"*10
     expect_bigint_string_eq("1""0000000000", a);
-    b = bigint_mul(a, a); // 20
+    b = bigint_from_int(0);
+    bigint_mul(b, a, a); // 20
     expect_bigint_string_eq("1""0000000000""0000000000", b);
-    c = bigint_mul(b, a); // 30
-    expect_bigint_string_eq("1""0000000000""0000000000""0000000000", c);
-    d = bigint_mul(b, b); // 40
-    expect_bigint_string_eq("1""0000000000""0000000000""0000000000""0000000000", d);
+    bigint_mul(b, b, a); // 30
+    expect_bigint_string_eq("1""0000000000""0000000000""0000000000", b);
+    bigint_mul(b, b, a); // 40
+    expect_bigint_string_eq("1""0000000000""0000000000""0000000000""0000000000", b);
 
-    autoptr(BigInt) *na, *nb, *nc, *nd;
+    autoptr(BigInt) *na, *nb;
     na = bigint_from_int(-10000000000); // -a
     expect_bigint_string_eq("-1""0000000000", na);
-    nb = bigint_mul(a, na);
+    nb = bigint_from_int(0);
+    bigint_mul(nb, na, a);
     expect_bigint_string_eq("-1""0000000000""0000000000", nb);
-    nc = bigint_mul(b, na);
-    expect_bigint_string_eq("-1""0000000000""0000000000""0000000000", nc);
-    nd = bigint_mul(c, na);
-    expect_bigint_string_eq("-1""0000000000""0000000000""0000000000""0000000000", nd);
+    bigint_mul(nb, nb, a);
+    expect_bigint_string_eq("-1""0000000000""0000000000""0000000000", nb);
+    bigint_mul(nb, nb, a);
+    expect_bigint_string_eq("-1""0000000000""0000000000""0000000000""0000000000", nb);
 }
 
 #define expect_bigint_to_int(i) do { \
@@ -787,13 +812,14 @@ ParameterizedTest(int64_t p[2], bigint, op##_rand##n) { \
     int64_t ix = p[0], iy = p[1]; \
     if (iy == 0) iy = 42; /* for div/mod */ \
     autoptr(BigInt) *x = bigint_from_int(ix), *y = bigint_from_int(iy); \
-    autoptr(BigInt) *z1 = expf(op, ix, iy, x, y); \
-    autoptr(BigInt) *z2 = bigint_##op(x, y); \
+    autoptr(BigInt) *z1 = bigint_from_int(0), *z2 = bigint_from_int(0); \
+    expf(z1, op, ix, iy, x, y); \
+    bigint_##op(z2, x, y); \
     expect_bigint(eq, z1, z2); \
 }
-#define C_OP_FUNC(op, ix, iy, x, y) bigint_from_int(((int64_t) ix) C_OP(op) (iy))
+#define C_OP_FUNC(z, op, ix, iy, x, y) z = bigint_from_int(((int64_t) ix) C_OP(op) (iy))
 #define BigIntBinopRandomTestC(n, op) BigIntBinopRandomTest(n, op, C_OP_FUNC)
-#define BFUNC(op, ix, iy, x, y) bigint_##op((y), (x))
+#define BFUNC(z, op, ix, iy, x, y) bigint_##op((z), (y), (x))
 #define BigIntBinopRandomTestSymRel(n, op) BigIntBinopRandomTest(n, op, BFUNC)
 
 #define BigIntDivmodRandomTest(n) \
@@ -802,10 +828,12 @@ ParameterizedTest(int64_t p[2], bigint, divmod_rand##n) { \
     int64_t ix = p[0], iy = p[1]; \
     if (iy == 0) iy = 42; \
     autoptr(BigInt) *x = bigint_from_int(ix), *y = bigint_from_int(iy); \
-    autoptr(BigInt) *div = bigint_div(x, y), *mod = bigint_mod(x, y); \
-    autoptr(BigInt) *z1 = bigint_mul(y, div); \
-    autoptr(BigInt) *z = bigint_add(z1, mod); \
-    expect_bigint(eq, x, z); \
+    autoval(BigInt) div, mod; bigint_init(&div), bigint_init(&mod); \
+    bigint_div(&div, x, y), bigint_mod(&mod, x, y); \
+    autoval(BigInt) z; bigint_init(&z); \
+    bigint_mul(&z, y, &div); \
+    bigint_add(&z, &z, &mod); \
+    expect_bigint(eq, x, &z); \
 }
 
 BigIntBinopRandomTestC(63, add)
