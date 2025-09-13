@@ -394,19 +394,18 @@ BigInt *bigint_sub(const BigInt *x, const BigInt *y)
     return add_or_sub(x, y, true);
 }
 
-static void abs_mul_int(uint32_t *y, const uint32_t *x, uint32_t n, size_t xlen)
+static void abs_mul_int(uint32_t *z, const uint32_t *x, size_t xlen, uint32_t y)
 {
     uint32_t c = 0;
     uint64_t m;
     for (size_t i = 0; i < xlen; i++) {
-        m = (uint64_t) x[i] * n + y[i] + c;
-        y[i] = radmod(m);
+        m = (uint64_t) x[i] * y + z[i] + c;
+        z[i] = radmod(m);
         c = raddiv(m);
     }
-    y[xlen] += c;
+    z[xlen] += c;
 }
 
-#define MAX(x, y) ((x) > (y) ? (x) : (y))
 BigInt *bigint_mul(const BigInt *x, const BigInt *y)
 {
     const uint32_t *dx = x->digits, *dy = y->digits;
@@ -415,7 +414,7 @@ BigInt *bigint_mul(const BigInt *x, const BigInt *y)
     z->negative = x->negative != y->negative;
     uint32_t *dz = z->digits;
     for (size_t i = 0; i < ly; i++)
-        abs_mul_int(dz + i, dx, dy[i], lx);
+        abs_mul_int(dz + i, dx, lx, dy[i]);
     return normalize(z);
 }
 
@@ -430,7 +429,7 @@ static uint64_t msb_to_u64(const uint32_t *x, size_t n)
 static int check_div(const uint32_t *x, const uint32_t *y, uint32_t div,
                      uint32_t **buf, size_t ylen)
 {
-    abs_mul_int(*buf, y, div, ylen);
+    abs_mul_int(*buf, y, ylen, div);
     bool poped = digits_pop_zeros(*buf);
     if (abs_cmp(*buf, x) > 0) {
         if (poped)
@@ -484,7 +483,7 @@ static uint32_t abs_divmod_single(const uint32_t *x, const uint32_t *y,
         div = calc_div(x, y, div);
  out:
     uint32_t *mul = digits_new_sized(ly + 1);
-    abs_mul_int(mul, y, div, ly);
+    abs_mul_int(mul, y, ly, div);
     digits_pop_zeros(mul);
     uint32_t *mod = digits_new();
     abs_sub(&mod, x, mul);
