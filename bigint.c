@@ -340,17 +340,17 @@ static void abs_sub(uint32_t **z, const uint32_t *x, const uint32_t *y)
     size_t i, lx = scary_length(x), ly = scary_length(y);
     uint32_t c = 0;
     for (i = 0; i < ly; i++) {
-        uint32_t xi = x[i], yi = y[i], lc = 0;
-        if (xi < yi)
+        uint64_t xi = x[i], yi = y[i], lc = 0;
+        if (xi < yi + c)
             xi += RADIX, lc = 1;
-        scary_push(z, xi - yi - c);
+        scary_push(z, (uint32_t)(xi - yi - c));
         c = lc;
     }
     for (; i < lx; i++) {
-        uint32_t xi = x[i], lc = 0;
+        uint64_t xi = x[i], lc = 0;
         if (xi < c)
             xi += RADIX, lc = 1;
-        scary_push(z, xi - c);
+        scary_push(z, (uint32_t)(xi - c));
         c = lc;
     }
     digits_pop_zeros(*z);
