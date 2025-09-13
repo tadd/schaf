@@ -245,6 +245,8 @@ BigInt *bigint_from_int(int64_t x)
 
 static int abs_cmp(const uint32_t *x, const uint32_t *y)
 {
+    if (x == y)
+        return 0;
     size_t lx = scary_length(x), ly = scary_length(y);
     if (lx > ly)
         return 1;
@@ -261,6 +263,8 @@ static int abs_cmp(const uint32_t *x, const uint32_t *y)
 
 int bigint_cmp(const BigInt *x, const BigInt *y)
 {
+    if (x == y)
+        return 0;
     if (x->negative != y->negative)
         return x->negative ? -1 : 1;
     int cmp = abs_cmp(x->digits, y->digits);
