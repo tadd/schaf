@@ -36,7 +36,14 @@ def expr(s):
 def immediate(s):
     return highlight('immediate', s)
 
-class MyPrinter:
+def format_value(val, pretty=True):
+    if pretty:
+        pr = schaf_pp(val)
+        if pr:
+            return pr.to_string()
+    return val.format_string()
+
+class SchafPrinter:
     def __init__(self, val):
         self.val = val
 
@@ -47,21 +54,21 @@ class MyPrinter:
         ty = lookup_type(tname).pointer()
         return self.val.cast(ty).dereference()
 
-    def pp(self, val):
-        pr = schaf_pp(val)
-        return pr.to_string() if pr else val.format_string()
+    def format_as(self, ty):
+        return format_value(self.deref_as(ty))
 
-    def pp_val_as(self, ty):
-        return self.pp(self.val.cast(ty))
+    def format_casted(self, ty):
+        return format_value(self.val.cast(ty))
 
-    def format_single(self, val, pretty=True):
-        return self.pp(val) if pretty else val.format_string()
-
-    def format_members(self, *keys, pretty=True):
-        s = [f'{param(k)} = {self.format_single(self.val[k], pretty)}' for k in keys]
+    def format_members(self, *keys):
+        s = [f'{param(k)} = {format_value(self.val[k])}' for k in keys]
         return ', '.join(s)
 
-class ProcedurePrinter(MyPrinter):
+    def stringify(self):
+        s = cfuncall('sch_stringify', self.val).string()
+        return expr(s)
+
+class ProcedurePrinter(SchafPrinter):
     TYPE = lookup_type('Procedure')
 
     def child_fields(self):
@@ -73,43 +80,43 @@ class ProcedurePrinter(MyPrinter):
 class CFuncPrinter(ProcedurePrinter):
     TYPE = lookup_type('CFunc')
 
-    def format(self):
+    def format_cfunc(self):
         b = block_for_pc(self.val['cfunc'])
         if not b or not b.function:
             return None
         return b.function.value().format_string()
 
     def to_string(self):
-        sup = self.pp_val_as(super().TYPE)
-        s = self.format()
+        sup = self.format_casted(super().TYPE)
+        s = self.format_cfunc()
         return f'{sup}, {param("cfunc")} = {s}'
 
 class ClosurePrinter(ProcedurePrinter):
     TYPE = lookup_type('Closure')
 
     def to_string(self):
-        sup = self.pp_val_as(super().TYPE)
+        sup = self.format_casted(super().TYPE)
         s = self.format_members(*self.child_fields())
         return f'{sup}, {s}'
 
 class ContinuationPrinter(ProcedurePrinter):
     TYPE = lookup_type('Continuation')
-    PRETTY_FIELDS = {'call_stack', 'retval'}
+    PRETTY_FIELDS = ['retval']
 
     def to_string(self):
         pf = self.PRETTY_FIELDS
-        sup = self.pp_val_as(super().TYPE)
-        l = [f'{param(k)} = {self.format_single(self.val[k], k in pf)}' for
+        sup = self.format_casted(super().TYPE)
+        l = [f'{param(k)} = {format_value(self.val[k], k in pf)}' for
              k in self.child_fields()]
         return f'{sup}, {", ".join(l)}'
 
-class TablePrinter(MyPrinter):
+class TablePrinter(SchafPrinter):
     TYPE = lookup_type('Table')
 
     def to_string(self):
         return self.format_members(*self.TYPE.fields())
 
-class EnvPrinter(MyPrinter):
+class EnvPrinter(SchafPrinter):
     TYPE = lookup_type('Env')
 
     def to_string(self):
@@ -119,13 +126,13 @@ class EnvPrinter(MyPrinter):
         t = self.format_members('parent')
         return f'{s}, {t}'
 
-class ErrorPrinter(MyPrinter):
+class ErrorPrinter(SchafPrinter):
     TYPE = lookup_type('Error')
 
     def to_string(self):
         return self.format_members('call_stack')
 
-class ValuePrinter(MyPrinter):
+class ValuePrinter(SchafPrinter):
     TYPE = lookup_type('SchValue')
     TAG_TO_TYPE = {
         'cfunc': 'CFunc',
@@ -164,13 +171,6 @@ class ValuePrinter(MyPrinter):
             return self.TAG_TO_TYPE[self.tag_name]
         return cfuncall('sch_value_to_type_name', self.val).string().title()
 
-    def stringify(self):
-        s = cfuncall('sch_stringify', self.val).string()
-        return expr(s)
-
-    def format_as(self, ty):
-        return f'{{{self.pp(self.deref_as(ty))}}}'
-
     @property
     def addr(self):
         h = f'{int(self.val):#x}'
@@ -179,7 +179,7 @@ class ValuePrinter(MyPrinter):
     def to_string(self):
         addr, ty = (self.addr, self.type_name)
         if self.is_self_format:
-            val = self.format_as(ty)
+            val = f'{{{self.format_as(ty)}}}'
         else:
             val = self.stringify()
         return f'{addr} {ty}: {val}'
@@ -190,9 +190,7 @@ class PP (Command):
 
     def invoke(self, argument, from_tty):
         val = parse_and_eval(argument)
-        pp = schaf_pp(val)
-        s = pp.to_string() if pp else str(val)
-        print(s)
+        print(format_value(val))
 PP()
 
 PRINTERS = [ValuePrinter, EnvPrinter, ProcedurePrinter,
