@@ -8,22 +8,37 @@ def cfuncall(name, *args):
     func = sym.value()
     return func(*args)
 
-class MyPrinter:
-    COLORS = {
-        'green': 32,
-        'blue': 34,
-        'cyan': 36,
-    }
-    HIGHLIGHT = {
-        'param': 'cyan',
-    }
+COLORS = {
+    'green': 32,
+    'blue': 34,
+    'cyan': 36,
+}
 
+HIGHLIGHT = {
+    'param': 'cyan',
+    'immediate': 'blue',
+    'expr': 'green',
+}
+
+def color(name, s):
+    c = COLORS[name]
+    return f'\x1b[{c}m{s}\x1b[0m'
+
+def highlight(ty, s):
+    return color(HIGHLIGHT[ty], s)
+
+def param(s):
+    return highlight('param', s)
+
+def expr(s):
+    return highlight('expr', s)
+
+def immediate(s):
+    return highlight('immediate', s)
+
+class MyPrinter:
     def __init__(self, val):
         self.val = val
-
-    def color(self, s, cname):
-        c = self.COLORS[cname]
-        return f'\x1b[{c}m{s}\x1b[0m'
 
     def display_hint(self):
         return 'map'
@@ -42,14 +57,8 @@ class MyPrinter:
     def format_single(self, val, pretty=True):
         return self.pp(val) if pretty else val.format_string()
 
-    def highlight(self, s, ty):
-        return self.color(s, self.HIGHLIGHT[ty])
-
-    def param(self, s):
-        return self.highlight(s, 'param')
-
     def format_members(self, *keys, pretty=True):
-        s = [f'{self.param(k)} = {self.format_single(self.val[k], pretty)}' for k in keys]
+        s = [f'{param(k)} = {self.format_single(self.val[k], pretty)}' for k in keys]
         return ', '.join(s)
 
 class ProcedurePrinter(MyPrinter):
@@ -73,7 +82,7 @@ class CFuncPrinter(ProcedurePrinter):
     def to_string(self):
         sup = self.pp_val_as(super().TYPE)
         s = self.format()
-        return f'{sup}, {self.param("cfunc")} = {s}'
+        return f'{sup}, {param("cfunc")} = {s}'
 
 class ClosurePrinter(ProcedurePrinter):
     TYPE = lookup_type('Closure')
@@ -90,7 +99,7 @@ class ContinuationPrinter(ProcedurePrinter):
     def to_string(self):
         pf = self.PRETTY_FIELDS
         sup = self.pp_val_as(super().TYPE)
-        l = [f'{self.param(k)} = {self.format_single(self.val[k], k in pf)}' for
+        l = [f'{param(k)} = {self.format_single(self.val[k], k in pf)}' for
              k in self.child_fields()]
         return f'{sup}, {", ".join(l)}'
 
@@ -106,7 +115,7 @@ class EnvPrinter(MyPrinter):
     def to_string(self):
         ty = TablePrinter.TYPE.pointer()
         tab = self.val['table'].cast(ty).dereference()
-        s = f'{self.param("table")} = {tab}'
+        s = f'{param("table")} = {tab}'
         t = self.format_members('parent')
         return f'{s}, {t}'
 
@@ -127,10 +136,6 @@ class ValuePrinter(MyPrinter):
         'error': 'Error',
         None: None
     }
-    HIGHLIGHT = {
-        'immediate': 'blue',
-        'expr': 'green',
-    }
 
     @property
     def is_immediate(self):
@@ -140,6 +145,7 @@ class ValuePrinter(MyPrinter):
     def tag_name(self):
         if self.is_immediate:
             return None
+        # 4: omit "TAG_"
         return self.deref_as('ValueTag').format_string()[4:].lower()
 
     @property
@@ -160,15 +166,15 @@ class ValuePrinter(MyPrinter):
 
     def stringify(self):
         s = cfuncall('sch_stringify', self.val).string()
-        return self.highlight(s, 'expr')
+        return expr(s)
 
     def format_as(self, ty):
         return f'{{{self.pp(self.deref_as(ty))}}}'
 
     @property
     def addr(self):
-        hex = f'{int(self.val):#x}'
-        return self.highlight(hex, 'immediate')
+        h = f'{int(self.val):#x}'
+        return immediate(h)
 
     def to_string(self):
         addr, ty = (self.addr, self.type_name)
