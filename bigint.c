@@ -356,36 +356,45 @@ static void abs_sub(uint32_t **z, const uint32_t *x, const uint32_t *y)
     digits_pop_zeros(*z);
 }
 
-static void set_zero(BigInt *x)
+static BigInt *zero(void)
 {
+    BigInt *x = bigint_new();
     x->negative = false;
     scary_push(&x->digits, UINT32_C(0));
+    return x;
 }
 
-static BigInt *add_or_sub(const BigInt *x, const BigInt *y, bool sub)
+static BigInt *add(const BigInt *x, const BigInt *y)
 {
-    const uint32_t *dx = x->digits, *dy = y->digits;
-    const uint32_t *dmax, *dmin;
-    int cmp = abs_cmp(dx, dy);
-    if (cmp > 0) {
-        dmax = dx;
-        dmin = dy;
-    } else {
-        dmax = dy;
-        dmin = dx;
-    }
+    const uint32_t *dx = x->digits, *dy = y->digits, *tmp;
+    if (scary_length(dx) < scary_length(dy))
+        tmp = dx, dx = dy, dy = tmp;
     BigInt *z = bigint_new();
-    bool yneg = y->negative != sub;
-    if (x->negative == yneg) {
-        z->negative = x->negative;
-        abs_add(&z->digits, dmax, dmin);
-    } else if (cmp == 0)
-        set_zero(z);
-    else {
-        z->negative = cmp > 0 ? x->negative : yneg;
-        abs_sub(&z->digits, dmax, dmin);
-    }
+    z->negative = x->negative;
+    abs_add(&z->digits, dx, dy);
     return z;
+}
+
+static BigInt *sub(const BigInt *x, const BigInt *y)
+{
+    const uint32_t *dx = x->digits, *dy = y->digits, *tmp;
+    int cmp = abs_cmp(dx, dy);
+    if (cmp == 0)
+        return zero();
+    BigInt *z = bigint_new();
+    z->negative = x->negative;
+    if (cmp < 0) {
+        tmp = dx, dx = dy, dy = tmp;
+        z->negative = !x->negative;
+    }
+    abs_sub(&z->digits, dx, dy);
+    return z;
+}
+
+static BigInt *add_or_sub(const BigInt *x, const BigInt *y, bool is_sub)
+{
+    bool yneg = y->negative != is_sub;
+    return x->negative == yneg ? add(x, y) : sub(x, y);
 }
 
 BigInt *bigint_add(const BigInt *x, const BigInt *y)
