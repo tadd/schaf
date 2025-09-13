@@ -443,9 +443,9 @@ static int check_div(const uint32_t *x, const uint32_t *y, uint32_t div,
                      uint32_t **buf, size_t ylen)
 {
     abs_mul_int(*buf, y, ylen, div);
-    bool poped = digits_pop_zeros(*buf);
+    bool popped = digits_pop_zeros(*buf);
     if (abs_cmp(*buf, x) > 0) {
-        if (poped)
+        if (popped)
             scary_push(buf, UINT32_C(0));
         return 1;
     }
