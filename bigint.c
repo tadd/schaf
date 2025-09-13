@@ -291,7 +291,7 @@ bool bigint_le(const BigInt *x, const BigInt *y)
     return bigint_cmp(x, y) <= 0;
 }
 
-static int abs_eq(const uint32_t *x, const uint32_t *y)
+static bool abs_eq(const uint32_t *x, const uint32_t *y)
 {
     size_t len = scary_length(x);
     return len == scary_length(y) &&
