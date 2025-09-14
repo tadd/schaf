@@ -11,6 +11,7 @@
 
 typedef struct {
     const char *name;
+    int ch; // declare an alias of short option
     bool has_arg;
 } OptLonger;
 
@@ -47,8 +48,9 @@ static int getopt_longer(int argc, char *const *argv, const char *optstrorig,
     for (size_t i = 0; longopts[i].name != NULL; i++) {
         const OptLonger *e = &longopts[i];
         if (!e->has_arg && strcmp(e->name, name) == 0) {
-            *val = (OptLongerData) { .name = name, .value = NULL };
-            return 0;
+            if (val != NULL)
+                *val = (OptLongerData) { .name = name, .value = NULL };
+            return e->ch;
         } else if (e->has_arg) {
             size_t len = strlen(e->name);
             if (strncmp(e->name, name, len) != 0 || (name[len] != '\0' && name[len] != '='))
@@ -58,8 +60,9 @@ static int getopt_longer(int argc, char *const *argv, const char *optstrorig,
                 return '?';
             }
             const char *value = name + len + 1;
-            *val = (OptLongerData) { .name = e->name, .value = value };
-            return 0;
+            if (val != NULL)
+                *val = (OptLongerData) { .name = e->name, .value = value };
+            return e->ch;
         }
     }
     eprintf("invalid option '%s'", argv[optind - 1]);
@@ -68,22 +71,22 @@ static int getopt_longer(int argc, char *const *argv, const char *optstrorig,
 
 static void usage_opt(FILE* out, const char *opt, const char *desc)
 {
-    fprintf(out, "  %-16s%s\n", opt, desc);
+    fprintf(out, "  %-18s%s\n", opt, desc);
 }
 
 [[gnu::noreturn]]
 static void usage(FILE *out)
 {
-    fprintf(out, "Usage: schaf [-e <source>] [-pPTMh] <file>\n");
-    usage_opt(out, "-e <source>", "evaluate <source> string directly instead of <file>");
-    usage_opt(out, "-H <MiB>", "specify initial heap size");
-    usage_opt(out, "-M", "print memory usage (VmHWM) at exit");
-    usage_opt(out, "-p", "print last expression in the input");
-    usage_opt(out, "-P", "only parse then exit before evaluation. implies -p");
-    usage_opt(out, "-S", "put stress on GC");
-    usage_opt(out, "-s", "print heap statistics before/after GC");
-    usage_opt(out, "-T", "print consumed CPU time at exit");
-    usage_opt(out, "-h", "print this help");
+    fprintf(out, "Usage: schaf [-HMpPsSTh] [-e <source>] <file>\n");
+    usage_opt(out, "-e <source>", "Evaluate <source> string directly instead of <file>.");
+    usage_opt(out, "-H <MiB>", "Specify initial heap size.");
+    usage_opt(out, "-M", "Print memory usage (VmHWM) at exit.");
+    usage_opt(out, "-p", "Print last expression before exit.");
+    usage_opt(out, "-P", "Only parse and print syntax list without evaluation.");
+    usage_opt(out, "-s", "Print heap statistics before/after GC.");
+    usage_opt(out, "-S, --gc-stress", "Put stress on GC.");
+    usage_opt(out, "-T", "Print consumed CPU time at exit.");
+    usage_opt(out, "-h, --help", "Print this help.");
     exit(out == stdout ? 0 : 2);
 }
 
@@ -122,10 +125,15 @@ static void option_init(SchOption *o)
 
 static SchOption parse_opt(int argc, char *const *argv)
 {
+    const OptLonger opts[] = {
+        { "help", 'h', false },
+        { "gc-stress", 'S', false },
+        { NULL, 0, false }
+    };
     SchOption o;
     option_init(&o);
     int opt;
-    while ((opt = getopt_longer(argc, argv, "e:H:MPpSsTh", NULL, NULL)) != -1) {
+    while ((opt = getopt_longer(argc, argv, "e:H:MPpSsTh", opts, NULL)) != -1) {
         switch (opt) {
         case 'e':
             o.script = optarg;
