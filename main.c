@@ -117,21 +117,16 @@ static double parse_posnum(const char *s)
     return val;
 }
 
-static void option_init(SchOption *o)
-{
-    memset(o, 0, sizeof(SchOption));
-    o->init_heap_size_mib = 0.0;
-}
-
 static SchOption parse_opt(int argc, char *const *argv)
 {
     const OptLonger opts[] = {
         { "help", 'h', false },
         { "gc-stress", 'S', false },
-        { NULL, 0, false }
+        {}
     };
-    SchOption o;
-    option_init(&o);
+    SchOption o = {
+        .init_heap_size_mib = 0.0,
+    };
     int opt;
     while ((opt = getopt_longer(argc, argv, "e:H:MPpSsTh", opts, NULL)) != -1) {
         switch (opt) {
