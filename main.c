@@ -35,36 +35,32 @@ static int getopt_longer(int argc, char *const *argv, const char *optstrorig,
         strcpy(optstring, optstrorig);
         strcat(optstring, "-:");
     }
-
     int opt = getopt(argc, argv, optstring);
     if (opt != '-')
         return opt; // as is
-    const char *flag = argv[optind-1];
-    if (strncmp(flag, "--", 2) != 0) {
-        eprintf("invalid option -- '%s'", flag);
-        return '?';
-    }
+    const char *flag = argv[optind - 1];
+    if (strncmp(flag, "--", 2) != 0)
+        goto invalid;
     const char *name = flag + 2;
     for (size_t i = 0; longopts[i].name != NULL; i++) {
         const OptLonger *e = &longopts[i];
-        if (!e->has_arg && strcmp(e->name, name) == 0) {
-            if (val != NULL)
-                *val = (OptLongerData) { .name = name, .value = NULL };
-            return e->ch;
-        } else if (e->has_arg) {
-            size_t len = strlen(e->name);
-            if (strncmp(e->name, name, len) != 0 || (name[len] != '\0' && name[len] != '='))
-                continue;
-            if (name[len] == '\0' || strcmp(name + len, "=") == 0) {
-                eprintf("option requires an argument '%s'", argv[optind - 1]);
-                return '?';
-            }
-            const char *value = name + len + 1;
-            if (val != NULL)
-                *val = (OptLongerData) { .name = e->name, .value = value };
-            return e->ch;
+        size_t len = strlen(e->name);
+        if (!(strncmp(e->name, name, len) == 0 && (name[len] == '\0' || name[len] == '=')))
+            continue;
+        const char *value = NULL;
+        if (!e->has_arg && name[len] == '\0')
+            ; // accepted
+        else if (e->has_arg && name[len] == '=' && name[len + 1] != '\0')
+            value = name + len + 1;
+        else {
+            eprintf("option requires %s argument '%s'", e->has_arg ? "an" : "no", argv[optind - 1]);
+            return '?';
         }
+        if (val != NULL)
+            *val = (OptLongerData) { .name = e->name, .value = value };
+        return e->ch;
     }
+ invalid:
     eprintf("invalid option '%s'", argv[optind - 1]);
     return '?';
 }
@@ -91,19 +87,19 @@ static void usage(FILE *out)
 }
 
 #define opt_error(fmt, ...) do { \
-        fprintf(stderr, "error: " fmt "\n" __VA_OPT__(,) __VA_ARGS__); \
+        eprintf(fmt __VA_OPT__(,) __VA_ARGS__); \
         usage(stderr); \
     } while (0)
 
 typedef struct {
     const char *path;
     const char *script;
+    double init_heap_size_mib;
     bool print;
     bool parse_only;
     bool cputime;
     bool memory;
     bool heap_stat;
-    double init_heap_size_mib;
     bool stress_gc;
     bool interacitve;
 } SchOption;
@@ -157,7 +153,6 @@ static SchOption parse_opt(int argc, char *const *argv)
         case 'h':
             usage(stdout);
         case '?':
-        default:
             usage(stderr);
         }
     }
