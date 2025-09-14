@@ -50,6 +50,17 @@ char *xstrdup(const char *s)
     return strcpy(dup, s);
 }
 
+FILE *mopen(const char *s)
+{
+    return fmemopen((char *) s, strlen(s), "r");
+}
+
+FILE *mopen_w(char **p)
+{
+    static size_t dummy;
+    return open_memstream(p, &dummy);
+}
+
 // List
 
 typedef struct List {

@@ -890,7 +890,7 @@ static Value iload_inner(FILE *in, const char *path)
 
 Value sch_eval_string(const char *in)
 {
-    FILE *f = fmemopen((char *) in, strlen(in), "r");
+    FILE *f = mopen(in);
     Value v = iload(f, "<inline>");
     fclose(f);
     return v;
@@ -2359,7 +2359,6 @@ static Value port_new(FILE *fp, bool output)
     p->fp = fp;
     p->output = output;
     p->string = NULL;
-    p->string_size = 0;
     return (Value) p;
 }
 #define input_port_new(path) port_new((path), false)
@@ -2440,11 +2439,9 @@ static void close_port(Port *p)
     if (p->fp == NULL)
         return;
     fclose(p->fp);
-    if (p->string != NULL) {
-        free(p->string);
-        p->string = NULL;
-    }
     p->fp = NULL; // guarantee safety
+    free(p->string);
+    p->string = NULL;
 }
 
 static Value proc_close_port(UNUSED Value env, Value port)
@@ -2626,15 +2623,14 @@ static void fdisplay(FILE* f, Value v)
 char *sch_stringify(Value v)
 {
     char *s;
-    size_t size = 0;
     errno = 0;
-    FILE *stream = open_memstream(&s, &size);
-    if (stream == NULL) {
+    FILE *fp = mopen_w(&s);
+    if (fp == NULL) {
         perror(NULL);
         exit(2);
     }
-    fdisplay(stream, v);
-    fclose(stream);
+    fdisplay(fp, v);
+    fclose(fp);
     return s;
 }
 
@@ -2700,12 +2696,11 @@ static Value string_port_new(void)
     Port *p = obj_new(sizeof(Port), TAG_PORT);
     p->output = true;
     p->string = (void *) 1U; // dummy
-    p->string_size = 0;
     errno = 0;
-    FILE *stream = open_memstream(&p->string, &p->string_size);
-    if (stream == NULL)
+    FILE *fp = mopen_w(&p->string);
+    if (fp == NULL)
         return runtime_error("open_memstream failed: %s", strerror(errno));
-    p->fp = stream;
+    p->fp = fp;
     return (Value) p;
 }
 
@@ -2720,8 +2715,6 @@ static Value proc_get_output_string(UNUSED Value env, Value p)
     if (PORT(p)->string == NULL)
         return runtime_error("not a string port");
     fflush(PORT(p)->fp); // open_memstream() requires flushing
-    if (PORT(p)->string_size == 0)
-        return sch_string_new("");
     return sch_string_new(PORT(p)->string);
 }
 

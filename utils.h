@@ -43,6 +43,8 @@ ATTR_XMALLOC void *xmalloc(size_t size);
 ATTR_XMALLOC void *xcalloc(size_t nmem, size_t memsize);
 ATTR_XMALLOC void *xrealloc(void *orig, size_t size);
 ATTR_XMALLOC char *xstrdup(const char *s);
+FILE *mopen(const char *s);
+FILE *mopen_w(char **p);
 
 typedef struct Table Table;
 typedef void (*TableForeachFunc)(uint64_t key, uint64_t val, void *data);

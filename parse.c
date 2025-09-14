@@ -645,7 +645,7 @@ Value sch_parse(const char *path)
 
 Value sch_parse_string(const char *in)
 {
-    FILE *f = fmemopen((char *) in, strlen(in), "r");
+    FILE *f = mopen(in);
     Value ast = iparse_ast(f, "<inline>");
     fclose(f);
     return ast;
