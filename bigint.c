@@ -507,9 +507,9 @@ static uint32_t abs_divmod_single(const uint32_t *x, const uint32_t *y,
 
 static uint32_t *digits_rshift(const uint32_t *x, size_t n)
 {
-    uint32_t *y = digits_new();
-    for (ssize_t i = n, len = scary_length(x); i < len; i++)
-        scary_push(&y, x[i]);
+    size_t len = scary_length(x) - n;
+    uint32_t *y = digits_new_sized(len);
+    memcpy(y, x + n, sizeof(uint32_t) * len);
     return y;
 }
 
