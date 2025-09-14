@@ -1571,18 +1571,26 @@ static Value proc_mul(UNUSED Value env, Value args)
     return sch_integer_new(y);
 }
 
+static Value divzero_error(void)
+{
+    return runtime_error("divided by zero");
+}
+
 static Value proc_div(UNUSED Value env, Value args)
 {
     EXPECT(arity_min_1, args);
 
     int64_t y = get_int(car(args));
     Value p = cdr(args);
-    if (p == Qnil)
-       return sch_integer_new(1 / y);
+    if (p == Qnil) {
+        if (y == 0)
+            return divzero_error();
+        return sch_integer_new(1 / y); // 0, 1, -1
+    }
     for (; p != Qnil; p = cdr(p)) {
         int64_t x = get_int(car(p));
         if (x == 0)
-            return runtime_error("divided by zero");
+            return divzero_error();
         y /= x;
     }
     return sch_integer_new(y);
@@ -1598,7 +1606,7 @@ static Value proc_quotient(UNUSED Value env, Value x, Value y)
 {
     int64_t a = get_int(x), b = get_int(y);
     if (b == 0)
-        return runtime_error("divided by zero");
+        return divzero_error();
     return sch_integer_new(a / b);
 }
 
@@ -1606,7 +1614,7 @@ static Value proc_remainder(UNUSED Value env, Value x, Value y)
 {
     int64_t a = get_int(x), b = get_int(y);
     if (b == 0)
-        return runtime_error("divided by zero");
+        return divzero_error();
     int64_t c = a % b;
     return sch_integer_new(c);
 }
@@ -1615,7 +1623,7 @@ static Value proc_modulo(UNUSED Value env, Value x, Value y)
 {
     int64_t a = get_int(x), b = get_int(y);
     if (b == 0)
-        return runtime_error("divided by zero");
+        return divzero_error();
     int64_t c = a % b;
     if ((a < 0 && b > 0) || (a > 0 && b < 0))
         c += b;
