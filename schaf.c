@@ -1728,20 +1728,24 @@ static Value proc_cdr(UNUSED Value env, Value pair)
     return cdr(pair);
 }
 
-static Value proc_set_car(UNUSED Value env, Value pair, Value obj)
+static Value expect_mutable_pair(Value pair)
 {
     EXPECT(type, TYPE_PAIR, pair);
     if (HEADER(pair)->immutable)
         return runtime_error("cannot modify immutable pair");
+    return Qfalse;
+}
+
+static Value proc_set_car(UNUSED Value env, Value pair, Value obj)
+{
+    EXPECT(mutable_pair, pair);
     PAIR(pair)->car = obj;
     return pair;
 }
 
 static Value proc_set_cdr(UNUSED Value env, Value pair, Value obj)
 {
-    EXPECT(type, TYPE_PAIR, pair);
-    if (HEADER(pair)->immutable)
-        return runtime_error("cannot modify immutable pair");
+    EXPECT(mutable_pair, pair);
     PAIR(pair)->cdr = obj;
     return pair;
 }
@@ -2290,17 +2294,22 @@ static Value proc_eval(UNUSED Value genv, Value expr, Value env)
     return eval(env, expr);
 }
 
+static Value expect_r5rs(Value version)
+{
+    if (sch_value_is_integer(version) && sch_integer_to_cint(version) == 5)
+        return Qfalse;
+    return runtime_error("only integer '5' is allowed for environment version");
+}
+
 static Value proc_scheme_report_environment(UNUSED Value env, Value version)
 {
-    if (!sch_value_is_integer(version) || sch_integer_to_cint(version) != 5)
-        return runtime_error("only integer '5' is allowed for argument");
+    EXPECT(r5rs, version);
     return env_dup(NULL, env_r5rs);
 }
 
 static Value proc_null_environment(UNUSED Value env, Value version)
 {
-    if (!sch_value_is_integer(version) || sch_integer_to_cint(version) != 5)
-        return runtime_error("only integer '5' is allowed for argument");
+    EXPECT(r5rs, version);
     return env_dup(NULL, env_null);
 }
 
