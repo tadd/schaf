@@ -521,8 +521,6 @@ static uint32_t *lshift1_add(const uint32_t *x, uint32_t a)
         return y;
     }
     size_t len = scary_length(x);
-    if (x[len-1] == 0)
-        UNREACHABLE();
     uint32_t *y = digits_new_sized(len + 1);
     y[0] = a;
     memcpy(y+1, x, sizeof(uint32_t) * len);
