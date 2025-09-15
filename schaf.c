@@ -2320,27 +2320,27 @@ static Value proc_interaction_environment(UNUSED Value env)
 
 // 6.6. Input and output
 // 6.6.1. Ports
-static Value open_port(const char *path, bool output);
-#define open_input_port(path) open_port((path), false)
-#define open_output_port(path) open_port((path), true)
+static Value open_port(const char *path, PortType type);
 static void close_port(Port *p);
 
-static Value proc_call_with_input_file(Value env, Value path, Value thunk)
+static Value call_with_file(Value env, Value path, Value thunk, PortType type)
 {
-    EXPECT(type, TYPE_STRING, path);
-    Value file = open_input_port(STRING(path));
+    Value file = open_port(STRING(path), type);
     Value ret = apply(env, thunk, list1(file));
     close_port(PORT(file));
     return ret;
 }
 
+static Value proc_call_with_input_file(Value env, Value path, Value thunk)
+{
+    EXPECT(type, TYPE_STRING, path);
+    return call_with_file(env, path, thunk, PORT_INPUT);
+}
+
 static Value proc_call_with_output_file(Value env, Value path, Value thunk)
 {
     EXPECT(type, TYPE_STRING, path);
-    Value file = open_output_port(STRING(path));
-    Value ret = apply(env, thunk, list1(file));
-    close_port(PORT(file));
-    return ret;
+    return call_with_file(env, path, thunk, PORT_OUTPUT);
 }
 
 static Value proc_port_p(UNUSED Value env, Value port)
@@ -2350,36 +2350,34 @@ static Value proc_port_p(UNUSED Value env, Value port)
 
 static Value proc_input_port_p(UNUSED Value env, Value port)
 {
-    return OF_BOOL(value_tag_is(port, TAG_PORT) && !PORT(port)->output);
+    return OF_BOOL(value_tag_is(port, TAG_PORT) && !PORT(port)->type);
 }
 
 static Value proc_output_port_p(UNUSED Value env, Value port)
 {
-    return OF_BOOL(value_tag_is(port, TAG_PORT) && PORT(port)->output);
+    return OF_BOOL(value_tag_is(port, TAG_PORT) && PORT(port)->type);
 }
 
-static Value port_new(FILE *fp, bool output)
+static Value port_new(FILE *fp, PortType type)
 {
     Port *p = obj_new(sizeof(Port), TAG_PORT);
     p->fp = fp;
-    p->output = output;
+    p->type = type;
     p->string = NULL;
     return (Value) p;
 }
-#define input_port_new(path) port_new((path), false)
-#define output_port_new(path) port_new((path), true)
 
 static Value get_current_input_port(void)
 {
     if (current_input_port == Qfalse)
-        current_input_port = input_port_new(stdin);
+        current_input_port = port_new(stdin, PORT_INPUT);
     return current_input_port;
 }
 
 static Value get_current_output_port(void)
 {
     if (current_output_port == Qfalse)
-        current_output_port = output_port_new(stdout);
+        current_output_port = port_new(stdout, PORT_OUTPUT);
     return current_output_port;
 }
 
@@ -2393,48 +2391,50 @@ static Value proc_current_output_port(UNUSED Value env)
     return get_current_output_port();
 }
 
-static Value open_port(const char *path, bool output)
+static Value open_port(const char *path, PortType type)
 {
+    bool output = type == PORT_OUTPUT;
     const char *mode = output ? "w" : "r";
     FILE *fp = fopen(path, mode);
     if (fp == NULL)
         return runtime_error("cannot open %s file: %s",
                              output ? "output" : "input", path);
-    return port_new(fp, output);
+    return port_new(fp, type);
 }
 static Value proc_open_input_file(UNUSED Value env, Value path)
 {
     EXPECT(type, TYPE_STRING, path);
-    return open_input_port(STRING(path));
+    return open_port(STRING(path), PORT_INPUT);
 }
 
 static Value proc_open_output_file(UNUSED Value env, Value path)
 {
     EXPECT(type, TYPE_STRING, path);
-    return open_output_port(STRING(path));
+    return open_port(STRING(path), PORT_OUTPUT);
+}
+
+static Value with_file(Value env, Value path, Value thunk, Value *curr_port, PortType type)
+{
+    Value orig = *curr_port;
+    *curr_port = open_port(STRING(path), type);
+    Value ret = apply(env, thunk, Qnil);
+    close_port(PORT(*curr_port));
+    *curr_port = orig;
+    return ret;
 }
 
 static Value proc_with_input_from_file(Value env, Value path, Value thunk)
 {
     EXPECT(type, TYPE_STRING, path);
-    Value orig = current_input_port;
-    current_input_port = open_input_port(STRING(path));
-    Value ret = apply(env, thunk, Qnil);
-    close_port(PORT(current_input_port));
-    current_input_port = orig;
-    return ret;
+    EXPECT(type, TYPE_PROC, thunk);
+    return with_file(env, path, thunk, &current_input_port, PORT_INPUT);
 }
 
 static Value proc_with_output_to_file(Value env, Value path, Value thunk)
 {
     EXPECT(type, TYPE_STRING, path);
     EXPECT(type, TYPE_PROC, thunk);
-    Value orig = current_output_port;
-    current_output_port = open_output_port(STRING(path));
-    Value ret = apply(env, thunk, Qnil);
-    close_port(PORT(current_output_port));
-    current_output_port = orig;
-    return ret;
+    return with_file(env, path, thunk, &current_output_port, PORT_OUTPUT);
 }
 
 static void close_port(Port *p)
@@ -2696,9 +2696,8 @@ static Value proc_read_string(UNUSED Value env, Value args)
 
 static Value string_port_new(void)
 {
-    Port *p = obj_new(sizeof(Port), TAG_PORT);
-    p->output = true;
-    p->string = (void *) 1U; // dummy
+    Port *p = PORT(port_new(NULL, PORT_OUTPUT));
+    p->string = (void *) 1U; // non-NULL dummy value to indicate string port 
     errno = 0;
     FILE *fp = mopen_w(&p->string);
     if (fp == NULL)

@@ -118,10 +118,15 @@ typedef struct {
     Table *table;
 } Env;
 
+typedef enum {
+    PORT_INPUT,
+    PORT_OUTPUT
+} PortType;
+
 typedef struct {
     Header header;
     FILE *fp;
-    bool output;
+    PortType type;
     char *string;
 } Port;
 
