@@ -419,7 +419,7 @@ static Value apply_cfunc_closure_1(UNUSED Value env, Value f, Value args)
 }
 
 static Value cfunc_closure_new(const char *name, void *cfunc,
-                                    int64_t arity, Value data)
+                               int64_t arity, Value data)
 {
     expect_cfunc_arity(arity);
     CFuncClosure *cc = obj_new(sizeof(CFuncClosure), TAG_CFUNC_CLOSURE);
@@ -616,9 +616,7 @@ static Value env_dup(const char *name, const Value orig)
     if (UNLIKELY(ENV(orig)->parent != Qfalse))
         bug("duplication of chained environment not permitted");
     Env *e = obj_new(sizeof(Env), TAG_ENV);
-    if (name == NULL)
-        name = ENV(orig)->name; // copy it
-    e->name = xstrdup(name);
+    e->name = xstrdup(name == NULL ? ENV(orig)->name : name);
     e->table = table_dup(ENV(orig)->table);
     e->parent = Qfalse;
     return (Value) e;
