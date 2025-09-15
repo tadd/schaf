@@ -69,6 +69,7 @@ static Value inner_continuation = Qfalse;
 // Singletons
 static Value eof_object = Qfalse;
 static Value current_input_port = Qfalse, current_output_port = Qfalse;
+#define INIT_SINGLETON(var, val) do { if ((var) == Qfalse) (var) = val; } while (0)
 
 //
 // value_is_*: Type Checks
@@ -2369,15 +2370,13 @@ static Value port_new(FILE *fp, PortType type)
 
 static Value get_current_input_port(void)
 {
-    if (current_input_port == Qfalse)
-        current_input_port = port_new(stdin, PORT_INPUT);
+    INIT_SINGLETON(current_input_port, port_new(stdin, PORT_INPUT));
     return current_input_port;
 }
 
 static Value get_current_output_port(void)
 {
-    if (current_output_port == Qfalse)
-        current_output_port = port_new(stdout, PORT_OUTPUT);
+    INIT_SINGLETON(current_output_port, port_new(stdin, PORT_OUTPUT));
     return current_output_port;
 }
 
@@ -2463,8 +2462,7 @@ static Value eof_new(void)
 
 static Value get_eof_object(void)
 {
-    if (eof_object == Qfalse)
-        eof_object = eof_new();
+    INIT_SINGLETON(eof_object, eof_new());
     return eof_object;
 }
 
