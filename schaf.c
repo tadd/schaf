@@ -2323,19 +2323,24 @@ static Value proc_interaction_environment(UNUSED Value env)
 static Value open_port(const char *path, bool output);
 #define open_input_port(path) open_port((path), false)
 #define open_output_port(path) open_port((path), true)
+static void close_port(Port *p);
 
 static Value proc_call_with_input_file(Value env, Value path, Value thunk)
 {
     EXPECT(type, TYPE_STRING, path);
     Value file = open_input_port(STRING(path));
-    return apply(env, thunk, list1(file));
+    Value ret = apply(env, thunk, list1(file));
+    close_port(PORT(file));
+    return ret;
 }
 
 static Value proc_call_with_output_file(Value env, Value path, Value thunk)
 {
     EXPECT(type, TYPE_STRING, path);
     Value file = open_output_port(STRING(path));
-    return apply(env, thunk, list1(file));
+    Value ret = apply(env, thunk, list1(file));
+    close_port(PORT(file));
+    return ret;
 }
 
 static Value proc_port_p(UNUSED Value env, Value port)
@@ -2408,8 +2413,6 @@ static Value proc_open_output_file(UNUSED Value env, Value path)
     EXPECT(type, TYPE_STRING, path);
     return open_output_port(STRING(path));
 }
-
-static void close_port(Port *p);
 
 static Value proc_with_input_from_file(Value env, Value path, Value thunk)
 {
