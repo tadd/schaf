@@ -2626,10 +2626,8 @@ char *sch_stringify(Value v)
     char *s;
     errno = 0;
     FILE *fp = mopen_w(&s);
-    if (fp == NULL) {
-        perror(NULL);
-        exit(2);
-    }
+    if (fp == NULL)
+        error("%s", strerror(errno));
     fdisplay(fp, v);
     fclose(fp);
     return s;
