@@ -2474,10 +2474,10 @@ static Value iread(FILE *in)
     return datum;
 }
 
-static Value arg_or_current_port(Value arg, bool output)
+static Value arg_or_current_port(Value arg, PortType type)
 {
     if (arg == Qnil)
-        return output ? get_current_output_port() : get_current_input_port();
+        return type == PORT_OUTPUT ? get_current_output_port() : get_current_input_port();
     Value p = car(arg);
     EXPECT(type, TYPE_PORT, p);
     return p;
@@ -2486,7 +2486,7 @@ static Value arg_or_current_port(Value arg, bool output)
 static Value proc_read(UNUSED Value env, Value args)
 {
     EXPECT(arity_range, 0, 1, args);
-    Value port = arg_or_current_port(args, false);
+    Value port = arg_or_current_port(args, PORT_INPUT);
     CHECK_ERROR(port);
     return iread(PORT(port)->fp);
 }
@@ -2644,7 +2644,7 @@ static Value proc_display(UNUSED Value env, Value args)
 {
     EXPECT(arity_range, 1, 2, args);
     Value obj = car(args);
-    Value out = arg_or_current_port(cdr(args), true);
+    Value out = arg_or_current_port(cdr(args), PORT_OUTPUT);
     CHECK_ERROR(out);
     fdisplay(PORT(out)->fp, obj);
     return Qfalse;
@@ -2653,7 +2653,7 @@ static Value proc_display(UNUSED Value env, Value args)
 static Value proc_newline(UNUSED Value env, Value args)
 {
     EXPECT(arity_range, 0, 1, args);
-    Value out = arg_or_current_port(args, true);
+    Value out = arg_or_current_port(args, PORT_OUTPUT);
     CHECK_ERROR(out);
     fputs("\n", PORT(out)->fp);
     return Qfalse;
