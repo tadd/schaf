@@ -576,9 +576,11 @@ static void parser_free(Parser *p)
 static Source *source_new(Parser *p, Value syntax_list)
 {
     Source *src = xmalloc(sizeof(Source));
-    src->filename = xstrdup(p->filename);
     src->ast = syntax_list;
-    src->newline_pos = scary_dup(p->newline_pos);
+    src->filename = p->filename; // move
+    p->filename = NULL;
+    src->newline_pos = p->newline_pos;
+    p->newline_pos = NULL;
     return src;
 }
 
