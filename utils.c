@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <math.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -52,7 +53,11 @@ char *xstrdup(const char *s)
 
 FILE *mopen(const char *s)
 {
-    return fmemopen((char *) s, strlen(s), "r");
+    errno = 0;
+    FILE *fp = fmemopen((char *) s, strlen(s), "r");
+    if (fp == NULL) // we do not care that at caller
+        error("fmemopen failed: %s", strerror(errno));
+    return fp;
 }
 
 FILE *mopen_w(char **p)
