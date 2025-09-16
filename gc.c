@@ -85,6 +85,11 @@ typedef struct {
     GCHeader *free_list;
 } MSHeap;
 
+static inline size_t align(size_t size)
+{
+    return (size + 15U) / 16U * 16U;
+}
+
 static void init_header(GCHeader *h, size_t size, GCHeader *next)
 {
     h->used = false;
@@ -146,8 +151,11 @@ static bool is_valid_header(Value v)
 {
     UNPOISON(&VALUE_TAG(v), sizeof(ValueTag));              // Suspicious but
     UNPOISON(&GC_HEADER_FROM_VAL(v)->size, sizeof(size_t)); // need to be read
-    return is_valid_tag(VALUE_TAG(v)) &&
-        GC_HEADER_FROM_VAL(v)->size == sizeof(SchObject);
+    if (!is_valid_tag(VALUE_TAG(v)))
+        return false;
+    size_t size = GC_HEADER_FROM_VAL(v)->size;
+    return size > 0 && size % 16U == 0 &&
+        size <= sizeof(Continuation) + GC_HEADER_OFFSET;
 }
 
 static bool in_heap_val(Value v)
@@ -203,8 +211,8 @@ static void mark_val(Value v)
     case TAG_CONTINUATION: {
         Continuation *p = CONTINUATION(v);
         mark_val(p->retval);
-        mark_jmpbuf(&p->exstate->regs);
-        mark_array(p->exstate->stack, p->exstate->stack_len / sizeof(uintptr_t));
+        mark_jmpbuf(&p->state);
+        mark_array(p->stack, p->stack_len / sizeof(uintptr_t));
         break;
     }
     case TAG_CFUNC_CLOSURE:
@@ -222,8 +230,7 @@ static void mark_val(Value v)
             mark_val(p[i]);
         break;
     }
-    case TAG_HSTRING:
-    case TAG_ESTRING:
+    case TAG_STRING:
     case TAG_CFUNC:
     case TAG_SYNTAX:
     case TAG_PORT:
@@ -279,14 +286,11 @@ static bool is_user_opened_file(FILE *fp)
 static void free_val(Value v)
 {
     switch (VALUE_TAG(v)) {
-    case TAG_CONTINUATION: {
-        Continuation *p = CONTINUATION(v);
-        free(p->exstate->stack);
-        free(p->exstate);
+    case TAG_CONTINUATION:
+        free(CONTINUATION(v)->stack);
         break;
-    }
-    case TAG_HSTRING:
-        free(HSTRING(v));
+    case TAG_STRING:
+        free(STRING(v));
         break;
     case TAG_ENV:
         table_free(ENV(v)->table);
@@ -309,7 +313,6 @@ static void free_val(Value v)
     case TAG_SYNTAX:
     case TAG_CFUNC_CLOSURE:
     case TAG_CLOSURE:
-    case TAG_ESTRING:
     case TAG_PAIR:
     case TAG_EOF:
         break;
@@ -512,11 +515,6 @@ typedef struct {
     size_t size;
     EpsHeapSlot *slot[64];
 } EpsHeap;
-
-static inline size_t align(size_t size)
-{
-    return (size + 15U) / 16U * 16U;
-}
 
 static EpsHeapSlot *eps_heap_slot_new(size_t size)
 {

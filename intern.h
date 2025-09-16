@@ -34,8 +34,7 @@ typedef enum {
 
 typedef enum {
     TAG_PAIR,
-    TAG_HSTRING,
-    TAG_ESTRING,
+    TAG_STRING,
     TAG_CFUNC,
     TAG_SYNTAX, // almost a C Function
     TAG_CLOSURE,
@@ -56,6 +55,7 @@ typedef struct {
 } Header;
 
 typedef struct {
+    Header header;
     Value car, cdr;
 } Pair;
 
@@ -63,6 +63,11 @@ typedef struct {
     Pair pair;   // inherit
     int64_t pos; // value from ftell(3)
 } LocatedPair;
+
+typedef struct {
+    Header header;
+    char *body;
+} String;
 
 typedef struct {
     Header header;
@@ -95,16 +100,12 @@ typedef struct {
 } Closure;
 
 typedef struct {
+    Procedure proc;
+    Value retval;
     uintptr_t *volatile sp;
     void *volatile stack;
     size_t stack_len;
-    jmp_buf regs;
-} ExecutionState;
-
-typedef struct {
-    Procedure proc;
-    Value retval;
-    ExecutionState *exstate;
+    jmp_buf state;
 } Continuation;
 
 typedef struct {
@@ -125,8 +126,9 @@ typedef enum {
 } PortType;
 
 typedef struct {
-    FILE *fp;
+    Header header;
     PortType type;
+    FILE *fp;
     char *string;
 } Port;
 
@@ -136,42 +138,25 @@ typedef struct {
 } StackFrame;
 
 typedef struct {
-    Header header; // common
-    union {
-        alignas(16) char *hstring;
-        char estring[sizeof(Continuation)];// may be the largest
-        Pair pair;
-        LocatedPair lpair;
-        Procedure proc;
-        CFunc cfunc;
-        Closure closure;
-        Continuation continuation;
-        CFuncClosure cfunc_closure;
-        Value *vector;// use scary
-        Env env;
-        Port port;
-        StackFrame **error;// ditto
-    };
-} SchObject;
+    Header header;
+    StackFrame **call_stack;
+} Error;
 
-#define OBJ(v) ((SchObject *) v)
-#define HEADER(v) (&OBJ(v)->header)
+#define HEADER(v) ((Header *) v)
 #define VALUE_TAG(v) (HEADER(v)->tag)
 
-#define PAIR(v) (&OBJ(v)->pair)
-#define LOCATED_PAIR(v) (&OBJ(v)->lpair)
-#define ESTRING(v) (OBJ(v)->estring)
-#define HSTRING(v) (OBJ(v)->hstring)
-#define STRING(v) (VALUE_TAG(v) == TAG_HSTRING ? HSTRING(v) : ESTRING(v))
-#define PROCEDURE(v) (&OBJ(v)->proc)
-#define CFUNC(v) (&OBJ(v)->cfunc)
-#define CLOSURE(v) (&OBJ(v)->closure)
-#define CONTINUATION(v) (&OBJ(v)->continuation)
-#define CFUNC_CLOSURE(v) (&OBJ(v)->cfunc_closure)
-#define VECTOR(v) (OBJ(v)->vector)
-#define ENV(v) (&OBJ(v)->env)
-#define PORT(v) (&OBJ(v)->port)
-#define ERROR(v) (OBJ(v)->error)
+#define PAIR(v) ((Pair *) v)
+#define LOCATED_PAIR(v) ((LocatedPair *) v)
+#define STRING(v) (((String *) v)->body)
+#define PROCEDURE(v) ((Procedure *) v)
+#define CFUNC(v) ((CFunc *) v)
+#define CLOSURE(v) ((Closure *) v)
+#define CONTINUATION(v) ((Continuation *) v)
+#define CFUNC_CLOSURE(v) ((CFuncClosure *) v)
+#define VECTOR(v) (((Vector *) v)->body)
+#define ENV(v) ((Env *) v)
+#define PORT(v) ((Port *) v)
+#define ERROR(v) (((Error *) v)->call_stack)
 
 typedef struct {
     int64_t *newline_pos; // list of position | int
@@ -187,7 +172,7 @@ Source *iparse(FILE *in, const char *filename);
 Value parse_datum(FILE *in, const char *filename);
 void pos_to_line_col(int64_t pos, int64_t *newline_pos, int64_t *line, int64_t *col);
 [[gnu::noreturn]] void raise_error(jmp_buf buf, const char *fmt, ...);
-SchObject *obj_new(ValueTag t);
+void *obj_new(ValueTag t, size_t size);
 void source_free(Source *s);
 
 void gc_init(const uintptr_t *volatile base_sp);
@@ -229,12 +214,11 @@ static inline Value list1(Value x)
 
 static Value cons_const(Value car, Value cdr)
 {
-    SchObject *o = obj_new(TAG_PAIR);
-    HEADER(o)->immutable = true;
-    Pair *p = PAIR(o);
+    Pair *p = obj_new(TAG_PAIR, sizeof(Pair));
+    HEADER(p)->immutable = true;
     p->car = car;
     p->cdr = cdr;
-    return (Value) o;
+    return (Value) p;
 }
 
 static inline Value list1_const(Value x)
@@ -247,9 +231,9 @@ static inline Value list2_const(Value x, Value y)
     return cons_const(x, list1_const(y));
 }
 
-#define DUMMY_PAIR() ((Value) &(SchObject) { \
+#define DUMMY_PAIR() ((Value) &(Pair) { \
             .header = { .tag = TAG_PAIR, .immutable = false }, \
-            .pair = { .car = Qundef, .cdr = Qnil } \
+            .car = Qundef, .cdr = Qnil \
         })
 #define GET_SP(p) uintptr_t v##p = 0, *volatile p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
 
