@@ -84,10 +84,9 @@ typedef struct {
     GCHeader *free_list;
 } MSHeap;
 
-static inline size_t align_objsize(size_t size)
+static inline size_t align(size_t size)
 {
-    const size_t n = sizeof(SchObject);
-    return (size + (n-1)) / n * n;
+    return (size + 15U) / 16U * 16U;
 }
 
 static void init_header(GCHeader *h, size_t size, GCHeader *next)
@@ -102,7 +101,7 @@ static void init_header(GCHeader *h, size_t size, GCHeader *next)
 static MSHeapSlot *ms_heap_slot_new(size_t size)
 {
     MSHeapSlot *s = xmalloc(sizeof(MSHeapSlot));
-    size = align_objsize(size);
+    size = align(size);
     size_t hsize = HSIZE(size);
     s->size = hsize;
     s->body = xmalloc(hsize);
@@ -151,8 +150,10 @@ static bool is_valid_header(Value v)
 {
     UNPOISON(&VALUE_TAG(v), sizeof(ValueTag));              // Suspicious but
     UNPOISON(&GC_HEADER_FROM_VAL(v)->size, sizeof(size_t)); // need to be read
-    return is_valid_tag(VALUE_TAG(v)) &&
-        GC_HEADER_FROM_VAL(v)->size == sizeof(SchObject);
+    if (!is_valid_tag(VALUE_TAG(v)))
+        return false;
+    size_t size = GC_HEADER_FROM_VAL(v)->size;
+    return size > 0 && size < sizeof(Continuation) * 2 && size % 16U == 0;
 }
 
 static bool in_heap_val(Value v)
@@ -208,8 +209,8 @@ static void mark_val(Value v)
     case TAG_CONTINUATION: {
         Continuation *p = CONTINUATION(v);
         mark_val(p->retval);
-        mark_jmpbuf(&p->exstate->regs);
-        mark_array(p->exstate->stack, p->exstate->stack_len / sizeof(uintptr_t));
+        mark_jmpbuf(&p->regs);
+        mark_array(p->stack, p->stack_len / sizeof(uintptr_t));
         return;
     }
     case TAG_CFUNC_CLOSURE:
@@ -227,8 +228,7 @@ static void mark_val(Value v)
             mark_val(p[i]);
         return;
     }
-    case TAG_HSTRING:
-    case TAG_ESTRING:
+    case TAG_STRING:
     case TAG_CFUNC:
     case TAG_SYNTAX:
     case TAG_PORT:
@@ -293,12 +293,11 @@ static void free_val(Value v)
     }
     case TAG_CONTINUATION: {
         Continuation *p = CONTINUATION(v);
-        free(p->exstate->stack);
-        free(p->exstate);
+        free(p->stack);
         break;
     }
-    case TAG_HSTRING:
-        free(HSTRING(v));
+    case TAG_STRING:
+        free(STRING(v));
         break;
     case TAG_ENV: {
         Env *p = ENV(v);
@@ -322,7 +321,6 @@ static void free_val(Value v)
         break;
     }
     case TAG_CLOSURE:
-    case TAG_ESTRING:
     case TAG_PAIR:
     case TAG_EOF:
         break;
@@ -453,7 +451,7 @@ static void *ms_malloc(size_t size)
 {
     if (stress)
         ms_gc();
-    size = align_objsize(size);
+    size = align(size);
     Header *p = ms_allocate(size);
     if (!stress && p == NULL) {
         ms_gc();
@@ -524,11 +522,6 @@ typedef struct {
     size_t size;
     EpsHeapSlot *slot[64];
 } EpsHeap;
-
-static inline size_t align(size_t size)
-{
-    return (size + 15U) / 16U * 16U;
-}
 
 static EpsHeapSlot *eps_heap_slot_new(size_t size)
 {
