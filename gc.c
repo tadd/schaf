@@ -40,7 +40,7 @@ typedef struct {
 } GCFunctions;
 
 static void heap_print_stat(const char *header);
-[[gnu::noreturn]] static void error_out_of_memory(void);
+[[noreturn]] static void error_out_of_memory(void);
 
 // Static data
 static void *gc_data; // singleton; maybe a heap or some context

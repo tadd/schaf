@@ -71,7 +71,7 @@ static void usage_opt(FILE *out, const char *opt, const char *desc)
     fprintf(out, "  %-18s%s\n", opt, desc);
 }
 
-[[gnu::noreturn]]
+[[noreturn]]
 static void usage(FILE *out)
 {
     fprintf(out, "Usage: schaf [-HMpPsSTh] [-e <source>] <file>\n");
