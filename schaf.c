@@ -473,7 +473,7 @@ static Value closure_new(Value env, Value params, Value body)
 // Errors
 //
 
-[[gnu::noreturn]]
+[[noreturn]]
 void raise_error(jmp_buf buf, const char *fmt, ...)
 {
     va_list ap;
@@ -2133,7 +2133,7 @@ static Value proc_for_each(Value env, Value args)
     return Qfalse;
 }
 
-[[gnu::noreturn, gnu::noinline]]
+[[noreturn, gnu::noinline]]
 static void jump(Continuation *cont)
 {
     memcpy(cont->sp, cont->stack, cont->stack_len);
