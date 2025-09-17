@@ -53,7 +53,8 @@ static int getopt_longer(int argc, char *const *argv, const char *optstrorig,
         else if (e->has_arg && name[len] == '=' && name[len + 1] != '\0')
             value = name + len + 1;
         else {
-            eprintf("option requires %s argument '%s'", e->has_arg ? "an" : "no", argv[optind - 1]);
+            eprintf("option requires %s argument '%s'",
+                    e->has_arg ? "an" : "no", argv[optind - 1]);
             return '?';
         }
         if (val != NULL)
