@@ -5,7 +5,7 @@ nloop=10
 benchflags=-TM
 
 run() {
-    local -r bin=$1
+    local -r bin="$1"
     for t in *.scm; do
         printf '%12s	' $t
 	benchmark-run -n $nloop ../$bin $benchflags $t 2>&1|
@@ -21,9 +21,9 @@ puts "%.3f ms\t%6d kb" % [cpu, mem]'
 main() {
     local bin=schaf
     if (( $# >= 1 )); then
-        bin=$1
+        bin="$1"
     fi
-    run $bin
+    run "$bin"
 }
 
 main "$@"
