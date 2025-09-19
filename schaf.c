@@ -329,16 +329,17 @@ void *obj_new(ValueTag t, size_t size)
     return h;
 }
 
-static Value string_new_moved(char *str)
-{ // move ownership then use as is
-    String *s = obj_new(TAG_STRING, sizeof(String));
-    STRING(s) = str;
-    return (Value) s;
+static Value string_new_sized(size_t size)
+{
+    size_t add = size + offsetof(String, body); // XXX
+    return (Value) obj_new(TAG_STRING, sizeof(String) + add);
 }
 
 Value sch_string_new(const char *str)
 {
-    return string_new_moved(xstrdup(str));
+    Value s = string_new_sized(strlen(str) + 1);
+    strcpy(STRING(s), str);
+    return s;
 }
 
 // General macros for error handling
@@ -2152,11 +2153,12 @@ static Value proc_string_append(UNUSED Value env, Value args)
         EXPECT_TYPE(string, v);
         len += strlen(STRING(v));
     }
-    char *s = xmalloc(len + 1);
+    Value v = string_new_sized(len + 1);
+    char *s = STRING(v);
     s[0] = '\0';
     for (Value p = args; p != Qnil; p = cdr(p))
         strcat(s, STRING(car(p)));
-    return string_new_moved(s);
+    return v;
 }
 
 // 6.3.6. Vectors
