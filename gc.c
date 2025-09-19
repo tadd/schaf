@@ -296,9 +296,6 @@ static void free_val(Value v)
         free(p->stack);
         break;
     }
-    case TAG_STRING:
-        free(STRING(v));
-        break;
     case TAG_ENV: {
         Env *p = ENV(v);
         table_free(p->table);
@@ -320,6 +317,7 @@ static void free_val(Value v)
         break;
     }
     case TAG_CLOSURE:
+    case TAG_STRING:
     case TAG_PAIR:
     case TAG_EOF:
         break;
