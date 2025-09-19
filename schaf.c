@@ -309,16 +309,16 @@ void *obj_new(ValueTag t, size_t size)
     return h;
 }
 
-static Value string_new_moved(char *str)
-{ // move ownership then use as is
-    String *s = obj_new(TAG_STRING, sizeof(String));
-    STRING(s) = str;
-    return (Value) s;
+static Value string_new_sized(size_t size)
+{
+    return (Value) obj_new(TAG_STRING, sizeof(String) + size);
 }
 
 Value sch_string_new(const char *str)
 {
-    return string_new_moved(xstrdup(str));
+    String *s = obj_new(TAG_STRING, sizeof(String) + strlen(str) + 8); // XXX
+    strcpy(s->body, str);
+    return (Value) s;
 }
 
 static void expect_cfunc_tag(ValueTag tag)
@@ -2029,11 +2029,12 @@ static Value proc_string_append(UNUSED Value env, Value args)
         EXPECT(type, TYPE_STRING, v);
         len += strlen(STRING(v));
     }
-    char *s = xmalloc(len + 1);
+    Value v = string_new_sized(len + 1);
+    char *s = STRING(v);
     s[0] = '\0';
     for (Value p = args; p != Qnil; p = cdr(p))
         strcat(s, STRING(car(p)));
-    return string_new_moved(s);
+    return v;
 }
 
 // 6.3.6. Vectors
