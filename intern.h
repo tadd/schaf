@@ -66,7 +66,7 @@ typedef struct {
 
 typedef struct {
     Header header;
-    char *body;
+    char body[];
 } String;
 
 typedef struct {

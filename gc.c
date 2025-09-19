@@ -306,9 +306,6 @@ static void free_val(Value v)
     case TAG_CONTINUATION:
         free(CONTINUATION(v)->stack);
         break;
-    case TAG_STRING:
-        free(STRING(v));
-        break;
     case TAG_ENV:
         table_free(ENV(v)->table);
         break;
@@ -330,6 +327,7 @@ static void free_val(Value v)
     case TAG_SYNTAX:
     case TAG_CFUNC_CLOSURE:
     case TAG_CLOSURE:
+    case TAG_STRING:
     case TAG_PAIR:
     case TAG_EOF:
         break;
