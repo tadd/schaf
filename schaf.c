@@ -100,6 +100,8 @@ inline bool sch_value_is_string(Value v)
     return value_tag_is(v, TAG_STRING);
 }
 
+#define bug_invalid_tag(t) bug("got invalid tag %u", t)
+
 static inline bool value_is_procedure(Value v)
 {
     if (value_is_immediate(v))
@@ -121,7 +123,7 @@ static inline bool value_is_procedure(Value v)
     case TAG_ERROR:
         break;
     }
-    UNREACHABLE();
+    bug_invalid_tag(VALUE_TAG(v));
 }
 
 inline bool sch_value_is_pair(Value v)
@@ -175,7 +177,7 @@ Type sch_value_type_of(Value v)
     case TAG_ERROR:
         break;
     }
-    UNREACHABLE();
+    bug_invalid_tag(VALUE_TAG(v));
 }
 
 static inline const char *value_type_to_string(Type t)
