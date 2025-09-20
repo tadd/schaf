@@ -2376,7 +2376,7 @@ static Value get_current_input_port(void)
 
 static Value get_current_output_port(void)
 {
-    INIT_SINGLETON(current_output_port, port_new(stdin, PORT_OUTPUT));
+    INIT_SINGLETON(current_output_port, port_new(stdout, PORT_OUTPUT));
     return current_output_port;
 }
 
