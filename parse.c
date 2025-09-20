@@ -21,8 +21,8 @@ typedef enum {
     TOK_TYPE_DOT,
     TOK_TYPE_STRING,
     TOK_TYPE_IDENT,
-    TOK_TYPE_CONST_TRUE,
-    TOK_TYPE_CONST_FALSE,
+    TOK_TYPE_TRUE,
+    TOK_TYPE_FALSE,
     TOK_TYPE_VECTOR_LPAREN,
     TOK_TYPE_EOF
 } TokenType;
@@ -42,36 +42,36 @@ static const Token TOK_GRAVE = TOKEN_C(GRAVE);
 static const Token TOK_COMMA = TOKEN_C(COMMA);
 static const Token TOK_SPLICE = TOKEN_C(SPLICE);
 static const Token TOK_DOT = TOKEN_C(DOT);
-static const Token TOK_CONST_TRUE = TOKEN_C(CONST_TRUE);
-static const Token TOK_CONST_FALSE = TOKEN_C(CONST_FALSE);
+static const Token TOK_TRUE = TOKEN_C(TRUE);
+static const Token TOK_FALSE = TOKEN_C(FALSE);
 static const Token TOK_VECTOR_LPAREN = TOKEN_C(VECTOR_LPAREN);
 static const Token TOK_EOF = { .type = TOK_TYPE_EOF }; // avoid conflict with "EOF" in stdio.h
-static Token tok_ident_dot2 = TOKEN_C(IDENT);
-static Token tok_ident_dot3 = TOKEN_C(IDENT);
-static Token tok_ident_plus = TOKEN_C(IDENT);
-static Token tok_ident_minus = TOKEN_C(IDENT);
-#define DEF_CONST_TOKEN_FUNC(lower, upper, val) \
-    static inline Token TOK_##upper(void) \
+static Token TOK_DOT2_v = TOKEN_C(IDENT);
+static Token TOK_DOT3_v = TOKEN_C(IDENT);
+static Token TOK_PLUS_v = TOKEN_C(IDENT);
+static Token TOK_MINUS_v = TOKEN_C(IDENT);
+#define DEF_CONST_TOKEN_FUNC(name, str) \
+    static inline Token TOK_##name(void) \
     { \
-        if (tok_##lower.value == 0) \
-            tok_##lower.value = val; \
-        return tok_##lower; \
+        if (TOK_##name##_v.value == 0) \
+            TOK_##name##_v.value = sch_symbol_new(str); \
+        return TOK_##name##_v; \
     }
-DEF_CONST_TOKEN_FUNC(ident_dot2, IDENT_DOT2, sch_symbol_new(".."))
-DEF_CONST_TOKEN_FUNC(ident_dot3, IDENT_DOT3, sch_symbol_new("..."))
-DEF_CONST_TOKEN_FUNC(ident_plus, IDENT_PLUS, sch_symbol_new("+"))
-DEF_CONST_TOKEN_FUNC(ident_minus, IDENT_MINUS, sch_symbol_new("-"))
+DEF_CONST_TOKEN_FUNC(DOT2, "..")
+DEF_CONST_TOKEN_FUNC(DOT3, "...")
+DEF_CONST_TOKEN_FUNC(PLUS, "+")
+DEF_CONST_TOKEN_FUNC(MINUS, "-")
 
 // and ctor-s
-static inline Token TOKEN_INT(int64_t i)
+static inline Token token_int(int64_t i)
 {
     return TOKEN_VAL(INT, sch_integer_new(i));
 }
-static inline Token TOKEN_STRING(const char *s)
+static inline Token token_string(const char *s)
 {
     return TOKEN_VAL(STRING, sch_string_new(s));
 }
-static inline Token TOKEN_IDENT(const char *s)
+static inline Token token_ident(const char *s)
 {
     return TOKEN_VAL(IDENT, sch_symbol_new(s));
 }
@@ -162,9 +162,9 @@ static Token lex_dots(Parser *p)
     c = fgetc(p->in);
     if (c != '.') {
         ungetc(c, p->in);
-        return TOK_IDENT_DOT2();
+        return TOK_DOT2();
     }
-    return TOK_IDENT_DOT3();
+    return TOK_DOT3();
 }
 
 static int unescape_hex(Parser *p)
@@ -219,7 +219,7 @@ static Token lex_string(Parser *p)
             parse_error(p, "string literal", "too long: \"%s...\"", pbuf);
     }
     *pbuf = '\0';
-    return TOKEN_STRING(buf);
+    return token_string(buf);
 }
 
 static Token lex_int_binary(Parser *p, int coeff)
@@ -241,7 +241,7 @@ static Token lex_int_binary(Parser *p, int coeff)
     }
     if (i == 0 || i == 63)
         parse_error(p, "integer", "invalid string");
-    return TOKEN_INT(coeff * v);
+    return token_int(coeff * v);
 }
 
 static Token lex_int_with_radix(Parser *p, int coeff, unsigned radix)
@@ -263,7 +263,7 @@ static Token lex_int_with_radix(Parser *p, int coeff, unsigned radix)
     if (endp[0] != '\0')
         parse_error(p, "integer digits", "'%s'", endp); // XXX
     free(s);
-    return TOKEN_INT(coeff * i);
+    return token_int(coeff * i);
 }
 
 static Token lex_signed_int_with_radix(Parser *p, unsigned radix)
@@ -285,9 +285,9 @@ static Token lex_constant(Parser *p)
     int c = fgetc(p->in);
     switch (c) {
     case 't':
-        return TOK_CONST_TRUE;
+        return TOK_TRUE;
     case 'f':
-        return TOK_CONST_FALSE;
+        return TOK_FALSE;
     case '(':
         return TOK_VECTOR_LPAREN;
     case 'b':
@@ -314,7 +314,7 @@ static Token lex_int(Parser *p, int coeff)
     int n = fscanf(p->in, "%"PRId64, &i);
     if (n != 1)
         parse_error(p, "integer digits", "invalid string");
-    return TOKEN_INT(coeff * i);
+    return token_int(coeff * i);
 }
 
 static Token lex_after_sign(Parser *p, int csign)
@@ -323,11 +323,9 @@ static Token lex_after_sign(Parser *p, int csign)
     int dig = isdigit(c);
     ungetc(c, p->in);
     bool minus = csign == '-';
-    if (dig) {
-        int coeff = minus ? -1 : 1;
-        return lex_int(p, coeff);
-    }
-    return minus ? TOK_IDENT_MINUS() : TOK_IDENT_PLUS();
+    if (dig)
+        return lex_int(p, minus * -2 + 1);
+    return minus ? TOK_MINUS() : TOK_PLUS();
 }
 
 static inline bool is_special_initial(int c)
@@ -366,7 +364,7 @@ static Token lex_ident(Parser *p, int init)
     }
     ungetc(c, p->in);
     *s = '\0';
-    return TOKEN_IDENT(buf);
+    return token_ident(buf);
 }
 
 static Token lex(Parser *p)
@@ -436,9 +434,9 @@ static const char *token_stringify(Token t)
     case TOK_TYPE_STRING:
         snprintf(buf, sizeof(buf), "\"%s\"", STRING(t.value));
         break;
-    case TOK_TYPE_CONST_TRUE:
+    case TOK_TYPE_TRUE:
         return "#t";
-    case TOK_TYPE_CONST_FALSE:
+    case TOK_TYPE_FALSE:
         return "#f";
     case TOK_TYPE_EOF:
         return "EOF";
@@ -540,9 +538,9 @@ static Value parse_expr(Parser *p)
         parse_error(p, "expression", "'.'");
     case TOK_TYPE_VECTOR_LPAREN:
         return parse_vector(p); // parse til ')'
-    case TOK_TYPE_CONST_TRUE:
+    case TOK_TYPE_TRUE:
         return Qtrue;
-    case TOK_TYPE_CONST_FALSE:
+    case TOK_TYPE_FALSE:
         return Qfalse;
     case TOK_TYPE_STRING:
     case TOK_TYPE_INT:
