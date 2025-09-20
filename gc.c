@@ -37,7 +37,7 @@ typedef struct {
 static size_t init_size = 1 * MiB;
 static Heap heap; // singleton
 
-static uintptr_t *volatile stack_base;
+static const uintptr_t *volatile stack_base;
 
 static bool stress, print_stat;
 static bool in_gc;
@@ -79,7 +79,7 @@ void gc_fin(void)
     }
 }
 
-void gc_init(uintptr_t *volatile sp)
+void gc_init(const uintptr_t *volatile sp)
 {
     stack_base = sp;
     heap.slot[0] = heap_slot_new(init_size);
@@ -96,7 +96,7 @@ static void *allocate(size_t size)
     return ret;
 }
 
-size_t gc_stack_get_size(uintptr_t *volatile sp)
+size_t gc_stack_get_size(const uintptr_t *volatile sp)
 {
     return (uint8_t *volatile) stack_base - (uint8_t *volatile) sp;
 }

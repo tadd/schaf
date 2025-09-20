@@ -8,7 +8,7 @@ typedef uintptr_t SchValue;
 
 extern const SchValue SCH_NULL, SCH_UNDEF, SCH_FALSE, SCH_TRUE;
 
-void sch_init(uintptr_t *volatile base);
+void sch_init(const uintptr_t *volatile base);
 #define SCH_INIT() uintptr_t sch_stack_base = 0; sch_init(&sch_stack_base)
 int sch_fin(void);
 
