@@ -78,9 +78,9 @@ static inline Token TOKEN_IDENT(const char *s)
 
 typedef struct {
     FILE *in;
-    char *filename;
     int64_t *newline_pos;
     jmp_buf jmp_error;
+    char filename[];
 } Parser;
 
 void pos_to_line_col(int64_t pos, int64_t *newline_pos, int64_t *line, int64_t *col)
@@ -556,10 +556,11 @@ static Value parse_expr(Parser *p)
 
 static Parser *parser_new(FILE *in, const char *filename)
 {
-    Parser *p = xmalloc(sizeof(Parser));
+    size_t len = strlen(filename);
+    Parser *p = xmalloc(sizeof(Parser) + len + 1);
     p->in = in;
-    p->filename = xstrdup(filename);
     p->newline_pos = scary_new(sizeof(int64_t));
+    strcpy(p->filename, filename);
     return p;
 }
 
@@ -568,19 +569,18 @@ static void parser_free(Parser *p)
     if (p == NULL)
         return;
     scary_free(p->newline_pos);
-    free(p->filename);
     free(p);
 }
 
 // Source: filename, ast, newline_pos
 static Source *source_new(Parser *p, Value syntax_list)
 {
-    Source *src = xmalloc(sizeof(Source));
+    size_t len = strlen(p->filename);
+    Source *src = xmalloc(sizeof(Source) + len + 1);
     src->ast = syntax_list;
-    src->filename = p->filename; // move
-    p->filename = NULL;
-    src->newline_pos = p->newline_pos;
+    src->newline_pos = p->newline_pos; // move
     p->newline_pos = NULL;
+    strcpy(src->filename, p->filename);
     return src;
 }
 
@@ -589,7 +589,6 @@ void source_free(Source *s)
     if (s == NULL)
         return;
     scary_free(s->newline_pos);
-    free(s->filename);
     free(s);
 }
 

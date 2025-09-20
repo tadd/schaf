@@ -302,16 +302,17 @@ void *obj_new(size_t size, ValueTag t)
     return p;
 }
 
-static Value string_new_moved(char *s)
+static Value string_new_sized(size_t size)
 {
-    String *str = obj_new(sizeof(String), TAG_STRING);
-    str->body = s; // move ownership and use as is
-    return (Value) str;
+    return (Value) obj_new(sizeof(String) + size, TAG_STRING);
 }
 
 Value sch_string_new(const char *s)
 {
-    return string_new_moved(xstrdup(s));
+    size_t len = strlen(s);
+    String *str = obj_new(sizeof(String) + len + 1, TAG_STRING);
+    strcpy(STRING(str), s);
+    return (Value) str;
 }
 
 static void expect_cfunc_arity(int64_t actual)
@@ -604,12 +605,14 @@ static Value expect_arity_3(Value args)
     return arity_error("", 3, length(args));
 }
 
+[[gnu::nonnull(1)]]
 static Value env_new(const char *name)
 {
-    Env *e = obj_new(sizeof(Env), TAG_ENV);
-    e->name = name == NULL ? NULL : xstrdup(name);
+    size_t len = strlen(name);
+    Env *e = obj_new(sizeof(Env) + len + 1, TAG_ENV);
     e->table = table_new();
     e->parent = Qfalse;
+    strcpy(e->name, name);
     return (Value) e;
 }
 
@@ -617,10 +620,12 @@ static Value env_dup(const char *name, const Value orig)
 {
     if (UNLIKELY(ENV(orig)->parent != Qfalse))
         bug("duplication of chained environment not permitted");
-    Env *e = obj_new(sizeof(Env), TAG_ENV);
-    e->name = xstrdup(name == NULL ? ENV(orig)->name : name);
+    const char *n = name != NULL ? name : ENV(orig)->name;
+    size_t len = strlen(n);
+    Env *e = obj_new(sizeof(Env) + len + 1, TAG_ENV);
     e->table = table_dup(ENV(orig)->table);
     e->parent = Qfalse;
+    strcpy(e->name, n);
     return (Value) e;
 }
 
@@ -1983,11 +1988,12 @@ static Value proc_string_append(UNUSED Value env, Value args)
         EXPECT(type, TYPE_STRING, v);
         len += strlen(STRING(v));
     }
-    char *s = xmalloc(len + 1);
+    Value v = string_new_sized(len + 1);
+    char *s = STRING(v);
     s[0] = '\0';
     for (Value p = args; p != Qnil; p = cdr(p))
         strcat(s, STRING(car(p)));
-    return string_new_moved(s);
+    return v;
 }
 
 // 6.3.6. Vectors
@@ -2793,7 +2799,6 @@ static void free_symbol_names(void)
 static void env_free(Value ve)
 {
     Env *e = ENV(ve);
-    free(e->name);
     table_free(e->table);
 }
 

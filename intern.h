@@ -64,7 +64,7 @@ typedef struct {
 
 typedef struct {
     Header header;
-    char *body;
+    char body[];
 } String;
 
 typedef struct {
@@ -113,9 +113,9 @@ typedef struct {
 
 typedef struct {
     Header header;
-    char *name;
     Value parent;
     Table *table;
+    char name[];
 } Env;
 
 typedef enum {
@@ -157,9 +157,9 @@ typedef struct {
 #define ERROR(v) (((Error *) v)->call_stack)
 
 typedef struct {
-    char *filename;
     int64_t *newline_pos; // list of position | int
     Value ast;
+    char filename[];
 } Source;
 
 #pragma GCC visibility push(hidden) // also affects Clang
