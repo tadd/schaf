@@ -116,7 +116,7 @@ typedef struct {
     Header header;
     Value parent;
     Table *table;
-    char *name;
+    char name[];
 } Env;
 
 typedef enum {

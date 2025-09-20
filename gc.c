@@ -302,7 +302,6 @@ static void free_val(Value v)
     case TAG_ENV: {
         Env *p = ENV(v);
         table_free(p->table);
-        free(p->name);
         break;
     }
     case TAG_PORT: {
