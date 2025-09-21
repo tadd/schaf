@@ -354,6 +354,8 @@ static inline bool is_subsequent(int c)
     return is_initial(c) || isdigit(c) || is_special_subsequent(c);
 }
 
+static bool is_keyword(const char *id);
+
 static Token lex_ident(Parser *p, int init)
 {
     char buf[BUFSIZ], *s = buf, *end = s + sizeof(buf);
@@ -364,6 +366,8 @@ static Token lex_ident(Parser *p, int init)
     }
     ungetc(c, p->in);
     *s = '\0';
+    if (is_keyword(buf))
+        debug("got a keyword: %s", buf);
     return token_ident(buf);
 }
 
@@ -589,6 +593,311 @@ void source_free(Source *s)
     scary_free(s->newline_pos);
     free(s);
 }
+
+#if 1
+static void strtou64x2(const char *s, uint64_t val[2])
+{
+    uint8_t buf[16] = { 0 };
+    strncpy((char *) buf, s, 16);
+    val[0] = *(uint64_t *) buf;
+    val[1] = *(uint64_t *) (buf + 8);
+}
+
+static void init_keywords(uint64_t keywords[][2])
+{
+    const char *words[] = {
+        "=>",
+        "and",
+        "begin",
+        "case",
+        "cond",
+        "define",
+        "delay",
+        "do",
+        "else",
+        "if",
+        "lambda",
+        "let",
+        "let*",
+        "letrec",
+        "or",
+        "quasiquote",
+        "quote",
+        "set!",
+        "unquote",
+        "unquote-splicing"
+    };
+    for (size_t i = 0; i < sizeof(words) / sizeof(words[0]); i++)
+        strtou64x2(words[i], keywords[i]);
+}
+
+static bool is_keyword(const char *id)
+{
+    static uint64_t keywords[20][2] = { 0 };
+    if (keywords[0][0] == 0)
+        init_keywords(keywords);
+    size_t len = strlen(id);
+    if (len < 2 || (len > 7 && len != 10 && len != 16))
+        return false;
+    uint64_t val[2];
+    strtou64x2(id, val);
+    for (size_t i = 0; i < 20; i++) {
+        uint64_t *key = keywords[i];
+        if (key[0] == val[0] && key[1] == val[1])
+            return true;
+    }
+    return false;
+}
+
+#elif 1
+static bool getkeyword(const char *id, uint64_t val[2])
+{
+#define RANGE(x, y) ((x)+1)...((y)-1) // open interval
+    static const uint8_t table[256] = {
+        [RANGE(-1, '!')] = 255,
+        ['!'] = 0,
+        [RANGE('!', '*')] = 255,
+        ['*'] = 1,
+        [RANGE('*', '-')] = 255,
+        ['-'] = 2,
+        [RANGE('-', '=')] = 255,
+        ['='] = 3,
+        ['>'] = 4,
+        [RANGE('>', 'a')] = 255,
+        ['a'] = 5,
+        ['b'] = 6,
+        ['c'] = 7,
+        ['d'] = 8,
+        ['e'] = 9,
+        ['f'] = 10,
+        ['g'] = 11,
+        ['h'] = 255,
+        ['i'] = 12,
+        ['j'] = 255,
+        ['k'] = 255,
+        ['l'] = 13,
+        ['m'] = 14,
+        ['n'] = 15,
+        ['o'] = 16,
+        ['p'] = 17,
+        ['q'] = 18,
+        ['r'] = 19,
+        ['s'] = 20,
+        ['t'] = 21,
+        ['u'] = 22,
+        ['v'] = 255,
+        ['w'] = 255,
+        ['x'] = 255,
+        ['y'] = 23,
+        ['z'] = 255,
+        [RANGE('z', 256)] = 255,
+    };
+    uint64_t v = 0;
+    for (size_t i = 0; i < 13; i++) {
+        uint8_t ch = (uint8_t) id[i];
+        if (ch == '\0') {
+            val[0] = v;
+            val[1] = UINT64_MAX;
+            return true;
+        }
+        uint64_t n = table[ch];
+        if (n == 255)
+            return false;
+        v = v * 24U + n;
+    }
+    uint64_t v2 = 0;
+    for (size_t i = 13; i <= 16; i++) {
+        uint8_t ch = (uint8_t) id[i];
+        if (ch == '\0') {
+            val[0] = v;
+            val[1] = v2;
+            return true;
+        }
+        uint64_t n = table[ch];
+        if (n == 255)
+            return false;
+        v2 = v2 * 24U + n;
+    }
+    return false;
+}
+
+static void init_keywords(uint64_t keywords[20][2])
+{
+    const char *words[] = {
+        "=>",
+        "and",
+        "begin",
+        "case",
+        "cond",
+        "define",
+        "delay",
+        "do",
+        "else",
+        "if",
+        "lambda",
+        "let",
+        "let*",
+        "letrec",
+        "or",
+        "quasiquote",
+        "quote",
+        "set!",
+        "unquote",
+        "unquote-splicing"
+    };
+    for (size_t i = 0; i < sizeof(words) / sizeof(words[0]); i++) {
+        if (!getkeyword(words[i], keywords[i]))
+            bug("keyword caching failed");
+    }
+}
+
+static bool is_keyword(const char *id)
+{
+    static uint64_t keywords[20][2] = { 0 };
+    if (keywords[0][0] == 0)
+        init_keywords(keywords);
+    uint64_t val[2];
+    if (!getkeyword(id, val))
+        return false;
+    for (size_t i = 0; i < 20; i++) {
+        uint64_t *key = keywords[i];
+        if (key[0] == val[0] && key[1] == val[1])
+            return true;
+    }
+    return false;
+}
+
+#else
+
+static int getkeyword(const char *id)
+{
+    switch (*id++) {
+    case '=':
+        if (*id == '>')
+            return 1;
+        break;
+    case 'a':
+        if (strcmp(id, "nd") == 0)
+            return 2;
+        break;
+    case 'b':
+        if (strcmp(id, "egin") == 0)
+            return 3;
+        break;
+    case 'c':
+        if (strcmp(id, "ase") == 0)
+            return 4;
+        if (strcmp(id, "ond") == 0)
+            return 5;
+        break;
+    case 'd':
+        switch (*id++) {
+        case 'e':
+            if (strcmp(id, "fine") == 0)
+                return 6;
+            if (strcmp(id, "lay") == 0)
+                return 7;
+            break;
+        case 'o':
+            if (*id == '\0')
+                return 8;
+            break;
+        default:
+            break;
+        }
+        break;
+    case 'e':
+        if (strcmp(id, "lse") == 0)
+            return 9;
+        break;
+    case 'i':
+        if (strcmp(id, "f") == 0)
+            return 10;
+        break;
+    case 'l':
+        switch (*id++) {
+        case 'a':
+            if (strcmp(id, "mbda") == 0)
+                return 11;
+            break;
+        case 'e':
+            switch (*id++) {
+            case 't':
+                switch (*id++) {
+                case '\0':
+                    return 12;
+                case '*':
+                    if (*id == '\0')
+                        return 13;
+                    break;
+                case 'r':
+                    if (strcmp(id, "ec") == 0)
+                        return 14;
+                    break;
+                default:
+                    break;
+                }
+            default:
+                break;
+            }
+        default:
+            break;
+        }
+        break;
+    case 'o':
+        if (strcmp(id, "r") == 0)
+            return 15;
+        break;
+    case 'q':
+        if (*id++ != 'u')
+            break;
+        if (strcmp(id, "asiquote") == 0)
+            return 16;
+        if (strcmp(id, "ote") == 0)
+            return 17;
+        break;
+    case 's':
+        if (strcmp(id, "et!") == 0)
+            return 18;
+        break;
+    case 'u':
+        if (strncmp(id, "nquote", 6) != 0)
+            break;
+        id += 6;
+        if (*id == '\0')
+            return 19;
+        if (strcmp(id, "-splicing") == 0)
+            return 20;
+        break;
+    default:
+        break;
+    }
+    return 0;
+}
+
+static bool is_keyword(const char *id)
+{
+    return getkeyword(id) > 0;
+}
+#endif
+
+#if 0
+static bool is_expression_keyword(Value ident)
+{
+    return ident == SYM_QUOTE || ident == SYM_LAMBDA || ident == SYM_IF ||
+        ident == SYM_SET_BANG || ident == SYM_BEGIN || ident == SYM_COND ||
+        ident == SYM_AND || ident == SYM_OR || ident == SYM_CASE ||
+        ident == SYM_LET || ident == SYM_LET_STAR || ident == SYM_LETREC ||
+        ident == SYM_DO || ident == SYM_DELAY || ident == SYM_QUASIQUOTE;
+}
+
+static bool is_syntactic_keyword(Value ident)
+{
+    return is_expression_keyword(ident) ||
+        ident == SYM_ELSE || ident == SYM_RARROW || ident == SYM_DEFINE ||
+        ident == SYM_UNQUOTE || ident == SYM_UNQUOTE_SPLICING;
+}
+#endif
 
 static Source *parse_program(Parser *p)
 {

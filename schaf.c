@@ -54,8 +54,10 @@ static const int64_t CFUNCARG_MAX = 3;
 // Frame: Table of 'symbol => <value>
 static Value env_toplevel, env_default, env_r5rs, env_null;
 static char **symbol_names; // ("name0" "name1" ...)
-Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
-static Value SYM_ELSE, SYM_RARROW;
+Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
+    SYM_RARROW, SYM_BEGIN, SYM_DEFINE;
+Value SYM_LAMBDA, SYM_IF, SYM_SET_BANG, SYM_COND, SYM_AND, SYM_OR,
+    SYM_CASE, SYM_LET, SYM_LET_STAR, SYM_LETREC, SYM_DO, SYM_DELAY;
 static const char *load_basedir;
 static Source **source_data;
 static jmp_buf jmp_exit;
@@ -3008,6 +3010,21 @@ void sch_init(const uintptr_t *sp)
     DEF_SYMBOL(UNQUOTE, "unquote");
     DEF_SYMBOL(UNQUOTE_SPLICING, "unquote-splicing");
     DEF_SYMBOL(RARROW, "=>");
+    DEF_SYMBOL(BEGIN, "begin");
+    DEF_SYMBOL(DEFINE, "define");
+    DEF_SYMBOL(LAMBDA, "lambda");
+    DEF_SYMBOL(IF, "if");
+    DEF_SYMBOL(SET_BANG, "set!");
+    DEF_SYMBOL(COND, "cond");
+    DEF_SYMBOL(AND, "and");
+    DEF_SYMBOL(OR, "or");
+    DEF_SYMBOL(CASE, "case");
+    DEF_SYMBOL(LET, "let");
+    DEF_SYMBOL(LET_STAR, "let*");
+    DEF_SYMBOL(LETREC, "letrec");
+    DEF_SYMBOL(DO, "do");
+    DEF_SYMBOL(DELAY, "delay");
+
     source_data = scary_new(sizeof(Source *));
 
     env_toplevel = env_new("default");
