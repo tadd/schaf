@@ -2448,7 +2448,8 @@ static void close_port(Port *p)
         return;
     fclose(p->fp);
     p->fp = NULL; // guarantee safety
-    free(p->string);
+    if (p->string != (void *) 1U) // avoid mark
+        free(p->string);
     p->string = NULL;
 }
 
@@ -2721,7 +2722,7 @@ static Value string_port_new(void)
 {
     Value v = port_new(NULL, PORT_OUTPUT);
     Port *p = PORT(v);
-    p->string = (void *) 1U; // non-NULL dummy value to indicate string port 
+    p->string = (void *) 1U; // non-NULL dummy value to mark string port
     p->fp = mopen_w(&p->string);
     return v;
 }
