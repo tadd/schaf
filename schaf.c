@@ -2655,8 +2655,6 @@ char *sch_stringify(Value v)
     char *s;
     errno = 0;
     FILE *fp = mopen_w(&s);
-    if (fp == NULL)
-        error("%s", strerror(errno));
     fdisplay(fp, v);
     fclose(fp);
     return s;
@@ -2721,14 +2719,11 @@ static Value proc_read_string(UNUSED Value env, Value args)
 
 static Value string_port_new(void)
 {
-    Port *p = PORT(port_new(NULL, PORT_OUTPUT));
+    Value v = port_new(NULL, PORT_OUTPUT);
+    Port *p = PORT(v);
     p->string = (void *) 1U; // non-NULL dummy value to indicate string port 
-    errno = 0;
-    FILE *fp = mopen_w(&p->string);
-    if (fp == NULL)
-        return runtime_error("open_memstream failed: %s", strerror(errno));
-    p->fp = fp;
-    return (Value) p;
+    p->fp = mopen_w(&p->string);
+    return v;
 }
 
 static Value proc_open_output_string(UNUSED Value env)

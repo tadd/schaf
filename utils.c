@@ -55,7 +55,7 @@ FILE *mopen(const char *s)
 {
     errno = 0;
     FILE *fp = fmemopen((char *) s, strlen(s), "r");
-    if (fp == NULL) // we do not care that at caller
+    if (UNLIKELY(fp == NULL)) // we do not care that at caller
         error("fmemopen failed: %s", strerror(errno));
     return fp;
 }
@@ -63,7 +63,11 @@ FILE *mopen(const char *s)
 FILE *mopen_w(char **p)
 {
     static size_t dummy;
-    return open_memstream(p, &dummy);
+    errno = 0;
+    FILE *fp = open_memstream(p, &dummy);
+    if (UNLIKELY(fp == NULL))
+        error("open_memstream failed: %s", strerror(errno));
+    return fp;
 }
 
 // List

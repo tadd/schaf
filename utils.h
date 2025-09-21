@@ -38,12 +38,15 @@
 
 #pragma GCC visibility push(hidden) // also affects Clang
 
-[[gnu::noreturn, gnu::format(printf, 1, 2)]] void error(const char *fmt, ...);
+[[gnu::noreturn, gnu::format(printf, 1, 2)]]
+void error(const char *fmt, ...);
 ATTR_XMALLOC void *xmalloc(size_t size);
 ATTR_XMALLOC void *xcalloc(size_t nmem, size_t memsize);
 ATTR_XMALLOC void *xrealloc(void *orig, size_t size);
 ATTR_XMALLOC char *xstrdup(const char *s);
+[[nodiscard, gnu::returns_nonnull]]
 FILE *mopen(const char *s);
+[[nodiscard, gnu::returns_nonnull]]
 FILE *mopen_w(char **p);
 
 typedef struct Table Table;
