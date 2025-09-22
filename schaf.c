@@ -421,18 +421,14 @@ static Value apply_cfunc_closure_1(UNUSED Value env, Value f, Value args)
     return CFUNC(f)->f1(CFUNC_CLOSURE(f)->data, car(args));
 }
 
-static Value cfunc_closure_new(const char *name, void *cfunc,
-                               int64_t arity, Value data)
+static Value cfunc_closure_new(const char *name, void *cfunc, Value data)
 {
-    expect_cfunc_arity(arity);
     CFuncClosure *cc = obj_new(sizeof(CFuncClosure), TAG_CFUNC_CLOSURE);
     cc->data = data;
     CFunc *f = CFUNC(cc);
-    f->proc.arity = arity;
+    f->proc.arity = 1; // currently fixed
     f->name = xstrdup(name);
     f->cfunc = cfunc;
-    if (UNLIKELY(arity != 1))
-        bug("invalid arity: %"PRId64, arity);
     f->proc.apply = apply_cfunc_closure_1;
     return (Value) cc;
 }
@@ -2200,27 +2196,25 @@ static Value callcc(Value env, Value proc)
 
 static void do_wind(Value new_winders);
 
-static Value callcc_inner2(Value data, Value x)
+static Value callcc_inner2(Value pair, Value arg)
 {
-    Value k = car(data), saved = cadr(data);
+    Value k = car(pair), saved = cdr(pair);
     if (saved != inner_winders)
         do_wind(saved);
-    return apply(Qfalse, k, list1(x));
+    return apply(Qfalse, k, list1(arg));
 }
 
-static Value callcc_inner1(Value data, Value k)
+static Value callcc_inner1(Value proc, Value k)
 {
-    Value f = data;
-    Value saved = inner_winders;
-    Value nextdata = cons(k, list1(saved));
-    Value arg = cfunc_closure_new(".callcc-inner2", callcc_inner2, 1, nextdata);
-    return apply(Qfalse, f, list1(arg));
+    Value saved = inner_winders, pair = cons(k, saved);
+    Value arg = cfunc_closure_new(".callcc-inner2", callcc_inner2, pair);
+    return apply(Qfalse, proc, list1(arg));
 }
 
 static Value proc_callcc(Value env, Value proc)
 {
     EXPECT(type, TYPE_PROC, proc);
-    Value inner = cfunc_closure_new(".callcc-inner1", callcc_inner1, 1, proc);
+    Value inner = cfunc_closure_new(".callcc-inner1", callcc_inner1, proc);
     return callcc(env, inner);
 }
 
