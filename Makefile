@@ -40,12 +40,12 @@ microbench: schaf
 %.san.o: %.c
 	$(CC) $(CFLAGS) $(SANITIZER) -c $< -o $@
 
-gc.o: intern.h schaf.h utils.h
-libscary.o: libscary.h
-main.o: schaf.h utils.h
-parse.o: intern.h schaf.h utils.h
-schaf.o: intern.h libscary.h schaf.h utils.h
-utils.o: utils.h
+gc.o gc.san.o: intern.h schaf.h utils.h
+libscary.o libscary.san.o: libscary.h
+main.o main.san.o: schaf.h utils.h
+parse.o parse.san.o: intern.h schaf.h utils.h
+schaf.o schaf.san.o: intern.h libscary.h schaf.h utils.h
+utils.o utils.san.o: utils.h
 
 .PHONY: all clean analyze sanitize microbench
 
@@ -78,7 +78,7 @@ test/basic-test: $(OBJ_TEST)
 test/basic-test-san: $(OBJ_TEST:.o=.san.o)
 	$(CC) $(CFLAGS) $(SANITIZER) -o $@ $^ $(LIBS) -lcriterion
 
-test/basic-test.o: schaf.h utils.h
+test/basic-test.o test/basic-test.san.o: schaf.h utils.h
 
 .PHONY: test test-all test-san test-c test-c-san test-scheme test-scheme-san \
 	test-scheme-stress test-scheme-stress-san
