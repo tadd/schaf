@@ -50,7 +50,7 @@ FILE *mopen(const char *s);
 FILE *mopen_w(char **p);
 
 typedef struct Table Table;
-typedef void (*TableForeachFunc)(uint64_t key, uint64_t val, void *data);
+typedef void (*TableForeachFunc)(uint64_t key, uint64_t val);
 
 extern const uint64_t TABLE_NOT_FOUND;
 Table *table_new(void);
@@ -59,7 +59,7 @@ void table_free(Table *t);
 Table *table_put(Table *t, uint64_t key, uint64_t val); // `val` can't be TABLE_NOT_FOUND
 bool table_set(Table *t, uint64_t key, uint64_t val); // set if found
 uint64_t table_get(const Table *t, uint64_t key);
-void table_foreach(const Table *t, TableForeachFunc f, void *data);
+void table_foreach(const Table *t, TableForeachFunc f);
 UNUSED void table_dump(const Table *t); // for debug
 
 #pragma GCC visibility pop
