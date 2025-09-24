@@ -256,7 +256,6 @@ static void mark_val(Value v)
     }
     case TAG_STRING:
     case TAG_CFUNC:
-    case TAG_SYNTAX:
     case TAG_PORT:
     case TAG_EOF:
     case TAG_ERROR:
@@ -329,7 +328,6 @@ static void free_val(Value v)
         scary_free(ERROR(v));
         break;
     case TAG_CFUNC:
-    case TAG_SYNTAX:
     case TAG_CFUNC_CLOSURE:
     case TAG_CLOSURE:
     case TAG_PAIR:
