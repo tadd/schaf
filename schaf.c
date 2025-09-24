@@ -314,6 +314,13 @@ Value sch_string_new(const char *s)
     return (Value) str;
 }
 
+static void expect_cfunc_tag(ValueTag tag)
+{
+    if (tag == TAG_CFUNC || tag == TAG_SYNTAX)
+        return;
+    bug_invalid_tag(tag);
+}
+
 static void expect_cfunc_arity(int64_t actual)
 {
     if (LIKELY(actual <= CFUNCARG_MAX))
@@ -377,10 +384,11 @@ static Value apply_cfunc_3(Value env, Value f, Value args)
 
 static Value cfunc_new_internal(ValueTag tag, const char *name, void *cfunc, int64_t arity)
 {
+    expect_cfunc_tag(tag);
     expect_cfunc_arity(arity);
     CFunc *f = obj_new(sizeof(CFunc), tag);
     f->proc.arity = arity;
-    f->name = xstrdup(name);
+    f->name = name;
     f->cfunc = cfunc;
     switch (arity) {
     case -1:
@@ -426,7 +434,7 @@ static Value cfunc_closure_new(const char *name, void *cfunc, Value data)
     cc->data = data;
     CFunc *f = CFUNC(cc);
     f->proc.arity = 1; // currently fixed
-    f->name = xstrdup(name);
+    f->name = name;
     f->cfunc = cfunc;
     f->proc.apply = apply_cfunc_closure_1;
     return (Value) cc;

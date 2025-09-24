@@ -77,7 +77,7 @@ typedef struct {
 
 typedef struct {
     Procedure proc;
-    char *name;
+    const char *name;
     union {
         void *cfunc;
         Value (*f0)(Value);
