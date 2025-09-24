@@ -55,7 +55,7 @@ static const int64_t CFUNCARG_MAX = 3;
 static Value env_toplevel, env_default, env_r5rs, env_null;
 static char **symbol_names; // ("name0" "name1" ...)
 Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
-static Value SYM_ELSE, SYM_RARROW;
+static Value SYM_ELSE, SYM_RARROW, SYM_LAST_SYNTAX;
 static const char *load_basedir;
 static Source **source_data;
 static jmp_buf jmp_exit;
@@ -105,7 +105,6 @@ static bool value_is_procedure(Value v)
     if (value_is_immediate(v))
         return false;
     switch (VALUE_TAG(v)) {
-    case TAG_SYNTAX:
     case TAG_CFUNC:
     case TAG_CLOSURE:
     case TAG_CONTINUATION:
@@ -159,7 +158,6 @@ Type sch_value_type_of(Value v)
     case TAG_PAIR:
         return TYPE_PAIR;
     case TAG_CFUNC:
-    case TAG_SYNTAX:
     case TAG_CLOSURE:
     case TAG_CONTINUATION:
     case TAG_CFUNC_CLOSURE:
@@ -311,13 +309,6 @@ Value sch_string_new(const char *str)
     return string_new_moved(xstrdup(str));
 }
 
-static void expect_cfunc_tag(ValueTag tag)
-{
-    if (LIKELY(tag == TAG_CFUNC || tag == TAG_SYNTAX))
-        return;
-    bug_invalid_tag(tag);
-}
-
 static void expect_cfunc_arity(int64_t actual)
 {
     if (LIKELY(actual <= CFUNCARG_MAX))
@@ -379,11 +370,10 @@ static Value apply_cfunc_3(Value env, Value f, Value args)
     return CFUNC(f)->f3(env, car(args), cadr(args), caddr(args));
 }
 
-static Value cfunc_new_internal(ValueTag tag, const char *name, void *cfunc, int64_t arity)
+static Value cfunc_new(const char *name, void *cfunc, int64_t arity)
 {
-    expect_cfunc_tag(tag);
     expect_cfunc_arity(arity);
-    CFunc *f = obj_new(tag, sizeof(CFunc));
+    CFunc *f = obj_new(TAG_CFUNC, sizeof(CFunc));
     f->proc.arity = arity;
     f->name = name;
     f->cfunc = cfunc;
@@ -407,16 +397,6 @@ static Value cfunc_new_internal(ValueTag tag, const char *name, void *cfunc, int
         bug("invalid arity: %"PRId64, arity);
     }
     return (Value) f;
-}
-
-static Value cfunc_new(const char *name, void *cfunc, int64_t arity)
-{
-    return cfunc_new_internal(TAG_CFUNC, name, cfunc, arity);
-}
-
-static Value syntax_new(const char *name, void *cfunc, int64_t arity)
-{
-    return cfunc_new_internal(TAG_SYNTAX, name, cfunc, arity);
 }
 
 static Value apply_cfunc_closure_1(UNUSED Value env, Value f, Value args)
@@ -671,12 +651,6 @@ static Value env_get(const Value env, Value name)
     return Qundef;
 }
 
-// Note: Do not mistake this for "(define-syntax ...)" which related to macros
-static void define_syntax(Value env, const char *name, void *cfunc, int64_t arity)
-{
-    env_put(env, sch_symbol_new(name), syntax_new(name, cfunc, arity));
-}
-
 static void define_procedure(Value env, const char *name, void *cfunc, int64_t arity)
 {
     env_put(env, sch_symbol_new(name), cfunc_new(name, cfunc, arity));
@@ -731,9 +705,109 @@ static Value apply(Value env, Value proc, Value args)
 static const char *get_func_name(Value proc)
 {
     ValueTag t = VALUE_TAG(proc);
-    if (t == TAG_CFUNC || t == TAG_SYNTAX)
+    if (t == TAG_CFUNC)
         return CFUNC(proc)->name;
     return NULL;
+}
+
+static Value syn_quote(UNUSED Value env, Value datum);
+static Value syn_lambda(Value env, Value args);
+static Value syn_if(Value env, Value args);
+static Value syn_set(Value env, Value ident, Value expr);
+static Value syn_cond(Value env, Value clauses);
+static Value syn_case(Value env, Value args);
+static Value syn_and(Value env, Value args);
+static Value syn_or(Value env, Value args);
+static Value syn_let(Value env, Value args);
+static Value syn_let_star(Value env, Value args);
+static Value syn_letrec(Value env, Value args);
+static Value syn_begin(Value env, Value body);
+static Value syn_do(Value env, Value args);
+static Value syn_quasiquote(Value env, Value datum);
+static Value syn_unquote(UNUSED Value env, UNUSED Value args);
+static Value syn_unquote_splicing(UNUSED Value env, UNUSED Value args);
+static Value syn_define(Value env, Value args);
+static Value syn_defined_p(Value env, Value name);
+
+static Value eval_syntax(Value env, Value l)
+{
+    // Waring: The order of labels is important; do not change!
+    // Keep correspondence to sch_symbol_new() in sch_init().
+    static const void *const labels[] = {
+        &&syn_quote,
+        &&syn_lambda,
+        &&syn_if,
+        &&syn_set,
+        &&syn_cond,
+        NULL, // else
+        NULL, // =>
+        &&syn_case,
+        &&syn_and,
+        &&syn_or,
+        &&syn_let,
+        &&syn_let_star,
+        &&syn_letrec,
+        &&syn_begin,
+        &&syn_do,
+        NULL, // &&syn_delay,
+        &&syn_quasiquote,
+        &&syn_unquote,
+        &&syn_unquote_splicing,
+        &&syn_define,
+        &&syn_defined_p,
+    };
+    Value sym = car(l), args = cdr(l), ret;
+    const char *fname;
+    Symbol s = sch_symbol_to_csymbol(sym);
+    goto *labels[s];
+
+#define case_v(f, ev, ag) case_v_named(#f, f, ev, ag)
+#define case_1(f, ev, ag) case_1_named(#f, f, ev, ag)
+#define case_pre(f, name) syn_##f: fname = name
+#define case_v_named(name, f, ev, ag) \
+    case_pre(f, name); \
+    ret = syn_##f(ev, ag); \
+    goto out
+#define case_1_named(name, f, ev, ag) \
+    case_pre(f, name); \
+    EXPECT(arity_1, ag); \
+    ret = syn_##f(ev, car(ag)); \
+    goto out
+#define case_2_named(name, f, ev, ag) \
+    case_pre(f, name); \
+    EXPECT(arity_2, ag); \
+    ret = syn_##f(ev, car(ag), cadr(ag)); \
+    goto out
+
+    do {
+        case_v(and, env, args);
+        case_v(begin, env, args);
+        case_v(case, env, args);
+        case_v(cond, env, args);
+        case_v(define, env, args);
+        case_v(do, env, args);
+        case_v(if, env, args);
+        case_v(lambda, env, args);
+        case_v(let, env, args);
+        case_v_named("let*", let_star, env, args);
+        case_v(letrec, env, args);
+        case_v(or, env, args);
+
+        case_1(quasiquote, env, args);
+        case_1(quote, env, args);
+        case_1(unquote, env, args);
+        case_1(unquote_splicing, env, args);
+        case_1_named("_defined?", defined_p, env, args);
+        //case_v(delay, env, args);
+        case_2_named("set!", set, env, args);
+    } while (0);
+#undef case_2
+#undef case_1
+#undef case_v
+ out:
+    if (UNLIKELY(is_error(ret)))
+        return push_stack_frame(ret, fname, l);
+    return ret;
 }
 
 static Value eval_apply(Value env, Value l)
@@ -742,10 +816,8 @@ static Value eval_apply(Value env, Value l)
     Value proc = eval(env, symproc);
     CHECK_ERROR_LOCATED(proc, l);
     EXPECT(type, TYPE_PROC, proc);
-    if (!value_tag_is(proc, TAG_SYNTAX)) {
-        args = map_eval(env, args);
-        CHECK_ERROR_LOCATED(args, l);
-    }
+    args = map_eval(env, args);
+    CHECK_ERROR_LOCATED(args, l);
     Value ret = apply(env, proc, args);
     if (UNLIKELY(is_error(ret))) {
         const char *fname = get_func_name(proc);
@@ -762,12 +834,19 @@ static Value lookup_or_error(Value env, Value v)
     return p;
 }
 
+static bool is_keyword(Value v)
+{
+    return sch_value_is_symbol(v) && v <= SYM_LAST_SYNTAX;
+}
+
 static Value eval(Value env, Value v)
 {
     if (sch_value_is_symbol(v))
         return lookup_or_error(env, v);
     if (v == Qnil || !sch_value_is_pair(v))
         return v;
+    if (is_keyword(car(v)))
+        return eval_syntax(env, v);
     return eval_apply(env, v);
 }
 
@@ -2882,50 +2961,51 @@ void sch_init(const uintptr_t *sp)
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
     symbol_names = scary_new(sizeof(char *));
-#define DEF_SYMBOL(var, name) SYM_##var = sch_symbol_new(name)
-    DEF_SYMBOL(ELSE, "else");
-    DEF_SYMBOL(QUOTE, "quote");
-    DEF_SYMBOL(QUASIQUOTE, "quasiquote");
-    DEF_SYMBOL(UNQUOTE, "unquote");
-    DEF_SYMBOL(UNQUOTE_SPLICING, "unquote-splicing");
-    DEF_SYMBOL(RARROW, "=>");
+
     source_data = scary_new(sizeof(Source *));
 
     env_toplevel = env_new("default");
     gc_add_root(&env_toplevel);
     Value e = env_toplevel;
+    env_null = env_dup("null", e);
+
+    // Waring: The order of sch_symbol_new is important; do not change!
+    // Keep correspondence to labels[] in eval_syntax().
 
     // 4. Expressions
 
     // 4.1. Primitive expression types
     // 4.1.2. Literal expressions
-    define_syntax(e, "quote", syn_quote, 1);
+    SYM_QUOTE = sch_symbol_new("quote");
     // 4.1.4. Procedures
-    define_syntax(e, "lambda", syn_lambda, -1);
+    sch_symbol_new("lambda");
     // 4.1.5. Conditionals
-    define_syntax(e, "if", syn_if, -1);
+    sch_symbol_new("if");
     // 4.1.6. Assignments
-    define_syntax(e, "set!", syn_set, 2);
+    sch_symbol_new("set!");
     // 4.2. Derived expression types
     // 4.2.1. Conditionals
-    define_syntax(e, "cond", syn_cond, -1);
-    define_syntax(e, "case", syn_case, -1);
-    define_syntax(e, "and", syn_and, -1);
-    define_syntax(e, "or", syn_or, -1);
+    sch_symbol_new("cond");
+    SYM_ELSE = sch_symbol_new("else");
+    SYM_RARROW = sch_symbol_new("=>");
+    sch_symbol_new("case");
+    sch_symbol_new("and");
+    sch_symbol_new("or");
     // 4.2.2. Binding constructs
-    define_syntax(e, "let", syn_let, -1); // with named let in 4.2.4.
-    define_syntax(e, "let*", syn_let_star, -1);
-    define_syntax(e, "letrec", syn_letrec, -1);
+    sch_symbol_new("let"); // with named let in 4.2.4.
+    sch_symbol_new("let*");
+    sch_symbol_new("letrec");
     // 4.2.3. Sequencing
-    define_syntax(e, "begin", syn_begin, -1);
+    sch_symbol_new("begin");
     // 4.2.4. Iteration
-    define_syntax(e, "do", syn_do, -1);
+    sch_symbol_new("do");
     // 4.2.5. Delayed evaluation
     //- delay
+    sch_symbol_new("delay");
     // 4.2.6. Quasiquotation
-    define_syntax(e, "quasiquote", syn_quasiquote, 1);
-    define_syntax(e, "unquote", syn_unquote, 1);
-    define_syntax(e, "unquote-splicing", syn_unquote_splicing, 1);
+    SYM_QUASIQUOTE = sch_symbol_new("quasiquote");
+    SYM_UNQUOTE = sch_symbol_new("unquote");
+    SYM_UNQUOTE_SPLICING = sch_symbol_new("unquote-splicing");
     // 4.3. Macros
     // 4.3.2. Pattern language
     //- syntax-rules
@@ -2933,11 +3013,14 @@ void sch_init(const uintptr_t *sp)
     // 5. Program structure
 
     // 5.2. Definitions
-    define_syntax(e, "define", syn_define, -1);
+    sch_symbol_new("define");
     // 5.3. Syntax definitions
     //- define-syntax
     env_null = env_dup("null", e);
     gc_add_root(&env_null);
+
+    // Local Extension syntax
+    SYM_LAST_SYNTAX = sch_symbol_new("_defined?");
 
     // 6. Standard procedures
 
@@ -3068,7 +3151,6 @@ void sch_init(const uintptr_t *sp)
     define_procedure(e, "exit", proc_exit, -1);
 
     // Local Extensions
-    define_syntax(e, "_defined?", syn_defined_p, 1);
     define_procedure(e, "_cputime", proc_cputime, 0);
     define_procedure(e, "p", proc_p, -1);
     define_procedure(e, "print", proc_print, -1); // like Gauche
@@ -3077,3 +3159,4 @@ void sch_init(const uintptr_t *sp)
     env_default = env_dup("default", e);
     gc_add_root(&env_default);
 }
+
