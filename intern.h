@@ -39,6 +39,7 @@ typedef enum {
     TYPE_PROC,
     TYPE_PROMISE,
     TYPE_ENV,
+    TYPE_TRANSFORMER,
 } Type;
 
 typedef enum {
@@ -53,6 +54,7 @@ typedef enum {
     TAG_CFUNC_CLOSURE,
     TAG_PROMISE,
     TAG_ENV,
+    TAG_TRANSFORMER,
     // internal use only
     TAG_ERROR,
     TAG_LAST = TAG_ERROR
@@ -151,6 +153,11 @@ typedef struct {
 } Env;
 
 typedef struct {
+    Header header;
+    Value *syntax_rules; // scary[Closure]
+} Transformer;
+
+typedef struct {
     const char *func_name;
     Value loc; // maybe an Integer for resolution in caller
 } StackFrame;
@@ -177,6 +184,7 @@ typedef struct {
 #define CFUNC_CLOSURE(v) ((CFuncClosure *) v)
 #define PROMISE(v) ((Promise *) v)
 #define ENV(v) ((Env *) v)
+#define TRANSFORMER(v) (((Transformer *) v)->syntax_rules)
 #define ERROR(v) (((Error *) v)->call_stack)
 
 typedef struct {

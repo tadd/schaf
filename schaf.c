@@ -55,10 +55,10 @@ static const int64_t CFUNCARG_MAX = 3;
 
 // Environment: list of Frames
 // Frame: Table of 'symbol => <value>
-static Value env_toplevel, env_default, env_r5rs, env_null;
+static Value env_toplevel, env_default, env_r5rs, env_macro, env_macro_inner, env_null;
 static char **symbol_names; // ("name0" "name1" ...)
 Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
-static Value SYM_ELSE, SYM_RARROW;
+static Value SYM_ELSE, SYM_RARROW, SYM_SYNTAX_RULES, SYM_ELLIPSIS;
 static const char *load_basedir;
 static Source **source_data;
 static jmp_buf jmp_exit;
@@ -119,6 +119,7 @@ static bool sch_value_is_procedure(Value v)
     case TAG_PORT:
     case TAG_PROMISE:
     case TAG_ENV:
+    case TAG_TRANSFORMER:
         return false;
     case TAG_ERROR:
         break; // internal objects
@@ -201,6 +202,8 @@ Type sch_value_type_of(Value v)
         return TYPE_PROMISE;
     case TAG_ENV:
         return TYPE_ENV;
+    case TAG_TRANSFORMER:
+        return TYPE_TRANSFORMER;
     case TAG_ERROR:
         break; // internal objects
     }
@@ -236,6 +239,8 @@ static const char *value_type_to_string(Type t)
         return "promise";
     case TYPE_ENV:
         return "environment";
+    case TYPE_TRANSFORMER:
+        return "transformer";
     }
     UNREACHABLE();
 }
@@ -384,6 +389,7 @@ static bool length_in_range(Value l, int64_t min, int64_t max)
 // Trigger runtime errors
 #define EXPECT_OR_RETURN(expr, err) do { if (!(expr)) return err; } while (0)
 #define EXPECT(expr, ...) EXPECT_OR_RETURN((expr), runtime_error(__VA_ARGS__))
+#define EXPECT_LOC(expr, loc, ...) EXPECT_OR_RETURN((expr), runtime_error_located((loc), __VA_ARGS__))
 #define EXPECT_WITH_OBJ(expr, ...) EXPECT_OR_RETURN((expr), runtime_error_with_obj(__VA_ARGS__))
 
 // Check then forward error from others
@@ -622,6 +628,9 @@ static Value runtime_error(const char *fmt, ...)
     ERROR(e) = scary_new(sizeof(StackFrame *));
     return (Value) e;
 }
+
+#define runtime_error_located(loc, ...) \
+    ({ Value E = runtime_error(__VA_ARGS__); push_stack_frame(E, NULL, (loc)); })
 
 static Value runtime_error_with_obj(const char *message, Value obj)
 {
@@ -1000,16 +1009,149 @@ static void add_source(const Source *newsrc)
     gc_add_root(&source_data[len-1]->ast);
 }
 
+static Value located_cons(Value a, Value d, Value loc)
+{
+    LocatedPair *p = obj_new(TAG_PAIR, sizeof(LocatedPair)); // imitate ordinal pairs
+    HEADER(p)->immutable = true;
+    PAIR(p)->car = a;
+    PAIR(p)->cdr = d;
+    p->pos = LOCATED_PAIR(loc)->pos;
+    return (Value) p;
+}
+
+static inline Value located_list1(Value v, Value loc)
+{
+    return located_cons(v, Qnil, loc);
+}
+
+static bool syntax_rule_pattern_matched(Value rule, int64_t arity)
+{
+    int64_t rule_arity = PROCEDURE(rule)->arity;
+    uint64_t rule_arity_min = CLOSURE(rule)->arity_min;
+    if (rule_arity >= 0)
+        return arity == rule_arity;
+    return (uint64_t) arity >= rule_arity_min;
+}
+
+static Value apply_transformer(Value env, Value tr, Value args)
+{
+    int64_t arity = length(args);
+    const Value *trs = TRANSFORMER(tr);
+    for (size_t i = 0, len = scary_length(trs); i < len; i++) {
+        Value rule = trs[i];
+        if (syntax_rule_pattern_matched(rule, arity))
+            return apply(env, rule, args);
+    }
+    return args;
+}
+
+static Value transform(Value env, Value v);
+
+// including improper lists
+static Value transform_list(Value env, Value list)
+{
+    Value ret = DUMMY_PAIR(), last = ret;
+    for (Value p = list; p != Qnil; p = cdr(p)) {
+        if (!sch_value_is_pair(p)) { // Got an improper list
+            Value tr = transform(env, p);
+            EXPECT_ERROR_LOCATED(tr, p);
+            last = PAIR(last)->cdr = tr;
+            break;
+        }
+        Value orig = car(p);
+        Value tr = transform(env, orig);
+        EXPECT_ERROR_LOCATED(tr, p);
+        last = PAIR(last)->cdr = located_list1(tr, p);
+    }
+    return cdr(ret);
+}
+
+static Value transform_apply(Value env, Value l)
+{
+    Value first = car(l), args = cdr(l);
+    Value tr = transform(env, first);
+    EXPECT_ERROR_LOCATED(tr, l);
+    Value ret;
+    if (sch_value_is_procedure(tr))
+        ret = apply(env, tr, args);
+    else if (value_tag_is(tr, TAG_TRANSFORMER))
+        ret = apply_transformer(env, tr, args);
+    else
+        ret = transform_list(env, l);
+    EXPECT_ERROR_LOCATED(ret, l);
+    return ret;
+}
+
+static Value lookup_or_as_is(Value env, Value v)
+{
+    Value p = env_get(env, v);
+    return p == Qundef ? v : p;
+}
+
+// Process macros for an expression like eval
+static Value transform(Value env, Value v)
+{
+    if (sch_value_is_symbol(v))
+        return lookup_or_as_is(env, v);
+    if (!sch_value_is_pair(v))
+        return v;
+    return transform_apply(env, v);
+}
+
+// Process macros for a syntax tree
+static Value transform_ast(Value ast)
+{
+    return transform_list(env_macro, ast);
+}
+
+Value sch_transform_file(FILE *in, const char *filename)
+{
+    Source *src = iparse(in, filename);
+    if (src == NULL)
+        return Qundef;
+    add_source(src);
+    Value ret = transform_ast(src->ast);
+    if (is_error(ret)) {
+        dump_stack_trace(ERROR(ret));
+        return Qundef;
+    }
+    src->ast = ret;
+    return ret;
+}
+
+Value sch_transform(const char *path)
+{
+    FILE *in = fopen(path, "r");
+    if (in == NULL)
+        error("transform: can't open file: %s", path);
+    Value ast = sch_transform_file(in, path);
+    fclose(in);
+    return ast;
+}
+
+Value sch_transform_string(const char *in)
+{
+    FILE *f = mopen(in);
+    Value ast = sch_transform_file(f, "<inline>");
+    fclose(f);
+    return ast;
+}
+
 Value sch_load_file(FILE *in, const char *filename)
 {
     Source *src = iparse(in, filename);
     if (src == NULL)
         return Qundef;
     add_source(src);
+    Value ret = transform_ast(src->ast);
+    if (is_error(ret))
+        goto error;
+    src->ast = ret;
     if (setjmp(jmp_exit) != 0)
         return sch_integer_new(exit_status);
-    Value ret = eval_body(env_toplevel, src->ast);
+    ret = eval_body(env_toplevel, ret);
     if (is_error(ret)) {
+    error:
         dump_stack_trace(ERROR(ret));
         return Qundef;
     }
@@ -1022,7 +1164,10 @@ static Value iload_inner(FILE *in, const char *path)
     if (src == NULL)
         return Qundef;
     add_source(src);
-    return eval_body(env_toplevel, src->ast);
+    Value tr = transform_ast(src->ast);
+    EXPECT_ERROR_WITH_RETVAL(tr, Qundef);
+    src->ast = tr;
+    return eval_body(env_toplevel, tr);
 }
 
 Value sch_eval_string(const char *in)
@@ -1512,8 +1657,312 @@ static Value syn_unquote_splicing(UNUSED Value env, UNUSED Value args)
 }
 
 // 4.3. Macros
+// 4.3.1. Binding constructs for syntactic keywords
+
+static Value transform_body(Value env, Value list)
+{
+    Value last = Qfalse;
+    for (Value p = list; p != Qnil; p = cdr(p)) {
+        Value orig = car(p);
+        Value tr = transform(env, orig);
+        EXPECT_ERROR_LOCATED(tr, p);
+        last = tr;
+    }
+    return last;
+}
+
+static Value transformer_new(Value literals, Value rules);
+
+static Value macro_let_syntax(Value env, Value args)
+{
+    EXPECT_ARITY_MIN_2(args);
+    Value bindings = car(args), body = cdr(args);
+    EXPECT_LIST_HEAD(bindings);
+    EXPECT_LIST_HEAD(body);
+    Value letenv = env_inherit(env);
+    for (Value p = bindings; p != Qnil; p = cdr(p)) {
+        Value b = car(p);
+        EXPECT_TYPE(pair, b);
+        EXPECT_ARITY_2(b);
+        Value ident = car(b);
+        EXPECT_TYPE(symbol, ident);
+        Value spec = cadr(b);
+        EXPECT_ARITY_MIN_N(3, spec);
+        Value sym = car(spec), literals = cadr(spec), rules = cddr(spec);
+        EXPECT(sym == SYM_SYNTAX_RULES, "invalid transformer spec form");
+        Value tr = transformer_new(literals, rules);
+        EXPECT_ERROR_LOCATED(tr, spec);
+        env_put(letenv, ident, tr);
+    }
+    return transform_body(letenv, body);
+}
+
+#if 0
+static Value macro_letrec_syntax(Value env, Value args);
+#endif
+
 // 4.3.2. Pattern language
-//- syntax-rules
+
+#if 0
+static Value expect_syntax_rules_pattern(Value pattern);
+
+static Value expect_syntax_rules_pattern_of_vector(const Value *patterns)
+{
+    for (size_t i = 0, len = scary_length(patterns); i < len; i++)
+        EXPECT_ERROR(expect_syntax_rules_pattern(patterns[i]));
+    return Qfalse;
+}
+
+static Value expect_syntax_rules_pattern_of_list(Value patterns)
+{
+    for (Value p = patterns; p != Qnil; p = cdr(p)) {
+        if (!sch_value_is_pair(p)) {// got the end of an improper list
+            EXPECT_ERROR(expect_syntax_rules_pattern(p));
+            break;
+        }
+        EXPECT_ERROR(expect_syntax_rules_pattern(car(p)));
+    }
+    return Qfalse;
+}
+
+static Value expect_syntax_rules_pattern(Value pattern)
+{
+    switch (sch_value_type_of(pattern)) {
+    case TYPE_BOOL:
+    case TYPE_SYMBOL:
+    case TYPE_STRING:
+    case TYPE_INT:
+    case TYPE_NULL:
+        return Qfalse;
+    case TYPE_PAIR:
+        return expect_syntax_rules_pattern_of_list(pattern);
+    case TYPE_VECTOR:
+        return expect_syntax_rules_pattern_of_vector(VECTOR(pattern));
+    case TYPE_PROC:
+    case TYPE_ENV:
+    case TYPE_PORT:
+    case TYPE_PROMISE:
+    case TYPE_EOF:
+    case TYPE_TRANSFORMER:
+    case TYPE_UNDEF:
+        return runtime_error("malformed pattern in transform spec: %s",
+                             sch_stringify(pattern));
+    }
+    UNREACHABLE();
+}
+
+static Value expect_syntax_rules_template(Value template);
+
+static Value expect_syntax_rules_template_element(Value element)
+{
+    return expect_syntax_rules_template(element); // XXX: ellipsis?
+}
+
+static Value expect_syntax_rules_template_of_vector(const Value *templates)
+{
+    for (size_t i = 0, len = scary_length(templates); i < len; i++)
+        EXPECT_ERROR(expect_syntax_rules_template_element(templates[i]));
+    return Qfalse;
+}
+
+static Value expect_syntax_rules_template_of_list(Value templates)
+{
+    for (Value p = templates; p != Qnil; p = cdr(p)) {
+        if (!sch_value_is_pair(p)) {// got the end of an improper list
+            EXPECT_ERROR(expect_syntax_rules_template(p));
+            break;
+        }
+        EXPECT_ERROR(expect_syntax_rules_template_element(car(p)));
+    }
+    return Qfalse;
+}
+
+static Value expect_syntax_rules_template(Value template)
+{
+    switch (sch_value_type_of(template)) {
+    case TYPE_BOOL:
+    case TYPE_SYMBOL:
+    case TYPE_INT:
+    case TYPE_STRING:
+    case TYPE_NULL:
+        return Qfalse;
+    case TYPE_PAIR:
+        return expect_syntax_rules_template_of_list(template);
+    case TYPE_VECTOR:
+        return expect_syntax_rules_template_of_vector(VECTOR(template));
+    case TYPE_PROC:
+    case TYPE_ENV:
+    case TYPE_PORT:
+    case TYPE_PROMISE:
+    case TYPE_EOF:
+    case TYPE_TRANSFORMER:
+    case TYPE_UNDEF:
+        return runtime_error("malformed template in transform spec: %s",
+                             sch_stringify(template));
+    }
+    UNREACHABLE();
+}
+
+static Value expect_syntax_rules(Value rules)
+{
+    for (Value p = rules, e; p != Qnil; p = cdr(p)) {
+        Value rule = car(p);
+        EXPECT_TYPE(pair, rule);
+        EXPECT_ARITY_2(rule);
+        Value pattern = car(rule), template = cadr(rule);
+        e = expect_syntax_rules_pattern(pattern);
+        EXPECT_ERROR_LOCATED(e, rule);
+        e = expect_syntax_rules_template(template); // XXX
+        EXPECT_ERROR_LOCATED(e, cdr(rule));
+    }
+    return Qfalse;
+}
+#endif
+
+static Value add_unquotes(Value params, Value rest, Value template)
+{
+    Value ret = DUMMY_PAIR(), last = ret;
+    bool rest_seen = false;
+    for (Value p = template, added; p != Qnil;
+         last = PAIR(last)->cdr = list1_const(added), p = cdr(p)) {
+        Value v = car(p);
+        if (!sch_value_is_symbol(v)) {
+            if (sch_value_is_pair(v))
+                added = add_unquotes(params, rest, v);
+            else
+                added = v;
+            continue;
+        }
+        EXPECT_LOC(!(v == SYM_ELLIPSIS && !rest_seen), p,
+                   "invalid use of ellipsis dots");
+        if (v == rest) {
+            Value next = cdr(p);
+            EXPECT(next == Qnil || car(next) == SYM_ELLIPSIS,
+                   "invalid usage of a variable before ellipsis");
+            added = list2_const(SYM_UNQUOTE_SPLICING, v);
+            p = next; // skip "..."
+            rest_seen = true;
+            continue;
+        }
+        rest_seen = false;
+        if (memq(v, params) != Qfalse)
+            added = list2_const(SYM_UNQUOTE, v);
+        else
+            added = v;
+    }
+    return cdr(ret);
+}
+
+static Value template_to_body(Value literals, Value params, Value rest, Value template)
+{
+    EXPECT(literals == Qnil, "literals not implemented");
+    Value expr = template; // immediate
+    if (sch_value_is_symbol(template)) {
+        if (memq(template, params) != Qfalse)
+            expr = list2_const(SYM_UNQUOTE, template);
+        expr = list2_const(SYM_QUASIQUOTE, expr);
+    } else if (sch_value_is_pair(template)) {
+        Value u = add_unquotes(params, rest, template);
+        EXPECT_ERROR(u);
+        expr = list2_const(SYM_QUASIQUOTE, u);
+    }
+    return list1_const(expr);
+}
+
+static Value convert_ellipsis_ended_params(Value params, uint64_t len/*> 1*/, Value *rest)
+{
+    Value ret = DUMMY_PAIR(), last = ret, p = params, prev = Qnil;
+    for (size_t i = 0; i < len; i++, prev = p, p = cdr(p)) {
+        last = PAIR(last)->cdr = list1(car(p));
+    }
+    PAIR(last)->cdr = SYM_ELLIPSIS;
+    *rest = car(prev); // Make an improper list
+    return cdr(ret);
+}
+
+// may return a symbol or an improper list
+static Value syntax_rule_convert_params(Value params, uint64_t *len, Value *rest)
+{
+    uint64_t n = 0;
+    if (params == Qnil) {
+        *len = n;
+        return Qnil;
+    }
+    Value vars = Qnil, p = params, prev = Qfalse, var = Qfalse;
+    for (Value next; p != Qnil; prev = p, p = next) {
+        if (!sch_value_is_pair(p)) {
+            EXPECT_TYPE(symbol, p);
+            EXPECT_UNIQUE_VARNAME(vars, p);
+            *rest = p;
+            *len = n;
+            return params;
+        }
+        if ((next = cdr(p)) == Qnil)
+            break;
+        var = car(p);
+        EXPECT_TYPE(symbol, var);
+        EXPECT_UNIQUE_VARNAME(vars, var);
+        n++;
+    }
+    var = car(p);
+    if (var == SYM_ELLIPSIS) {
+        *len = --n;
+        if (n == 0)
+            return (*rest = car(prev));
+        if (n == 1) {
+            *rest = car(prev);
+            return cons(car(params), car(prev));
+        }
+        return convert_ellipsis_ended_params(params, n, rest);
+    }
+    EXPECT_TYPE(symbol, var);
+    EXPECT_UNIQUE_VARNAME(vars, var);
+    *len = ++n;
+    return params;
+}
+
+// XXX: CFunc (check literals in parameter) with Closure (quasi-quoted and unquoted list)
+static Value syntax_rule_new(Value literals, Value params, Value template)
+{
+    EXPECT(literals == Qnil, "literal list in macros not supported yet");
+    uint64_t len = 0;
+    Value rest = Qnil;
+    Value params2 = syntax_rule_convert_params(params, &len, &rest);
+    EXPECT_ERROR_LOCATED(params2, params);
+    Value body = template_to_body(literals, params, rest, template);
+    EXPECT_ERROR(body);
+    return closure_new(env_macro_inner, params2, len, rest, body);
+}
+
+static Value expect_literal_symbol_list(Value v)
+{
+    EXPECT_LIST_HEAD(v);
+    for (Value p = v, sym; p != Qnil; p = cdr(p)) {
+        sym = car(p);
+        EXPECT_TYPE(symbol, sym);
+        EXPECT(sym != SYM_ELLIPSIS, "cannot use '...' in lirerals");
+    }
+    return Qfalse;
+}
+static Value transformer_new(Value literals, Value rules)
+{
+    Value e = expect_literal_symbol_list(literals);
+    EXPECT_ERROR(e);
+    Transformer *tr = obj_new(TAG_TRANSFORMER, sizeof(Transformer));
+    tr->syntax_rules = scary_new(sizeof(Vector));
+    for (Value p = rules; p != Qnil; p = cdr(p)) {
+        Value rule = car(p);
+        EXPECT_ARITY_2(rule);
+        Value pattern = car(rule), template = cadr(rule); // XXX: validate contents?
+        EXPECT_LOC(sch_value_is_pair(pattern), rule,
+                   "trivial pattern in syntax-rules not supported yet");
+        // Just ignore car(pattern)
+        Value ruleval = syntax_rule_new(literals, cdr(pattern), template);
+        EXPECT_ERROR(ruleval);
+        scary_push(&tr->syntax_rules, ruleval);
+    }
+    return (Value) tr;
+}
 
 // 5. Program structure
 // 5.2. Definitions
@@ -1568,6 +2017,7 @@ static Value syn_define(Value env, Value args)
     case TYPE_PROC:
     case TYPE_PROMISE:
     case TYPE_ENV:
+    case TYPE_TRANSFORMER:
         return runtime_error("the first argument expected symbol or pair but got %s",
                              value_type_to_string(t));
     }
@@ -1575,7 +2025,14 @@ static Value syn_define(Value env, Value args)
 }
 
 // 5.3. Syntax definitions
-//- define-syntax
+#if 0
+// Note: Do not mistake this for "define_syntax(...)" which used for
+// syntax definitions by internal C functions
+static Value syn_define_syntax(Value env, Value keyword, Value spec)
+{
+    return Qfalse;
+}
+#endif
 
 // 6. Standard procedures
 // 6.1. Equivalence predicates
@@ -1623,6 +2080,7 @@ static bool equal(Value x, Value y)
     case TYPE_PROC:
     case TYPE_PROMISE:
     case TYPE_ENV:
+    case TYPE_TRANSFORMER:
         return false;
     }
     UNREACHABLE();
@@ -2867,6 +3325,7 @@ static void print_object(FILE *f, Value v, Value record, ValuePrinter printer)
     case TYPE_PROC:
     case TYPE_PROMISE:
     case TYPE_ENV:
+    case TYPE_TRANSFORMER:
         printer(f, v);
         break;
     }
@@ -2907,6 +3366,9 @@ static void fdisplay_single(FILE *f, Value v)
         break;
     case TYPE_ENV:
         fprintf(f, "<environment: %s>", ENV(v)->name);
+        break;
+    case TYPE_TRANSFORMER:
+        fprintf(f, "<transformer>");
         break;
     case TYPE_PAIR:
     case TYPE_VECTOR:
@@ -3087,11 +3549,44 @@ static void inspect_string(FILE *f, const char *s)
     fprintf(f, "%s\"", t);
 }
 
+#ifdef DEBUG
+static void inspect(FILE *f, Value v);
+
+static void inspect_syntax_rule(FILE *f, Value v)
+{
+    EXPECT_OR_RETURN(VALUE_TAG(v) == TAG_CLOSURE, (void) 0);
+    Closure *cl = CLOSURE(v);
+    fprintf(f, " arity: %ld, arity_min: %lu, params: ", PROCEDURE(v)->arity, cl->arity_min);
+    inspect(f, cl->params);
+    fprintf(f, ", body: ");
+    inspect(f, cl->body);
+}
+
+static void inspect_transformer(FILE *f, Value tr)
+{
+    fprintf(f, "<transformer:");
+    Value *v = TRANSFORMER(tr);
+    for (size_t i = 0, len = scary_length(v); i < len; i++) {
+        if (i > 0)
+            fprintf(f, ",");
+        fprintf(f, " [%zu]: {", i);
+        inspect_syntax_rule(f, v[i]);
+        fprintf(f, " }");
+    }
+    fprintf(f, ">");
+}
+#else
+#define inspect_transformer fdisplay_single
+#endif
+
 static void inspect_single(FILE *f, Value v)
 {
     switch (sch_value_type_of(v)) {
     case TYPE_STRING:
         inspect_string(f, STRING(v));
+        break;
+    case TYPE_TRANSFORMER:
+        inspect_transformer(f, v);
         break;
     case TYPE_SYMBOL:
     case TYPE_UNDEF:
@@ -3166,7 +3661,16 @@ void sch_init(const void *sp)
     DEF_SYMBOL(UNQUOTE, "unquote");
     DEF_SYMBOL(UNQUOTE_SPLICING, "unquote-splicing");
     DEF_SYMBOL(RARROW, "=>");
+    DEF_SYMBOL(SYNTAX_RULES, "syntax-rules");
+    DEF_SYMBOL(ELLIPSIS, "...");
     source_data = scary_new(sizeof(Source *));
+
+    env_macro = env_new("macro");
+    gc_add_root(&env_macro);
+    Value em = env_macro;
+    env_macro_inner = env_new("macro inner");
+    gc_add_root(&env_macro_inner);
+    Value emi = env_macro_inner;
 
     env_toplevel = env_new("default");
     gc_add_root(&env_toplevel);
@@ -3204,15 +3708,23 @@ void sch_init(const void *sp)
     define_syntax(e, "unquote", syn_unquote, 1);
     define_syntax(e, "unquote-splicing", syn_unquote_splicing, 1);
     // 4.3. Macros
+    // 4.3.1. Binding constructs for syntactic keywords
     // 4.3.2. Pattern language
-    //- syntax-rules
+    define_syntax(em, "let-syntax", macro_let_syntax, -1);
+    //-define_syntax(em, "letrec-syntax", macro_letrec_syntax, -1);
+    //-define_syntax(em, "syntax-rules", macro_syntax_rules, -1);
+    // For closures as syntax-rule
+    define_syntax(emi, "quasiquote", syn_quasiquote, 1);
+    define_syntax(emi, "unquote", syn_unquote, 1);
+    define_syntax(emi, "unquote-splicing", syn_unquote_splicing, 1);
 
     // 5. Program structure
 
     // 5.2. Definitions
     define_syntax(e, "define", syn_define, -1);
     // 5.3. Syntax definitions
-    //- define-syntax
+    //-define_syntax(em, "define-syntax", syn_define_syntax, 2);
+
     env_null = env_dup("null", e);
     gc_add_root(&env_null);
 

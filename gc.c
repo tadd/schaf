@@ -220,6 +220,12 @@ static bool is_living(MSHeap *heap, MSHeader *h, bool do_mark)
     return marked;
 }
 
+static void mark_scary(MSHeap *heap, Value *v)
+{
+    for (size_t i = 0, len = scary_length(v); i < len; i++)
+        mark_val(heap, v[i]);
+}
+
 static void mark_val(MSHeap *heap, Value v)
 {
     if (!is_heap_value(heap, v))
@@ -235,9 +241,7 @@ static void mark_val(MSHeap *heap, Value v)
         break;
     }
     case TAG_VECTOR: {
-        Value *p = VECTOR(v);
-        for (size_t i = 0, len = scary_length(p); i < len; i++)
-            mark_val(heap, p[i]);
+        mark_scary(heap, VECTOR(v));
         break;
     }
     case TAG_CLOSURE: {
@@ -271,6 +275,9 @@ static void mark_val(MSHeap *heap, Value v)
         mark_val(heap, p->parent);
         break;
     }
+    case TAG_TRANSFORMER:
+        mark_scary(heap, TRANSFORMER(v));
+        break;
     case TAG_STRING:
     case TAG_PORT:
     case TAG_CFUNC:
@@ -354,6 +361,7 @@ static void free_val(Value v)
     case TAG_CLOSURE:
     case TAG_CFUNC_CLOSURE:
     case TAG_PROMISE:
+    case TAG_TRANSFORMER:
         break;
     }
 }

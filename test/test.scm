@@ -470,7 +470,55 @@
 
 ;; 4.3. Macros
 ;; 4.3.2. Pattern language
-;; (describe "syntax-rules" ...)
+(describe "let-syntax and syntax-rules" (lambda ()
+  (let-syntax ((f (syntax-rules ()
+                    ((f) 0)
+                    ((f x) x)
+                    ((f x y) y))))
+    (expect-t (not (not f)))
+    (expect = (f) 0)
+    (expect = (f 1) 1)
+    (expect = (f 1 2) 2))
+  (let-syntax ((len (syntax-rules ()
+                    ((_) 0)
+                    ((_ x ...) (length (list x ...))))))
+    (expect = (len) 0)
+    (expect = (len 1) 1)
+    (expect = (len 1 2) 2)
+    (expect = (len 1 2 3) 3)
+    (expect = (len 1 2 3 4 5 6 7 8 9 10) 10))))
+
+(describe "my-if with let-syntax" (lambda ()
+  (let-syntax ((my-if (syntax-rules ()
+                        ((_ cond then else)
+                         (if cond then else)))))
+    (let* ((var 0)
+           (inc! (lambda () (set! var (+ 1 var))))
+           (f (lambda () (inc!) 1))
+           (g (lambda () (inc!) 2)))
+      (expect = var 0)
+      (expect = (if #t (f) (g)) 1)
+      (expect = var 1)
+      (expect = (if #f (f) (g)) 2)
+      (expect = var 2)
+      (expect = (if #t (f) (g)) 1)
+      (expect = var 3)))))
+
+;; (xdescribe "hygienic let-syntax" (lambda ()
+;;   (let-syntax ((when (syntax-rules ()
+;;                        ((when test stmt1 stmt2 ...)
+;;                         (if test
+;;                             (begin stmt1
+;;                                    stmt2 ...))))))
+;;     (let ((if #t))
+;;       (when if (set! if 'now))))))
+      ;; (expect eq? if 'now)))))
+
+;; (describe "hygienic let-syntax 2" (lambda ()
+;;   (let ((x 'outer))
+;;     (let-syntax ((m (syntax-rules () ((m) x))))
+;;       (let ((x 'inner))
+;;         (expect eq? (m) 'inner))))))
 
 ;; 5. Program structure
 ;; 5.2. Definitions
