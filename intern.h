@@ -35,6 +35,7 @@ typedef enum {
     TYPE_ENV,
     TYPE_PORT,
     TYPE_PROMISE,
+    TYPE_TRANSFORMER,
     TYPE_EOF,
 } Type;
 
@@ -50,6 +51,8 @@ typedef enum {
     TAG_ENV,
     TAG_PORT,
     TAG_PROMISE,
+    TAG_SYNTAX_RULE,
+    TAG_TRANSFORMER,
     TAG_EOF,
     // internal use only
     TAG_ERROR,
@@ -147,6 +150,16 @@ typedef struct {
 } Promise;
 
 typedef struct {
+    Value closure;
+    int64_t arity_min;
+} SyntaxRule;
+
+typedef struct {
+    Header header;
+    Value syntax_rules;
+} Transformer;
+
+typedef struct {
     const char *func_name;
     Value loc; // maybe an Integer for resolution in caller
 } StackFrame;
@@ -172,6 +185,8 @@ typedef struct {
 #define VECTOR(v) (((Vector *) v)->body)
 #define ENV(v) ((Env *) v)
 #define PORT(v) ((Port *) v)
+#define SYNTAX_RULE(v) ((SyntaxRule *) v)
+#define TRANSFORMER(v) (((Transformer *) v)->syntax_rules)
 #define PROMISE(v) ((Promise *) v)
 #define ERROR(v) (((Error *) v)->call_stack)
 
