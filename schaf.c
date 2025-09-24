@@ -920,7 +920,7 @@ Value sch_load(const char *path)
 {
     FILE *in = open_loadable(path);
     if (UNLIKELY(in == NULL))
-        error("load: can't open file: %s", path);
+        error("can't open file: %s", path);
     Value retval = iload(in, path);
     fclose(in);
     return retval;
@@ -931,7 +931,7 @@ static Value load_inner(const char *path)
     const char *basedir_saved = load_basedir;
     FILE *in = open_loadable(path);
     if (in == NULL)
-        return runtime_error("load: can't open file: %s", path);
+        return runtime_error("can't open file: %s", path);
     Value retval = iload_inner(in, path);
     fclose(in);
     load_basedir = basedir_saved;
