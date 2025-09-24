@@ -271,6 +271,12 @@ static void mark_val(MSHeap *heap, Value v)
         mark_val(heap, p->val);
         break;
     }
+    case TAG_SYNTAX_RULE:
+        mark_val(heap, SYNTAX_RULE(v)->closure);
+        break;
+    case TAG_TRANSFORMER:
+        mark_val(heap, TRANSFORMER(v));
+        break;
     case TAG_STRING:
     case TAG_CFUNC:
     case TAG_SYNTAX:
@@ -356,6 +362,8 @@ static void free_val(Value v)
     case TAG_PAIR:
     case TAG_PROMISE:
     case TAG_EOF:
+    case TAG_SYNTAX_RULE:
+    case TAG_TRANSFORMER:
         break;
     }
 }

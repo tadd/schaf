@@ -463,7 +463,11 @@
 
 ;; 4.3. Macros
 ;; 4.3.2. Pattern language
-;; (describe "syntax-rules" ...)
+(describe "syntax-rules" (lambda ()
+  (syntax-rules () ((a) 3)
+                   ((a x) x)
+                   ((a x y) y))
+  (syntax-rules () ((a x ...) (list x ...)))))
 
 ;; 5. Program structure
 ;; 5.2. Definitions
