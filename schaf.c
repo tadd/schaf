@@ -55,8 +55,8 @@ static const int64_t CFUNCARG_MAX = 3;
 // Frame: Table of 'symbol => <value>
 static Value env_toplevel, env_default, env_r5rs, env_null;
 static char **symbol_names; // ("name0" "name1" ...)
-Value SYM_ELSE, SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
-    SYM_RARROW;
+Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
+static Value SYM_ELSE, SYM_RARROW;
 static const char *load_basedir;
 static Source **source_data;
 static jmp_buf jmp_exit;
