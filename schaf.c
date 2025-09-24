@@ -875,12 +875,22 @@ static void dump_stack_trace(StackFrame **call_stack)
     dump_frame(call_stack[len-1], NULL);
 }
 
+// process macros
+static bool expand(Source *src)
+{
+    Value ast = src->ast;
+    (void) ast;
+    return true;
+}
+
 static Value iload(FILE *in, const char *filename)
 {
     Source *src = iparse(in, filename);
     if (src == NULL)
         return Qundef;
     scary_push((void ***) &source_data, (void *) src);
+    if (!expand(src))
+        return Qundef;
     if (setjmp(jmp_exit) != 0)
         return sch_integer_new(exit_status);
     Value ret = eval_body(env_toplevel, src->ast);
@@ -897,6 +907,8 @@ static Value iload_inner(FILE *in, const char *path)
     if (src == NULL)
         return Qundef;
     scary_push((void ***) &source_data, (void *) src);
+    if (!expand(src))
+        return Qundef;
     return eval_body(env_toplevel, src->ast);
 }
 
