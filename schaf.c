@@ -52,10 +52,10 @@ static const int64_t CFUNCARG_MAX = 3;
 
 // Environment: list of Frames
 // Frame: Table of 'symbol => <value>
-static Value env_toplevel, env_default, env_r5rs, env_null;
+static Value env_toplevel, env_default, env_r5rs, env_null, env_syntax;
 static char **symbol_names; // ("name0" "name1" ...)
 Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
-static Value SYM_ELSE, SYM_RARROW;
+static Value SYM_ELSE, SYM_RARROW, SYM_SYNTAX_RULES;
 static const char *load_basedir;
 static Source **source_data;
 static jmp_buf jmp_exit;
@@ -950,12 +950,82 @@ static void add_source(const Source *newsrc)
     gc_add_root(&source_data[len-1]->ast);
 }
 
+static Value transform_by_rule(Value env, Value name,
+                               Value literals, Value rule, Value src)
+{
+    (void) env;
+    (void) name;
+    (void) literals;
+    (void) rule;
+    return src; // FIXME!
+}
+
+static Value transform_by_spec(Value env, Value name, Value spec, Value src)
+{
+    Value literals = car(spec), rules = cdr(spec), tr = src;
+    for (Value p = rules; p != Qnil; p = cdr(p)) {
+        Value rule = car(p);
+        tr = transform_by_rule(env, name, literals, rule, tr);
+    }
+    return src;
+}
+
+// process macros
+static Value transform(Value env, Value l)
+{
+    if (!sch_value_is_pair(l))
+        return l;
+    Value name = car(l), args = cdr(l);
+    if (!sch_value_is_symbol(name) || !sch_value_is_pair(args))
+        return l;
+    Value val = env_get(env, name);
+    switch (sch_value_type_of(val)) {
+    case TYPE_PROC:
+        break;
+    case TYPE_PAIR:
+        return transform_by_spec(env, name, val, l);
+    case TYPE_BOOL:
+    case TYPE_INT:
+    case TYPE_SYMBOL:
+    case TYPE_NULL:
+    case TYPE_UNDEF:
+    case TYPE_STRING:
+    case TYPE_VECTOR:
+    case TYPE_ENV:
+    case TYPE_PORT:
+    case TYPE_PROMISE:
+    case TYPE_EOF:
+        return l;
+    }
+    Value ret = apply(env, val, args);
+    if (UNLIKELY(is_error(ret))) {
+        const char *fname = get_func_name(val);
+        return push_stack_frame(ret, fname, l);
+    }
+    return ret;
+}
+
+// process macros
+static bool transform_source(Source *src)
+{
+    for (Value p = src->ast; p != Qnil; p = cdr(p)) {
+        Value orig = car(p);
+        Value tr = transform(env_syntax, orig);
+        CHECK_ERROR_LOCATED(tr, src->ast);
+        if (tr != orig)
+            PAIR(p)->car = tr;
+    }
+    return true;
+}
+
 static Value iload(FILE *in, const char *filename)
 {
     Source *src = iparse(in, filename);
     if (src == NULL)
         return Qundef;
     add_source(src);
+    if (!transform_source(src))
+        return Qundef;
     if (setjmp(jmp_exit) != 0)
         return sch_integer_new(exit_status);
     Value ret = eval_body(env_toplevel, src->ast);
@@ -972,6 +1042,8 @@ static Value iload_inner(FILE *in, const char *path)
     if (src == NULL)
         return Qundef;
     add_source(src);
+    if (!transform_source(src))
+        return Qundef;
     return eval_body(env_toplevel, src->ast);
 }
 
@@ -1425,8 +1497,118 @@ static Value syn_unquote_splicing(UNUSED Value env, UNUSED Value args)
 }
 
 // 4.3. Macros
+// 4.3.1. Binding constructs for syntactic keywords
+static Value expect_valid_pattern_in_list(Value patterns)
+{
+    for (Value p = patterns; p != Qnil; p = cdr(p))
+        EXPECT(type_or, TYPE_SYMBOL, TYPE_BOOL, car(p));
+    return Qfalse;
+}
+
+static Value expect_valid_pattern_in_vector(UNUSED const Value *patterns)
+{
+    return runtime_error("malformed pattern in transform spec: vectors not supported yet");
+}
+
+static Value expect_valid_pattern(Value pattern)
+{
+    switch (sch_value_type_of(pattern)) {
+    case TYPE_PAIR:
+        return expect_valid_pattern_in_list(pattern);
+    case TYPE_VECTOR:
+        return expect_valid_pattern_in_vector(VECTOR(pattern));
+    case TYPE_BOOL:
+    case TYPE_SYMBOL:
+        return Qfalse;
+    case TYPE_INT:
+    case TYPE_STRING:
+    case TYPE_NULL:
+    case TYPE_PROC:
+    case TYPE_ENV:
+    case TYPE_PORT:
+    case TYPE_PROMISE:
+    case TYPE_EOF:
+    case TYPE_UNDEF:
+        return runtime_error("malformed pattern in transform spec: %s",
+                             sch_stringify(pattern));
+    }
+    UNREACHABLE();
+}
+
+static Value expect_valid_template(Value template)
+{
+    EXPECT(valid_pattern, template); // XXX
+    return Qfalse;
+}
+
+static Value expect_list_type(Type t, Value v)
+{
+    EXPECT(list_head, v);
+    for (Value p = v; p != Qnil; p = cdr(p))
+        EXPECT(type, t, car(p));
+    return Qfalse;
+}
+
+static Value syn_syntax_rules(Value env, Value args);
+
+static Value syn_let_syntax(Value env, Value args)
+{
+    EXPECT(arity_min_2, args);
+    Value bindings = car(args), body = cdr(args);
+    EXPECT(list_head, bindings);
+    EXPECT(list_head, body);
+    Value letenv = env_inherit(env);
+    for (Value p = bindings; p != Qnil; p = cdr(p)) {
+        Value b = car(p);
+        EXPECT(type, TYPE_PAIR, b);
+        if (length(b) != 2)
+            return runtime_error("malformed binding: %s", sch_stringify(b));
+        Value ident = car(b);
+        EXPECT(type, TYPE_SYMBOL, ident);
+        Value trspec = syn_syntax_rules(env, cadr(b));
+        CHECK_ERROR(trspec);
+        env_put(letenv, ident, trspec);
+    }
+    return transform(letenv, body);
+}
+
+// static Value syn_letrec_syntax(Value env, Value args);
+
 // 4.3.2. Pattern language
-//- syntax-rules
+static Value expect_valid_syntax_rules(Value rules)
+{
+    for (Value p = rules; p != Qnil; p = cdr(p)) {
+        Value rule = car(p);
+        if (length(rule) != 2)
+            return runtime_error("malformed syntax_rule: %s", sch_stringify(rule));
+        Value pattern = car(rule), template = cadr(rule);
+        EXPECT(valid_pattern, pattern);
+        EXPECT(valid_template, template);
+    }
+    return Qfalse;
+}
+
+static Value env_from_literals(Value literals);
+static Value evaluatable_list(Value params, Value l);
+
+static Value transformer_new(Value literals, Value params, Value body)
+{
+    return Qnil; // FIXME
+    Value e = env_from_literals(literals);
+    Value l = evaluatable_list(params, body);
+}
+
+static Value syn_syntax_rules(UNUSED Value env, Value args)
+{
+    // EXPECT(type, TYPE_PAIR, args);
+    Value sym = car(args);
+    if (length(args) < 2 || sym != SYM_SYNTAX_RULES)
+        return runtime_error("malformed transform spec: %s", sch_stringify(args));
+    Value literals = cadr(args), rules = cddr(args);
+    EXPECT(list_type, TYPE_SYMBOL, literals);
+    EXPECT(valid_syntax_rules, rules);
+    return args;
+}
 
 // 5. Program structure
 // 5.2. Definitions
@@ -1481,7 +1663,12 @@ static Value syn_define(Value env, Value args)
 }
 
 // 5.3. Syntax definitions
-//- define-syntax
+// Note: Do not mistake this for "define_syntax(...)" which used for
+// syntax definitions by internal C functions
+static Value syn_define_syntax(Value env, Value keyword, Value spec)
+{
+    return Qfalse;
+}
 
 // 6. Standard procedures
 // 6.1. Equivalence predicates
@@ -3070,7 +3257,12 @@ void sch_init(const void *sp)
     DEF_SYMBOL(UNQUOTE, "unquote");
     DEF_SYMBOL(UNQUOTE_SPLICING, "unquote-splicing");
     DEF_SYMBOL(RARROW, "=>");
+    DEF_SYMBOL(SYNTAX_RULES, "syntax-rules");
     source_data = scary_new(sizeof(Source *));
+
+    env_syntax = env_new("syntax"); // for macros
+    gc_add_root(&env_syntax);
+    Value esyn = env_syntax;
 
     env_toplevel = env_new("default");
     gc_add_root(&env_toplevel);
@@ -3108,15 +3300,19 @@ void sch_init(const void *sp)
     define_syntax(e, "unquote", syn_unquote, 1);
     define_syntax(e, "unquote-splicing", syn_unquote_splicing, 1);
     // 4.3. Macros
+    // 4.3.1. Binding constructs for syntactic keywords
+    define_syntax(esyn, "let-syntax", syn_let_syntax, -1);
+    //-define_syntax(esyn, "letrec-syntax", syn_letrec_syntax, -1);
     // 4.3.2. Pattern language
-    //- syntax-rules
+    define_syntax(esyn, "syntax-rules", syn_syntax_rules, -1);
 
     // 5. Program structure
 
     // 5.2. Definitions
     define_syntax(e, "define", syn_define, -1);
     // 5.3. Syntax definitions
-    //- define-syntax
+    define_syntax(esyn, "define-syntax", syn_define_syntax, 2);
+
     env_null = env_dup("null", e);
     gc_add_root(&env_null);
 
