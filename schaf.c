@@ -611,11 +611,10 @@ static Value expect_arity_3(Value args)
 [[gnu::nonnull(1)]]
 static Value env_new(const char *name)
 {
-    size_t len = strlen(name);
-    Env *e = obj_new(sizeof(Env) + len + 1, TAG_ENV);
+    Env *e = obj_new(sizeof(Env), TAG_ENV);
     e->table = table_new();
     e->parent = Qfalse;
-    strcpy(e->name, name);
+    e->name = name;
     return (Value) e;
 }
 
@@ -623,12 +622,10 @@ static Value env_dup(const char *name, const Value orig)
 {
     if (UNLIKELY(ENV(orig)->parent != Qfalse))
         bug("duplication of chained environment not permitted");
-    const char *n = name != NULL ? name : ENV(orig)->name;
-    size_t len = strlen(n);
-    Env *e = obj_new(sizeof(Env) + len + 1, TAG_ENV);
+    Env *e = obj_new(sizeof(Env), TAG_ENV);
     e->table = table_dup(ENV(orig)->table);
     e->parent = Qfalse;
-    strcpy(e->name, n);
+    e->name = name != NULL ? name : ENV(orig)->name;
     return (Value) e;
 }
 
