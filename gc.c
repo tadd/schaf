@@ -52,9 +52,7 @@ enum {
 #define GC_HEADER_FROM_VAL(v) GC_HEADER((uint8_t *)(v) - GC_HEADER_OFFSET)
 
 static void heap_print_stat(const char *header);
-static size_t heap_size(void);
 [[gnu::noreturn]] static void error_out_of_memory(void);
-static inline size_t align(size_t size);
 
 // Static data
 static void *gc_data; // singleton; maybe a heap or some context
@@ -150,7 +148,8 @@ static bool is_valid_pointer(Value v)
 static bool is_valid_header(Value v)
 {
     UNPOISON(&VALUE_TAG(v), sizeof(ValueTag));              // Suspicious but
-    UNPOISON(&GC_HEADER_FROM_VAL(v)->size, sizeof(size_t)); // need to be read
+    UNPOISON(GC_HEADER_FROM_VAL(v), sizeof(GCHeader *));    // need to
+    UNPOISON(&GC_HEADER_FROM_VAL(v)->size, sizeof(size_t)); // be read
     if (!is_valid_tag(VALUE_TAG(v)))
         return false;
     size_t size = GC_HEADER_FROM_VAL(v)->size;
@@ -240,10 +239,9 @@ static void mark_val(Value v)
     }
 }
 
-static void *allocate_from_chunk(GCHeader *prev, GCHeader *curr, size_t size)
+static void *allocate_from_chunk(MSHeap *heap, GCHeader *prev, GCHeader *curr, size_t size)
 {
     size_t hsize = HSIZE(size);
-    MSHeap *heap = gc_data;
     GCHeader *next = curr->next;
     if (curr->size > hsize) {
         GCHeader *rest = (GCHeader *)((uint8_t *) curr + hsize);
@@ -263,9 +261,8 @@ static void *allocate_from_chunk(GCHeader *prev, GCHeader *curr, size_t size)
     return p;
 }
 
-static void add_to_free_list(GCHeader *h)
+static void add_to_free_list(MSHeap *heap, GCHeader *h)
 {
-    MSHeap *heap = gc_data;
     h->next = heap->free_list; // prepend
     heap->free_list = h;
 }
@@ -325,23 +322,20 @@ static void free_val(Value v)
 #undef scary_free
 #endif
 
-static bool adjoining_p(const GCHeader *curr)
+static bool adjoining_p(GCHeader *free_list, const GCHeader *curr)
 {
-    MSHeap *heap = gc_data;
-    GCHeader *free_list = heap->free_list;
     if (free_list == NULL)
         return false;
     size_t hsize = HSIZE(free_list->size);
     return (uint8_t *) free_list + hsize == (void *) curr;
 }
 
-static void free_chunk(GCHeader *curr)
+static void free_chunk(MSHeap *heap, GCHeader *curr)
 {
-    MSHeap *heap = gc_data;
     GCHeader *free_list = heap->free_list;
     Value val = (Value) &curr->next;
     free_val(val);
-    if (adjoining_p(curr)) {
+    if (adjoining_p(free_list, curr)) {
         free_list->size += HSIZE(curr->size);
 #ifdef DEBUG
         memset(&curr->next, 0, curr->size);
@@ -352,10 +346,10 @@ static void free_chunk(GCHeader *curr)
         return;
     }
     curr->used = false;
-    add_to_free_list(curr);
+    add_to_free_list(heap, curr);
 }
 
-static void sweep_slot(MSHeapSlot *slot)
+static void sweep_slot(MSHeap *heap, MSHeapSlot *slot)
 {
     uint8_t *p = slot->body, *endp = p + slot->size;
     size_t offset;
@@ -367,20 +361,18 @@ static void sweep_slot(MSHeapSlot *slot)
         if (h->living)
             h->living = false;
         else
-            free_chunk(h);
+            free_chunk(heap, h);
     }
 }
 
-static void sweep(void)
+static void sweep(MSHeap *heap)
 {
-    MSHeap *heap = gc_data;
     for (size_t i = 0; i < heap->size; i++)
-        sweep_slot(heap->slot[i]);
+        sweep_slot(heap, heap->slot[i]);
 }
 
-static void ms_add_slot(void)
+static void ms_add_slot(MSHeap *heap)
 {
-    MSHeap *heap = gc_data;
     MSHeapSlot *last = heap->slot[heap->size - 1];
     size_t new_size = last->size * HEAP_RATIO;
     last = heap->slot[heap->size++] = ms_heap_slot_new(new_size);
@@ -389,25 +381,23 @@ static void ms_add_slot(void)
         heap->low = beg;
     else if (heap->high < end)
         heap->high = end;
-    add_to_free_list(GC_HEADER(beg));
+    add_to_free_list(heap, GC_HEADER(beg));
 }
 
-static Header *ms_allocate(size_t size)
+static Header *ms_allocate(MSHeap *heap, size_t size)
 {
-    MSHeap *heap = gc_data;
     GCHeader *free_list = heap->free_list;
     for (GCHeader *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = curr->next) {
         if (curr->size >= size) // First-fit
-            return allocate_from_chunk(prev, curr, size);
+            return allocate_from_chunk(heap, prev, curr, size);
     }
     return NULL;
 }
 
-static void mark_roots(void)
+static void mark_roots(Value **roots)
 {
-    MSHeap *heap = gc_data;
-    for (size_t i = 0, len = scary_length(heap->roots); i < len; i++)
-        mark_val(*heap->roots[i]);
+    for (size_t i = 0, len = scary_length(roots); i < len; i++)
+        mark_val(*roots[i]);
 }
 
 [[gnu::noinline]]
@@ -417,24 +407,24 @@ static void mark_stack(void)
     mark_array(sp, stack_base - sp);
 }
 
-static void mark(void)
+static void mark(MSHeap *heap)
 {
     mark_stack();
-    mark_roots();
+    mark_roots(heap->roots);
     jmp_buf jmp;
     setjmp(jmp);
     mark_jmpbuf(&jmp);
 }
 
-static void ms_gc(void)
+static void ms_gc(MSHeap *heap)
 {
     if (UNLIKELY(in_gc))
         bug("nested GC detected");
     in_gc = true;
     if (print_stat)
         heap_print_stat("GC begin");
-    mark();
-    sweep();
+    mark(heap);
+    sweep(heap);
     if (print_stat)
         heap_print_stat("GC end");
     in_gc = false;
@@ -442,17 +432,18 @@ static void ms_gc(void)
 
 static void *ms_malloc(size_t size)
 {
+    MSHeap *heap = gc_data;
     if (stress)
-        ms_gc();
+        ms_gc(heap);
     size = align(size);
-    Header *p = ms_allocate(size);
+    Header *p = ms_allocate(heap, size);
     if (!stress && p == NULL) {
-        ms_gc();
-        p = ms_allocate(size);
+        ms_gc(heap);
+        p = ms_allocate(heap, size);
     }
     if (p == NULL) {
-        ms_add_slot();
-        p = ms_allocate(size);
+        ms_add_slot(heap);
+        p = ms_allocate(heap, size);
     }
     if (UNLIKELY(p == NULL))
         error_out_of_memory();
@@ -488,7 +479,7 @@ static void ms_stat(HeapStat *stat)
 static void ms_fin(void)
 {
     MSHeap *heap = gc_data;
-    sweep(); // nothing marked, all values are freed
+    sweep(heap); // nothing marked, all values are freed
     for (size_t i = 0; i < heap->size; i++) {
         free(heap->slot[i]->body);
         free(heap->slot[i]);
@@ -544,14 +535,13 @@ static void eps_fin(void)
     free(heap);
 }
 
-static inline EpsHeapSlot *last_slot(EpsHeap *heap)
+static inline EpsHeapSlot *last_slot(const EpsHeap *heap)
 {
     return heap->slot[heap->size - 1];
 }
 
-static void *eps_allocate(size_t size)
+static void *eps_allocate(EpsHeap *heap, size_t size)
 {
-    EpsHeap *heap = gc_data;
     EpsHeapSlot *last = last_slot(heap); // use the last slot only
     if (last->used + size > last->size)
         return NULL;
@@ -560,19 +550,47 @@ static void *eps_allocate(size_t size)
     return ret;
 }
 
-static bool eps_has_minimum_free_space(void)
+static bool eps_has_minimum_free_space(const EpsHeap *heap)
 {
-    EpsHeap *heap = gc_data;
     static const size_t minreq = sizeof(Continuation); // maybe the largest
     EpsHeapSlot *last = last_slot(heap);
     return (last->size - last->used) >= minreq;
 }
 
-static void eps_increase_heap(void)
+static void eps_increase_heap(EpsHeap *heap)
 {
-    EpsHeap *heap = gc_data;
     EpsHeapSlot *last = last_slot(heap);
     heap->slot[heap->size++] = eps_heap_slot_new(last->size * HEAP_RATIO);
+}
+
+static void eps_gc(EpsHeap *heap)
+{
+    if (UNLIKELY(in_gc))
+        bug("nested GC detected");
+    in_gc = true;
+    if (print_stat)
+        heap_print_stat("GC begin");
+    if (!eps_has_minimum_free_space(heap))
+        eps_increase_heap(heap); // collects nothing ;)
+    if (print_stat)
+        heap_print_stat("GC end");
+    in_gc = false;
+}
+
+static void *eps_malloc(size_t size)
+{
+    EpsHeap *heap = gc_data;
+    if (stress)
+        eps_gc(heap);
+    size = align(size);
+    void *p = eps_allocate(heap, size);
+    if (!stress && p == NULL) {
+        eps_gc(heap);
+        p = eps_allocate(heap, size);
+    }
+    if (UNLIKELY(p == NULL))
+        error_out_of_memory();
+    return p;
 }
 
 static void eps_add_root(UNUSED const Value *p) {} // dummy
@@ -590,35 +608,6 @@ static void eps_stat(HeapStat *stat)
     }
 }
 
-static void eps_gc(void)
-{
-    if (UNLIKELY(in_gc))
-        bug("nested GC detected");
-    in_gc = true;
-    if (print_stat)
-        heap_print_stat("GC begin");
-    if (!eps_has_minimum_free_space())
-        eps_increase_heap(); // collects nothing ;)
-    if (print_stat)
-        heap_print_stat("GC end");
-    in_gc = false;
-}
-
-static void *eps_malloc(size_t size)
-{
-    if (stress)
-        eps_gc();
-    size = align(size);
-    void *p = eps_allocate(size);
-    if (!stress && p == NULL) {
-        eps_gc();
-        p = eps_allocate(size);
-    }
-    if (UNLIKELY(p == NULL))
-        error_out_of_memory();
-    return p;
-}
-
 static const GCFunctions GC_FUNCS_EPSILON = {
     eps_init, eps_fin, eps_malloc, eps_add_root, eps_stat
 };
@@ -626,11 +615,6 @@ static const GCFunctions GC_FUNCS_EPSILON = {
 //
 // General functions
 //
-
-static void error_out_of_memory(void)
-{
-    error("out of memory; heap (~%zu MiB) exhausted", heap_size() / MiB);
-}
 
 void gc_add_root(const Value *r)
 {
@@ -675,15 +659,13 @@ static size_t heap_size(void)
     return stat.size;
 }
 
-UNUSED
-static size_t heap_used(void)
+static void error_out_of_memory(void)
 {
-    HeapStat stat;
-    heap_stat(&stat);
-    return stat.used;
+    error("out of memory; heap (~%zu MiB) exhausted", heap_size() / MiB);
 }
 
-#define error_if_gc_initialized() if (initialized) error("%s called after GC initialization", __func__)
+#define error_if_gc_initialized() \
+    if (initialized) error("%s called after GC initialization", __func__)
 
 void sch_set_gc_init_size(double init_mib)
 {

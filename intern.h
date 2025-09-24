@@ -127,8 +127,8 @@ typedef enum {
 
 typedef struct {
     Header header;
-    PortType type;
     FILE *fp;
+    PortType type;
     char *string;
 } Port;
 
