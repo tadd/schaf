@@ -13,6 +13,8 @@ typedef SchValue Value;
 #define Qtrue SCH_TRUE
 #define Qundef SCH_UNDEF
 
+typedef uintptr_t Symbol;
+
 typedef enum {
 // immediate
     TYPE_BOOL,
@@ -187,6 +189,7 @@ Type sch_value_type_of(Value v);
 int64_t sch_integer_to_cint(Value v);
 const char *sch_symbol_to_cstr(Value v);
 const char *sch_string_to_cstr(Value v);
+Symbol sch_symbol_to_csymbol(Value v);
 const char *sch_value_to_type_name(Value v);
 
 Value sch_integer_new(int64_t i);

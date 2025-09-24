@@ -33,7 +33,6 @@
 //   0b0--00100 #f
 //   0b0--01100 #t
 //   0b0-010100 <undef>
-typedef uintptr_t Symbol;
 static const uintptr_t FLAG_NBIT_SYM = 2;
 static const uintptr_t FLAG_NBIT_INT = 1;
 static const uintptr_t FLAG_MASK     = 0b111; // for 64 bit machine
@@ -229,7 +228,7 @@ inline int64_t sch_integer_to_cint(Value x)
 #endif
 }
 
-inline static Symbol vsymbol_to_symbol(Value v)
+Symbol sch_symbol_to_csymbol(Value v)
 {
     return (Symbol) v >> FLAG_NBIT_SYM;
 }
@@ -250,7 +249,7 @@ inline const char *sch_string_to_cstr(Value v)
 
 inline const char *sch_symbol_to_cstr(Value v)
 {
-    return unintern(vsymbol_to_symbol(v));
+    return unintern(sch_symbol_to_csymbol(v));
 }
 
 // define caar, cadr, ... cddddr, 28 procedures, at once
@@ -634,14 +633,14 @@ static Value env_inherit(Value parent)
 
 static Value env_put(Value env, Value key, Value value)
 {
-    table_put(ENV(env)->table, vsymbol_to_symbol(key), value);
+    table_put(ENV(env)->table, sch_symbol_to_csymbol(key), value);
     return env;
 }
 
 // chained!
 static bool env_set(Value env, Value key, Value value)
 {
-    Symbol sym = vsymbol_to_symbol(key);
+    Symbol sym = sch_symbol_to_csymbol(key);
     for (Value p = env; p != Qfalse; p = ENV(p)->parent) {
         if (table_set(ENV(p)->table, sym, value))
             return true;
@@ -652,7 +651,7 @@ static bool env_set(Value env, Value key, Value value)
 // chained!!
 static Value env_get(const Value env, Value name)
 {
-    Symbol sym = vsymbol_to_symbol(name);
+    Symbol sym = sch_symbol_to_csymbol(name);
     for (Value p = env; p != Qfalse; p = ENV(p)->parent) {
         Value v = table_get(ENV(p)->table, sym);
         if (v != TABLE_NOT_FOUND)
