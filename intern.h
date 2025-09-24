@@ -37,7 +37,6 @@ typedef enum {
     TAG_PAIR,
     TAG_STRING,
     TAG_CFUNC,
-    TAG_SYNTAX, // almost a C Function
     TAG_CLOSURE,
     TAG_CONTINUATION,
     TAG_CFUNC_CLOSURE,
