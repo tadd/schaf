@@ -24,8 +24,6 @@
 // Types
 //
 
-#define OF_BOOL(v) ((!!(v) << 3U) | 0b100U)
-
 // Value (uintptr_t):
 //   0b.....000 Pointer (Unchangeable pattern!)
 //   0b.......1 Integer
@@ -44,6 +42,7 @@ const Value SCH_NULL  = 0b11100U; // emtpy list
 const Value SCH_FALSE = 0b00100U;
 const Value SCH_TRUE  = 0b01100U;
 const Value SCH_UNDEF = 0b10100U; // may be an error or something
+#define BOOL_VAL(v) ((!!(v) << 3U) | 0b100U)
 
 static const int64_t CFUNCARG_MAX = 3;
 
@@ -101,7 +100,7 @@ inline bool sch_value_is_string(Value v)
 
 #define bug_invalid_tag(t) bug("got invalid tag %u", t)
 
-static inline bool value_is_procedure(Value v)
+static bool value_is_procedure(Value v)
 {
     if (value_is_immediate(v))
         return false;
@@ -179,7 +178,7 @@ Type sch_value_type_of(Value v)
     bug_invalid_tag(VALUE_TAG(v));
 }
 
-static inline const char *value_type_to_string(Type t)
+static const char *value_type_to_string(Type t)
 {
     switch (t) {
     case TYPE_BOOL:
@@ -1386,7 +1385,7 @@ static Value syn_define(Value env, Value args)
 // 6.1. Equivalence predicates
 static Value proc_eq(UNUSED Value env, Value x, Value y)
 {
-    return OF_BOOL(x == y);
+    return BOOL_VAL(x == y);
 }
 
 static bool equal(Value x, Value y);
@@ -1415,7 +1414,7 @@ static bool equal(Value x, Value y)
         return equal(car(x), car(y)) &&
                equal(cdr(x), cdr(y));
     case TYPE_STRING:
-        return (strcmp(STRING(x), STRING(y)) == 0);
+        return strcmp(STRING(x), STRING(y)) == 0;
     case TYPE_VECTOR:
         return vector_equal(VECTOR(x), VECTOR(y));
     case TYPE_SYMBOL:
@@ -1434,14 +1433,14 @@ static bool equal(Value x, Value y)
 
 static Value proc_equal(UNUSED Value env, Value x, Value y)
 {
-    return OF_BOOL(equal(x, y));
+    return BOOL_VAL(equal(x, y));
 }
 
 // 6.2. Numbers
 // 6.2.5. Numerical operations
 static Value proc_integer_p(UNUSED Value env, Value obj)
 {
-    return OF_BOOL(sch_value_is_integer(obj));
+    return BOOL_VAL(sch_value_is_integer(obj));
 }
 
 #define get_int(x) ({ \
@@ -1499,27 +1498,27 @@ static Value proc_ge(UNUSED Value env, Value args)
 
 static Value proc_zero_p(UNUSED Value env, Value obj)
 {
-    return OF_BOOL(sch_value_is_integer(obj) && sch_integer_to_cint(obj) == 0);
+    return BOOL_VAL(sch_value_is_integer(obj) && sch_integer_to_cint(obj) == 0);
 }
 
 static Value proc_positive_p(UNUSED Value env, Value obj)
 {
-    return OF_BOOL(sch_value_is_integer(obj) && sch_integer_to_cint(obj) > 0);
+    return BOOL_VAL(sch_value_is_integer(obj) && sch_integer_to_cint(obj) > 0);
 }
 
 static Value proc_negative_p(UNUSED Value env, Value obj)
 {
-    return OF_BOOL(sch_value_is_integer(obj) && sch_integer_to_cint(obj) < 0);
+    return BOOL_VAL(sch_value_is_integer(obj) && sch_integer_to_cint(obj) < 0);
 }
 
 static Value proc_odd_p(UNUSED Value env, Value obj)
 {
-    return OF_BOOL(sch_value_is_integer(obj) && (sch_integer_to_cint(obj) % 2) != 0);
+    return BOOL_VAL(sch_value_is_integer(obj) && (sch_integer_to_cint(obj) % 2) != 0);
 }
 
 static Value proc_even_p(UNUSED Value env, Value obj)
 {
-    return OF_BOOL(sch_value_is_integer(obj) && (sch_integer_to_cint(obj) % 2) == 0);
+    return BOOL_VAL(sch_value_is_integer(obj) && (sch_integer_to_cint(obj) % 2) == 0);
 }
 
 static Value proc_max(UNUSED Value env, Value args)
@@ -1683,18 +1682,18 @@ static Value proc_number_to_string(UNUSED Value env, Value x)
 // 6.3.1. Booleans
 static Value proc_not(UNUSED Value env, Value x)
 {
-    return OF_BOOL(x == Qfalse);
+    return BOOL_VAL(x == Qfalse);
 }
 
 static Value proc_boolean_p(UNUSED Value env, Value x)
 {
-    return OF_BOOL(x == Qtrue || x == Qfalse);
+    return BOOL_VAL(x == Qtrue || x == Qfalse);
 }
 
 // 6.3.2. Pairs and lists
 static Value proc_pair_p(UNUSED Value env, Value o)
 {
-    return OF_BOOL(sch_value_is_pair(o));
+    return BOOL_VAL(sch_value_is_pair(o));
 }
 
 Value cons(Value car, Value cdr)
@@ -1764,7 +1763,7 @@ CXRS(DEF_CXR_BUILTIN)
 
 static Value proc_null_p(UNUSED Value env, Value list)
 {
-    return OF_BOOL(list == Qnil);
+    return BOOL_VAL(list == Qnil);
 }
 
 static Value proc_list_p(UNUSED Value env, Value l)
@@ -1939,13 +1938,13 @@ static Value proc_assoc(UNUSED Value env, Value obj, Value alist)
 // 6.3.3. Symbols
 static Value proc_symbol_p(UNUSED Value env, Value obj)
 {
-    return OF_BOOL(sch_value_is_symbol(obj));
+    return BOOL_VAL(sch_value_is_symbol(obj));
 }
 
 // 6.3.5. Strings
 static Value proc_string_p(UNUSED Value env, Value obj)
 {
-    return OF_BOOL(sch_value_is_string(obj));
+    return BOOL_VAL(sch_value_is_string(obj));
 }
 
 static Value proc_string_length(UNUSED Value env, Value s)
@@ -1957,7 +1956,7 @@ static Value proc_string_length(UNUSED Value env, Value s)
 static Value proc_string_eq(UNUSED Value env, Value s1, Value s2)
 {
     EXPECT(type_twin, TYPE_STRING, s1, s2);
-    return OF_BOOL(strcmp(STRING(s1), STRING(s2)) == 0);
+    return BOOL_VAL(strcmp(STRING(s1), STRING(s2)) == 0);
 }
 
 static Value proc_substring(UNUSED Value env, Value string, Value vstart, Value vend)
@@ -2009,7 +2008,7 @@ Value vector_push(Value v, Value e)
 
 static Value proc_vector_p(UNUSED Value env, Value o)
 {
-    return OF_BOOL(value_tag_is(o, TAG_VECTOR));
+    return BOOL_VAL(value_tag_is(o, TAG_VECTOR));
 }
 
 static Value proc_vector(UNUSED Value env, Value args)
@@ -2062,7 +2061,7 @@ static Value proc_vector_set(UNUSED Value env, Value o, Value k, Value obj)
 // 6.4. Control features
 static Value proc_procedure_p(UNUSED Value env, Value o)
 {
-    return OF_BOOL(value_is_procedure(o));
+    return BOOL_VAL(value_is_procedure(o));
 }
 
 static Value build_apply_args(Value args)
@@ -2346,17 +2345,17 @@ static Value proc_call_with_output_file(Value env, Value path, Value thunk)
 
 static Value proc_port_p(UNUSED Value env, Value port)
 {
-    return OF_BOOL(value_tag_is(port, TAG_PORT));
+    return BOOL_VAL(value_tag_is(port, TAG_PORT));
 }
 
 static Value proc_input_port_p(UNUSED Value env, Value port)
 {
-    return OF_BOOL(value_tag_is(port, TAG_PORT) && !PORT(port)->type);
+    return BOOL_VAL(value_tag_is(port, TAG_PORT) && !PORT(port)->type);
 }
 
 static Value proc_output_port_p(UNUSED Value env, Value port)
 {
-    return OF_BOOL(value_tag_is(port, TAG_PORT) && PORT(port)->type);
+    return BOOL_VAL(value_tag_is(port, TAG_PORT) && PORT(port)->type);
 }
 
 static Value port_new(FILE *fp, PortType type)
@@ -2494,7 +2493,7 @@ static Value proc_read(UNUSED Value env, Value args)
 
 static Value proc_eof_object_p(UNUSED Value env, Value obj)
 {
-    return OF_BOOL(value_tag_is(obj, TAG_EOF));
+    return BOOL_VAL(value_tag_is(obj, TAG_EOF));
 }
 
 // 6.6.3. Output
@@ -2759,7 +2758,7 @@ static Value syn_defined_p(Value env, Value name)
 {
     if (!sch_value_is_symbol(name))
         return Qfalse;
-    return OF_BOOL(env_get(env, name) != Qundef);
+    return BOOL_VAL(env_get(env, name) != Qundef);
 }
 
 static Value proc_cputime(UNUSED Value env) // in micro sec
