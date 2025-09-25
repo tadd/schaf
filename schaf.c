@@ -294,24 +294,22 @@ inline Value sch_symbol_new(const char *s)
 
 void *obj_new(ValueTag t, size_t size)
 {
-    void *p = gc_malloc(size);
-    Header *h = HEADER(p);
+    Header *h = gc_malloc(size);
     h->tag = t;
     h->immutable = false;
-    return p;
+    return h;
 }
 
-static Value string_new_sized(size_t size)
-{
-    return (Value) obj_new(TAG_STRING, sizeof(String) + size);
+static Value string_new_moved(char *str)
+{ // move ownership then use as is
+    String *s = obj_new(TAG_STRING, sizeof(String));
+    STRING(s) = str;
+    return (Value) s;
 }
 
-Value sch_string_new(const char *s)
+Value sch_string_new(const char *str)
 {
-    size_t len = strlen(s);
-    String *str = obj_new(TAG_STRING, sizeof(String) + len + 1);
-    strcpy(STRING(str), s);
-    return (Value) str;
+    return string_new_moved(xstrdup(str));
 }
 
 static void expect_cfunc_tag(ValueTag tag)
@@ -497,7 +495,6 @@ static Value runtime_error(const char *fmt, ...)
     va_start(ap, fmt);
     vsnprintf(errmsg, sizeof(errmsg), fmt, ap);
     va_end(ap);
-
     Error *e = obj_new(TAG_ERROR, sizeof(Error));
     ERROR(e) = scary_new(sizeof(StackFrame *));
     return (Value) e;
@@ -1989,12 +1986,11 @@ static Value proc_string_append(UNUSED Value env, Value args)
         EXPECT(type, TYPE_STRING, v);
         len += strlen(STRING(v));
     }
-    Value v = string_new_sized(len + 1);
-    char *s = STRING(v);
+    char *s = xmalloc(len + 1);
     s[0] = '\0';
     for (Value p = args; p != Qnil; p = cdr(p))
         strcat(s, STRING(car(p)));
-    return v;
+    return string_new_moved(s);
 }
 
 // 6.3.6. Vectors
@@ -2149,8 +2145,6 @@ static void jump(Continuation *cont)
     longjmp(cont->state, 1);
 }
 
-#define GET_SP(p) uintptr_t v##p = 0, *volatile p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
-
 [[gnu::noinline]]
 static Value apply_continuation(UNUSED Value env, Value f, Value args)
 {
@@ -2172,7 +2166,8 @@ static Value continuation_new(int64_t n)
     c->proc.arity = n; // call/cc: 1, call-with-values: -1
     c->proc.apply = apply_continuation;
     c->retval = Qfalse;
-    c->sp = c->stack = NULL;
+    c->sp = NULL;
+    c->stack = NULL;
     c->stack_len = 0;
     return (Value) c;
 }
@@ -2463,7 +2458,7 @@ static Value proc_close_port(UNUSED Value env, Value port)
 static Value eof_new(void)
 {
     // an empty object
-    return (Value) obj_new(TAG_EOF, sizeof(Header));
+    return (Value) obj_new(TAG_EOF, sizeof(uintptr_t));
 }
 
 static Value get_eof_object(void)
@@ -2864,18 +2859,8 @@ static void free_symbol_names(void)
     scary_free(symbol_names);
 }
 
-static void env_free(Value ve)
-{
-    Env *e = ENV(ve);
-    table_free(e->table);
-}
-
 int sch_fin(void)
 {
-    env_free(env_null);
-    env_free(env_r5rs);
-    env_free(env_default);
-    env_free(env_toplevel);
     free_source_data();
     free_symbol_names();
     gc_fin();
@@ -2885,6 +2870,12 @@ int sch_fin(void)
 void sch_init(const uintptr_t *sp)
 {
     gc_init(sp);
+
+    gc_add_root(&eof_object);
+    gc_add_root(&current_input_port);
+    gc_add_root(&current_output_port);
+    gc_add_root(&inner_winders);
+    gc_add_root(&inner_continuation);
 
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
@@ -2899,6 +2890,7 @@ void sch_init(const uintptr_t *sp)
     source_data = scary_new(sizeof(Source *));
 
     env_toplevel = env_new("default");
+    gc_add_root(&env_toplevel);
     Value e = env_toplevel;
 
     // 4. Expressions
@@ -2943,6 +2935,7 @@ void sch_init(const uintptr_t *sp)
     // 5.3. Syntax definitions
     //- define-syntax
     env_null = env_dup("null", e);
+    gc_add_root(&env_null);
 
     // 6. Standard procedures
 
@@ -3061,6 +3054,7 @@ void sch_init(const uintptr_t *sp)
     define_procedure(e, "load", proc_load, 1);
 
     env_r5rs = env_dup("r5rs", e);
+    gc_add_root(&env_r5rs);
 
     // Extensions from R7RS
     // (scheme base)
@@ -3079,4 +3073,5 @@ void sch_init(const uintptr_t *sp)
     define_procedure(e, "schaf-environment", proc_schaf_environment, 0);
 
     env_default = env_dup("default", e);
+    gc_add_root(&env_default);
 }
