@@ -120,7 +120,7 @@ static inline bool value_is_procedure(Value v)
     case TAG_EOF:
         return false;
     case TAG_ERROR:
-        break;
+        break; // internal objects
     }
     bug_invalid_tag(VALUE_TAG(v));
 }
@@ -174,7 +174,7 @@ Type sch_value_type_of(Value v)
     case TAG_EOF:
         return TYPE_EOF;
     case TAG_ERROR:
-        break;
+        break; // internal objects
     }
     bug_invalid_tag(VALUE_TAG(v));
 }
@@ -434,9 +434,9 @@ static Value cfunc_closure_new(const char *name, void *cfunc, Value data)
     cc->data = data;
     CFunc *f = CFUNC(cc);
     f->proc.arity = 1; // currently fixed
+    f->proc.apply = apply_cfunc_closure_1;
     f->name = name;
     f->cfunc = cfunc;
-    f->proc.apply = apply_cfunc_closure_1;
     return (Value) cc;
 }
 
@@ -465,7 +465,8 @@ static Value apply_closure(UNUSED Value env, Value proc, Value args)
 static Value closure_new(Value env, Value params, Value body)
 {
     Closure *f = obj_new(TAG_CLOSURE, sizeof(Closure));
-    f->proc.arity = (params == Qnil || sch_value_is_pair(params)) ? length(params) : -1;
+    bool headp = (params == Qnil || sch_value_is_pair(params));
+    f->proc.arity = headp ? length(params) : -1;
     f->proc.apply = apply_closure;
     f->env = env;
     f->params = params;
@@ -498,7 +499,7 @@ static Value runtime_error(const char *fmt, ...)
     va_end(ap);
 
     Error *e = obj_new(TAG_ERROR, sizeof(Error));
-    e->call_stack = scary_new(sizeof(StackFrame *));
+    ERROR(e) = scary_new(sizeof(StackFrame *));
     return (Value) e;
 }
 
@@ -623,9 +624,9 @@ static Value env_dup(const char *name, const Value orig)
     if (UNLIKELY(ENV(orig)->parent != Qfalse))
         bug("duplication of chained environment not permitted");
     Env *e = obj_new(TAG_ENV, sizeof(Env));
+    e->name = name != NULL ? name : ENV(orig)->name;
     e->table = table_dup(ENV(orig)->table);
     e->parent = Qfalse;
-    e->name = name != NULL ? name : ENV(orig)->name;
     return (Value) e;
 }
 
@@ -2000,7 +2001,7 @@ static Value proc_string_append(UNUSED Value env, Value args)
 Value vector_new(void)
 {
     Vector *v = obj_new(TAG_VECTOR, sizeof(Vector));
-    v->body = scary_new(sizeof(Value));
+    VECTOR(v) = scary_new(sizeof(Value));
     return (Value) v;
 }
 
@@ -2170,9 +2171,9 @@ static Value continuation_new(int64_t n)
     Continuation *c = obj_new(TAG_CONTINUATION, sizeof(Continuation));
     c->proc.arity = n; // call/cc: 1, call-with-values: -1
     c->proc.apply = apply_continuation;
+    c->retval = Qfalse;
     c->sp = c->stack = NULL;
     c->stack_len = 0;
-    c->retval = Qfalse;
     return (Value) c;
 }
 
@@ -2510,9 +2511,8 @@ static const char *file_to_name(const FILE *fp)
         NULL;
 }
 
-static void display_port(FILE *f, const Port *p)
+static void display_port(FILE *f, const FILE *fp)
 {
-    FILE *fp = p->fp;
     const char *name = file_to_name(fp);
     if (name != NULL)
         fprintf(f, "<port: %s>", name);
@@ -2630,7 +2630,7 @@ static void fdisplay_single(FILE* f, Value v)
         fprintf(f, "<environment: %s>", ENV(v)->name);
         break;
     case TYPE_PORT:
-        display_port(f, PORT(v));
+        display_port(f, PORT(v)->fp);
         break;
     case TYPE_EOF:
         fprintf(f, "<eof>");

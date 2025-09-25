@@ -55,7 +55,7 @@ typedef struct {
 } Header;
 
 typedef struct {
-    Header header; // common
+    Header header;
     Value car, cdr;
 } Pair;
 
@@ -101,11 +101,11 @@ typedef struct {
 
 typedef struct {
     Procedure proc;
+    Value retval;
     uintptr_t *sp;
     void *stack;
     size_t stack_len;
     jmp_buf state;
-    Value retval;
 } Continuation;
 
 typedef struct {
@@ -214,9 +214,9 @@ static inline Value list1(Value x)
 static Value cons_const(Value car, Value cdr)
 {
     Pair *p = obj_new(TAG_PAIR, sizeof(Pair));
+    HEADER(p)->immutable = true;
     p->car = car;
     p->cdr = cdr;
-    HEADER(p)->immutable = true;
     return (Value) p;
 }
 
