@@ -292,7 +292,7 @@ inline Value sch_symbol_new(const char *s)
     return (Value) (sym << FLAG_NBIT_SYM | FLAG_SYM);
 }
 
-void *obj_new(size_t size, ValueTag t)
+void *obj_new(ValueTag t, size_t size)
 {
     void *p = gc_malloc(size);
     Header *h = HEADER(p);
@@ -303,13 +303,13 @@ void *obj_new(size_t size, ValueTag t)
 
 static Value string_new_sized(size_t size)
 {
-    return (Value) obj_new(sizeof(String) + size, TAG_STRING);
+    return (Value) obj_new(TAG_STRING, sizeof(String) + size);
 }
 
 Value sch_string_new(const char *s)
 {
     size_t len = strlen(s);
-    String *str = obj_new(sizeof(String) + len + 1, TAG_STRING);
+    String *str = obj_new(TAG_STRING, sizeof(String) + len + 1);
     strcpy(STRING(str), s);
     return (Value) str;
 }
@@ -386,7 +386,7 @@ static Value cfunc_new_internal(ValueTag tag, const char *name, void *cfunc, int
 {
     expect_cfunc_tag(tag);
     expect_cfunc_arity(arity);
-    CFunc *f = obj_new(sizeof(CFunc), tag);
+    CFunc *f = obj_new(tag, sizeof(CFunc));
     f->proc.arity = arity;
     f->name = name;
     f->cfunc = cfunc;
@@ -430,7 +430,7 @@ static Value apply_cfunc_closure_1(UNUSED Value env, Value f, Value args)
 
 static Value cfunc_closure_new(const char *name, void *cfunc, Value data)
 {
-    CFuncClosure *cc = obj_new(sizeof(CFuncClosure), TAG_CFUNC_CLOSURE);
+    CFuncClosure *cc = obj_new(TAG_CFUNC_CLOSURE, sizeof(CFuncClosure));
     cc->data = data;
     CFunc *f = CFUNC(cc);
     f->proc.arity = 1; // currently fixed
@@ -464,7 +464,7 @@ static Value apply_closure(UNUSED Value env, Value proc, Value args)
 
 static Value closure_new(Value env, Value params, Value body)
 {
-    Closure *f = obj_new(sizeof(Closure), TAG_CLOSURE);
+    Closure *f = obj_new(TAG_CLOSURE, sizeof(Closure));
     f->proc.arity = (params == Qnil || sch_value_is_pair(params)) ? length(params) : -1;
     f->proc.apply = apply_closure;
     f->env = env;
@@ -497,7 +497,7 @@ static Value runtime_error(const char *fmt, ...)
     vsnprintf(errmsg, sizeof(errmsg), fmt, ap);
     va_end(ap);
 
-    Error *e = obj_new(sizeof(Error), TAG_ERROR);
+    Error *e = obj_new(TAG_ERROR, sizeof(Error));
     e->call_stack = scary_new(sizeof(StackFrame *));
     return (Value) e;
 }
@@ -611,7 +611,7 @@ static Value expect_arity_3(Value args)
 [[gnu::nonnull(1)]]
 static Value env_new(const char *name)
 {
-    Env *e = obj_new(sizeof(Env), TAG_ENV);
+    Env *e = obj_new(TAG_ENV, sizeof(Env));
     e->table = table_new();
     e->parent = Qfalse;
     e->name = name;
@@ -622,7 +622,7 @@ static Value env_dup(const char *name, const Value orig)
 {
     if (UNLIKELY(ENV(orig)->parent != Qfalse))
         bug("duplication of chained environment not permitted");
-    Env *e = obj_new(sizeof(Env), TAG_ENV);
+    Env *e = obj_new(TAG_ENV, sizeof(Env));
     e->table = table_dup(ENV(orig)->table);
     e->parent = Qfalse;
     e->name = name != NULL ? name : ENV(orig)->name;
@@ -1701,7 +1701,7 @@ static Value proc_pair_p(UNUSED Value env, Value o)
 
 Value cons(Value car, Value cdr)
 {
-    Pair *p = obj_new(sizeof(Pair), TAG_PAIR);
+    Pair *p = obj_new(TAG_PAIR, sizeof(Pair));
     p->car = car;
     p->cdr = cdr;
     return (Value) p;
@@ -1999,7 +1999,7 @@ static Value proc_string_append(UNUSED Value env, Value args)
 // 6.3.6. Vectors
 Value vector_new(void)
 {
-    Vector *v = obj_new(sizeof(Vector), TAG_VECTOR);
+    Vector *v = obj_new(TAG_VECTOR, sizeof(Vector));
     v->body = scary_new(sizeof(Value));
     return (Value) v;
 }
@@ -2167,7 +2167,7 @@ static Value apply_continuation(UNUSED Value env, Value f, Value args)
 
 static Value continuation_new(int64_t n)
 {
-    Continuation *c = obj_new(sizeof(Continuation), TAG_CONTINUATION);
+    Continuation *c = obj_new(TAG_CONTINUATION, sizeof(Continuation));
     c->proc.arity = n; // call/cc: 1, call-with-values: -1
     c->proc.apply = apply_continuation;
     c->sp = c->stack = NULL;
@@ -2365,7 +2365,7 @@ static Value proc_output_port_p(UNUSED Value env, Value port)
 
 static Value port_new(FILE *fp, PortType type)
 {
-    Port *p = obj_new(sizeof(Port), TAG_PORT);
+    Port *p = obj_new(TAG_PORT, sizeof(Port));
     p->fp = fp;
     p->type = type;
     p->string = NULL;
@@ -2462,7 +2462,7 @@ static Value proc_close_port(UNUSED Value env, Value port)
 static Value eof_new(void)
 {
     // an empty object
-    return (Value) obj_new(sizeof(Header), TAG_EOF);
+    return (Value) obj_new(TAG_EOF, sizeof(Header));
 }
 
 static Value get_eof_object(void)

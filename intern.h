@@ -172,7 +172,7 @@ Source *iparse(FILE *in, const char *filename);
 Value parse_datum(FILE *in, const char *filename);
 void pos_to_line_col(int64_t pos, int64_t *newline_pos, int64_t *line, int64_t *col);
 [[gnu::noreturn]] void raise_error(jmp_buf buf, const char *fmt, ...);
-void *obj_new(size_t size, ValueTag t);
+void *obj_new(ValueTag t, size_t size);
 void source_free(Source *s);
 
 void gc_init(const uintptr_t *volatile base_sp);
@@ -213,7 +213,7 @@ static inline Value list1(Value x)
 
 static Value cons_const(Value car, Value cdr)
 {
-    Pair *p = obj_new(sizeof(Pair), TAG_PAIR);
+    Pair *p = obj_new(TAG_PAIR, sizeof(Pair));
     p->car = car;
     p->cdr = cdr;
     HEADER(p)->immutable = true;
