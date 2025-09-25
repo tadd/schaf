@@ -39,18 +39,6 @@ typedef struct {
     void (*stat)(HeapStat *stat);
 } GCFunctions;
 
-typedef struct GCHeader {
-    bool used;
-    bool living;
-    size_t size;
-    alignas(16) struct GCHeader *next;
-} GCHeader;
-enum {
-    GC_HEADER_OFFSET = offsetof(GCHeader, next)
-};
-#define GC_HEADER(p) ((GCHeader *) (p))
-#define GC_HEADER_FROM_VAL(v) GC_HEADER((uint8_t *)(v) - GC_HEADER_OFFSET)
-
 static void heap_print_stat(const char *header);
 [[gnu::noreturn]] static void error_out_of_memory(void);
 
@@ -61,12 +49,23 @@ static size_t init_size = 1 * MiB;
 
 static const uintptr_t *volatile stack_base;
 
-static bool stress, print_stat;
-static bool in_gc, initialized;
+static bool stress, print_stat, initialized;
 
 //
 // Algorithm: Mark-and-sweep
 //
+
+typedef struct MSHeader {
+    bool used;
+    bool living;
+    size_t size;
+    alignas(16) struct MSHeader *next;
+} MSHeader;
+enum {
+    MS_HEADER_OFFSET = offsetof(MSHeader, next)
+};
+#define MS_HEADER(p) ((MSHeader *) (p))
+#define MS_HEADER_FROM_VAL(v) MS_HEADER((uint8_t *)(v) - MS_HEADER_OFFSET)
 
 typedef struct {
     size_t size;
@@ -80,7 +79,7 @@ typedef struct {
     MSHeapSlot *slot[64];
     uint8_t *low, *high;
     Value **roots;
-    GCHeader *free_list;
+    MSHeader *free_list;
 } MSHeap;
 
 static inline size_t align(size_t size)
@@ -88,7 +87,7 @@ static inline size_t align(size_t size)
     return (size + 15U) / 16U * 16U;
 }
 
-static void init_header(GCHeader *h, size_t size, GCHeader *next)
+static void init_header(MSHeader *h, size_t size, MSHeader *next)
 {
     h->used = false;
     h->living = false;
@@ -96,7 +95,7 @@ static void init_header(GCHeader *h, size_t size, GCHeader *next)
     h->next = next;
 }
 
-#define HSIZE(size) (GC_HEADER_OFFSET + (size)) // size with header
+#define HSIZE(size) (MS_HEADER_OFFSET + (size)) // size with header
 static MSHeapSlot *ms_heap_slot_new(size_t size)
 {
     MSHeapSlot *s = xmalloc(sizeof(MSHeapSlot));
@@ -104,7 +103,7 @@ static MSHeapSlot *ms_heap_slot_new(size_t size)
     size_t hsize = HSIZE(size);
     s->size = hsize;
     s->body = xmalloc(hsize);
-    init_header(GC_HEADER(s->body), size, NULL);
+    init_header(MS_HEADER(s->body), size, NULL);
     return s;
 }
 
@@ -118,7 +117,7 @@ static void ms_init(const uintptr_t *volatile sp)
     heap->size = 1;
     heap->low = first->body;
     heap->high = heap->low + first->size;
-    heap->free_list = GC_HEADER(first->body);
+    heap->free_list = MS_HEADER(first->body);
     gc_data = heap;
 }
 
@@ -148,13 +147,13 @@ static bool is_valid_pointer(Value v)
 static bool is_valid_header(Value v)
 {
     UNPOISON(&VALUE_TAG(v), sizeof(ValueTag));              // Suspicious but
-    UNPOISON(GC_HEADER_FROM_VAL(v), sizeof(GCHeader *));    // need to
-    UNPOISON(&GC_HEADER_FROM_VAL(v)->size, sizeof(size_t)); // be read
+    UNPOISON(MS_HEADER_FROM_VAL(v), sizeof(MSHeader *));    // need to
+    UNPOISON(&MS_HEADER_FROM_VAL(v)->size, sizeof(size_t)); // be read
     if (!is_valid_tag(VALUE_TAG(v)))
         return false;
-    size_t size = GC_HEADER_FROM_VAL(v)->size;
+    size_t size = MS_HEADER_FROM_VAL(v)->size;
     return size > 0 && size % 16U == 0 &&
-        size <= sizeof(Continuation) + GC_HEADER_OFFSET;
+        size <= sizeof(Continuation) + MS_HEADER_OFFSET;
 }
 
 static bool in_heap_val(Value v)
@@ -189,7 +188,7 @@ static void mark_val(Value v)
 {
     if (!is_valid_pointer(v))
         return;
-    GCHeader *h = GC_HEADER_FROM_VAL(v);
+    MSHeader *h = MS_HEADER_FROM_VAL(v);
     if (h->living)
         return;
     h->living = true; // mark it!
@@ -239,12 +238,12 @@ static void mark_val(Value v)
     }
 }
 
-static void *allocate_from_chunk(MSHeap *heap, GCHeader *prev, GCHeader *curr, size_t size)
+static void *allocate_from_chunk(MSHeap *heap, MSHeader *prev, MSHeader *curr, size_t size)
 {
     size_t hsize = HSIZE(size);
-    GCHeader *next = curr->next;
+    MSHeader *next = curr->next;
     if (curr->size > hsize) {
-        GCHeader *rest = (GCHeader *)((uint8_t *) curr + hsize);
+        MSHeader *rest = (MSHeader *)((uint8_t *) curr + hsize);
         init_header(rest, curr->size - hsize, next);
         next = rest;
         curr->size = size;
@@ -261,7 +260,7 @@ static void *allocate_from_chunk(MSHeap *heap, GCHeader *prev, GCHeader *curr, s
     return p;
 }
 
-static void add_to_free_list(MSHeap *heap, GCHeader *h)
+static void add_to_free_list(MSHeap *heap, MSHeader *h)
 {
     h->next = heap->free_list; // prepend
     heap->free_list = h;
@@ -322,7 +321,7 @@ static void free_val(Value v)
 #undef scary_free
 #endif
 
-static bool adjoining_p(GCHeader *free_list, const GCHeader *curr)
+static bool adjoining_p(MSHeader *free_list, const MSHeader *curr)
 {
     if (free_list == NULL)
         return false;
@@ -330,16 +329,16 @@ static bool adjoining_p(GCHeader *free_list, const GCHeader *curr)
     return (uint8_t *) free_list + hsize == (void *) curr;
 }
 
-static void free_chunk(MSHeap *heap, GCHeader *curr)
+static void free_chunk(MSHeap *heap, MSHeader *curr)
 {
-    GCHeader *free_list = heap->free_list;
+    MSHeader *free_list = heap->free_list;
     Value val = (Value) &curr->next;
     free_val(val);
     if (adjoining_p(free_list, curr)) {
         free_list->size += HSIZE(curr->size);
 #ifdef DEBUG
         memset(&curr->next, 0, curr->size);
-        memset(curr, 0, sizeof(GCHeader));
+        memset(curr, 0, sizeof(MSHeader));
 #else
         curr->size = 0; // XXX: for is_valid_header ?
 #endif
@@ -353,8 +352,8 @@ static void sweep_slot(MSHeap *heap, MSHeapSlot *slot)
 {
     uint8_t *p = slot->body, *endp = p + slot->size;
     size_t offset;
-    for (GCHeader *h; p < endp; p += offset) {
-        h = GC_HEADER(p);
+    for (MSHeader *h; p < endp; p += offset) {
+        h = MS_HEADER(p);
         offset = HSIZE(h->size);
         if (!h->used)
             continue;
@@ -381,13 +380,13 @@ static void ms_add_slot(MSHeap *heap)
         heap->low = beg;
     else if (heap->high < end)
         heap->high = end;
-    add_to_free_list(heap, GC_HEADER(beg));
+    add_to_free_list(heap, MS_HEADER(beg));
 }
 
 static Header *ms_allocate(MSHeap *heap, size_t size)
 {
-    GCHeader *free_list = heap->free_list;
-    for (GCHeader *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = curr->next) {
+    MSHeader *free_list = heap->free_list;
+    for (MSHeader *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = curr->next) {
         if (curr->size >= size) // First-fit
             return allocate_from_chunk(heap, prev, curr, size);
     }
@@ -418,6 +417,7 @@ static void mark(MSHeap *heap)
 
 static void ms_gc(MSHeap *heap)
 {
+    static bool in_gc = false;
     if (UNLIKELY(in_gc))
         bug("nested GC detected");
     in_gc = true;
@@ -461,9 +461,9 @@ static void ms_stat(HeapStat *stat)
     for (size_t i = 0; i < heap->size; i++) {
         MSHeapSlot *slot = heap->slot[i];
         stat->size += slot->size;
-        GCHeader *h;
+        MSHeader *h;
         for (uint8_t *p = slot->body, *endp = p + slot->size; p < endp; p += h->size) {
-            h = GC_HEADER(p);
+            h = MS_HEADER(p);
             size_t j = h->size - 1;
             if (j > TABMAX)
                 j = TABMAX;
@@ -565,6 +565,7 @@ static void eps_increase_heap(EpsHeap *heap)
 
 static void eps_gc(EpsHeap *heap)
 {
+    static bool in_gc = false;
     if (UNLIKELY(in_gc))
         bug("nested GC detected");
     in_gc = true;
