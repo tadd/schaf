@@ -426,6 +426,8 @@ static void ms_gc(MSHeap *heap)
         heap_print_stat("GC begin");
     mark(heap);
     sweep(heap);
+    if (heap->free_list == NULL)
+        ms_add_slot(heap);
     if (print_stat)
         heap_print_stat("GC end");
     in_gc = false;
@@ -440,10 +442,6 @@ static void *ms_malloc(size_t size)
     Header *p = ms_allocate(heap, size);
     if (!stress && p == NULL) {
         ms_gc(heap);
-        p = ms_allocate(heap, size);
-    }
-    if (p == NULL) {
-        ms_add_slot(heap);
         p = ms_allocate(heap, size);
     }
     if (UNLIKELY(p == NULL))
