@@ -477,14 +477,18 @@ static void ms_stat(HeapStat *stat)
     }
 }
 
+#define free_slots(slot, size) do { \
+        for (size_t i = 0; i < size; i++) { \
+            free(slot[i]->body); \
+            free(slot[i]); \
+        } \
+    } while (0)
+
 static void ms_fin(void)
 {
     MSHeap *heap = gc_data;
     sweep(heap); // nothing marked, all values are freed
-    for (size_t i = 0; i < heap->size; i++) {
-        free(heap->slot[i]->body);
-        free(heap->slot[i]);
-    }
+    free_slots(heap->slot, heap->size);
     scary_free(heap->roots);
     free(heap);
 }
@@ -529,10 +533,7 @@ static void eps_init(const uintptr_t *volatile sp)
 static void eps_fin(void)
 {
     EpsHeap *heap = gc_data;
-    for (size_t i = 0; i < heap->size; i++) {
-        free(heap->slot[i]->body);
-        free(heap->slot[i]);
-    }
+    free_slots(heap->slot, heap->size);
     free(heap);
 }
 

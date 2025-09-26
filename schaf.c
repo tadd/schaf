@@ -2853,24 +2853,16 @@ static Value proc_p(UNUSED Value env, Value args)
 // Interpreter things
 //
 
-static void free_source_data(void)
-{
-    for (size_t i = 0, len = scary_length(source_data); i < len; i++)
-        source_free(source_data[i]);
-    scary_free(source_data);
-}
-
-static void free_symbol_names(void)
-{
-    for (size_t i = 0, len = scary_length(symbol_names); i < len; i++)
-        free(symbol_names[i]);
-    scary_free(symbol_names);
-}
+#define scary_free_with(f, a) do { \
+        for (size_t i = 0, len = scary_length(a); i < len; i++) \
+            f(a[i]); \
+        scary_free(a); \
+    } while (0)
 
 int sch_fin(void)
 {
-    free_source_data();
-    free_symbol_names();
+    scary_free_with(source_free, source_data);
+    scary_free_with(free, symbol_names);
     gc_fin();
     return exit_status;
 }
