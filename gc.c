@@ -695,8 +695,6 @@ void sch_set_gc_algorithm(SchGCAlgorithm s)
     case GC_ALGORITHM_MARK_SWEEP:
         funcs = GC_FUNCS_MARK_SWEEP;
         break;
-    default:
-        UNREACHABLE();
     }
 }
 

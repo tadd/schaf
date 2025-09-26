@@ -146,7 +146,7 @@ static Type immediate_type_of(Value v)
         return TYPE_BOOL;
     if (v == Qundef)
         return TYPE_UNDEF;
-    UNREACHABLE();
+    bug("unexpected immediate: %zu", v);
 }
 
 Type sch_value_type_of(Value v)
@@ -313,7 +313,7 @@ Value sch_string_new(const char *str)
 
 static void expect_cfunc_tag(ValueTag tag)
 {
-    if (tag == TAG_CFUNC || tag == TAG_SYNTAX)
+    if (LIKELY(tag == TAG_CFUNC || tag == TAG_SYNTAX))
         return;
     bug_invalid_tag(tag);
 }
@@ -2643,7 +2643,7 @@ static void fdisplay_single(FILE* f, Value v)
         break;
     case TYPE_PAIR:
     case TYPE_VECTOR:
-        UNREACHABLE();
+        bug("invalid type %s", sch_value_to_type_name(v));
     }
 }
 
@@ -2826,7 +2826,7 @@ static void inspect_single(FILE* f, Value v)
         break;
     case TYPE_PAIR:
     case TYPE_VECTOR:
-        UNREACHABLE();
+        bug("invalid type %s", sch_value_to_type_name(v));
     }
 }
 

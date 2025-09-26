@@ -30,7 +30,7 @@
 #define UNLIKELY(x) __builtin_expect((x), 0)
 #define UNUSED [[maybe_unused]]
 #ifdef DEBUG
-#define UNREACHABLE() bug("unreachable"), __builtin_unreachable()
+#define UNREACHABLE() bug("unreachable")
 #else
 #define UNREACHABLE() __builtin_unreachable()
 #endif
