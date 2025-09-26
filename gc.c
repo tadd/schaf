@@ -178,26 +178,26 @@ static bool is_heap_value(MSHeap *heap, Value v)
         is_in_heap_range(heap, v) && is_valid_header(v);
 }
 
-static void mark_val(MSHeap *heap, Value v);
+static void mark_val(Value v);
 
-static void mark_array(MSHeap *heap, const void *beg, size_t n)
+static void mark_array(const void *beg, size_t n)
 {
     UNPOISON(beg, n * sizeof(uintptr_t));
     const Value *p = beg;
     for (size_t i = 0; i < n; i++, p++)
-        mark_val(heap, *p);
+        mark_val(*p);
 }
 
-static void mark_jmpbuf(MSHeap *heap, const jmp_buf *jmp)
+static void mark_jmpbuf(const jmp_buf *jmp)
 {
     size_t n = idivceil(sizeof(jmp_buf), sizeof(uintptr_t));
-    mark_array(heap, jmp, n);
+    mark_array(jmp, n);
 }
 
-static void mark_env_each(UNUSED uint64_t key, uint64_t value, void *data)
+static void mark_env_each(UNUSED uint64_t key, uint64_t value, UNUSED void *data)
 {
     // key is always a Symbol
-    mark_val(data, value);
+    mark_val(value);
 }
 
 static uintptr_t bitmap_index(MSHeap *heap, const void *p);
@@ -220,55 +220,50 @@ static bool is_living(MSHeap *heap, MSHeader *h, bool do_mark)
     return marked;
 }
 
-static void mark_val(MSHeap *heap, Value v)
+static void mark_children(MSHeap *heap, Value v)
 {
-    if (!is_heap_value(heap, v))
-        return;
-    MSHeader *h = MS_HEADER_FROM_VAL(v);
-    if (is_living(heap, h, true)) // mark it!
-        return;
     switch (VALUE_TAG(v)) {
     case TAG_PAIR: {
         Pair *p = PAIR(v);
-        mark_val(heap, p->car);
-        mark_val(heap, p->cdr);
+        mark_val(p->car);
+        mark_val(p->cdr);
         break;
     }
     case TAG_CLOSURE: {
         Closure *p = CLOSURE(v);
-        mark_val(heap, p->env);
-        mark_val(heap, p->params);
-        mark_val(heap, p->body);
+        mark_val(p->env);
+        mark_val(p->params);
+        mark_val(p->body);
         break;
     }
     case TAG_CONTINUATION: {
         Continuation *p = CONTINUATION(v);
-        mark_val(heap, p->retval);
-        mark_jmpbuf(heap, &p->state);
+        mark_val(p->retval);
+        mark_jmpbuf(&p->state);
         size_t n = idivceil(p->stack_len, sizeof(uintptr_t));
-        mark_array(heap, p->stack, n);
+        mark_array(p->stack, n);
         break;
     }
     case TAG_CFUNC_CLOSURE:
-        mark_val(heap, CFUNC_CLOSURE(v)->data);
+        mark_val(CFUNC_CLOSURE(v)->data);
         break;
     case TAG_ENV: {
         Env *p = ENV(v);
         if (p->table != NULL)
             table_foreach(p->table, mark_env_each, heap);
-        mark_val(heap, p->parent);
+        mark_val(p->parent);
         break;
     }
     case TAG_VECTOR: {
         Value *p = VECTOR(v);
         for (size_t i = 0, len = scary_length(p); i < len; i++)
-            mark_val(heap, p[i]);
+            mark_val(p[i]);
         break;
     }
     case TAG_PROMISE: {
         Promise *p = PROMISE(v);
-        mark_val(heap, p->env);
-        mark_val(heap, p->val);
+        mark_val(p->env);
+        mark_val(p->val);
         break;
     }
     case TAG_STRING:
@@ -279,6 +274,27 @@ static void mark_val(MSHeap *heap, Value v)
     case TAG_ERROR:
         break;
     }
+}
+
+static inline bool is_nonliving_value(MSHeap *heap, Value v)
+{
+    return is_heap_value(heap, v) &&
+        !is_living(heap, MS_HEADER_FROM_VAL(v), true); // mark it!
+}
+
+static Value *val_to_mark;
+static void do_mark(MSHeap *heap)
+{
+    while (scary_length(val_to_mark) > 0) {
+        Value v = scary_pop(val_to_mark);
+        if (is_nonliving_value(heap, v))
+            mark_children(heap, v);
+    }
+}
+
+static void mark_val(Value v)
+{
+    scary_push(&val_to_mark, v);
 }
 
 static void *allocate_from_chunk(MSHeap *heap, MSHeader *prev, MSHeader *curr, size_t size)
@@ -436,27 +452,31 @@ static void *ms_allocate(MSHeap *heap, size_t size)
     return NULL;
 }
 
-static void mark_roots(MSHeap *heap, Value **roots)
+static void mark_roots(Value **roots)
 {
     for (size_t i = 0, len = scary_length(roots); i < len; i++)
-        mark_val(heap, *roots[i]);
+        mark_val(*roots[i]);
 }
 
 [[gnu::noinline]]
-static void mark_stack(MSHeap *heap)
+static void mark_stack(void)
 {
     GET_SP(sp);
     const uintptr_t *beg = stack_base, *end = sp;
-    mark_array(heap, end, beg - end);
+    mark_array(end, beg - end);
 }
 
 static void mark(MSHeap *heap)
 {
-    mark_roots(heap, heap->roots);
-    mark_stack(heap);
+    val_to_mark = scary_new(sizeof(Value));
+    mark_roots(heap->roots);
+    mark_stack();
     jmp_buf jmp;
     setjmp(jmp);
-    mark_jmpbuf(heap, &jmp);
+    mark_jmpbuf(&jmp);
+    do_mark(heap);
+    scary_free(val_to_mark);
+    val_to_mark = NULL;
 }
 
 static void ms_gc(MSHeap *heap)
