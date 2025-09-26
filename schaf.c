@@ -2330,13 +2330,13 @@ static Value proc_interaction_environment(UNUSED Value env)
 // 6.6. Input and output
 // 6.6.1. Ports
 static Value open_port(const char *path, PortType type);
-static void close_port(Port *p);
+static void close_port(Value port);
 
 static Value call_with_file(Value env, Value path, Value thunk, PortType type)
 {
     Value file = open_port(STRING(path), type);
     Value ret = apply(env, thunk, list1(file));
-    close_port(PORT(file));
+    close_port(file);
     return ret;
 }
 
@@ -2359,12 +2359,12 @@ static Value proc_port_p(UNUSED Value env, Value port)
 
 static Value proc_input_port_p(UNUSED Value env, Value port)
 {
-    return BOOL_VAL(value_tag_is(port, TAG_PORT) && !PORT(port)->type);
+    return BOOL_VAL(value_tag_is(port, TAG_PORT) && PORT(port)->type == PORT_INPUT);
 }
 
 static Value proc_output_port_p(UNUSED Value env, Value port)
 {
-    return BOOL_VAL(value_tag_is(port, TAG_PORT) && PORT(port)->type);
+    return BOOL_VAL(value_tag_is(port, TAG_PORT) && PORT(port)->type == PORT_OUTPUT);
 }
 
 static Value port_new(FILE *fp, PortType type)
@@ -2425,7 +2425,7 @@ static Value with_file(Value env, Value path, Value thunk, Value *curr_port, Por
     Value orig = *curr_port;
     *curr_port = open_port(STRING(path), type);
     Value ret = apply(env, thunk, Qnil);
-    close_port(PORT(*curr_port));
+    close_port(*curr_port);
     *curr_port = orig;
     return ret;
 }
@@ -2444,8 +2444,9 @@ static Value proc_with_output_to_file(Value env, Value path, Value thunk)
     return with_file(env, path, thunk, &current_output_port, PORT_OUTPUT);
 }
 
-static void close_port(Port *p)
+static void close_port(Value v)
 {
+    Port *p = PORT(v);
     if (p->fp == NULL)
         return;
     fclose(p->fp);
@@ -2458,7 +2459,7 @@ static void close_port(Port *p)
 static Value proc_close_port(UNUSED Value env, Value port)
 {
     EXPECT(type, TYPE_PORT, port);
-    close_port(PORT(port));
+    close_port(port);
     return Qfalse;
 }
 
@@ -2733,13 +2734,14 @@ static Value proc_open_output_string(UNUSED Value env)
     return string_port_new();
 }
 
-static Value proc_get_output_string(UNUSED Value env, Value p)
+static Value proc_get_output_string(UNUSED Value env, Value port)
 {
-    EXPECT(type, TYPE_PORT, p);
-    if (PORT(p)->string == NULL)
+    EXPECT(type, TYPE_PORT, port);
+    Port *p = PORT(port);
+    if (p->string == NULL)
         return runtime_error("not a string port");
-    fflush(PORT(p)->fp); // open_memstream() requires flushing
-    return sch_string_new(PORT(p)->string);
+    fflush(p->fp); // open_memstream() requires flushing
+    return sch_string_new(p->string);
 }
 
 // (scheme process-context)
