@@ -218,7 +218,8 @@ static void mark_val(Value v)
         break;
     case TAG_ENV: {
         Env *p = ENV(v);
-        table_foreach(p->table, mark_env_each);
+        if (p->table != NULL)
+            table_foreach(p->table, mark_env_each);
         mark_val(p->parent);
         break;
     }

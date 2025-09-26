@@ -609,7 +609,7 @@ static Value expect_arity_3(Value args)
 static Value env_new(const char *name)
 {
     Env *e = obj_new(TAG_ENV, sizeof(Env));
-    e->table = table_new();
+    e->table = NULL;
     e->parent = Qfalse;
     e->name = name;
     return (Value) e;
@@ -621,7 +621,7 @@ static Value env_dup(const char *name, const Value orig)
         bug("duplication of chained environment not permitted");
     Env *e = obj_new(TAG_ENV, sizeof(Env));
     e->name = name != NULL ? name : ENV(orig)->name;
-    e->table = table_dup(ENV(orig)->table);
+    e->table = ENV(orig)->table != NULL ? table_dup(ENV(orig)->table) : NULL;
     e->parent = Qfalse;
     return (Value) e;
 }
@@ -635,7 +635,10 @@ static Value env_inherit(Value parent)
 
 static Value env_put(Value env, Value key, Value value)
 {
-    table_put(ENV(env)->table, sch_symbol_to_csymbol(key), value);
+    Table *t = ENV(env)->table;
+    if (t == NULL)
+        t = ENV(env)->table = table_new();
+    table_put(t, sch_symbol_to_csymbol(key), value);
     return env;
 }
 
@@ -644,7 +647,10 @@ static bool env_set(Value env, Value key, Value value)
 {
     Symbol sym = sch_symbol_to_csymbol(key);
     for (Value p = env; p != Qfalse; p = ENV(p)->parent) {
-        if (table_set(ENV(p)->table, sym, value))
+        Table *t = ENV(p)->table;
+        if (t == NULL)
+            continue;
+        if (table_set(t, sym, value))
             return true;
     }
     return false;
@@ -655,7 +661,10 @@ static Value env_get(const Value env, Value name)
 {
     Symbol sym = sch_symbol_to_csymbol(name);
     for (Value p = env; p != Qfalse; p = ENV(p)->parent) {
-        Value v = table_get(ENV(p)->table, sym);
+        Table *t = ENV(p)->table;
+        if (t == NULL)
+            continue;
+        Value v = table_get(t, sym);
         if (v != TABLE_NOT_FOUND)
             return v;
     }
