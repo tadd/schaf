@@ -220,13 +220,8 @@ static bool is_living(MSHeap *heap, MSHeader *h, bool do_mark)
     return marked;
 }
 
-static void mark_val(MSHeap *heap, Value v)
+static void mark_val_children(MSHeap *heap, Value v)
 {
-    if (!is_heap_value(heap, v))
-        return;
-    MSHeader *h = MS_HEADER_FROM_VAL(v);
-    if (is_living(heap, h, true)) // mark it!
-        return;
     switch (VALUE_TAG(v)) {
     case TAG_PAIR: {
         Pair *p = PAIR(v);
@@ -279,6 +274,16 @@ static void mark_val(MSHeap *heap, Value v)
     case TAG_ERROR:
         break;
     }
+}
+
+static void mark_val(MSHeap *heap, Value v)
+{
+    if (!is_heap_value(heap, v))
+        return;
+    MSHeader *h = MS_HEADER_FROM_VAL(v);
+    if (is_living(heap, h, true)) // mark it!
+        return;
+    mark_val_children(heap, v);
 }
 
 static void *allocate_from_chunk(MSHeap *heap, MSHeader *prev, MSHeader *curr, size_t size)
