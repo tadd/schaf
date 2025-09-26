@@ -99,53 +99,35 @@ size_t scary_length(const void *p)
     return get(p)->length;
 }
 
-#define FOR_T(f, t) f(t##_t, t)
-#define FOR_1(f, t) f(t, t)
-#define FOR_DATA(f) \
-    FOR_1(f, char) \
-    FOR_T(f, int8) \
-    FOR_T(f, int16) \
-    FOR_T(f, int32) \
-    FOR_T(f, int64) \
-    FOR_T(f, uint8) \
-    FOR_T(f, uint16) \
-    FOR_T(f, uint32) \
-    FOR_T(f, uint64)
-#define FOR_PTRS(f) FOR_1(f, void) FOR_DATA(f)
+#define DEFINE_PUSH_DATA(type, suffix)        \
+void scary_push_##suffix(type **p, type elem) \
+{                                             \
+    Scary *ary = maybe_resize(p);             \
+    type *sp = (type *) ary->space;           \
+    sp[ary->length++] = elem;                 \
+}
+xDATA(DEFINE_PUSH_DATA)
 
-#define DEF_PUSH_VARIANT(type, suffix) \
-    void scary_push_##suffix(type **p, type elem) \
-    { \
-        Scary *ary = maybe_resize(p); \
-        type *sp = (type *) ary->space; \
-        sp[ary->length++] = elem; \
-    }
-FOR_DATA(DEF_PUSH_VARIANT)
-
-static void scary_push_ptr(void *p, const void *elem)
+static void scary_push_ptr_any(void *p, const void *elem)
 {
     Scary *ary = maybe_resize(p);
     const void **sp = (const void **) ary->space;
     sp[ary->length++] = elem;
 }
-#define DEF_PUSH_VARIANT_PTR(type, suffix) \
-    void scary_push_##suffix##p(type ***p, const type *elem) \
-    { \
-        scary_push_ptr(p, elem); \
-    }
-FOR_PTRS(DEF_PUSH_VARIANT_PTR)
 
-void scary_push_ccharp(const char ***p, const char *elem)
-{
-    scary_push_ptr(p, elem);
+#define DEFINE_PUSH_PTR(type, suffix)                    \
+void scary_push_##suffix(type **p, const type elem)      \
+{                                                        \
+    scary_push_ptr_any(p, elem);                         \
 }
+xPTRS(DEFINE_PUSH_PTR)
 
 void scary_pop(void *p)
 {
     get(p)->length--; // do not shrink for speed
 }
 
-static void *scary_dup_(const void *p)
+static void *scary_dup_any(const void *p)
 {
     Scary *ary = get(p);
     Scary *dup = xmalloc(sizeof(Scary) + ary->capacity);
@@ -154,9 +136,9 @@ static void *scary_dup_(const void *p)
     return opaque(dup);
 }
 
-#define DEF_DUP_VARIANT(type, suffix) \
-    type *scary_dup_##suffix(const type *p) \
-    { \
-        return scary_dup_(p); \
-    }
-FOR_PTRS(DEF_DUP_VARIANT)
+#define DEFINE_DUP(type, suffix)        \
+type *scary_dup_##suffix(const type *p) \
+{                                       \
+    return scary_dup_any(p);            \
+}
+xTYPES(DEFINE_DUP)
