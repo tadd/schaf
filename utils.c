@@ -97,9 +97,9 @@ static void list_free(List *l)
 // Table
 
 enum {
-    TABLE_INIT_SIZE = 4,      // must be power of two
-    TABLE_RESIZE_FACTOR = 2,  // ditto
-    TABLE_TOO_MANY_FACTOR = 3,
+    TABLE_INIT_SIZE = 2,      // must be power of two
+    TABLE_RESIZE_FACTOR = 4,  // ditto
+    TABLE_TOO_MANY_FACTOR = 2,
 };
 
 struct Table {
