@@ -208,13 +208,8 @@ static bool is_living(MSHeader *h, bool do_mark)
     return marked;
 }
 
-static void mark_val(Value v)
+static void mark_children(Value v)
 {
-    if (!is_valid_pointer(v))
-        return;
-    MSHeader *h = MS_HEADER_FROM_VAL(v);
-    if (is_living(h, true)) // mark it!
-        return;
     switch (VALUE_TAG(v)) {
     case TAG_PAIR: {
         Pair *p = PAIR(v);
@@ -266,6 +261,28 @@ static void mark_val(Value v)
     case TAG_ERROR:
         break;
     }
+}
+
+static Value *val_to_mark;
+static void do_mark(void)
+{
+    size_t len;
+    while ((len = scary_length(val_to_mark)) > 0) {
+        Value v = val_to_mark[len - 1];
+        scary_pop(val_to_mark);
+        if (!is_valid_pointer(v))
+            continue;
+        MSHeader *h = MS_HEADER_FROM_VAL(v);
+        if (h->living)
+            continue;
+        h->living = true; // mark it!
+        mark_children(v);
+    }
+}
+
+static void mark_val(Value v)
+{
+    scary_push(&val_to_mark, v);
 }
 
 static void *allocate_from_chunk(MSHeap *heap, MSHeader *prev, MSHeader *curr, size_t size)
@@ -436,11 +453,15 @@ static void mark_stack(void)
 
 static void mark(MSHeap *heap)
 {
+    val_to_mark = scary_new(sizeof(Value));
     mark_stack();
     mark_roots(heap->roots);
     jmp_buf jmp;
     setjmp(jmp);
     mark_jmpbuf(&jmp);
+    do_mark();
+    scary_free(val_to_mark);
+    val_to_mark = NULL;
 }
 
 static void ms_gc(MSHeap *heap)
