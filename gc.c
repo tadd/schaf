@@ -404,7 +404,7 @@ static void ms_add_slot(MSHeap *heap)
     add_to_free_list(heap, MS_HEADER(beg));
 }
 
-static Header *ms_allocate(MSHeap *heap, size_t size)
+static void *ms_allocate(MSHeap *heap, size_t size)
 {
     MSHeader *free_list = heap->free_list;
     for (MSHeader *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = curr->next) {
@@ -459,7 +459,7 @@ static void *ms_malloc(size_t size)
     if (stress)
         ms_gc(heap);
     size = align(size);
-    Header *p = ms_allocate(heap, size);
+    void *p = ms_allocate(heap, size);
     if (!stress && p == NULL) {
         ms_gc(heap);
         p = ms_allocate(heap, size);
@@ -543,7 +543,7 @@ static void *bmp_malloc(size_t size)
     if (stress)
         bmp_gc(heap);
     size = align(size);
-    Header *p = ms_allocate(heap, size);
+    void *p = ms_allocate(heap, size);
     if (!stress && p == NULL) {
         bmp_gc(heap);
         p = ms_allocate(heap, size);
