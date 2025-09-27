@@ -9,4 +9,4 @@ end
 l = ARGF.readlines
 cpu = mean(l, "CPU", 3)
 mem = mean(l, "Vm")
-puts "%.3f ms\t%6d kb" % [cpu, mem]
+puts "%.3f\t%d" % [cpu, mem]
