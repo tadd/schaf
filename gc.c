@@ -446,8 +446,6 @@ static void ms_gc(MSHeap *heap)
         heap_print_stat("GC begin");
     mark(heap);
     sweep(heap);
-    if (heap->free_list == NULL)
-        ms_add_slot(heap);
     if (print_stat)
         heap_print_stat("GC end");
     in_gc = false;
@@ -463,6 +461,10 @@ static void *ms_malloc(size_t size)
     if (!stress && p == NULL) {
         ms_gc(heap);
         p = ms_allocate(heap, asize);
+    }
+    if (p == NULL) {
+        ms_add_slot(heap);
+        p = ms_allocate(heap, size);
     }
     if (UNLIKELY(p == NULL))
         error_out_of_memory();
@@ -547,6 +549,10 @@ static void *bmp_malloc(size_t size)
     if (!stress && p == NULL) {
         bmp_gc(heap);
         p = ms_allocate(heap, asize);
+    }
+    if (p == NULL) {
+        ms_add_slot(heap);
+        p = ms_allocate(heap, size);
     }
     if (UNLIKELY(p == NULL))
         error_out_of_memory();
