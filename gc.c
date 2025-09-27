@@ -404,7 +404,7 @@ static void mark_roots(Value **roots)
 static void mark_stack(void)
 {
     GET_SP(sp);
-    mark_array(sp, stack_base - sp);
+    mark_array(sp, stack_base - sp + 1);
 }
 
 static void mark(MSHeap *heap)
@@ -717,5 +717,5 @@ void *gc_malloc(size_t size)
 
 size_t gc_stack_get_size(const uintptr_t *volatile sp)
 {
-    return (uint8_t *volatile) stack_base - (uint8_t *volatile) sp;
+    return (uint8_t *volatile) (stack_base + 1) - (uint8_t *volatile) sp;
 }
