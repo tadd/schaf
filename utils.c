@@ -10,6 +10,16 @@
 
 // Misc
 
+size_t idivceil(size_t n, size_t aligned)
+{
+    return (n + (aligned - 1)) / aligned;
+}
+
+size_t iceil(size_t n, size_t aligned)
+{
+    return idivceil(n, aligned) * aligned;
+}
+
 void error(const char *fmt, ...)
 {
     va_list ap;

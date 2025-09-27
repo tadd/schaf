@@ -85,7 +85,7 @@ typedef struct {
 
 static inline size_t align(size_t size)
 {
-    return (size + 15U) / 16U * 16U;
+    return iceil(size, 16U);
 }
 
 static void init_header(MSHeader *h, size_t size, MSHeader *next)
@@ -177,7 +177,7 @@ static void mark_array(const void *volatile beg, size_t n)
 
 static void mark_jmpbuf(const jmp_buf *jmp)
 {
-    mark_array(jmp, (size_t) sizeof(jmp_buf) / sizeof(uintptr_t));
+    mark_array(jmp, idivceil(sizeof(jmp_buf), sizeof(uintptr_t)));
 }
 
 static void mark_env_each(UNUSED uint64_t key, uint64_t value)
@@ -233,7 +233,7 @@ static void mark_val(Value v)
         Continuation *p = CONTINUATION(v);
         mark_val(p->retval);
         mark_jmpbuf(&p->state);
-        mark_array(p->stack, p->stack_len / sizeof(uintptr_t));
+        mark_array(p->stack, idivceil(p->stack_len, sizeof(uintptr_t)));
         break;
     }
     case TAG_CFUNC_CLOSURE:
@@ -530,7 +530,7 @@ static void bmp_init_bitmap(void)
 {
     MSHeap *heap = gc_data;
     size_t rawsize = (align_t *) heap->high - (align_t *) heap->low + 1;
-    heap->bitmap = xcalloc(1, (rawsize + 7U) / 8U);
+    heap->bitmap = xcalloc(1, idivceil(rawsize, 8U));
 }
 
 static void bmp_gc(MSHeap *heap)
@@ -735,7 +735,8 @@ static size_t heap_size(void)
 
 static void error_out_of_memory(void)
 {
-    error("out of memory; heap (~%zu MiB) exhausted", heap_size() / MiB);
+    error("out of memory; heap (~%zu MiB) exhausted",
+          (size_t) round((double) heap_size() / MiB));
 }
 
 #define error_if_gc_initialized() \
