@@ -456,15 +456,14 @@ static void *ms_malloc(size_t size)
     MSHeap *heap = gc_data;
     if (stress)
         ms_gc(heap);
-    size_t asize = align(size);
-    void *p = ms_allocate(heap, asize);
+    void *p = ms_allocate(heap, size);
     if (!stress && p == NULL) {
         ms_gc(heap);
-        p = ms_allocate(heap, asize);
+        p = ms_allocate(heap, size);
     }
     if (p == NULL) {
         ms_add_slot(heap);
-        p = ms_allocate(heap, asize);
+        p = ms_allocate(heap, size);
     }
     if (UNLIKELY(p == NULL))
         error_out_of_memory();
@@ -544,15 +543,14 @@ static void *bmp_malloc(size_t size)
     MSHeap *heap = gc_data;
     if (stress)
         bmp_gc(heap);
-    size_t asize = align(size);
-    void *p = ms_allocate(heap, asize);
+    void *p = ms_allocate(heap, size);
     if (!stress && p == NULL) {
         bmp_gc(heap);
-        p = ms_allocate(heap, asize);
+        p = ms_allocate(heap, size);
     }
     if (p == NULL) {
         ms_add_slot(heap);
-        p = ms_allocate(heap, asize);
+        p = ms_allocate(heap, size);
     }
     if (UNLIKELY(p == NULL))
         error_out_of_memory();
@@ -656,7 +654,6 @@ static void *eps_malloc(size_t size)
     EpsHeap *heap = gc_data;
     if (stress)
         eps_gc(heap);
-    size = align(size);
     void *p = eps_allocate(heap, size);
     if (!stress && p == NULL) {
         eps_gc(heap);
@@ -789,7 +786,8 @@ void gc_fin(void)
 
 void *gc_malloc(size_t size)
 {
-    void *p = funcs.malloc(size);
+    size_t asize = align(size);
+    void *p = funcs.malloc(asize);
 #ifdef DEBUG
     memset(p, 0, size);
 #endif
