@@ -10,7 +10,7 @@ run() {
     for t in *.scm; do
         echo "${t/.scm/}"
 	benchmark-run -n $nloop ../$bin $benchflags $t 2>&1
-    done | ruby stat.rb "$nloop"
+    done | ruby stat.rb "$nloop" base.tsv
 }
 
 main() {
