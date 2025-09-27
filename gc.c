@@ -80,6 +80,7 @@ typedef struct {
     uint8_t *low, *high;
     Value **roots;
     MSHeader *free_list;
+    uint8_t *bitmap;
 } MSHeap;
 
 static inline size_t align(size_t size)
@@ -118,6 +119,7 @@ static void ms_init(const uintptr_t *volatile sp)
     heap->low = first->body;
     heap->high = heap->low + first->size;
     heap->free_list = MS_HEADER(first->body);
+    heap->bitmap = NULL;
     gc_data = heap;
 }
 
@@ -184,14 +186,35 @@ static void mark_env_each(UNUSED uint64_t key, uint64_t value)
     mark_val(value);
 }
 
+static uintptr_t bitmap_index(const void *p);
+
+static bool is_living(MSHeader *h, bool do_mark)
+{
+    MSHeap *heap = gc_data;
+    bool marked;
+    if (heap->bitmap == NULL) {
+        marked = h->living;
+        if (marked != do_mark)
+            h->living = do_mark;
+    } else {
+        uintptr_t index = bitmap_index(h);
+        uint8_t offset = index % 8U;
+        index /= 8U;
+        uint8_t mask = 1UL << offset;
+        marked = heap->bitmap[index] & mask;
+        if (do_mark && !marked) // no need to unflag while sweep() because bitmap
+            heap->bitmap[index] |= mask; // is immediately freed after that
+    }
+    return marked;
+}
+
 static void mark_val(Value v)
 {
     if (!is_valid_pointer(v))
         return;
     MSHeader *h = MS_HEADER_FROM_VAL(v);
-    if (h->living)
+    if (is_living(h, true)) // mark it!
         return;
-    h->living = true; // mark it!
     switch (VALUE_TAG(v)) {
     case TAG_PAIR: {
         Pair *p = PAIR(v);
@@ -255,9 +278,6 @@ static void *allocate_from_chunk(MSHeap *heap, MSHeader *prev, MSHeader *curr, s
         prev->next = next;
     curr->used = true;
     void *p = &curr->next;
-#ifdef DEBUG
-    memset(p, 0, curr->size);
-#endif
     return p;
 }
 
@@ -341,7 +361,7 @@ static void free_chunk(MSHeap *heap, MSHeader *curr)
         memset(&curr->next, 0, curr->size);
         memset(curr, 0, sizeof(MSHeader));
 #else
-        curr->size = 0; // XXX: for is_valid_header ?
+        curr->size = 0; // XXX: affects is_valid_header but really needed?
 #endif
         return;
     }
@@ -358,9 +378,7 @@ static void sweep_slot(MSHeap *heap, MSHeapSlot *slot)
         offset = HSIZE(h->size);
         if (!h->used)
             continue;
-        if (h->living)
-            h->living = false;
-        else
+        if (!is_living(h, false))
             free_chunk(heap, h);
     }
 }
@@ -369,6 +387,8 @@ static void sweep(MSHeap *heap)
 {
     for (size_t i = 0; i < heap->size; i++)
         sweep_slot(heap, heap->slot[i]);
+    free(heap->bitmap);
+    heap->bitmap = NULL;
 }
 
 static void ms_add_slot(MSHeap *heap)
@@ -446,9 +466,6 @@ static void *ms_malloc(size_t size)
     }
     if (UNLIKELY(p == NULL))
         error_out_of_memory();
-#ifdef DEBUG
-    memset(p, 0, size);
-#endif
     return p;
 }
 
@@ -495,6 +512,56 @@ static const GCFunctions GC_FUNCS_MARK_SWEEP = {
     ms_init, ms_fin, ms_malloc, ms_add_root, ms_stat
 };
 static const GCFunctions GC_FUNCS_DEFAULT = GC_FUNCS_MARK_SWEEP;
+
+//
+// Algorithm: Mark-and-sweep + Bitmap Marking
+//
+
+typedef uint64_t align_t[2];
+static uintptr_t bitmap_index(const void *p)
+{
+    MSHeap *heap = gc_data;
+    return (align_t *) p - (align_t *) heap->low;
+}
+
+static void bmp_init_bitmap(void)
+{
+    MSHeap *heap = gc_data;
+    size_t rawsize = (align_t *) heap->high - (align_t *) heap->low + 1;
+    heap->bitmap = xcalloc(1, (rawsize + 7U) / 8U);
+}
+
+static void bmp_gc(MSHeap *heap)
+{
+    bmp_init_bitmap();
+    ms_gc(heap);
+}
+
+static void *bmp_malloc(size_t size)
+{
+    MSHeap *heap = gc_data;
+    if (stress)
+        bmp_gc(heap);
+    size = align(size);
+    Header *p = ms_allocate(heap, size);
+    if (!stress && p == NULL) {
+        bmp_gc(heap);
+        p = ms_allocate(heap, size);
+    }
+    if (UNLIKELY(p == NULL))
+        error_out_of_memory();
+    return p;
+}
+
+static void bmp_fin(void)
+{
+    bmp_init_bitmap();
+    ms_fin();
+}
+
+static const GCFunctions GC_FUNCS_MARK_SWEEP_BITMAP = {
+    ms_init, bmp_fin, bmp_malloc, ms_add_root, ms_stat
+};
 
 //
 // Algorithm: Epsilon
@@ -694,6 +761,9 @@ void sch_set_gc_algorithm(SchGCAlgorithm s)
     case GC_ALGORITHM_MARK_SWEEP:
         funcs = GC_FUNCS_MARK_SWEEP;
         break;
+    case GC_ALGORITHM_MARK_SWEEP_BITMAP:
+        funcs = GC_FUNCS_MARK_SWEEP_BITMAP;
+        break;
     }
 }
 
@@ -712,7 +782,11 @@ void gc_fin(void)
 
 void *gc_malloc(size_t size)
 {
-    return funcs.malloc(size);
+    void *p = funcs.malloc(size);
+#ifdef DEBUG
+    memset(p, 0, size);
+#endif
+    return p;
 }
 
 size_t gc_stack_get_size(const uintptr_t *volatile sp)

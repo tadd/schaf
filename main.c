@@ -114,6 +114,7 @@ static SchGCAlgorithm get_gc_algorithm(const char *s)
         SchGCAlgorithm algorithm;
     } algos[] = {
         { "mark-sweep", GC_ALGORITHM_MARK_SWEEP },
+        { "mark-sweep+bitmap", GC_ALGORITHM_MARK_SWEEP_BITMAP },
         { "epsilon", GC_ALGORITHM_EPSILON },
     };
     for (size_t i = 0; i < sizeof(algos) / sizeof(*algos); i++) {
