@@ -7,7 +7,7 @@ all: benchmark
 target: $(TARGET)
 
 benchmark: benchmark.bash $(TARGET)
-	./$< '$(BIN)'
+	./$< '$(BIN)' '$(OUT)'
 
 %.scm: src/%.scm.erb
 	erb -T - $< > $@
