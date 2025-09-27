@@ -458,11 +458,11 @@ static void *ms_malloc(size_t size)
     MSHeap *heap = gc_data;
     if (stress)
         ms_gc(heap);
-    size = align(size);
-    void *p = ms_allocate(heap, size);
+    size_t asize = align(size);
+    void *p = ms_allocate(heap, asize);
     if (!stress && p == NULL) {
         ms_gc(heap);
-        p = ms_allocate(heap, size);
+        p = ms_allocate(heap, asize);
     }
     if (UNLIKELY(p == NULL))
         error_out_of_memory();
@@ -542,11 +542,11 @@ static void *bmp_malloc(size_t size)
     MSHeap *heap = gc_data;
     if (stress)
         bmp_gc(heap);
-    size = align(size);
-    void *p = ms_allocate(heap, size);
+    size_t asize = align(size);
+    void *p = ms_allocate(heap, asize);
     if (!stress && p == NULL) {
         bmp_gc(heap);
-        p = ms_allocate(heap, size);
+        p = ms_allocate(heap, asize);
     }
     if (UNLIKELY(p == NULL))
         error_out_of_memory();
