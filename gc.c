@@ -464,7 +464,7 @@ static void *ms_malloc(size_t size)
     }
     if (p == NULL) {
         ms_add_slot(heap);
-        p = ms_allocate(heap, size);
+        p = ms_allocate(heap, asize);
     }
     if (UNLIKELY(p == NULL))
         error_out_of_memory();
@@ -552,7 +552,7 @@ static void *bmp_malloc(size_t size)
     }
     if (p == NULL) {
         ms_add_slot(heap);
-        p = ms_allocate(heap, size);
+        p = ms_allocate(heap, asize);
     }
     if (UNLIKELY(p == NULL))
         error_out_of_memory();
