@@ -1205,6 +1205,16 @@ static Value syn_begin(Value env, Value body)
     return eval_body(env, body);
 }
 
+static bool symvector_exist(Value v, Symbol needle)
+{
+    Symbol *array = VECTOR(v);
+    for (size_t i = 0, len = scary_length(array); i < len; i++) {
+        if (array[i] == needle)
+            return true;
+    }
+    return false;
+}
+
 // 4.2.4. Iteration
 //PTR
 static Value syn_do(Value env, Value args)
@@ -1216,23 +1226,23 @@ static Value syn_do(Value env, Value args)
     EXPECT(type, TYPE_PAIR, tests);
 
     Value doenv = env_inherit(env);
-    Value steps = Qnil, vars = Qnil, v;
+    Value steps = Qnil, vars = vector_new(), v;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
         EXPECT(type, TYPE_PAIR, b);
         int64_t l = length(b);
         if (l < 2 || l > 3)
             return runtime_error("malformed binding: %s", sch_stringify(b));
-        Value var = car(b), init = cadr(b), step = cddr(b);
-        EXPECT(type, TYPE_SYMBOL, var);
-        if (memq(var, vars) != Qfalse)
-            return runtime_error("duplicated variable: %s", sch_symbol_to_cstr(var));
-        vars = cons(var, vars);
+        Symbol var = get(SYMBOL, car(b));
+        Value init = cadr(b), step = cddr(b);
+        if (symvector_exist(vars, var))
+            return runtime_error("duplicated variable: %s", unintern(var));
+        vector_push(vars, var);
         if (step != Qnil)
             steps = cons(cons(var, car(step)), steps);
         v = eval(env, init); // in the original env
         CHECK_ERROR(v);
-        env_put(doenv, SYMBOL(var), v);
+        env_put(doenv, var, v);
     }
     Value test = car(tests), exprs = cdr(tests);
     while ((v = eval(doenv, test)) == Qfalse) {
@@ -1241,11 +1251,11 @@ static Value syn_do(Value env, Value args)
             CHECK_ERROR(v);
         }
         for (Value p = steps; p != Qnil; p = cdr(p)) {
-            Value pstep = car(p);
-            Value var = car(pstep), step = cdr(pstep);
+            Value pstep = car(p), step = cdr(pstep);
+            Symbol var = car(pstep);
             Value val = eval(doenv, step);
             CHECK_ERROR(val);
-            iset(doenv, SYMBOL(var), val);
+            iset(doenv, var, val);
         }
     }
     CHECK_ERROR(v);
