@@ -638,14 +638,14 @@ static Value env_put(Value env, Value key, Value value)
     Table *t = ENV(env)->table;
     if (t == NULL)
         t = ENV(env)->table = table_new();
-    table_put(t, sch_symbol_to_csymbol(key), value);
+    table_put(t, SYMBOL(key), value);
     return env;
 }
 
 // chained!
 static bool env_set(Value env, Value key, Value value)
 {
-    Symbol sym = sch_symbol_to_csymbol(key);
+    Symbol sym = SYMBOL(key);
     for (Value p = env; p != Qfalse; p = ENV(p)->parent) {
         Table *t = ENV(p)->table;
         if (t == NULL)
@@ -659,7 +659,7 @@ static bool env_set(Value env, Value key, Value value)
 // chained!!
 static Value env_get(const Value env, Value name)
 {
-    Symbol sym = sch_symbol_to_csymbol(name);
+    Symbol sym = SYMBOL(name);
     for (Value p = env; p != Qfalse; p = ENV(p)->parent) {
         Table *t = ENV(p)->table;
         if (t == NULL)
