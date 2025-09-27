@@ -395,8 +395,8 @@ static void ms_add_slot(MSHeap *heap)
 {
     MSHeapSlot *last = heap->slot[heap->size - 1];
     size_t new_size = last->size * HEAP_RATIO;
-    last = heap->slot[heap->size++] = ms_heap_slot_new(new_size);
-    uint8_t *beg = last->body, *end = beg + last->size;
+    MSHeapSlot *next = heap->slot[heap->size++] = ms_heap_slot_new(new_size);
+    uint8_t *beg = next->body, *end = beg + next->size;
     if (heap->low > beg)
         heap->low = beg;
     else if (heap->high < end)
