@@ -278,9 +278,6 @@ static void *allocate_from_chunk(MSHeap *heap, MSHeader *prev, MSHeader *curr, s
         prev->next = next;
     curr->used = true;
     void *p = &curr->next;
-#ifdef DEBUG
-    memset(p, 0, curr->size);
-#endif
     return p;
 }
 
@@ -364,7 +361,7 @@ static void free_chunk(MSHeap *heap, MSHeader *curr)
         memset(&curr->next, 0, curr->size);
         memset(curr, 0, sizeof(MSHeader));
 #else
-        curr->size = 0; // XXX: for is_valid_header ?
+        curr->size = 0; // XXX: affects is_valid_header but really needed?
 #endif
         return;
     }
@@ -469,9 +466,6 @@ static void *ms_malloc(size_t size)
     }
     if (UNLIKELY(p == NULL))
         error_out_of_memory();
-#ifdef DEBUG
-    memset(p, 0, size);
-#endif
     return p;
 }
 
@@ -556,9 +550,6 @@ static void *bmp_malloc(size_t size)
     }
     if (UNLIKELY(p == NULL))
         error_out_of_memory();
-#ifdef DEBUG
-    memset(p, 0, size);
-#endif
     return p;
 }
 
@@ -791,7 +782,11 @@ void gc_fin(void)
 
 void *gc_malloc(size_t size)
 {
-    return funcs.malloc(size);
+    void *p = funcs.malloc(size);
+#ifdef DEBUG
+    memset(p, 0, size);
+#endif
+    return p;
 }
 
 size_t gc_stack_get_size(const uintptr_t *volatile sp)
