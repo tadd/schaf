@@ -5,7 +5,7 @@ nloop=10
 benchflags=-TM
 
 label() {
-    printf 'Test\tTime (msec)\tMemory (KiB)\n'
+    printf 'Test\tTime (msec)\tstdev (%%)\tMemory (KiB)\n'
 }
 
 run() {
