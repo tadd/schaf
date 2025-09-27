@@ -7,4 +7,4 @@
          (tarai (- y 1) z x)
          (tarai (- z 1) x y)))))
 
-(tarai 10 9 0)
+(tarai 11 4 0)
