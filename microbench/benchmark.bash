@@ -4,18 +4,13 @@ set -o pipefail
 nloop=10
 benchflags=-TM
 
-label() {
-    printf 'Test\tTime (msec)\tstdev (%%)\tMemory (KiB)\n'
-}
-
 run() {
     local -r bin="$1"
     sudo echo -n
-    label
     for t in *.scm; do
-        printf '%s\t' ${t/.scm/}
-	benchmark-run -n $nloop ../$bin $benchflags $t 2>&1 | ruby stat.rb
-    done
+        echo "${t/.scm/}"
+	benchmark-run -n $nloop ../$bin $benchflags $t 2>&1
+    done | ruby stat.rb "$nloop"
 }
 
 main() {
