@@ -875,12 +875,20 @@ static void dump_stack_trace(StackFrame **call_stack)
     dump_frame(call_stack[len-1], NULL);
 }
 
+static void add_source(Source ***psource_data, const Source *newsrc)
+{
+    scary_push((void ***) psource_data, (void *) newsrc);
+    Source **data = *psource_data;
+    size_t len = scary_length(data);
+    gc_add_root(&data[len-1]->ast);
+}
+
 static Value iload(FILE *in, const char *filename)
 {
     Source *src = iparse(in, filename);
     if (src == NULL)
         return Qundef;
-    scary_push((void ***) &source_data, (void *) src);
+    add_source(&source_data, src);
     if (setjmp(jmp_exit) != 0)
         return sch_integer_new(exit_status);
     Value ret = eval_body(env_toplevel, src->ast);
@@ -896,7 +904,7 @@ static Value iload_inner(FILE *in, const char *path)
     Source *src = iparse(in, path);
     if (src == NULL)
         return Qundef;
-    scary_push((void ***) &source_data, (void *) src);
+    add_source(&source_data, src);
     return eval_body(env_toplevel, src->ast);
 }
 
