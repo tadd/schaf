@@ -227,7 +227,7 @@ inline int64_t sch_integer_to_cint(Value x)
 #endif
 }
 
-Symbol sch_symbol_to_csymbol(Value v)
+inline Symbol sch_symbol_to_csymbol(Value v)
 {
     return (Symbol) v >> FLAG_NBIT_SYM;
 }
