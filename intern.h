@@ -154,6 +154,7 @@ typedef struct {
 #define HEADER(v) ((Header *) v)
 #define VALUE_TAG(v) (HEADER(v)->tag)
 
+#define INT(v) sch_integer_to_cint(v)
 #define SYMBOL(v) sch_symbol_to_csymbol(v)
 #define PAIR(v) ((Pair *) v)
 #define LOCATED_PAIR(v) ((LocatedPair *) v)

@@ -21,7 +21,7 @@
         if (sch_value_is_integer(vexp)) \
             expect_int_eq(vexp, vact); \
         else if (sch_value_is_string(vexp)) \
-            expect_vstr_eq(sch_string_to_cstr(vexp), vact); \
+            expect_vstr_eq(STRING(vexp), vact); \
         else if (sch_value_is_symbol(vexp)) \
             expect_vsym_eq(sch_symbol_to_cstr(vexp), vact); \
     } while (0)

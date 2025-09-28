@@ -1490,7 +1490,7 @@ static Value proc_integer_p(UNUSED Value env, Value obj)
 #define get_int(x) ({ \
             Value X = x; \
             EXPECT(type, TYPE_INT, X); \
-            sch_integer_to_cint(X); \
+            INT(X); \
         })
 
 typedef bool (*RelOpFunc)(int64_t x, int64_t y);
@@ -1542,27 +1542,27 @@ static Value proc_ge(UNUSED Value env, Value args)
 
 static Value proc_zero_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && sch_integer_to_cint(obj) == 0);
+    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) == 0);
 }
 
 static Value proc_positive_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && sch_integer_to_cint(obj) > 0);
+    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) > 0);
 }
 
 static Value proc_negative_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && sch_integer_to_cint(obj) < 0);
+    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) < 0);
 }
 
 static Value proc_odd_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && (sch_integer_to_cint(obj) % 2) != 0);
+    return BOOL_VAL(sch_value_is_integer(obj) && (INT(obj) % 2) != 0);
 }
 
 static Value proc_even_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && (sch_integer_to_cint(obj) % 2) == 0);
+    return BOOL_VAL(sch_value_is_integer(obj) && (INT(obj) % 2) == 0);
 }
 
 static Value proc_max(UNUSED Value env, Value args)
@@ -1717,7 +1717,7 @@ static Value proc_number_to_string(UNUSED Value env, Value x)
 {
     char buf[22]; // log10(UINT64_MAX)+2
     EXPECT(type, TYPE_INT, x);
-    int64_t n = sch_integer_to_cint(x);
+    int64_t n = INT(x);
     snprintf(buf, sizeof(buf), "%"PRId64, n);
     return sch_string_new(buf);
 }
@@ -1911,7 +1911,7 @@ static Value proc_list_ref(UNUSED Value env, Value list, Value vk)
     int64_t k = get_non_negative_int(vk);
     Value tail = list_tail(list, k);
     if (tail == Qnil)
-        return runtime_error("list is not longer than %"PRId64, sch_integer_to_cint(k));
+        return runtime_error("list is not longer than %"PRId64, INT(k));
     return car(tail);
 }
 
@@ -2355,7 +2355,7 @@ static Value proc_eval(UNUSED Value genv, Value expr, Value env)
 
 static Value expect_r5rs(Value version)
 {
-    if (sch_value_is_integer(version) && sch_integer_to_cint(version) == 5)
+    if (sch_value_is_integer(version) && INT(version) == 5)
         return Qfalse;
     return runtime_error("only integer '5' is allowed for environment version");
 }
@@ -2670,13 +2670,13 @@ static void fdisplay_single(FILE* f, Value v)
         fprintf(f, "%s", v == Qtrue ? "#t" : "#f");
         break;
     case TYPE_INT:
-        fprintf(f, "%"PRId64, sch_integer_to_cint(v));
+        fprintf(f, "%"PRId64, INT(v));
         break;
     case TYPE_SYMBOL:
         fprintf(f, "%s", sch_symbol_to_cstr(v));
         break;
     case TYPE_STRING:
-        fprintf(f, "%s", sch_string_to_cstr(v));
+        fprintf(f, "%s", STRING(v));
         break;
     case TYPE_PROC:
         display_procedure(f, v);
@@ -2808,7 +2808,7 @@ static Value proc_exit(UNUSED Value env, Value args)
         if (obj == Qtrue)
             ; // use 0 for code as is
         else if (sch_value_is_integer(obj))
-            exit_status = sch_integer_to_cint(obj);
+            exit_status = INT(obj);
         else // or #f too
             exit_status = 2; // something failed
     }
