@@ -116,6 +116,7 @@ static bool value_is_procedure(Value v)
     case TAG_VECTOR:
     case TAG_ENV:
     case TAG_PORT:
+    case TAG_PROMISE:
     case TAG_EOF:
         return false;
     case TAG_ERROR:
@@ -127,6 +128,11 @@ static bool value_is_procedure(Value v)
 inline bool sch_value_is_pair(Value v)
 {
     return value_tag_is(v, TAG_PAIR);
+}
+
+inline bool sch_value_is_promise(Value v)
+{
+    return value_tag_is(v, TAG_PROMISE);
 }
 
 inline static bool is_error(Value v)
@@ -170,6 +176,8 @@ Type sch_value_type_of(Value v)
         return TYPE_ENV;
     case TAG_PORT:
         return TYPE_PORT;
+    case TAG_PROMISE:
+        return TYPE_PROMISE;
     case TAG_EOF:
         return TYPE_EOF;
     case TAG_ERROR:
@@ -203,6 +211,8 @@ static const char *value_type_to_string(Type t)
         return "environment";
     case TYPE_PORT:
         return "port";
+    case TYPE_PROMISE:
+        return "promise";
     case TYPE_EOF:
         return "eof";
     }
@@ -1250,6 +1260,21 @@ static Value syn_do(Value env, Value args)
     return eval_body(doenv, exprs);
 }
 
+// 4.2.5. Delayed evaluation
+static Value promise_new(Value env, Value val)
+{
+    Promise *pr = obj_new(TAG_PROMISE, sizeof(Promise));
+    pr->forced = false;
+    pr->env = env;
+    pr->val = val;
+    return (Value) pr;
+}
+
+static Value syn_delay(Value env, Value obj)
+{
+    return promise_new(env, obj);
+}
+
 // 4.2.6. Quasiquotation
 static Value qq_list(Value env, Value datum, int64_t depth);
 
@@ -1387,6 +1412,7 @@ static Value syn_define(Value env, Value args)
     case TYPE_VECTOR:
     case TYPE_ENV:
     case TYPE_PORT:
+    case TYPE_PROMISE:
     case TYPE_EOF:
     case TYPE_UNDEF:
         return runtime_error("the first argument expected symbol or pair but got %s",
@@ -1441,6 +1467,7 @@ static bool equal(Value x, Value y)
     case TYPE_PROC:
     case TYPE_ENV:
     case TYPE_PORT:
+    case TYPE_PROMISE:
     case TYPE_EOF:
     case TYPE_UNDEF:
         return false;
@@ -2154,6 +2181,21 @@ static Value proc_for_each(Value env, Value args)
     return Qfalse;
 }
 
+static Value proc_force(UNUSED Value env, Value obj)
+{
+    if (!sch_value_is_promise(obj))
+        return obj;
+    Promise *pr = PROMISE(obj);
+    if (!pr->forced) {
+        Value val = eval(pr->env, pr->val);
+        CHECK_ERROR(val);
+        pr->env = Qfalse; // env not needed anymore
+        pr->val = val;
+        pr->forced = true;
+    }
+    return pr->val;
+}
+
 [[gnu::noreturn, gnu::noinline]]
 static void jump(Continuation *cont)
 {
@@ -2605,6 +2647,7 @@ static void print_object(FILE* f, Value v, Value record, ValuePrinter printer)
     case TYPE_UNDEF:
     case TYPE_ENV:
     case TYPE_PORT:
+    case TYPE_PROMISE:
     case TYPE_EOF:
         printer(f, v);
         break;
@@ -2643,6 +2686,9 @@ static void fdisplay_single(FILE* f, Value v)
         break;
     case TYPE_PORT:
         display_port(f, PORT(v)->fp);
+        break;
+    case TYPE_PROMISE:
+        fprintf(f, "<promise: %p>", (void *) v);
         break;
     case TYPE_EOF:
         fprintf(f, "<eof>");
@@ -2769,6 +2815,12 @@ static Value proc_exit(UNUSED Value env, Value args)
     longjmp(jmp_exit, 1);
 }
 
+// (scheme lazy)
+static Value proc_promise_p(UNUSED Value env, Value obj)
+{
+    return BOOL_VAL(sch_value_is_promise(obj));
+}
+
 //
 // Local Extensions
 //
@@ -2831,6 +2883,7 @@ static void inspect_single(FILE* f, Value v)
     case TYPE_UNDEF:
     case TYPE_ENV:
     case TYPE_PORT:
+    case TYPE_PROMISE:
     case TYPE_EOF:
         fdisplay_single(f, v);
         break;
@@ -2929,7 +2982,7 @@ void sch_init(const uintptr_t *sp)
     // 4.2.4. Iteration
     define_syntax(e, "do", syn_do, -1);
     // 4.2.5. Delayed evaluation
-    //- delay
+    define_syntax(e, "delay", syn_delay, 1);
     // 4.2.6. Quasiquotation
     define_syntax(e, "quasiquote", syn_quasiquote, 1);
     define_syntax(e, "unquote", syn_unquote, 1);
@@ -3028,7 +3081,7 @@ void sch_init(const uintptr_t *sp)
     define_procedure(e, "apply", proc_apply, -1);
     define_procedure(e, "map", proc_map, -1);
     define_procedure(e, "for-each", proc_for_each, -1);
-    //- force
+    define_procedure(e, "force", proc_force, 1);
     define_procedure(e, "call/cc", proc_callcc, 1); // alias
     define_procedure(e, "call-with-current-continuation", proc_callcc, 1);
     define_procedure(e, "values", proc_values, -1);
@@ -3074,6 +3127,8 @@ void sch_init(const uintptr_t *sp)
     define_procedure(e, "get-output-string", proc_get_output_string, 1);
     // (scheme process-context)
     define_procedure(e, "exit", proc_exit, -1);
+    // (scheme lazy)
+    define_procedure(e, "promise?", proc_promise_p, 1);
 
     // Local Extensions
     define_syntax(e, "_defined?", syn_defined_p, 1);

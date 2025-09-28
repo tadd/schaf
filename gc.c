@@ -252,6 +252,12 @@ static void mark_val(Value v)
             mark_val(p[i]);
         break;
     }
+    case TAG_PROMISE: {
+        Promise *p = PROMISE(v);
+        mark_val(p->env);
+        mark_val(p->val);
+        break;
+    }
     case TAG_STRING:
     case TAG_CFUNC:
     case TAG_SYNTAX:
@@ -331,6 +337,7 @@ static void free_val(Value v)
     case TAG_CFUNC_CLOSURE:
     case TAG_CLOSURE:
     case TAG_PAIR:
+    case TAG_PROMISE:
     case TAG_EOF:
         break;
     }

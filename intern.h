@@ -29,6 +29,7 @@ typedef enum {
     TYPE_VECTOR,
     TYPE_ENV,
     TYPE_PORT,
+    TYPE_PROMISE,
     TYPE_EOF,
 } Type;
 
@@ -43,6 +44,7 @@ typedef enum {
     TAG_VECTOR,
     TAG_ENV,
     TAG_PORT,
+    TAG_PROMISE,
     TAG_EOF,
     // internal use only
     TAG_ERROR,
@@ -133,6 +135,13 @@ typedef struct {
 } Port;
 
 typedef struct {
+    Header header;
+    bool forced;
+    Value env;
+    Value val;
+} Promise;
+
+typedef struct {
     const char *func_name;
     Value loc;
 } StackFrame;
@@ -157,6 +166,7 @@ typedef struct {
 #define VECTOR(v) (((Vector *) v)->body)
 #define ENV(v) ((Env *) v)
 #define PORT(v) ((Port *) v)
+#define PROMISE(v) ((Promise *) v)
 #define ERROR(v) (((Error *) v)->call_stack)
 
 typedef struct {
@@ -186,6 +196,7 @@ bool sch_value_is_integer(Value v);
 bool sch_value_is_symbol(Value v);
 bool sch_value_is_string(Value v);
 bool sch_value_is_pair(Value v);
+bool sch_value_is_promise(Value v);
 Type sch_value_type_of(Value v);
 
 int64_t sch_integer_to_cint(Value v);

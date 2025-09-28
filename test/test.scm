@@ -355,6 +355,12 @@
                 ((null? x) sum))
             25))))
 
+;; 4.2.5. Delayed evaluation
+(describe "delay" (lambda ()
+  (noexpect equal? 42 (delay 42))
+  (noexpect equal? #t (delay #t))
+  (expect promise? (delay #t))))
+
 ;; 4.2.6. Quasiquotation
 (describe "quasiquote basic" (lambda ()
   (expect equal? `() (list))
@@ -1139,6 +1145,50 @@
     (for-each (lambda (a b) (set! x (+ a b))) '(1 2) '(4))
     (expect = x 5))))
 
+(describe "force" (lambda ()
+  (expect equal? 42 (force (delay 42)))
+  (let* ((a 10)
+         (pr (delay a)))
+    (expect equal? 10 (force pr))
+    (set! a 42)
+    (expect equal? 10 (force pr))
+    (set! pr (delay a))
+    (expect equal? 42 (force pr))
+    (set! a 10)
+    (expect equal? 42 (force pr)))
+  (expect equal? (force (delay (+ 1 2))) 3)
+  (let ((p (delay (+ 1 2))))
+    (expect equal? (list (force p) (force p)) '(3 3)))
+  (if local?
+      (begin
+        (expect equal? 42 (force 42))
+        (expect equal? #t (force #t))))))
+
+(describe "force stream" (lambda ()
+  (define a-stream
+    (letrec ((next
+              (lambda (n)
+                (cons n (delay (next (+ n 1)))))))
+      (next 0)))
+  (define head car)
+  (define tail
+    (lambda (stream) (force (cdr stream))))
+  (expect equal? (head (tail (tail a-stream))) 2)))
+
+(describe "force count" (lambda ()
+  (define count 0)
+  (define p
+    (delay (begin (set! count (+ count 1))
+                  (if (> count x)
+                      count
+                      (force p)))))
+  (define x 5)
+  (expect promise? p)
+  (expect equal? (force p) 6)
+  (expect promise? p)
+  (begin (set! x 10)
+         (expect equal? (force p) 6))))
+
 (describe "call-with-current-continuation" (lambda ()
   (define (f)
     (call-with-current-continuation
@@ -1462,6 +1512,12 @@
     (let ((f (eval '(lambda (f x) (f x x))
                    (schaf-environment))))
       (expect = (f + 10) 20))))
+
+  (describe "promise?" (lambda ()
+    (expect promise? (delay 1))
+    (expect promise? (delay #f))
+    (noexpect promise? 'promise)
+    (noexpect promise? #f)))
 
   ;; Detailed and implementation-dependent specs
 
