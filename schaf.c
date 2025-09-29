@@ -1116,11 +1116,12 @@ static Value syn_or(Value env, Value args)
 }
 
 // 4.2.2. Binding constructs
-static Value let(Value env, Value var, Value bindings, Value body)
+
+static Value prepare_letenv(Value env, Value bindings, Value *pparams)
 {
     EXPECT(list_head, bindings);
-    bool named = var != Qfalse;
     Value letenv = env_inherit(env);
+    bool named = pparams != NULL;
     Value params = DUMMY_PAIR(), lparams = params;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
@@ -1135,10 +1136,24 @@ static Value let(Value env, Value var, Value bindings, Value body)
         CHECK_ERROR(val);
         env_put(letenv, ident, val);
     }
-    if (named) {
-        Value proc = closure_new(letenv, cdr(params), body);
-        env_put(letenv, var, proc); // letenv affects as proc->env
-    }
+    if (named)
+        *pparams = cdr(params);
+    return letenv;
+}
+
+static Value let(Value env, Value bindings, Value body)
+{
+    Value letenv = prepare_letenv(env, bindings, NULL);
+    CHECK_ERROR(letenv);
+    return eval_body(letenv, body);
+}
+
+static Value named_let(Value env, Value var, Value bindings, Value body)
+{
+    Value params;
+    Value letenv = prepare_letenv(env, bindings, &params);
+    Value proc = closure_new(letenv, params, body);
+    env_put(letenv, var, proc); // letenv affects as proc->env
     return eval_body(letenv, body);
 }
 
@@ -1152,8 +1167,9 @@ static Value syn_let(Value env, Value args)
         var = bind_or_var;
         bindings = car(body);
         body = cdr(body);
+        return named_let(env, var, bindings, body);
     }
-    return let(env, var, bindings, body);
+    return let(env, bindings, body);
 }
 
 static Value let_star(Value env, Value bindings, Value body)
