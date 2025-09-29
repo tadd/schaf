@@ -126,7 +126,7 @@ static void ms_init(const uintptr_t *volatile sp)
 static void ms_add_root(const Value *r)
 {
     MSHeap *heap = gc_data;
-    scary_push((void ***) &heap->roots, (void *) r);
+    scary_push((void ***) &heap->roots, (const void *) r);
 }
 
 bool in_heap_range(volatile uintptr_t v)

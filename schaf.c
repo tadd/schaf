@@ -729,7 +729,7 @@ static StackFrame *stack_frame_new(const char *name, Value loc)
 static Value push_stack_frame(Value ve, const char *name, Value loc)
 {
     StackFrame *f = stack_frame_new(name, loc);
-    scary_push((void ***) &ERROR(ve), (void *) f);
+    scary_push((void ***) &ERROR(ve), (const void *) f);
     return ve;
 }
 
@@ -887,7 +887,7 @@ static void dump_stack_trace(StackFrame **call_stack)
 
 static void add_source(Source ***psource_data, const Source *newsrc)
 {
-    scary_push((void ***) psource_data, (void *) newsrc);
+    scary_push((void ***) psource_data, (const void *) newsrc);
     Source **data = *psource_data;
     size_t len = scary_length(data);
     gc_add_root(&data[len-1]->ast);
