@@ -1230,7 +1230,7 @@ static Value syn_do(Value env, Value args)
     EXPECT(list_head, bindings);
     EXPECT(type, TYPE_PAIR, tests);
     Value doenv = env_inherit(env);
-    Value steps = Qnil, vars = vector_new(), v;
+    Value steps = vector_new(), vars = vector_new(), v;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
         EXPECT(type, TYPE_PAIR, b);
@@ -1243,7 +1243,7 @@ static Value syn_do(Value env, Value args)
             return runtime_error("duplicated variable: %s", sch_symbol_to_cstr(var));
         vector_push(vars, var);
         if (step != Qnil)
-            steps = cons(cons(var, car(step)), steps);
+            vector_push(steps, cons(var, car(step)));
         v = eval(env, init); // in the original env
         CHECK_ERROR(v);
         env_put(doenv, var, v);
@@ -1254,8 +1254,8 @@ static Value syn_do(Value env, Value args)
             v = eval_body(doenv, body);
             CHECK_ERROR(v);
         }
-        for (Value p = steps; p != Qnil; p = cdr(p)) {
-            Value pstep = car(p);
+        for (ssize_t i = scary_length(VECTOR(steps)) - 1 ; i >= 0; i--) {
+            Value pstep = VECTOR(steps)[i];
             Value var = car(pstep), step = cdr(pstep);
             Value val = eval(doenv, step);
             CHECK_ERROR(val);
