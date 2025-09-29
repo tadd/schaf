@@ -25,16 +25,18 @@ void scary_pop(void *ary);
     xTYPE2(f, long long, longlong, s1, s2)
 #define xDATA(f) xTYPE(f,,)
 #define xPTRS(f) xTYPE(f, *, p) xTYPE0(f, void, void, *, p)
+#define xCPTRS(f) xTYPE(f, const * , p) xTYPE0(f, const void, void, *, p)
 #define xTYPES(f) xDATA(f) xPTRS(f)
+#define xTYPES_CPTR(f) xTYPES(f) xCPTRS(f)
 
 #define xDECL_PUSH(type, ident) void scary_push_##ident(type **, const type);
 xTYPES(xDECL_PUSH);
 #define xPAT_PUSH(type, ident) , type: scary_push_##ident
-#define scary_push(pary, elem) _Generic(elem xTYPES(xPAT_PUSH))(pary, elem)
+#define scary_push(pary, elem) _Generic(elem xTYPES_CPTR(xPAT_PUSH))(pary, elem)
 
 #define xDECL_DUP(type, ident) type *scary_dup_##ident(const type *);
 xTYPES(xDECL_DUP);
-#define xPAT_DUP(type, ident) , type *: scary_dup_##ident
+#define xPAT_DUP(type, ident) , type *: scary_dup_##ident, const type *: scary_dup_##ident
 #define scary_dup(p) _Generic(p xTYPES(xPAT_DUP))(p)
 
 #endif

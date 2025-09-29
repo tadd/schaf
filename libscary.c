@@ -132,7 +132,7 @@ static void *scary_dup_any(const void *p)
     Scary *ary = get(p);
     Scary *dup = xmalloc(sizeof(Scary) + ary->capacity);
     *dup = *ary;
-    memcpy(dup->space, ary->space, ary->capacity);
+    memcpy(dup->space, ary->space, ary->length * ary->elem_size);
     return opaque(dup);
 }
 
