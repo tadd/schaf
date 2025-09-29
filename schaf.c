@@ -1212,6 +1212,15 @@ static Value syn_begin(Value env, Value body)
 }
 
 // 4.2.4. Iteration
+static bool findval(Value *heystack, Value needle)
+{
+    for (size_t i = 0, len = scary_length(heystack); i < len; i++) {
+        if (heystack[i] == needle)
+            return true;
+    }
+    return false;
+}
+
 //PTR
 static Value syn_do(Value env, Value args)
 {
@@ -1220,9 +1229,8 @@ static Value syn_do(Value env, Value args)
     Value bindings = car(args), tests = cadr(args), body = cddr(args);
     EXPECT(list_head, bindings);
     EXPECT(type, TYPE_PAIR, tests);
-
     Value doenv = env_inherit(env);
-    Value steps = Qnil, vars = Qnil, v;
+    Value steps = Qnil, vars = vector_new(), v;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
         EXPECT(type, TYPE_PAIR, b);
@@ -1231,9 +1239,9 @@ static Value syn_do(Value env, Value args)
             return runtime_error("malformed binding: %s", sch_stringify(b));
         Value var = car(b), init = cadr(b), step = cddr(b);
         EXPECT(type, TYPE_SYMBOL, var);
-        if (memq(var, vars) != Qfalse)
+        if (findval(VECTOR(vars), var))
             return runtime_error("duplicated variable: %s", sch_symbol_to_cstr(var));
-        vars = cons(var, vars);
+        vector_push(vars, var);
         if (step != Qnil)
             steps = cons(cons(var, car(step)), steps);
         v = eval(env, init); // in the original env
@@ -2586,7 +2594,7 @@ static void display_procedure(FILE *f, Value proc)
 
 static bool check_circular(FILE *f, Value p, Value record)
 {
-    bool circular = memq(p, record) != Qfalse;
+    bool circular = findval(VECTOR(record), p);
     if (circular)
         fprintf(f, "..");
     return circular;
@@ -2601,7 +2609,7 @@ static void print_pair(FILE *f, Value l, Value record, ValuePrinter printer)
     for (Value p = l, next; p != Qnil; p = next) {
         if (check_circular(f, p, record))
             break;
-        record = cons(p, record);
+        vector_push(record, p);
         Value val = car(p);
         if (!check_circular(f, val, record))
             print_object(f, val, record, printer);
@@ -2623,7 +2631,7 @@ static void print_vector(FILE *f, Value val, Value record, ValuePrinter printer)
     if (check_circular(f, val, record))
         goto end;
     fprintf(f, "#(");
-    record = cons(val, record);
+    vector_push(record, val);
     const Value *v = VECTOR(val);
     for (int64_t i = 0, len = scary_length(v); i < len; i++) {
         Value e = v[i];
@@ -2705,7 +2713,8 @@ static void fdisplay_single(FILE* f, Value v)
 
 static void fdisplay(FILE* f, Value v)
 {
-    print_object(f, v, Qnil, fdisplay_single);
+    Value record = vector_new();
+    print_object(f, v, record, fdisplay_single);
 }
 
 char *sch_stringify(Value v)
@@ -2896,7 +2905,8 @@ static void inspect_single(FILE* f, Value v)
 
 static void inspect(FILE* f, Value v)
 {
-    print_object(f, v, Qnil, inspect_single);
+    Value record = vector_new();
+    print_object(f, v, record, inspect_single);
 }
 
 char *sch_inspect(Value v)
