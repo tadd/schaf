@@ -37,9 +37,7 @@ def main(n, basepath)
   base = parse_base(basepath)
   print "\tvs Time (%)\tvs stdev (pp)\tvs Memory (%)" if base
   puts
-  pp base
   STDOUT.flush
-  abort
   while (prog = STDIN.gets)
     stat(prog.chomp, n, base)
   end
