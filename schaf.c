@@ -472,7 +472,7 @@ static Value apply_closure(UNUSED Value env, Value proc, Value args)
 static Value closure_new(Value env, Value params, Value body)
 {
     Closure *f = obj_new(TAG_CLOSURE, sizeof(Closure));
-    bool headp = (params == Qnil || sch_value_is_pair(params));
+    bool headp = params == Qnil || sch_value_is_pair(params);
     f->proc.arity = headp ? length(params) : -1;
     f->proc.apply = apply_closure;
     f->env = env;
@@ -1557,12 +1557,12 @@ static Value proc_negative_p(UNUSED Value env, Value obj)
 
 static Value proc_odd_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && (INT(obj) % 2) != 0);
+    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) % 2 != 0);
 }
 
 static Value proc_even_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && (INT(obj) % 2) == 0);
+    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) % 2 == 0);
 }
 
 static Value proc_max(UNUSED Value env, Value args)
