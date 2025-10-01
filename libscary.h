@@ -10,8 +10,8 @@ void scary_free(void *ary);
 size_t scary_length(const void *ary);
 void scary_pop(void *ary);
 #if 0
-<T> void scary_push(T **ary, T elem);
-<T> T *scary_dup(T *src);
+<T> void scary_push(T **ary, const T elem);
+<T> T *scary_dup(const T *src);
 #endif
 
 #define xTYPE0(f, t, id, s1, s2) f(t s1, id##s2)
