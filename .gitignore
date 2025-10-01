@@ -1,4 +1,5 @@
 *.o
-schaf
-basic-test
-*-san
+/schaf
+/schaf-*
+/test/basic-test
+/test/basic-test-san
