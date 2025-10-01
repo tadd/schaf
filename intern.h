@@ -197,7 +197,6 @@ bool sch_value_is_integer(Value v);
 bool sch_value_is_symbol(Value v);
 bool sch_value_is_string(Value v);
 bool sch_value_is_pair(Value v);
-bool sch_value_is_promise(Value v);
 Type sch_value_type_of(Value v);
 
 int64_t sch_integer_to_cint(Value v);

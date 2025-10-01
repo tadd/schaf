@@ -130,7 +130,7 @@ inline bool sch_value_is_pair(Value v)
     return value_tag_is(v, TAG_PAIR);
 }
 
-inline bool sch_value_is_promise(Value v)
+inline static bool value_is_promise(Value v)
 {
     return value_tag_is(v, TAG_PROMISE);
 }
@@ -2183,7 +2183,7 @@ static Value proc_for_each(Value env, Value args)
 
 static Value proc_force(UNUSED Value env, Value obj)
 {
-    if (!sch_value_is_promise(obj))
+    if (!value_is_promise(obj))
         return obj;
     Promise *pr = PROMISE(obj);
     if (!pr->forced) {
@@ -2819,7 +2819,7 @@ static Value proc_exit(UNUSED Value env, Value args)
 // (scheme lazy)
 static Value proc_promise_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_promise(obj));
+    return BOOL_VAL(value_is_promise(obj));
 }
 
 //
