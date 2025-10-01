@@ -2464,6 +2464,7 @@ static Value open_port(const char *path, PortType type)
                              output ? "output" : "input", path);
     return port_new(fp, type);
 }
+
 static Value proc_open_input_file(UNUSED Value env, Value path)
 {
     EXPECT(type, TYPE_STRING, path);
