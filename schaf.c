@@ -936,8 +936,11 @@ static Value iload_inner(FILE *in, const char *path)
     return eval_body(env_toplevel, src->ast);
 }
 
+static void reset_source_data(void);
+
 Value sch_eval_string(const char *in)
 {
+    reset_source_data();
     FILE *f = mopen(in);
     Value v = iload(f, "<inline>");
     fclose(f);
@@ -2938,11 +2941,23 @@ static Value proc_p(UNUSED Value env, Value args)
         for (size_t i = 0, len = scary_length(a); i < len; i++) \
             f(a[i]); \
         scary_free(a); \
+        a = NULL; \
     } while (0)
+
+static void free_source_data(void)
+{
+    scary_free_with(source_free, source_data);
+}
+
+static void reset_source_data(void)
+{
+    free_source_data();
+    source_data = scary_new(sizeof(Source *));
+}
 
 int sch_fin(void)
 {
-    scary_free_with(source_free, source_data);
+    free_source_data();
     scary_free_with(free, symbol_names);
     gc_fin();
     return exit_status;
