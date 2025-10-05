@@ -2921,6 +2921,7 @@ static Value proc_p(UNUSED Value env, Value args)
         for (size_t i = 0, len = scary_length(a); i < len; i++) \
             f(a[i]); \
         scary_free(a); \
+        a = NULL; \
     } while (0)
 
 int sch_fin(void)

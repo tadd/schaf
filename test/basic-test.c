@@ -68,7 +68,7 @@
 #define expect_list_eq_parsed(exp, act) expect_x_eq_parsed(list, exp, act)
 #define expect_pair_eq_parsed(ecar, ecdr, act) expect_pair_eq(ecar, ecdr, parse_expr_string(act))
 #define expect_parse_error(exp, act) expect_error(exp, parse_expr_string(act))
-#define expect_runtime_error(exp, act) expect_error(exp, sch_eval_string(act))
+#define expect_runtime_error(exp, act) expect_error(exp, sch_eval_string(act)); test_sch_reset()
 
 static void test_sch_init(void)
 {
@@ -79,6 +79,12 @@ static void test_sch_fin(void)
     sch_fin();
 }
 TestSuite(schaf, .init = test_sch_init, .fini = test_sch_fin);
+
+static void test_sch_reset(void)
+{
+    test_sch_fin();
+    test_sch_init();
+}
 
 static Value parse_expr_string(const char *in)
 {
