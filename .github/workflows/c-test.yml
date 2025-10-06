@@ -18,6 +18,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - run: echo OPTFLAGS='-Og -ggdb3 -DDEBUG' >> "$GITHUB_ENV"
     - if: runner.os == 'Linux'
       run: |
         sudo apt install -U --no-install-recommends libcriterion-dev valgrind
