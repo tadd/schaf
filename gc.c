@@ -133,12 +133,12 @@ bool in_heap_range(volatile uintptr_t v)
 {
     MSHeap *heap = gc_data;
     const uint8_t *volatile p = (uint8_t *volatile) v;
-    return p >= heap->low && p < heap->high;
-}
-
-static bool is_valid_tag(ValueTag t)
-{
-    return t <= TAG_LAST;
+    for (size_t i = 0; i < heap->size; i++) {
+        const MSHeapSlot *slot = heap->slot[i];
+        if (p >= slot->body && p < slot->body + slot->size)
+            return true;
+    }
+    return false;
 }
 
 static bool is_valid_pointer(Value v)
@@ -151,14 +151,14 @@ static bool is_valid_header(Value v)
     UNPOISON(&VALUE_TAG(v), sizeof(ValueTag));              // Suspicious but
     UNPOISON(MS_HEADER_FROM_VAL(v), sizeof(MSHeader *));    // need to
     UNPOISON(&MS_HEADER_FROM_VAL(v)->size, sizeof(size_t)); // be read
-    if (!is_valid_tag(VALUE_TAG(v)))
+    if (VALUE_TAG(v) > TAG_LAST)
         return false;
     size_t size = MS_HEADER_FROM_VAL(v)->size;
     return size > 0 && size % 16U == 0 &&
         size <= sizeof(Continuation) + MS_HEADER_OFFSET;
 }
 
-static bool in_heap_val(Value v)
+static bool is_heap_value(Value v)
 {
     return is_valid_pointer(v) && in_heap_range(v) && is_valid_header(v);
 }
@@ -169,10 +169,8 @@ static void mark_array(const void *volatile beg, size_t n)
 {
     UNPOISON(beg, n * sizeof(uintptr_t));
     const Value *volatile p = beg;
-    for (size_t i = 0; i < n; i++, p++) {
-        if (in_heap_val(*p))
-            mark_val(*p);
-    }
+    for (size_t i = 0; i < n; i++, p++)
+        mark_val(*p);
 }
 
 static void mark_jmpbuf(const jmp_buf *jmp)
@@ -210,7 +208,7 @@ static bool is_living(MSHeader *h, bool do_mark)
 
 static void mark_val(Value v)
 {
-    if (!is_valid_pointer(v))
+    if (!is_heap_value(v))
         return;
     MSHeader *h = MS_HEADER_FROM_VAL(v);
     if (is_living(h, true)) // mark it!
