@@ -374,6 +374,17 @@ static Value apply_cfunc_0(Value env, Value f, UNUSED Value args)
     return CFUNC(f)->f0(env);
 }
 
+#if 0
+    b BOOL,
+    i INT,
+    o PORT,
+    p PAIR,
+    s STRING,
+    v VECTOR,
+    P PROC,
+    S SYMBOL,
+#endif
+
 static Value apply_cfunc_1(Value env, Value f, Value args)
 {
     EXPECT(arity_1, args);
@@ -1784,9 +1795,9 @@ static Value proc_number_to_string(UNUSED Value env, Value x)
 
 // 6.3. Other data types
 // 6.3.1. Booleans
-static Value proc_not(UNUSED Value env, Value x)
+static Value proc_not(UNUSED Value env, bool x)
 {
-    return BOOL_VAL(x == Qfalse);
+    return BOOL_VAL(!x);
 }
 
 static Value proc_boolean_p(UNUSED Value env, Value x)
@@ -2993,6 +3004,7 @@ int sch_fin(void)
 
 #define ARITY(f) _Generic((f), \
     Value (*)(Value): 0, \
+    Value (*)(Value, bool): 1, \
     Value (*)(Value, Value): 1, \
     Value (*)(Value, Value, Value): 2, \
     Value (*)(Value, Value, Value, Value): 3, \
