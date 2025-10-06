@@ -577,7 +577,7 @@ static void parser_free(Parser *p)
 }
 
 // Source: filename, ast, newline_pos
-static Source *source_new(Parser *p, Value syntax_list)
+static Source *source_new(Parser *p, volatile Value syntax_list)
 {
     size_t len = strlen(p->filename);
     Source *src = xmalloc(sizeof(Source) + len + 1);
@@ -602,7 +602,8 @@ static Source *parse_program(Parser *p)
     Value v = DUMMY_PAIR();
     for (Value last = v, expr; (expr = parse_expr_top(p, &pos)) != Qundef; )
         last = PAIR(last)->cdr = located_list1(expr, pos);
-    return source_new(p, cdr(v));
+    volatile Value ast = cdr(v);
+    return source_new(p, ast);
 }
 
 Source *iparse(FILE *in, const char *filename)
@@ -622,7 +623,7 @@ static Value iparse_ast(FILE *in, const char *filename)
     Source *src = iparse(in, filename);
     if (src == NULL)
         return Qundef;
-    Value ast = src->ast;
+    volatile Value ast = src->ast;
     source_free(src);
     return ast;
 }
@@ -644,7 +645,7 @@ Value sch_parse(const char *path)
     FILE *in = fopen(path, "r");
     if (UNLIKELY(in == NULL))
         error("parse: can't open file: %s", path);
-    Value ast = iparse_ast(in, path);
+    volatile Value ast = iparse_ast(in, path);
     fclose(in);
     return ast;
 }
@@ -652,7 +653,7 @@ Value sch_parse(const char *path)
 Value sch_parse_string(const char *in)
 {
     FILE *f = mopen(in);
-    Value ast = iparse_ast(f, "<inline>");
+    volatile Value ast = iparse_ast(f, "<inline>");
     fclose(f);
     return ast;
 }
