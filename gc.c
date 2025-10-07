@@ -256,6 +256,9 @@ static void mark_val(Value v)
         mark_val(p->val);
         break;
     }
+    case TAG_SOURCE:
+        mark_val(SOURCE(v)->ast);
+        break;
     case TAG_STRING:
     case TAG_CFUNC:
     case TAG_SYNTAX:
@@ -329,6 +332,10 @@ static void free_val(Value v)
         break;
     case TAG_ERROR:
         scary_free(ERROR(v));
+        break;
+    case TAG_SOURCE:
+        free(SOURCE(v)->filename);
+        scary_free(SOURCE(v)->newline_pos);
         break;
     case TAG_CFUNC:
     case TAG_SYNTAX:

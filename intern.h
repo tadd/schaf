@@ -47,6 +47,7 @@ typedef enum {
     TAG_PROMISE,
     TAG_EOF,
     // internal use only
+    TAG_SOURCE,
     TAG_ERROR,
     TAG_LAST = TAG_ERROR
 } ValueTag;
@@ -142,6 +143,13 @@ typedef struct {
 } Promise;
 
 typedef struct {
+    Header header;
+    int64_t *newline_pos; // list of position | int
+    Value ast;
+    char *filename;
+} Source;
+
+typedef struct {
     const char *func_name;
     Value loc;
 } StackFrame;
@@ -168,19 +176,14 @@ typedef struct {
 #define ENV(v) ((Env *) v)
 #define PORT(v) ((Port *) v)
 #define PROMISE(v) ((Promise *) v)
+#define SOURCE(v) ((Source *) v)
 #define ERROR(v) (((Error *) v)->call_stack)
-
-typedef struct {
-    int64_t *newline_pos; // list of position | int
-    Value ast;
-    char filename[];
-} Source;
 
 #pragma GCC visibility push(hidden) // also affects Clang
 
 extern Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
 
-Source *iparse(FILE *in, const char *filename);
+Value iparse(FILE *in, const char *filename);
 Value parse_datum(FILE *in, const char *filename);
 void pos_to_line_col(int64_t pos, int64_t *newline_pos, int64_t *line, int64_t *col);
 [[gnu::noreturn]] void raise_error(jmp_buf buf, const char *fmt, ...);

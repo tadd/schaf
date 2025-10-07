@@ -57,7 +57,7 @@ static char **symbol_names; // ("name0" "name1" ...)
 Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
 static Value SYM_ELSE, SYM_RARROW;
 static const char *load_basedir;
-static Source **source_data;
+static Value source_data = Qnil;
 static jmp_buf jmp_exit;
 static uint8_t exit_status; // should be <= 125 to be portable
 static char errmsg[BUFSIZ];
@@ -119,6 +119,7 @@ static bool value_is_procedure(Value v)
     case TAG_PROMISE:
     case TAG_EOF:
         return false;
+    case TAG_SOURCE:
     case TAG_ERROR:
         break; // internal objects
     }
@@ -180,6 +181,7 @@ Type sch_value_type_of(Value v)
         return TYPE_PROMISE;
     case TAG_EOF:
         return TYPE_EOF;
+    case TAG_SOURCE:
     case TAG_ERROR:
         break; // internal objects
     }
@@ -810,24 +812,25 @@ static int append_error_message(const char *fmt, ...)
     return n;
 }
 
-static Source *find_source_from_filename(const char *filename)
+static Value find_source_from_filename(const char *filename)
 {
-    for (size_t i = 0, len = scary_length(source_data); i < len; i++) {
-        if (strcmp(source_data[i]->filename, filename) == 0)
-            return source_data[i];
+    for (Value p = source_data; p != Qnil; p = cdr(p)) {
+        Value src = car(p);
+        if (strcmp(SOURCE(src)->filename, filename) == 0)
+            return src;
     }
-    return NULL;
+    return Qfalse;
 }
 
 static void dump_line_column(const char *filename, int64_t pos)
 {
     int64_t line, col;
-    Source *src = find_source_from_filename(filename);
-    if (src == NULL) {
+    Value src = find_source_from_filename(filename);
+    if (src == Qfalse) {
         append_error_message("\n\t<unknown>");
         return;
     }
-    pos_to_line_col(pos, src->newline_pos, &line, &col);
+    pos_to_line_col(pos, SOURCE(src)->newline_pos, &line, &col);
     append_error_message("\n\t%s:%"PRId64":%"PRId64" in ",
                          filename, line, col);
 }
@@ -848,10 +851,10 @@ static bool find_pair(Value tree, Value pair)
 
 static const char *find_filename(Value pair)
 {
-    for (size_t i = 0, len = scary_length(source_data); i < len; i++) {
-        Source *src = source_data[i];
-        if (find_pair(src->ast, pair))
-            return src->filename;
+    for (Value p = source_data; p != Qnil; p = cdr(p)) {
+        Value src = car(p);
+        if (find_pair(SOURCE(src)->ast, pair))
+            return SOURCE(src)->filename;
     }
     return NULL;
 }
@@ -903,23 +906,20 @@ static void dump_stack_trace(StackFrame **call_stack)
     dump_frame(call_stack[len-1], NULL);
 }
 
-static void add_source(Source ***psource_data, const Source *newsrc)
+static void add_source(Value *psource_data, Value newsrc)
 {
-    scary_push((void ***) psource_data, (const void *) newsrc);
-    Source **data = *psource_data;
-    size_t len = scary_length(data);
-    gc_add_root(&data[len-1]->ast);
+    *psource_data = cons(newsrc, *psource_data);
 }
 
 static Value iload(FILE *in, const char *filename)
 {
-    Source *src = iparse(in, filename);
-    if (src == NULL)
+    Value src = iparse(in, filename);
+    if (src == Qundef)
         return Qundef;
     add_source(&source_data, src);
     if (setjmp(jmp_exit) != 0)
         return sch_integer_new(exit_status);
-    Value ret = eval_body(env_toplevel, src->ast);
+    Value ret = eval_body(env_toplevel, SOURCE(src)->ast);
     if (is_error(ret)) {
         dump_stack_trace(ERROR(ret));
         return Qundef;
@@ -929,20 +929,16 @@ static Value iload(FILE *in, const char *filename)
 
 static Value iload_inner(FILE *in, const char *path)
 {
-    Source *src = iparse(in, path);
-    if (src == NULL)
+    Value src = iparse(in, path);
+    if (src == Qundef)
         return Qundef;
     add_source(&source_data, src);
-    return eval_body(env_toplevel, src->ast);
+    return eval_body(env_toplevel, SOURCE(src)->ast);
 }
 
 static void clear_source_data(void)
 {
-    for (size_t i = 0, len = scary_length(source_data); i < len; i++) {
-        source_free(source_data[i]);
-    }
-    scary_free(source_data);
-    source_data = scary_new(sizeof(Source *));
+    source_data = Qnil;
 }
 
 Value sch_eval_string(const char *in)
@@ -2952,7 +2948,7 @@ static Value proc_p(UNUSED Value env, Value args)
 
 int sch_fin(void)
 {
-    scary_free_with(source_free, source_data);
+    source_data = Qnil;
     scary_free_with(free, symbol_names);
     gc_fin();
     return exit_status;
@@ -2967,6 +2963,7 @@ void sch_init(const uintptr_t *sp)
     gc_add_root(&current_output_port);
     gc_add_root(&inner_winders);
     gc_add_root(&inner_continuation);
+    gc_add_root(&source_data);
 
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
@@ -2978,7 +2975,6 @@ void sch_init(const uintptr_t *sp)
     DEF_SYMBOL(UNQUOTE, "unquote");
     DEF_SYMBOL(UNQUOTE_SPLICING, "unquote-splicing");
     DEF_SYMBOL(RARROW, "=>");
-    source_data = scary_new(sizeof(Source *));
 
     env_toplevel = env_new("default");
     gc_add_root(&env_toplevel);

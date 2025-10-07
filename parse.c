@@ -577,26 +577,26 @@ static void parser_free(Parser *p)
 }
 
 // Source: filename, ast, newline_pos
-static Source *source_new(Parser *p, volatile Value syntax_list)
+static Value source_new(Parser *p, volatile Value syntax_list)
 {
-    size_t len = strlen(p->filename);
-    Source *src = xmalloc(sizeof(Source) + len + 1);
+    Source *src = obj_new(TAG_SOURCE, sizeof(Source));
     src->ast = syntax_list;
     src->newline_pos = p->newline_pos; // move
     p->newline_pos = NULL;
-    strcpy(src->filename, p->filename);
-    return src;
+    src->filename = xstrdup(p->filename);
+    return (Value) src;
 }
 
 void source_free(Source *s)
 {
     if (s == NULL)
         return;
+    free(s->filename);
     scary_free(s->newline_pos);
     free(s);
 }
 
-static Source *parse_program(Parser *p)
+static Value parse_program(Parser *p)
 {
     int64_t pos;
     Value v = DUMMY_PAIR();
@@ -606,25 +606,25 @@ static Source *parse_program(Parser *p)
     return source_new(p, ast);
 }
 
-Source *iparse(FILE *in, const char *filename)
+Value iparse(FILE *in, const char *filename)
 {
     Parser *p = parser_new(in, filename);
-    Source *src;
+    Value src;
     if (setjmp(p->jmp_error) == 0)
         src = parse_program(p); // success
     else
-        src = NULL; // got an error
+        src = Qundef; // got an error
     parser_free(p);
     return src;
 }
 
 static Value iparse_ast(FILE *in, const char *filename)
 {
-    Source *src = iparse(in, filename);
-    if (src == NULL)
+    Value src = iparse(in, filename);
+    if (src == Qundef)
         return Qundef;
-    volatile Value ast = src->ast;
-    source_free(src);
+    volatile Value ast = SOURCE(src)->ast;
+    source_free(SOURCE(src));
     return ast;
 }
 
