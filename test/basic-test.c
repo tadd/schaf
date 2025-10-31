@@ -72,6 +72,7 @@
 
 static void test_sch_init(void)
 {
+    sch_set_gc_algorithm(SCH_GC_ALGORITHM_GREEN_TEA);
     SCH_INIT(); // XXX
 }
 static void test_sch_fin(void)
