@@ -34,7 +34,9 @@ typedef struct {
 typedef struct {
     void (*init)(const uintptr_t *volatile sp);
     void (*fin)(void);
-    void *(*malloc)(size_t size);
+    void (*collect)(void);
+    void *(*allocate)(size_t size);
+    void (*extend)(void);
     void (*add_root)(const Value *r);
     void (*stat)(HeapStat *stat);
 } GCFunctions;
@@ -396,8 +398,9 @@ static void sweep(MSHeap *heap)
     heap->bitmap = NULL;
 }
 
-static void ms_add_slot(MSHeap *heap)
+static void ms_add_slot(void)
 {
+    MSHeap *heap = gc_data;
     MSHeapSlot *last = heap->slot[heap->size - 1];
     size_t new_size = last->size * HEAP_RATIO;
     MSHeapSlot *next = heap->slot[heap->size++] = ms_heap_slot_new(new_size);
@@ -409,8 +412,9 @@ static void ms_add_slot(MSHeap *heap)
     add_to_free_list(heap, MS_HEADER(beg));
 }
 
-static void *ms_allocate(MSHeap *heap, size_t size)
+static void *ms_allocate(size_t size)
 {
+    MSHeap *heap = gc_data;
     MSHeader *free_list = heap->free_list;
     for (MSHeader *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = curr->next) {
         if (curr->size >= size) // First-fit
@@ -441,38 +445,11 @@ static void mark(MSHeap *heap)
     mark_jmpbuf(&jmp);
 }
 
-static void ms_gc(MSHeap *heap)
-{
-    static bool in_gc = false;
-    if (UNLIKELY(in_gc))
-        bug("nested GC detected");
-    in_gc = true;
-    if (print_stat)
-        heap_print_stat("GC begin");
-    mark(heap);
-    sweep(heap);
-    if (print_stat)
-        heap_print_stat("GC end");
-    in_gc = false;
-}
-
-static void *ms_malloc(size_t size)
+static void ms_gc(void)
 {
     MSHeap *heap = gc_data;
-    if (stress)
-        ms_gc(heap);
-    void *p = ms_allocate(heap, size);
-    if (!stress && p == NULL) {
-        ms_gc(heap);
-        p = ms_allocate(heap, size);
-    }
-    if (p == NULL) {
-        ms_add_slot(heap);
-        p = ms_allocate(heap, size);
-    }
-    if (UNLIKELY(p == NULL))
-        error_out_of_memory();
-    return p;
+    mark(heap);
+    sweep(heap);
 }
 
 static void ms_stat(HeapStat *stat)
@@ -515,9 +492,14 @@ static void ms_fin(void)
 }
 
 static const GCFunctions GC_FUNCS_MARK_SWEEP = {
-    ms_init, ms_fin, ms_malloc, ms_add_root, ms_stat
+    .init = ms_init,
+    .fin = ms_fin,
+    .collect = ms_gc,
+    .allocate = ms_allocate,
+    .extend = ms_add_slot,
+    .add_root = ms_add_root,
+    .stat = ms_stat
 };
-static const GCFunctions GC_FUNCS_DEFAULT = GC_FUNCS_MARK_SWEEP;
 
 //
 // Algorithm: Mark-and-sweep + Bitmap Marking
@@ -537,29 +519,10 @@ static void bmp_init_bitmap(void)
     heap->bitmap = xcalloc(1, idivceil(rawsize, 8U));
 }
 
-static void bmp_gc(MSHeap *heap)
+static void bmp_gc(void)
 {
     bmp_init_bitmap();
-    ms_gc(heap);
-}
-
-static void *bmp_malloc(size_t size)
-{
-    MSHeap *heap = gc_data;
-    if (stress)
-        bmp_gc(heap);
-    void *p = ms_allocate(heap, size);
-    if (!stress && p == NULL) {
-        bmp_gc(heap);
-        p = ms_allocate(heap, size);
-    }
-    if (p == NULL) {
-        ms_add_slot(heap);
-        p = ms_allocate(heap, size);
-    }
-    if (UNLIKELY(p == NULL))
-        error_out_of_memory();
-    return p;
+    ms_gc();
 }
 
 static void bmp_fin(void)
@@ -569,7 +532,13 @@ static void bmp_fin(void)
 }
 
 static const GCFunctions GC_FUNCS_MARK_SWEEP_BITMAP = {
-    ms_init, bmp_fin, bmp_malloc, ms_add_root, ms_stat
+    .init = ms_init,
+    .fin = bmp_fin,
+    .collect = bmp_gc,
+    .allocate = ms_allocate,
+    .extend = ms_add_slot,
+    .add_root = ms_add_root,
+    .stat = ms_stat
 };
 
 //
@@ -616,8 +585,9 @@ static inline EpsHeapSlot *last_slot(const EpsHeap *heap)
     return heap->slot[heap->size - 1];
 }
 
-static void *eps_allocate(EpsHeap *heap, size_t size)
+static void *eps_allocate(size_t size)
 {
+    EpsHeap *heap = gc_data;
     EpsHeapSlot *last = last_slot(heap); // use the last slot only
     if (last->used + size > last->size)
         return NULL;
@@ -626,50 +596,15 @@ static void *eps_allocate(EpsHeap *heap, size_t size)
     return ret;
 }
 
-static bool eps_has_minimum_free_space(const EpsHeap *heap)
+static void eps_increase_heap(void)
 {
-    static const size_t minreq = sizeof(Continuation); // maybe the largest
-    EpsHeapSlot *last = last_slot(heap);
-    return (last->size - last->used) >= minreq;
-}
-
-static void eps_increase_heap(EpsHeap *heap)
-{
+    EpsHeap *heap = gc_data;
     EpsHeapSlot *last = last_slot(heap);
     heap->slot[heap->size++] = eps_heap_slot_new(last->size * HEAP_RATIO);
 }
 
-static void eps_gc(EpsHeap *heap)
-{
-    static bool in_gc = false;
-    if (UNLIKELY(in_gc))
-        bug("nested GC detected");
-    in_gc = true;
-    if (print_stat)
-        heap_print_stat("GC begin");
-    if (!eps_has_minimum_free_space(heap))
-        eps_increase_heap(heap); // collects nothing ;)
-    if (print_stat)
-        heap_print_stat("GC end");
-    in_gc = false;
-}
-
-static void *eps_malloc(size_t size)
-{
-    EpsHeap *heap = gc_data;
-    if (stress)
-        eps_gc(heap);
-    void *p = eps_allocate(heap, size);
-    if (!stress && p == NULL) {
-        eps_gc(heap);
-        p = eps_allocate(heap, size);
-    }
-    if (UNLIKELY(p == NULL))
-        error_out_of_memory();
-    return p;
-}
-
 static void eps_add_root(UNUSED const Value *p) {} // dummy
+static void eps_gc(void) {} // dummy
 
 static void eps_stat(HeapStat *stat)
 {
@@ -685,12 +620,20 @@ static void eps_stat(HeapStat *stat)
 }
 
 static const GCFunctions GC_FUNCS_EPSILON = {
-    eps_init, eps_fin, eps_malloc, eps_add_root, eps_stat
+    .init = eps_init,
+    .fin = eps_fin,
+    .collect = eps_gc,
+    .allocate = eps_allocate,
+    .extend = eps_increase_heap,
+    .add_root = eps_add_root,
+    .stat = eps_stat
 };
 
 //
 // General functions
 //
+
+static const GCFunctions GC_FUNCS_DEFAULT = GC_FUNCS_MARK_SWEEP;
 
 void gc_add_root(const Value *r)
 {
@@ -789,10 +732,36 @@ void gc_fin(void)
     funcs.fin();
 }
 
+static void gc_collect(void)
+{
+    static bool in_gc = false;
+    if (UNLIKELY(in_gc))
+        bug("nested GC detected");
+    in_gc = true;
+    if (print_stat)
+        heap_print_stat("GC begin");
+
+    funcs.collect();
+
+    if (print_stat)
+        heap_print_stat("GC end");
+}
+
 void *gc_malloc(size_t size)
 {
-    size_t asize = align(size);
-    void *p = funcs.malloc(asize);
+    if (stress)
+        gc_collect();
+    void *p = funcs.allocate(size);
+    if (!stress && p == NULL) {
+        gc_collect();
+        p = funcs.allocate(size);
+    }
+    if (p == NULL) {
+        funcs.extend();
+        p = funcs.allocate(size);
+    }
+    if (UNLIKELY(p == NULL))
+        error_out_of_memory();
 #ifdef DEBUG
     memset(p, 0, size);
 #endif
