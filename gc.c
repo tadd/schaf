@@ -82,6 +82,7 @@ typedef struct {
     MSHeader *free_list;
     uint8_t *bitmap;
 } MSHeap;
+#define MS_HEAP(p) ((MSHeap *)(p))
 
 #ifdef __clang__
 #pragma clang diagnostic ignored "-Wcast-align"
@@ -112,9 +113,8 @@ static MSHeapSlot *ms_heap_slot_new(size_t size)
     return s;
 }
 
-static void *ms_init(void)
+static void ms_init_heap(MSHeap *heap)
 {
-    MSHeap *heap = xmalloc(sizeof(MSHeap));
     heap->roots = scary_new(sizeof(Value *));
     heap->slot[0] = ms_heap_slot_new(init_size);
     MSHeapSlot *first = heap->slot[0];
@@ -123,6 +123,12 @@ static void *ms_init(void)
     heap->high = heap->low + first->size;
     heap->free_list = MS_HEADER(first->body);
     heap->bitmap = NULL;
+}
+
+static void *ms_init(void)
+{
+    MSHeap *heap = xmalloc(sizeof(MSHeap));
+    ms_init_heap(heap);
     return heap;
 }
 
@@ -132,16 +138,21 @@ static void ms_add_root(void *data, const Value *r)
     scary_push((void ***) &heap->roots, (const void *) r);
 }
 
-static bool is_in_heap_range(MSHeap *heap, Value v)
+static int64_t find_slot_index(MSHeap *heap, uintptr_t v)
 {
     const size_t smallest = sizeof(String);
     const uint8_t *p = (uint8_t *) MS_HEADER(v);
     for (size_t i = 0; i < heap->size; i++) {
         const MSHeapSlot *slot = heap->slot[i];
         if (p >= slot->body && p < slot->body + slot->size - smallest)
-            return true;
+            return (int64_t) i;
     }
-    return false;
+    return -1;
+}
+
+static bool is_in_heap_range(MSHeap *heap, Value v)
+{
+    return find_slot_index(heap, v) >= 0;
 }
 
 static bool is_valid_pointer(Value v)
@@ -542,7 +553,7 @@ static const GCAlgorithmData GC_FUNCS_MARK_SWEEP = {
     .add_root = ms_add_root,
     .stat = ms_stat
 };
-static const GCAlgorithmData GC_FUNCS_DEFAULT = GC_FUNCS_MARK_SWEEP;
+// static const GCAlgorithmData GC_FUNCS_DEFAULT = GC_FUNCS_MARK_SWEEP;
 
 //
 // Algorithm: Mark-and-sweep + Bitmap Marking
@@ -594,6 +605,283 @@ static const GCAlgorithmData GC_FUNCS_MARK_SWEEP_BITMAP = {
     .add_root = ms_add_root,
     .stat = ms_stat
 };
+
+//
+// Algorithm: Green Tea
+//
+
+typedef struct {
+    MSHeap ms;
+    uint8_t *gt_bitmap; // bitmap array
+    uint8_t *seen, *scanned; // points some place in gt_bitmap
+} GTHeap;
+
+// Queue of Slots to be processed
+static MSHeapSlot **gt_work_list;
+
+static void *gt_init(void)
+{
+    GTHeap *heap = xmalloc(sizeof(GTHeap));
+    ms_init_heap(MS_HEAP(heap));
+    return heap;
+}
+
+static void gt_init_bitmaps(GTHeap *heap)
+{
+    MSHeap *ms = MS_HEAP(heap);
+    size_t rawsize = ptrdiff_abs(ms->high, ms->low);
+    size_t size = idivceil(rawsize, 8U);
+    heap->gt_bitmap = xcalloc(1, size * 2);
+    heap->seen = heap->gt_bitmap;
+    heap->scanned = heap->gt_bitmap + size;
+}
+
+static bool check_bit(GTHeap *heap, uint8_t *field, MSHeader *h, bool do_mark)
+{
+    uintptr_t index = bitmap_index(MS_HEAP(heap), h);
+    uint8_t offset = index % 8U;
+    index /= 8U;
+    uint8_t mask = 1UL << offset;
+    bool marked = field[index] & mask;
+    if (do_mark && !marked)
+        field[index] |= mask;
+    return marked;
+}
+
+static bool gt_is_seen(GTHeap *heap, MSHeader *h)
+{
+    return check_bit(heap, heap->seen, h, false);
+}
+
+static bool gt_is_scanned(GTHeap *heap, MSHeader *h)
+{
+    return check_bit(heap, heap->scanned, h, false);
+}
+
+static void gt_mark_seen(GTHeap *heap, MSHeader *h)
+{
+    check_bit(heap, heap->seen, h, true);
+}
+
+static void gt_mark_scanned(GTHeap *heap, MSHeader *h)
+{
+    check_bit(heap, heap->scanned, h, true);
+}
+
+static bool gt_work_list_included(const MSHeapSlot *l)
+{
+    MSHeapSlot *const *wl = gt_work_list;
+    for (size_t i = 0, len = scary_length(wl); i < len; i++) {
+        if (wl[i] == l)
+            return true;
+    }
+    return false;
+}
+
+static void gt_push_slot_to_work_list(GTHeap *heap, int index)
+{
+    MSHeapSlot *list = MS_HEAP(heap)->slot[index];
+    if (!gt_work_list_included(list))
+        scary_push((void ***) &gt_work_list, (void *) list);
+}
+
+static void gt_see_val(GTHeap *heap, Value v)
+{
+    if (!is_heap_value(MS_HEAP(heap), v))
+        return;
+    int64_t index = find_slot_index(MS_HEAP(heap), v);
+    if (index < 0)
+        error("Value %p invalid as a pointer", (void *) v);
+    gt_push_slot_to_work_list(heap, index);
+    gt_mark_seen(heap, MS_HEADER_FROM_VAL(v));
+}
+
+static void gt_see_array(GTHeap *heap, const void *volatile beg, size_t n)
+{
+    UNPOISON(beg, n * sizeof(uintptr_t));
+    const Value *p = beg;
+    for (size_t i = 0; i < n; i++, p++)
+        gt_see_val(heap, *p);
+}
+
+static void gt_see_jmpbuf(GTHeap *heap, const jmp_buf *jmp)
+{
+    gt_see_array(heap, jmp, idivceil(sizeof(jmp_buf), sizeof(uintptr_t)));
+}
+
+static void gt_see_roots(GTHeap *heap, Value **roots)
+{
+    for (size_t i = 0, len = scary_length(roots); i < len; i++)
+        gt_see_val(heap, *roots[i]);
+}
+
+[[gnu::noinline]]
+static void gt_see_stack(GTHeap *heap)
+{
+    GET_SP(sp);
+    const uintptr_t *beg = stack_base, *end = sp;
+    gt_see_array(heap, sp,  beg - end);
+}
+
+static void see_env_each(UNUSED uint64_t key, uint64_t value, void *data)
+{
+    gt_see_val(data, value);
+}
+
+static void gt_scan_val(GTHeap *heap, Value v)
+{
+    switch (VALUE_TAG(v)) {
+    case TAG_PAIR: {
+        Pair *p = PAIR(v);
+        gt_see_val(heap, p->car);
+        gt_see_val(heap, p->cdr);
+        break;
+    }
+    case TAG_CLOSURE: {
+        Closure *p = CLOSURE(v);
+        gt_see_val(heap, p->env);
+        gt_see_val(heap, p->params);
+        gt_see_val(heap, p->body);
+        break;
+    }
+    case TAG_CONTINUATION: {
+        Continuation *p = CONTINUATION(v);
+        gt_see_val(heap, p->retval);
+        gt_see_jmpbuf(heap, &p->state);
+        gt_see_array(heap, p->stack, idivceil(p->stack_len, sizeof(uintptr_t)));
+        break;
+    }
+    case TAG_CFUNC_CLOSURE:
+        gt_see_val(heap, CFUNC_CLOSURE(v)->data);
+        break;
+    case TAG_ENV: {
+        Env *p = ENV(v);
+        if (p->table != NULL)
+            table_foreach(p->table, see_env_each, heap);
+        gt_see_val(heap, p->parent);
+        break;
+    }
+    case TAG_VECTOR: {
+        Value *p = VECTOR(v);
+        for (int64_t i = 0, len = scary_length(p); i < len; i++)
+            gt_see_val(heap, p[i]);
+        break;
+    }
+    case TAG_PROMISE: {
+        Promise *p = PROMISE(v);
+        gt_see_val(heap, p->env);
+        gt_see_val(heap, p->val);
+        break;
+    }
+    case TAG_STRING:
+    case TAG_CFUNC:
+    case TAG_SYNTAX:
+    case TAG_PORT:
+    case TAG_EOF:
+    case TAG_ERROR:
+        break;
+    }
+    gt_mark_scanned(heap, MS_HEADER_FROM_VAL(v));
+}
+
+static void gt_scan_slot(GTHeap *heap, MSHeapSlot *slot)
+{
+    size_t offset;
+    for (uint8_t *p = slot->body, *endp = p + slot->size; p < endp; p += offset) {
+        MSHeader *h = MS_HEADER(p);
+        offset = HSIZE(h->size);
+        if (gt_is_seen(heap, h) && !gt_is_scanned(heap, h))
+            gt_scan_val(heap, (Value) &h->next);
+    }
+}
+
+static void gt_scan(GTHeap *heap)
+{
+    while (scary_length(gt_work_list) > 0) {
+        MSHeapSlot *slot = scary_shift((void ***) &gt_work_list);
+        gt_scan_slot(heap, slot);
+    }
+}
+
+static void gt_see(GTHeap *heap)
+{
+    gt_see_stack(heap);
+    gt_see_roots(heap, MS_HEAP(heap)->roots);
+    jmp_buf jmp;
+    setjmp(jmp);
+    gt_see_jmpbuf(heap, &jmp);
+}
+
+static void gt_mark(GTHeap *heap)
+{
+    gt_init_bitmaps(heap);
+    gt_work_list = scary_new(sizeof(Value *));
+    gt_see(heap);
+    gt_scan(heap);
+    scary_free(gt_work_list);
+}
+
+static void gt_sweep_slot(GTHeap *heap, MSHeapSlot *slot)
+{
+    size_t offset;
+    for (uint8_t *p = slot->body, *endp = p + slot->size; p < endp; p += offset) {
+        MSHeader *h = MS_HEADER(p);
+        offset = HSIZE(h->size);
+        if (h->used && !gt_is_scanned(heap, h))
+            free_chunk(MS_HEAP(heap), h);
+    }
+}
+
+static void gt_sweep(GTHeap *heap)
+{
+    MSHeap *ms = MS_HEAP(heap);
+    for (size_t i = 0; i < ms->size; i++)
+        gt_sweep_slot(heap, ms->slot[i]);
+    free(heap->gt_bitmap);
+}
+
+static void gt_gc(GTHeap *heap)
+{
+    static bool in_gc = false;
+    if (in_gc)
+        bug("nested GC detected");
+    in_gc = true;
+    if (print_stat)
+        heap_print_stat("GC begin");
+    gt_mark(heap);
+    gt_sweep(heap);
+    if (print_stat)
+        heap_print_stat("GC end");
+    in_gc = false;
+}
+
+static void *gt_malloc(void *heap, size_t size)
+{
+    MSHeap *ms = MS_HEAP(heap);
+    if (stress)
+        gt_gc(heap);
+    void *p = ms_allocate(ms, size);
+    if (!stress && p == NULL) {
+        gt_gc(heap);
+        p = ms_allocate(ms, size);
+    }
+    if (p == NULL) {
+        ms_add_slot(ms);
+        p = ms_allocate(ms, size);
+    }
+    if (p == NULL)
+        error_out_of_memory();
+    return p;
+}
+
+static const GCAlgorithmData GC_FUNCS_GREEN_TEA = {
+    .init = gt_init,
+    .fin = ms_fin,
+    .malloc = gt_malloc,
+    .add_root = ms_add_root,
+    .stat = ms_stat
+};
+static const GCAlgorithmData GC_FUNCS_DEFAULT = GC_FUNCS_GREEN_TEA;
 
 //
 // Algorithm: Epsilon
@@ -793,6 +1081,9 @@ void sch_set_gc_algorithm(SchGCAlgorithm s)
         break;
     case SCH_GC_ALGORITHM_MARK_SWEEP_BITMAP:
         algo = GC_FUNCS_MARK_SWEEP_BITMAP;
+        break;
+    case SCH_GC_ALGORITHM_GREEN_TEA:
+        algo = GC_FUNCS_GREEN_TEA;
         break;
     }
 }
