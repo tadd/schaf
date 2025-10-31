@@ -120,6 +120,7 @@ static int get_gc_algorithm(const char *s)
     } algos[] = {
         { "mark-sweep", SCH_GC_ALGORITHM_MARK_SWEEP },
         { "mark-sweep+bitmap", SCH_GC_ALGORITHM_MARK_SWEEP_BITMAP },
+        { "green-tea", SCH_GC_ALGORITHM_GREEN_TEA },
         { "epsilon", SCH_GC_ALGORITHM_EPSILON },
     };
     for (size_t i = 0; i < sizeof(algos) / sizeof(*algos); i++) {

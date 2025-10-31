@@ -10,6 +10,7 @@ typedef uintptr_t SchValue;
 typedef enum {
     SCH_GC_ALGORITHM_MARK_SWEEP,
     SCH_GC_ALGORITHM_MARK_SWEEP_BITMAP,
+    SCH_GC_ALGORITHM_GREEN_TEA,
     SCH_GC_ALGORITHM_EPSILON
 } SchGCAlgorithm;
 
