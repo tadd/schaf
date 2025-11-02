@@ -107,28 +107,28 @@ typedef struct {
     bool interacitve;
 } SchOption;
 
-static SchGCAlgorithm get_gc_algorithm(const char *s)
+static int get_gc_algorithm(const char *s)
 {
     static const struct {
         const char *name;
         SchGCAlgorithm algorithm;
     } algos[] = {
-        { "mark-sweep", GC_ALGORITHM_MARK_SWEEP },
-        { "mark-sweep+bitmap", GC_ALGORITHM_MARK_SWEEP_BITMAP },
-        { "epsilon", GC_ALGORITHM_EPSILON },
+        { "mark-sweep", SCH_GC_ALGORITHM_MARK_SWEEP },
+        { "mark-sweep+bitmap", SCH_GC_ALGORITHM_MARK_SWEEP_BITMAP },
+        { "epsilon", SCH_GC_ALGORITHM_EPSILON },
     };
     for (size_t i = 0; i < sizeof(algos) / sizeof(*algos); i++) {
         if (strcmp(s, algos[i].name) == 0)
             return algos[i].algorithm;
     }
-    return 0;
+    return 0xFF;
 }
 
 static void parse_opt_longer(SchOption *o, const char *name, const char *value)
 {
     if (strcmp(name, "gc") == 0) {
         SchGCAlgorithm s = get_gc_algorithm(value);
-        if (s == 0)
+        if (s == 0xFF)
             opt_error("invalid value for --gc: %s", value);
         o->gc_algorithm = s;
     }

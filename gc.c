@@ -764,13 +764,13 @@ void sch_set_gc_algorithm(SchGCAlgorithm s)
 {
     error_if_gc_initialized();
     switch (s) {
-    case GC_ALGORITHM_EPSILON:
+    case SCH_GC_ALGORITHM_EPSILON:
         funcs = GC_FUNCS_EPSILON;
         break;
-    case GC_ALGORITHM_MARK_SWEEP:
+    case SCH_GC_ALGORITHM_MARK_SWEEP:
         funcs = GC_FUNCS_MARK_SWEEP;
         break;
-    case GC_ALGORITHM_MARK_SWEEP_BITMAP:
+    case SCH_GC_ALGORITHM_MARK_SWEEP_BITMAP:
         funcs = GC_FUNCS_MARK_SWEEP_BITMAP;
         break;
     }
