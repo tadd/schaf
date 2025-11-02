@@ -148,9 +148,8 @@ static bool is_valid_pointer(Value v)
 
 static bool is_valid_header(Value v)
 {
-    UNPOISON(&VALUE_TAG(v), sizeof(ValueTag));              // Suspicious but
-    UNPOISON(MS_HEADER_FROM_VAL(v), sizeof(MSHeader *));    // need to
-    UNPOISON(&MS_HEADER_FROM_VAL(v)->size, sizeof(size_t)); // be read
+    UNPOISON(&VALUE_TAG(v), sizeof(ValueTag));         // Suspicious but
+    UNPOISON(MS_HEADER_FROM_VAL(v), sizeof(MSHeader)); // need to be read
     if (VALUE_TAG(v) > TAG_LAST)
         return false;
     size_t size = MS_HEADER_FROM_VAL(v)->size;
