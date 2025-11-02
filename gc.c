@@ -632,42 +632,18 @@ static void *eps_allocate(EpsHeap *heap, size_t size)
     return ret;
 }
 
-static bool eps_has_minimum_free_space(const EpsHeap *heap)
-{
-    static const size_t minreq = sizeof(Continuation); // maybe the largest
-    EpsHeapSlot *last = last_slot(heap);
-    return (last->size - last->used) >= minreq;
-}
-
-static void eps_increase_heap(EpsHeap *heap)
+static void eps_add_slot(EpsHeap *heap)
 {
     EpsHeapSlot *last = last_slot(heap);
     heap->slot[heap->size++] = eps_heap_slot_new(last->size * HEAP_RATIO);
 }
 
-static void eps_gc(EpsHeap *heap)
-{
-    static bool in_gc = false;
-    if (UNLIKELY(in_gc))
-        bug("nested GC detected");
-    in_gc = true;
-    if (print_stat)
-        heap_print_stat("GC begin");
-    if (!eps_has_minimum_free_space(heap))
-        eps_increase_heap(heap); // collects nothing ;)
-    if (print_stat)
-        heap_print_stat("GC end");
-    in_gc = false;
-}
-
 static void *eps_malloc(size_t size)
 {
     EpsHeap *heap = gc_data;
-    if (stress)
-        eps_gc(heap);
     void *p = eps_allocate(heap, size);
-    if (!stress && p == NULL) {
-        eps_gc(heap);
+    if (p == NULL) {
+        eps_add_slot(heap);
         p = eps_allocate(heap, size);
     }
     if (UNLIKELY(p == NULL))
