@@ -562,14 +562,12 @@ static void *bmp_malloc(size_t size)
     return p;
 }
 
-static void bmp_fin(void)
-{
-    bmp_init_bitmap();
-    ms_fin();
-}
-
+// We use ms_fin() **as is** even in the bitmap-marking mode.
+// It seems dangerous because we don't provide heap->bitmap for the last
+// sweep() in fin(), but we can do it safely in fact. It depends on the
+// behavior of init_header() which sets every header->living = false.
 static const GCFunctions GC_FUNCS_MARK_SWEEP_BITMAP = {
-    ms_init, bmp_fin, bmp_malloc, ms_add_root, ms_stat
+    ms_init, ms_fin, bmp_malloc, ms_add_root, ms_stat
 };
 
 //
