@@ -515,7 +515,11 @@ static void ms_fin(void)
 }
 
 static const GCFunctions GC_FUNCS_MARK_SWEEP = {
-    ms_init, ms_fin, ms_malloc, ms_add_root, ms_stat
+    .init = ms_init,
+    .fin = ms_fin,
+    .malloc = ms_malloc,
+    .add_root = ms_add_root,
+    .stat = ms_stat
 };
 static const GCFunctions GC_FUNCS_DEFAULT = GC_FUNCS_MARK_SWEEP;
 
@@ -567,7 +571,11 @@ static void *bmp_malloc(size_t size)
 // sweep() in fin(), but we can do it safely in fact. It depends on the
 // behavior of init_header() which sets every header->living = false.
 static const GCFunctions GC_FUNCS_MARK_SWEEP_BITMAP = {
-    ms_init, ms_fin, bmp_malloc, ms_add_root, ms_stat
+    .init = ms_init,
+    .fin = ms_fin,
+    .malloc = bmp_malloc,
+    .add_root = ms_add_root,
+    .stat = ms_stat
 };
 
 //
@@ -683,7 +691,11 @@ static void eps_stat(HeapStat *stat)
 }
 
 static const GCFunctions GC_FUNCS_EPSILON = {
-    eps_init, eps_fin, eps_malloc, eps_add_root, eps_stat
+    .init = eps_init,
+    .fin = eps_fin,
+    .malloc = eps_malloc,
+    .add_root = eps_add_root,
+    .stat = eps_stat
 };
 
 //
