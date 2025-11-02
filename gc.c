@@ -433,8 +433,8 @@ static void mark_stack(void)
 
 static void mark(MSHeap *heap)
 {
-    mark_stack();
     mark_roots(heap->roots);
+    mark_stack();
     jmp_buf jmp;
     setjmp(jmp);
     mark_jmpbuf(&jmp);
