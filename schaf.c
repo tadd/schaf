@@ -2592,8 +2592,8 @@ static bool check_circular(FILE *f, Value p, Value record)
     return circular;
 }
 
-typedef void (*ValuePrinter)(FILE* f, Value v);
-static void print_object(FILE* f, Value v, Value record, ValuePrinter printer);
+typedef void (*ValuePrinter)(FILE *f, Value v);
+static void print_object(FILE *f, Value v, Value record, ValuePrinter printer);
 
 static void print_pair(FILE *f, Value l, Value record, ValuePrinter printer)
 {
@@ -2636,7 +2636,7 @@ static void print_vector(FILE *f, Value val, Value record, ValuePrinter printer)
     fprintf(f, ")");
 }
 
-static void print_object(FILE* f, Value v, Value record, ValuePrinter printer)
+static void print_object(FILE *f, Value v, Value record, ValuePrinter printer)
 {
     switch (sch_value_type_of(v)) {
     case TYPE_SYMBOL:
@@ -2661,7 +2661,7 @@ static void print_object(FILE* f, Value v, Value record, ValuePrinter printer)
     }
 }
 
-static void fdisplay_single(FILE* f, Value v)
+static void fdisplay_single(FILE *f, Value v)
 {
     switch (sch_value_type_of(v)) {
     case TYPE_NULL:
@@ -2703,7 +2703,7 @@ static void fdisplay_single(FILE* f, Value v)
     }
 }
 
-static void fdisplay(FILE* f, Value v)
+static void fdisplay(FILE *f, Value v)
 {
     print_object(f, v, Qnil, fdisplay_single);
 }
@@ -2866,7 +2866,7 @@ static Value proc_schaf_environment(UNUSED Value env)
     return env_dup(NULL, env_default);
 }
 
-static void inspect_single(FILE* f, Value v)
+static void inspect_single(FILE *f, Value v)
 {
     switch (sch_value_type_of(v)) {
     case TYPE_STRING:
@@ -2894,7 +2894,7 @@ static void inspect_single(FILE* f, Value v)
     }
 }
 
-static void inspect(FILE* f, Value v)
+static void inspect(FILE *f, Value v)
 {
     print_object(f, v, Qnil, inspect_single);
 }

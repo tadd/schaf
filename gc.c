@@ -678,7 +678,7 @@ static void eps_stat(HeapStat *stat)
     memset(stat->tab_used, 0, sizeof(stat->tab_used));
     stat->size = stat->used = 0;
     for (size_t i = 0; i < heap->size; i++) {
-        EpsHeapSlot* slot = heap->slot[i];
+        EpsHeapSlot *slot = heap->slot[i];
         stat->size += slot->size;
         stat->used += slot->used;
     }

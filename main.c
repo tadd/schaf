@@ -66,7 +66,7 @@ static int getopt_longer(int argc, char *const *argv, const char *optstrorig,
     return '?';
 }
 
-static void usage_opt(FILE* out, const char *opt, const char *desc)
+static void usage_opt(FILE *out, const char *opt, const char *desc)
 {
     fprintf(out, "  %-18s%s\n", opt, desc);
 }
