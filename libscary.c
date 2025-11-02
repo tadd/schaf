@@ -133,6 +133,36 @@ type scary_pop_##suffix(type *p)      \
 }
 xTYPES(DEFINE_POP_DATA)
 
+#define DEFINE_SHIFT_DATA(type, suffix)                 \
+type scary_shift_##suffix(type **p)                     \
+{                                                       \
+    Scary *ary = get(*p);                               \
+    type *sp = (type *) ary->space;                     \
+    type ret = sp[0];                                   \
+    ary->length--;                                      \
+    memmove(sp, sp + 1, ary->elem_size * ary->length);  \
+    return ret;                                         \
+}
+xDATA(DEFINE_SHIFT_DATA)
+
+static void *scary_shift_ptr_any(void *p)
+{
+    void **pp = p;
+    Scary *ary = get(*pp);
+    void **sp = (void **) ary->space;
+    void *ret = sp[0];
+    ary->length--;
+    memmove(sp, sp + 1, ary->elem_size * ary->length);
+    return ret;
+}
+
+#define DEFINE_SHIFT_PTR(type, suffix)   \
+type scary_shift_##suffix(type **p)      \
+{                                        \
+    return scary_shift_ptr_any(p);       \
+}
+xPTRS(DEFINE_SHIFT_PTR)
+
 static void *scary_dup_any(const void *p)
 {
     Scary *ary = get(p);
