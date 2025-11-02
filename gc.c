@@ -177,7 +177,7 @@ static void mark_jmpbuf(const jmp_buf *jmp)
     mark_array(jmp, idivceil(sizeof(jmp_buf), sizeof(uintptr_t)));
 }
 
-static void mark_env_each(UNUSED uint64_t key, uint64_t value)
+static void mark_env_each(UNUSED uint64_t key, uint64_t value, UNUSED void *data)
 {
     // key is always a Symbol
     mark_val(value);
@@ -239,7 +239,7 @@ static void mark_val(Value v)
     case TAG_ENV: {
         Env *p = ENV(v);
         if (p->table != NULL)
-            table_foreach(p->table, mark_env_each);
+            table_foreach(p->table, mark_env_each, NULL);
         mark_val(p->parent);
         break;
     }

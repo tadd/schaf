@@ -340,11 +340,10 @@ Test(table, get_put) {
     table_free(t);
 }
 
-static uint64_t tabforeach_mul = 1;
-
-static void tabforeach(uint64_t k, uint64_t v)
+static void tabforeach(uint64_t k, uint64_t v, void *p)
 {
-    tabforeach_mul *= k * v;
+    uint64_t *mul = p;
+    *mul *= k * v;
 }
 
 Test(table, foreach) {
@@ -352,9 +351,10 @@ Test(table, foreach) {
     table_put(t, 2, 3);
     table_put(t, 5, 7);
     table_put(t, 11, 13);
-    table_foreach(t, tabforeach);
+    uint64_t mul = 1;
+    table_foreach(t, tabforeach, &mul);
 
-    cr_expect(eq(u64, 30030, tabforeach_mul));
+    cr_expect(eq(u64, 30030, mul));
 
     table_free(t);
 }
