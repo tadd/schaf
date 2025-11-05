@@ -129,7 +129,7 @@ static void ms_add_root(const Value *r)
     scary_push((void ***) &heap->roots, (const void *) r);
 }
 
-bool in_heap_range(volatile uintptr_t v)
+static bool in_heap_range(volatile uintptr_t v)
 {
     MSHeap *heap = gc_data;
     const uint8_t *volatile p = (uint8_t *volatile) v;
