@@ -380,9 +380,7 @@ static void sweep_slot(MSHeap *heap, MSHeapSlot *slot)
     for (MSHeader *h; p < endp; p += offset) {
         h = MS_HEADER(p);
         offset = HSIZE(h->size);
-        if (!h->used)
-            continue;
-        if (!is_living(h, false))
+        if (h->used && !is_living(h, false))
             free_chunk(heap, h);
     }
 }
