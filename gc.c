@@ -162,25 +162,12 @@ static bool is_heap_value(Value v)
     return is_valid_pointer(v) && in_heap_range(v) && is_valid_header(v);
 }
 
-static uintptr_t bitmap_index(const void *p);
-
 static bool is_living(MSHeader *h, bool do_mark)
 {
-    MSHeap *heap = gc_data;
     bool marked;
-    if (heap->bitmap == NULL) {
-        marked = h->living;
-        if (marked != do_mark)
-            h->living = do_mark;
-    } else {
-        uintptr_t index = bitmap_index(h);
-        uint8_t offset = index % 8U;
-        index /= 8U;
-        uint8_t mask = 1UL << offset;
-        marked = heap->bitmap[index] & mask;
-        if (do_mark && !marked) // no need to unflag while sweep() because bitmap
-            heap->bitmap[index] |= mask; // is immediately freed after that
-    }
+    marked = h->living;
+    if (marked != do_mark)
+        h->living = do_mark;
     return marked;
 }
 
@@ -546,10 +533,88 @@ static void bmp_init_bitmap(void)
     heap->bitmap = xcalloc(1, idivceil(rawsize, 8U));
 }
 
+static bool bmp_is_living(MSHeader *h, bool do_mark)
+{
+    MSHeap *heap = gc_data;
+    bool marked;
+    uintptr_t index = bitmap_index(h);
+    uint8_t offset = index % 8U;
+    index /= 8U;
+    uint8_t mask = 1UL << offset;
+    marked = heap->bitmap[index] & mask;
+    if (do_mark && !marked) // no need to unflag while sweep() because bitmap
+        heap->bitmap[index] |= mask; // is immediately freed after that
+    return marked;
+}
+
+static void bmp_mark_val(Value v)
+{
+    if (is_heap_value(v) && // mark with `true`
+        !bmp_is_living(MS_HEADER_FROM_VAL(v), true))
+        visit_children(v, bmp_mark_val);
+}
+
+static void bmp_mark_roots(Value **roots)
+{
+    for (size_t i = 0, len = scary_length(roots); i < len; i++)
+        bmp_mark_val(*roots[i]);
+}
+
+static void bmp_mark_jmpbuf(const jmp_buf *jmp)
+{
+    visit_array(bmp_mark_val, jmp, idivceil(sizeof(jmp_buf), sizeof(uintptr_t)));
+}
+
+[[gnu::noinline]]
+static void bmp_mark_stack(void)
+{
+    GET_SP(sp);
+    visit_array(bmp_mark_val, sp, stack_base - sp);
+}
+
+static void bmp_mark(MSHeap *heap)
+{
+    bmp_mark_roots(heap->roots);
+    bmp_mark_stack();
+    jmp_buf jmp;
+    setjmp(jmp);
+    bmp_mark_jmpbuf(&jmp);
+}
+
+static void bmp_sweep_slot(MSHeap *heap, MSHeapSlot *slot)
+{
+    uint8_t *p = slot->body, *endp = p + slot->size;
+    size_t offset;
+    for (MSHeader *h; p < endp; p += offset) {
+        h = MS_HEADER(p);
+        offset = HSIZE(h->size);
+        if (h->used && !bmp_is_living(h, false))
+            free_chunk(heap, h);
+    }
+}
+
+static void bmp_sweep(MSHeap *heap)
+{
+    for (size_t i = 0; i < heap->size; i++)
+        bmp_sweep_slot(heap, heap->slot[i]);
+    free(heap->bitmap);
+    heap->bitmap = NULL;
+}
+
 static void bmp_gc(MSHeap *heap)
 {
     bmp_init_bitmap();
-    ms_gc(heap);
+    static bool in_gc = false;
+    if (UNLIKELY(in_gc))
+        bug("nested GC detected");
+    in_gc = true;
+    if (print_stat)
+        heap_print_stat("GC begin");
+    bmp_mark(heap);
+    bmp_sweep(heap);
+    if (print_stat)
+        heap_print_stat("GC end");
+    in_gc = false;
 }
 
 static void *bmp_malloc(size_t size)
