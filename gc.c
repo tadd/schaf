@@ -80,8 +80,8 @@ typedef struct {
     uint8_t *low, *high;
     Value **roots;
     MSHeader *free_list;
-    uint8_t *bitmap;
 } MSHeap;
+#define MS_HEAP(h) ((MSHeap *)(h))
 
 #ifdef __clang__
 #pragma clang diagnostic ignored "-Wcast-align"
@@ -112,9 +112,8 @@ static MSHeapSlot *ms_heap_slot_new(size_t size)
     return s;
 }
 
-static void ms_init(void)
+static void ms_init_heap(MSHeap *heap)
 {
-    MSHeap *heap = xmalloc(sizeof(MSHeap));
     heap->roots = scary_new(sizeof(Value *));
     heap->slot[0] = ms_heap_slot_new(init_size);
     MSHeapSlot *first = heap->slot[0];
@@ -122,7 +121,12 @@ static void ms_init(void)
     heap->low = first->body;
     heap->high = heap->low + first->size;
     heap->free_list = MS_HEADER(first->body);
-    heap->bitmap = NULL;
+}
+
+static void ms_init(void)
+{
+    MSHeap *heap = xmalloc(sizeof(MSHeap));
+    ms_init_heap(heap);
     gc_data = heap;
 }
 
@@ -176,25 +180,12 @@ static bool is_heap_value(Value v)
     return is_valid_pointer(v) && in_heap_range(v) && is_valid_header(v);
 }
 
-static uintptr_t bitmap_index(const void *p);
-
 static bool is_living(MSHeader *h, bool do_mark)
 {
-    MSHeap *heap = gc_data;
     bool marked;
-    if (heap->bitmap == NULL) {
-        marked = h->living;
-        if (marked != do_mark)
-            h->living = do_mark;
-    } else {
-        uintptr_t index = bitmap_index(h);
-        uint8_t offset = index % 8U;
-        index /= 8U;
-        uint8_t mask = 1UL << offset;
-        marked = heap->bitmap[index] & mask;
-        if (do_mark && !marked) // no need to unflag while sweep() because bitmap
-            heap->bitmap[index] |= mask; // is immediately freed after that
-    }
+    marked = h->living;
+    if (marked != do_mark)
+        h->living = do_mark;
     return marked;
 }
 
@@ -410,8 +401,6 @@ static void sweep(MSHeap *heap)
 {
     for (size_t i = 0; i < heap->size; i++)
         sweep_slot(heap, heap->slot[i]);
-    free(heap->bitmap);
-    heap->bitmap = NULL;
 }
 
 static void ms_add_slot(MSHeap *heap)
@@ -555,51 +544,153 @@ static const GCFunctions GC_FUNCS_DEFAULT = GC_FUNCS_MARK_SWEEP;
 // Algorithm: Mark-and-sweep + Bitmap Marking
 //
 
+typedef struct {
+    MSHeap ms_heap;
+    uint8_t *bitmap;
+} BMPHeap;
+
+static void bmp_init(void)
+{
+    BMPHeap *heap = xmalloc(sizeof(BMPHeap));
+    ms_init_heap(MS_HEAP(heap));
+    heap->bitmap = NULL;
+    gc_data = heap;
+}
+
 static uintptr_t bitmap_index(const void *p)
 {
     MSHeap *heap = gc_data;
     return ptrdiff_abs(p, heap->low) / PTR_ALIGN;
 }
 
-static void bmp_init_bitmap(void)
+static void bmp_init_bitmap(BMPHeap *heap)
 {
-    MSHeap *heap = gc_data;
-    size_t rawsize = bitmap_index(heap->high);
+    MSHeap *ms = MS_HEAP(heap);
+    size_t rawsize = bitmap_index(ms->high);
     heap->bitmap = xcalloc(1, idivceil(rawsize, 8U));
 }
 
-static void bmp_gc(MSHeap *heap)
+static bool bmp_is_living(MSHeader *h, bool do_mark)
 {
-    bmp_init_bitmap();
-    ms_gc(heap);
+    BMPHeap *heap = gc_data;
+    bool marked;
+    uintptr_t index = bitmap_index(h);
+    uint8_t offset = index % 8U;
+    index /= 8U;
+    uint8_t mask = 1UL << offset;
+    marked = heap->bitmap[index] & mask;
+    if (do_mark && !marked) // no need to unflag while sweep() because bitmap
+        heap->bitmap[index] |= mask; // is immediately freed after that
+    return marked;
+}
+
+static void bmp_mark_val(Value v)
+{
+    if (is_heap_value(v) && // mark with `true`
+        !bmp_is_living(MS_HEADER_FROM_VAL(v), true))
+        visit_children(v, bmp_mark_val);
+}
+
+static void bmp_mark_roots(Value **roots)
+{
+    for (size_t i = 0, len = scary_length(roots); i < len; i++)
+        bmp_mark_val(*roots[i]);
+}
+
+static void bmp_mark_jmpbuf(const jmp_buf *jmp)
+{
+    visit_array(bmp_mark_val, jmp, idivceil(sizeof(jmp_buf), sizeof(uintptr_t)));
+}
+
+[[gnu::noinline]]
+static void bmp_mark_stack(void)
+{
+    GET_SP(sp);
+    const uintptr_t *beg = stack_base, *end = sp;
+    visit_array(bmp_mark_val, end, beg - end);
+}
+
+static void bmp_mark(BMPHeap *heap)
+{
+    bmp_mark_roots(MS_HEAP(heap)->roots);
+    bmp_mark_stack();
+    jmp_buf jmp;
+    setjmp(jmp);
+    bmp_mark_jmpbuf(&jmp);
+}
+
+static void bmp_sweep_slot(BMPHeap *heap, MSHeapSlot *slot)
+{
+    MSHeap *ms = MS_HEAP(heap);
+    uint8_t *p = slot->body, *endp = p + slot->size;
+    size_t offset;
+    for (MSHeader *h; p < endp; p += offset) {
+        h = MS_HEADER(p);
+        offset = HSIZE(h->size);
+        if (h->used && !bmp_is_living(h, false))
+            free_chunk(ms, h);
+    }
+}
+
+static void bmp_sweep(BMPHeap *heap)
+{
+    MSHeap *ms = MS_HEAP(heap);
+    for (size_t i = 0; i < ms->size; i++)
+        bmp_sweep_slot(heap, ms->slot[i]);
+    free(heap->bitmap);
+    heap->bitmap = NULL;
+}
+
+static void bmp_gc(BMPHeap *heap)
+{
+    bmp_init_bitmap(heap);
+    static bool in_gc = false;
+    if (UNLIKELY(in_gc))
+        bug("nested GC detected");
+    in_gc = true;
+    if (print_stat)
+        heap_print_stat("GC begin");
+    bmp_mark(heap);
+    bmp_sweep(heap);
+    if (print_stat)
+        heap_print_stat("GC end");
+    in_gc = false;
 }
 
 static void *bmp_malloc(size_t size)
 {
-    MSHeap *heap = gc_data;
+    BMPHeap *heap = gc_data;
+    MSHeap *ms = MS_HEAP(heap);
     if (stress)
         bmp_gc(heap);
-    void *p = ms_allocate(heap, size);
+    void *p = ms_allocate(ms, size);
     if (!stress && p == NULL) {
         bmp_gc(heap);
-        p = ms_allocate(heap, size);
+        p = ms_allocate(ms, size);
     }
     if (p == NULL) {
-        ms_add_slot(heap);
-        p = ms_allocate(heap, size);
+        ms_add_slot(ms);
+        p = ms_allocate(ms, size);
     }
     if (p == NULL)
         error_out_of_memory();
     return p;
 }
 
-// We use ms_fin() **as is** even in the bitmap-marking mode.
-// It seems dangerous because we don't provide heap->bitmap for the last
-// sweep() in fin(), but we can do it safely in fact. It depends on the
-// behavior of init_header() which sets every header->living = false.
+static void bmp_fin(void)
+{
+    BMPHeap *heap = gc_data;
+    MSHeap *ms = MS_HEAP(heap);
+    bmp_init_bitmap(heap);
+    bmp_sweep(heap); // nothing marked, all values are freed
+    free_slots(ms->slot, ms->size);
+    scary_free(ms->roots);
+    free(heap);
+}
+
 static const GCFunctions GC_FUNCS_MARK_SWEEP_BITMAP = {
-    .init = ms_init,
-    .fin = ms_fin,
+    .init = bmp_init,
+    .fin = bmp_fin,
     .malloc = bmp_malloc,
     .add_root = ms_add_root,
     .stat = ms_stat
