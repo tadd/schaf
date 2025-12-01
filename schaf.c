@@ -801,7 +801,13 @@ static const int64_t *filename_to_newline_pos(const char *filename)
     return NULL;
 }
 
-static void dump_line_column(const char *filename, int64_t pos)
+static void frame_to_line_col(const StackFrame *f, const int64_t *newline_pos,
+                              int64_t *line, int64_t *col)
+{
+    pos_to_line_col(LOCATED_PAIR(f->loc)->pos, newline_pos, line, col);
+}
+
+static void dump_line_column(const char *filename, const StackFrame *f)
 {
     int64_t line, col;
     const int64_t *newline_pos = filename_to_newline_pos(filename);
@@ -809,7 +815,7 @@ static void dump_line_column(const char *filename, int64_t pos)
         append_error_message("\n\t<unknown>");
         return;
     }
-    pos_to_line_col(pos, newline_pos, &line, &col);
+    frame_to_line_col(f, newline_pos, &line, &col);
     append_error_message("\n\t%s:%"PRId64":%"PRId64" in ",
                          filename, line, col);
 }
@@ -860,7 +866,7 @@ static void dump_frame(const StackFrame *f, const StackFrame *next)
         append_error_message("\n\t<unknown>");
         return;
     }
-    dump_line_column(filename, LOCATED_PAIR(f->loc)->pos);
+    dump_line_column(filename, f);
     dump_callee_name(next);
 }
 
@@ -904,13 +910,13 @@ static void dump_error_line_with_point(const StackFrame *f)
     const int64_t *newline_pos = filename_to_newline_pos(filename);
     if (newline_pos == NULL)
         return;
-    int64_t line, col, pos = LOCATED_PAIR(f->loc)->pos;
-    pos_to_line_col(pos, newline_pos, &line, &col);
+    int64_t line, col;
+    frame_to_line_col(f, newline_pos, &line, &col);
     if (dump_nth_line(filename, line))
         dump_column_point(col);
 }
 
-static void dump_stack_trace(StackFrame **call_stack)
+static void dump_stack_trace(StackFrame *const *call_stack)
 {
     size_t len = scary_length(call_stack);
     if (len == 0)
