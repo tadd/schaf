@@ -83,7 +83,7 @@ typedef struct {
     char filename[];
 } Parser;
 
-void pos_to_line_col(int64_t pos, int64_t *newline_pos, int64_t *line, int64_t *col)
+void pos_to_line_col(int64_t pos, const int64_t *newline_pos, int64_t *line, int64_t *col)
 {
     int64_t nline, last = 0, len = scary_length(newline_pos);
     for (nline = 0; nline < len; nline++) {
