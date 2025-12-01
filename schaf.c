@@ -792,24 +792,30 @@ static int append_error_message(const char *fmt, ...)
     return n;
 }
 
-static Source *find_source_from_filename(const char *filename)
+static const int64_t *filename_to_newline_pos(const char *filename)
 {
     for (size_t i = 0, len = scary_length(source_data); i < len; i++) {
         if (strcmp(source_data[i]->filename, filename) == 0)
-            return source_data[i];
+            return source_data[i]->newline_pos;
     }
     return NULL;
 }
 
-static void dump_line_column(const char *filename, int64_t pos)
+static void frame_to_line_col(const StackFrame *f, const int64_t *newline_pos,
+                              int64_t *line, int64_t *col)
+{
+    pos_to_line_col(LOCATED_PAIR(f->loc)->pos, newline_pos, line, col);
+}
+
+static void dump_line_column(const char *filename, const StackFrame *f)
 {
     int64_t line, col;
-    Source *src = find_source_from_filename(filename);
-    if (src == NULL) {
+    const int64_t *newline_pos = filename_to_newline_pos(filename);
+    if (newline_pos == NULL) {
         append_error_message("\n\t<unknown>");
         return;
     }
-    pos_to_line_col(pos, src->newline_pos, &line, &col);
+    frame_to_line_col(f, newline_pos, &line, &col);
     append_error_message("\n\t%s:%"PRId64":%"PRId64" in ",
                          filename, line, col);
 }
@@ -860,7 +866,7 @@ static void dump_frame(const StackFrame *f, const StackFrame *next)
         append_error_message("\n\t<unknown>");
         return;
     }
-    dump_line_column(filename, LOCATED_PAIR(f->loc)->pos);
+    dump_line_column(filename, f);
     dump_callee_name(next);
 }
 
@@ -874,12 +880,50 @@ static void prepend_cfunc_name(const char *name)
     snprintf(errmsg, sizeof(errmsg), "%s: %s", name, tmp);
 }
 
-static void dump_stack_trace(StackFrame **call_stack)
+static bool dump_nth_line(const char *filename, int64_t n)
+{
+    FILE *f = fopen(filename, "r");
+    if (f == NULL)
+        return false;
+    char buf[BUFSIZ];
+    for (ssize_t i = 1; i < n; i++) // ignore (n-1) lines
+        fgets(buf, sizeof(buf), f);
+    fgets(buf, sizeof(buf), f);
+    fclose(f);
+    append_error_message("\n%s", buf); // `buf` includes "\n"
+    return true;
+}
+
+// <space><space>...^
+static void dump_column_point(int64_t col)
+{
+    for (ssize_t i = 1; i < col; i++)
+        append_error_message(" ");
+    append_error_message("^");
+}
+
+static void dump_error_line_with_point(const StackFrame *f)
+{
+    const char *filename = find_filename(f->loc);
+    if (filename == NULL)
+        return;
+    const int64_t *newline_pos = filename_to_newline_pos(filename);
+    if (newline_pos == NULL)
+        return;
+    int64_t line, col;
+    frame_to_line_col(f, newline_pos, &line, &col);
+    if (dump_nth_line(filename, line))
+        dump_column_point(col);
+}
+
+static void dump_stack_trace(StackFrame *const *call_stack)
 {
     size_t len = scary_length(call_stack);
     if (len == 0)
         return;
-    prepend_cfunc_name(call_stack[0]->func_name);
+    const StackFrame *top = call_stack[0];
+    prepend_cfunc_name(top->func_name);
+    dump_error_line_with_point(top);
     for (size_t i = 0; i < len - 1; i++)
         dump_frame(call_stack[i], call_stack[i+1]);
     dump_frame(call_stack[len-1], NULL);
