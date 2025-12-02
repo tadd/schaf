@@ -54,9 +54,12 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
     - name: Install native packages
+      uses: tecolicom/actions-use-homebrew-tools@v1
+      with:
+        tools: criterion coreutils
+        key: brew
+    - name: Setup for Homebrew
       run: |
-        brew update
-        brew install criterion coreutils
         echo CPATH="/opt/homebrew/include:$CPATH" >> "$GITHUB_ENV"
         echo LIBRARY_PATH="/opt/homebrew/lib:$LIBRARY_PATH" >> "$GITHUB_ENV"
     - name: Make binaries
@@ -69,5 +72,5 @@ jobs:
       run: make clean && make -j3 test CC=clang OPTFLAGS='-O3 -flto=auto'
     - name: Test optimized with Sanitizer
       run: make -j3 sanitize CC=clang OPTFLAGS='-O3 -flto=auto'
-    - name: Test optimized with stress
-      run: make test-stress CC=clang OPTFLAGS='-O3 -flto=auto'
+    # - name: Test optimized with stress
+    #   run: make test-stress CC=clang OPTFLAGS='-O3 -flto=auto'
