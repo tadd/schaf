@@ -176,6 +176,23 @@ typedef struct {
     char filename[];
 } Source;
 
+struct SchEngine {
+    Value env_toplevel, env_default, env_r5rs, env_null;
+    char **symbol_names; // ("name0" "name1" ...)
+    const char *load_basedir;
+    Source **source_data;
+    jmp_buf jmp_exit;
+    uint8_t exit_status; // should be <= 125 to be portable
+    char errmsg[BUFSIZ];
+    Value inner_winders, inner_continuation; // for dynamic-wind
+    // Singletons
+    Value eof_object;
+    Value current_input_port, current_output_port;
+    // GC
+    size_t gc_init_size;
+    bool gc_stress, gc_print_stat, gc_initialized;
+};
+
 #pragma GCC visibility push(hidden) // also affects Clang
 
 extern Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
@@ -187,11 +204,12 @@ void pos_to_line_col(int64_t pos, const int64_t *newline_pos, int64_t *line, int
 void *obj_new(ValueTag t, size_t size);
 void source_free(Source *s);
 
-void gc_init(const uintptr_t *volatile base_sp);
+void gc_init_stack(const uintptr_t *volatile base_sp);
+void gc_init(SchEngine *e);
 void gc_fin(void);
 size_t gc_stack_get_size(const uintptr_t *volatile sp);
 void gc_add_root(const Value *r);
-ATTR_XMALLOC void *gc_malloc(size_t size);
+ATTR_XMALLOC void *gc_malloc(SchEngine *e, size_t size);
 
 bool sch_value_is_integer(Value v);
 bool sch_value_is_symbol(Value v);
@@ -200,13 +218,13 @@ bool sch_value_is_pair(Value v);
 Type sch_value_type_of(Value v);
 
 int64_t sch_integer_to_cint(Value v);
-const char *sch_symbol_to_cstr(Value v);
+const char *sch_symbol_to_cstr(SchEngine *e, Value v);
 const char *sch_string_to_cstr(Value v);
 Symbol sch_symbol_to_csymbol(Value v);
 const char *sch_value_to_type_name(Value v);
 
 Value sch_integer_new(int64_t i);
-Value sch_symbol_new(const char *s);
+Value sch_symbol_new(SchEngine *e, const char *s);
 Value sch_string_new(const char *s);
 
 Value cons(Value car, Value cdr);
