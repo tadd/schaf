@@ -17,11 +17,14 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
     - if: runner.os == 'Linux'
+      name: Install native packages in Linux
       run: |
         sudo apt install -U --no-install-recommends libcriterion-dev valgrind
     - if: runner.os == 'macOS'
+      name: Install native packages in macOS
       run: |
         brew update
         brew install criterion coreutils
