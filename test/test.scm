@@ -1383,14 +1383,14 @@
                   (if (<= n 2)
                       n
                       (* n (fact (- n 1))))))
-  (expect equal? (read-file "test/data-trivial.txt") '(1 2 "abc"))
-  (expect equal? (read-file "test/data-fact.txt") fact)))
+  (expect equal? (read-file "test/data/trivial.txt") '(1 2 "abc"))
+  (expect equal? (read-file "test/data/fact.txt") fact)))
 
 (describe "read /dev/null" (lambda ()
   (expect eof-object? (read-file "/dev/null"))))
 
 (describe "read twice" (lambda ()
-  (with-input-from-file "test/data-double.txt"
+  (with-input-from-file "test/data/double.txt"
     (lambda ()
       (expect equal? (read) '(1 2 "abc"))
       (expect equal? (read) '(3 4 "def"))))))
@@ -1450,7 +1450,7 @@
 
 ;; 6.6.4. System interface
 (describe "load" (lambda ()
-  (load "./data-fact.txt")
+  (load "./data/fact.txt")
   (expect = (fact 5) 120)))
 
 (load "./test-callcc.scm")
@@ -1472,7 +1472,7 @@
       (expect-t #t))))
 
   (define (read-string-from-data-trivial k)
-    (with-input-from-file "test/data-trivial.txt"
+    (with-input-from-file "test/data/trivial.txt"
       (lambda () (read-string k))))
 
   (describe "read-string" (lambda ()
@@ -1483,7 +1483,7 @@
     (expect equal? (read-string-from-data-trivial 999) "(1 2 \"abc\")\n")))
 
   (describe "read-string EOF" (lambda ()
-    (with-input-from-file "test/data-trivial.txt"
+    (with-input-from-file "test/data/trivial.txt"
       (lambda ()
         (read-string 999)
         (expect eof-object? (read-string 1))))))
