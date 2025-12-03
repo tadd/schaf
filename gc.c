@@ -32,7 +32,7 @@ typedef struct {
 } HeapStat;
 
 typedef struct {
-    void (*init)(const uintptr_t *volatile sp);
+    void (*init)(void);
     void (*fin)(void);
     void *(*malloc)(size_t size);
     void (*add_root)(const Value *r);
@@ -108,9 +108,8 @@ static MSHeapSlot *ms_heap_slot_new(size_t size)
     return s;
 }
 
-static void ms_init(const uintptr_t *volatile sp)
+static void ms_init(void)
 {
-    stack_base = sp;
     MSHeap *heap = xmalloc(sizeof(MSHeap));
     heap->roots = scary_new(sizeof(Value *));
     heap->slot[0] = ms_heap_slot_new(init_size);
@@ -598,9 +597,8 @@ static EpsHeapSlot *eps_heap_slot_new(size_t size)
     return h;
 }
 
-static void eps_init(const uintptr_t *volatile sp)
+static void eps_init(void)
 {
-    stack_base = sp;
     EpsHeap *heap = xmalloc(sizeof(EpsHeap));
     heap->slot[0] = eps_heap_slot_new(init_size);
     heap->size = 1;
@@ -761,9 +759,10 @@ void sch_set_gc_algorithm(SchGCAlgorithm s)
 
 void gc_init(const uintptr_t *volatile sp)
 {
+    stack_base = sp;
     if (funcs.init == NULL)
         funcs = GC_FUNCS_DEFAULT;
-    funcs.init(sp);
+    funcs.init();
     initialized = true;
 }
 
