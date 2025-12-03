@@ -113,9 +113,15 @@ static int get_gc_algorithm(const char *s)
         const char *name;
         SchGCAlgorithm algorithm;
     } algos[] = {
+#ifndef GC_NO_MARK_SWEEP
         { "mark-sweep", SCH_GC_ALGORITHM_MARK_SWEEP },
+#endif
+#ifndef GC_NO_MARK_SWEEP_BITMAP
         { "mark-sweep+bitmap", SCH_GC_ALGORITHM_MARK_SWEEP_BITMAP },
+#endif
+#ifndef GC_NO_EPSILON
         { "epsilon", SCH_GC_ALGORITHM_EPSILON },
+#endif
     };
     for (size_t i = 0; i < sizeof(algos) / sizeof(*algos); i++) {
         if (strcmp(s, algos[i].name) == 0)

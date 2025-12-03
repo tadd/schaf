@@ -9,6 +9,20 @@
 #include "schaf.h"
 #include "utils.h"
 
+#if defined(GC_NO_MARK_SWEEP) && defined(GC_NO_MARK_SWEEP_BITMAP) && defined(GC_NO_EPSILON)
+#error One of GC algorithm should be enabled at least
+#endif
+// Avoid double negatives
+#ifndef GC_NO_MARK_SWEEP
+#define GC_MARK_SWEEP
+#endif
+#ifndef GC_NO_MARK_SWEEP_BITMAP
+#define GC_MARK_SWEEP_BITMAP
+#endif
+#ifndef GC_NO_EPSILON
+#define GC_EPSILON
+#endif
+
 //
 // General definitions
 //
@@ -51,9 +65,17 @@ static const void *stack_base;
 
 static bool stress, print_stat, initialized;
 
+#define free_slots(slot, size) do { \
+        for (size_t i = 0; i < size; i++) { \
+            free(slot[i]->body); \
+            free(slot[i]); \
+        } \
+    } while (0)
+
 //
 // Algorithm: Mark-and-sweep
 //
+#if defined(GC_MARK_SWEEP) || defined(GC_MARK_SWEEP_BITMAP)
 
 typedef struct MSHeader {
     bool used;
@@ -80,7 +102,9 @@ typedef struct {
     uint8_t *low, *high;
     Value **roots;
     MSHeader *free_list;
+#ifdef GC_MARK_SWEEP_BITMAP
     uint8_t *bitmap;
+#endif
 } MSHeap;
 
 #ifdef __clang__
@@ -89,7 +113,7 @@ typedef struct {
 
 static inline size_t align(size_t size)
 {
-    return iceil(size, PTR_ALIGN);
+    return iceil(size, 16U);
 }
 
 static void init_header(MSHeader *h, size_t size, MSHeader *next)
@@ -122,7 +146,9 @@ static void ms_init(void)
     heap->low = first->body;
     heap->high = heap->low + first->size;
     heap->free_list = MS_HEADER(first->body);
+#ifdef GC_MARK_SWEEP_BITMAP
     heap->bitmap = NULL;
+#endif
     gc_data = heap;
 }
 
@@ -197,16 +223,21 @@ static void mark_env_each(UNUSED uint64_t key, uint64_t value)
     mark_val(value);
 }
 
+#ifdef GC_MARK_SWEEP_BITMAP
 static uintptr_t bitmap_index(const void *p);
+#endif
 
 static bool is_living(MSHeader *h, bool do_mark)
 {
-    MSHeap *heap = gc_data;
     bool marked;
+#ifdef GC_MARK_SWEEP_BITMAP
+    MSHeap *heap = gc_data;
     if (heap->bitmap == NULL) {
+#endif
         marked = h->living;
         if (marked != do_mark)
             h->living = do_mark;
+#ifdef GC_MARK_SWEEP_BITMAP
     } else {
         uintptr_t index = bitmap_index(h);
         uint8_t offset = index % 8U;
@@ -216,6 +247,7 @@ static bool is_living(MSHeader *h, bool do_mark)
         if (do_mark && !marked) // no need to unflag while sweep() because bitmap
             heap->bitmap[index] |= mask; // is immediately freed after that
     }
+#endif
     return marked;
 }
 
@@ -407,8 +439,10 @@ static void sweep(MSHeap *heap)
 {
     for (size_t i = 0; i < heap->size; i++)
         sweep_slot(heap, heap->slot[i]);
+#ifdef GC_MARK_SWEEP_BITMAP
     free(heap->bitmap);
     heap->bitmap = NULL;
+#endif
 }
 
 static void ms_add_slot(MSHeap *heap)
@@ -472,6 +506,7 @@ static void ms_gc(MSHeap *heap)
     in_gc = false;
 }
 
+#ifdef GC_MARK_SWEEP
 static void *ms_malloc(size_t size)
 {
     MSHeap *heap = gc_data;
@@ -490,6 +525,7 @@ static void *ms_malloc(size_t size)
         error_out_of_memory();
     return p;
 }
+#endif
 
 static void ms_stat_slot(HeapStat *stat, const MSHeapSlot *slot)
 {
@@ -518,13 +554,6 @@ static void ms_stat(HeapStat *stat)
         ms_stat_slot(stat, heap->slot[i]);
 }
 
-#define free_slots(slot, size) do { \
-        for (size_t i = 0; i < size; i++) { \
-            free(slot[i]->body); \
-            free(slot[i]); \
-        } \
-    } while (0)
-
 static void ms_fin(void)
 {
     MSHeap *heap = gc_data;
@@ -534,6 +563,7 @@ static void ms_fin(void)
     free(heap);
 }
 
+#ifdef GC_MARK_SWEEP
 static const GCFunctions GC_FUNCS_MARK_SWEEP = {
     .init = ms_init,
     .fin = ms_fin,
@@ -541,11 +571,14 @@ static const GCFunctions GC_FUNCS_MARK_SWEEP = {
     .add_root = ms_add_root,
     .stat = ms_stat
 };
-static const GCFunctions GC_FUNCS_DEFAULT = GC_FUNCS_MARK_SWEEP;
+#endif
+
+#endif // GC_MARK_SWEEP || GC_MARK_SWEEP_BITMAP
 
 //
 // Algorithm: Mark-and-sweep + Bitmap Marking
 //
+#ifdef GC_MARK_SWEEP_BITMAP
 
 static uintptr_t bitmap_index(const void *p)
 {
@@ -597,9 +630,12 @@ static const GCFunctions GC_FUNCS_MARK_SWEEP_BITMAP = {
     .stat = ms_stat
 };
 
+#endif // GC_MARK_SWEEP_BITMAP
+
 //
 // Algorithm: Epsilon
 //
+#ifdef GC_EPSILON
 
 typedef struct {
     size_t size, used;
@@ -689,6 +725,8 @@ static const GCFunctions GC_FUNCS_EPSILON = {
     .add_root = eps_add_root,
     .stat = eps_stat
 };
+
+#endif // GC_EPSILON
 
 //
 // General functions
@@ -786,16 +824,39 @@ void sch_set_gc_algorithm(SchGCAlgorithm s)
     error_if_gc_initialized();
     switch (s) {
     case SCH_GC_ALGORITHM_EPSILON:
+#ifndef GC_EPSILON
+        error("epsilon is not supported");
+#else
         funcs = GC_FUNCS_EPSILON;
+#endif
         break;
     case SCH_GC_ALGORITHM_MARK_SWEEP:
+#ifndef GC_MARK_SWEEP
+        error("mark-sweep is not supported");
+#else
         funcs = GC_FUNCS_MARK_SWEEP;
+#endif
         break;
     case SCH_GC_ALGORITHM_MARK_SWEEP_BITMAP:
+#ifndef GC_MARK_SWEEP_BITMAP
+        error("mark-sweep+bitmap is not supported");
+#else
         funcs = GC_FUNCS_MARK_SWEEP_BITMAP;
+#endif
         break;
     }
 }
+
+static const GCFunctions GC_FUNCS_DEFAULT =
+#ifdef GC_MARK_SWEEP
+    GC_FUNCS_MARK_SWEEP;
+#elif defined(GC_MARK_SWEEP_BITMAP)
+    GC_FUNCS_MARK_SWEEP_BITMAP;
+#elif defined(GC_EPSILON)
+    GC_FUNCS_EPSILON;
+#else
+    { NULL };
+#endif
 
 void gc_init(const void *sp)
 {
