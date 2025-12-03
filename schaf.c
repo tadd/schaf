@@ -1501,6 +1501,18 @@ static bool vector_equal(const Value *x, const Value *y)
     return true;
 }
 
+static bool pair_equal(Value x, Value y)
+{
+    Value a = x, b = y;
+    do {
+        if (!equal(car(a), car(b)))
+            return false;
+        a = cdr(a), b = cdr(b);
+    } while (sch_value_is_pair(a) && sch_value_is_pair(b));
+    return equal(a, b);
+}
+
+
 static bool equal(Value x, Value y)
 {
     if (x == y)
@@ -1510,8 +1522,7 @@ static bool equal(Value x, Value y)
         return false;
     switch (tx) {
     case TYPE_PAIR:
-        return equal(car(x), car(y)) &&
-               equal(cdr(x), cdr(y));
+        return pair_equal(x, y);
     case TYPE_STRING:
         return strcmp(STRING(x), STRING(y)) == 0;
     case TYPE_VECTOR:
