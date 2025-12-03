@@ -52,21 +52,21 @@ static const int64_t CFUNCARG_MAX = 3;
 
 // Environment: list of Frames
 // Frame: Table of 'symbol => <value>
-static Value env_toplevel, env_default, env_r5rs, env_null;
-static char **symbol_names; // ("name0" "name1" ...)
+// static Value env_toplevel, env_default, env_r5rs, env_null;
+// static char **symbol_names; // ("name0" "name1" ...)
 Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
 static Value SYM_ELSE, SYM_RARROW;
-static const char *load_basedir;
-static Source **source_data;
-static jmp_buf jmp_exit;
-static uint8_t exit_status; // should be <= 125 to be portable
-static char errmsg[BUFSIZ];
-static Value inner_winders = Qnil; // both inner_* are used in (dynamic-wind)
-static Value inner_continuation = Qfalse;
+// static const char *load_basedir;
+// static Source **source_data;
+// static jmp_buf jmp_exit;
+// static uint8_t exit_status; // should be <= 125 to be portable
+// static char errmsg[BUFSIZ];
+// static Value inner_winders = Qnil; // both inner_* are used in (dynamic-wind)
+// static Value inner_continuation = Qfalse;
 
 // Singletons
-static Value eof_object = Qfalse;
-static Value current_input_port = Qfalse, current_output_port = Qfalse;
+// static Value eof_object = Qfalse;
+// static Value current_input_port = Qfalse, current_output_port = Qfalse;
 #define INIT_SINGLETON(var, val) do { if ((var) == Qfalse) (var) = val; } while (0)
 
 //
@@ -509,9 +509,9 @@ static Value runtime_error(const char *fmt, ...)
     return (Value) e;
 }
 
-const char *sch_error_message(void)
+const char *sch_error_message(const SchEngine *e)
 {
-    return errmsg;
+    return e->errmsg;
 }
 
 static Value expect_type(Type expected, Value v)
@@ -2978,7 +2978,7 @@ static Value proc_p(UNUSED Value env, Value args)
         scary_free(a); \
     } while (0)
 
-int sch_fin(void)
+int sch_fin(SchEngine *e)
 {
     scary_free_with(source_free, source_data);
     scary_free_with(free, symbol_names);
@@ -2986,10 +2986,13 @@ int sch_fin(void)
     return exit_status;
 }
 
-void sch_init(const uintptr_t *volatile sp)
+void sch_init_stack(const uintptr_t *volatile sp)
 {
     gc_init(sp);
+}
 
+SchEngine *sch_new(void)
+{
     gc_add_root(&eof_object);
     gc_add_root(&current_input_port);
     gc_add_root(&current_output_port);

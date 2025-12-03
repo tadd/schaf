@@ -176,6 +176,23 @@ typedef struct {
     char filename[];
 } Source;
 
+struct SchEngine {
+    Value env_toplevel, env_default, env_r5rs, env_null;
+    char **symbol_names; // ("name0" "name1" ...)
+    const char *load_basedir;
+    Source **source_data;
+    jmp_buf jmp_exit;
+    uint8_t exit_status; // should be <= 125 to be portable
+    char errmsg[BUFSIZ];
+    Value inner_winders, inner_continuation; // for dynamic-wind
+    // Singletons
+    Value eof_object;
+    Value current_input_port, current_output_port;
+    // GC
+    size_t gc_init_size;
+    bool gc_stress, gc_print_stat, gc_initialized;
+};
+
 #pragma GCC visibility push(hidden) // also affects Clang
 
 extern Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
