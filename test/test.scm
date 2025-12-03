@@ -38,6 +38,10 @@
   (expect equal? '"abc" "abc")
   (expect equal? '#t #t)))
 
+(describe "quote shadowing syntatic keywords" (lambda ()
+  (let ((quote -))
+    (noexpect eqv? '1 1))))
+
 ;; 4.1.4. Procedures
 (describe "lambda" (lambda ()
   (expect procedure? (lambda () 1))
@@ -147,6 +151,9 @@
     (let* ((x #t)
            (f (lambda () x)))
       (expect-t (f))))))
+
+(describe "lambdas shadowing syntatic keywords" (lambda ()
+  (expect equal? ((lambda lambda lambda) 'x) '(x))))
 
 ;; 4.1.5. Conditionals
 (describe "if" (lambda ()
@@ -333,6 +340,10 @@
 (describe "begin" (lambda ()
   (expect = (begin 1 2 3) 3)))
 
+(describe "begin shadowing syntatic keywords" (lambda ()
+  (expect equal? ((lambda (begin) (begin 1 2 3)) (lambda lambda lambda))
+          '(1 2 3))))
+
 ;; 4.2.4. Iteration
 (describe "do" (lambda ()
   (expect = 42 (do () (#t 42))) ;; accepts () for bindings
@@ -512,7 +523,8 @@
   (noexpect eqv? 1 2)
   (noexpect eqv? '() '(1))
   (noexpect eqv? "a" "a")
-  (noexpect eqv? #f 'nil)))
+  (noexpect eqv? #f 'nil)
+  (noexpect eqv? #f '())))
 
 (describe "eqv? complicated" (lambda ()
   (let ()
@@ -553,7 +565,8 @@
   (noexpect eq? #t #f)
   (noexpect eq? '() '(1))
   (noexpect eq? '(1) '(1))
-  (noexpect eq? '(1 '(2)) '(1 '(2)))))
+  (noexpect eq? '(1 '(2)) '(1 '(2)))
+  (noexpect eq? #f '())))
 
 (describe "equal?" (lambda ()
   (expect equal? 'a 'a)
@@ -575,7 +588,8 @@
   (expect equal? "abc" "abc")
   (expect equal? "\"" "\"")
   (noexpect equal? "abc" "abd")
-  (noexpect equal? "abc\"" "\"")))
+  (noexpect equal? "abc\"" "\"")
+  (noexpect equal? #f '())))
 
 ;; 6.2. Numbers
 ;; 6.2.5. Numerical operations
@@ -762,7 +776,8 @@
   (expect = (+ 42 21) 63)))
 
 (describe "-" (lambda ()
-  (expect = (- 42 21) 21)))
+  (expect = (- 42 21) 21)
+  (expect = -1 (let - ((n (- 1))) n))))
 
 (describe "*" (lambda ()
   (expect = (* 4 2) 8)))
@@ -935,7 +950,10 @@
          (m '(b c))
          (ret (append l m)))
     (expect eqv? (cdr ret) m); shares the last list
-    (noexpect eqv? l ret)))) ; newly allocated
+    (noexpect eqv? l ret))   ; newly allocated
+  (expect equal? (let ((ls (list 1 2 3 4)))
+                   (append ls ls '(5)))
+          '(1 2 3 4 1 2 3 4 5))))
 
 (describe "reverse" (lambda ()
   (expect equal? '() (reverse '()))

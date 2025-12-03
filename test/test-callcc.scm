@@ -20,7 +20,7 @@
         ((3) (a 6))
         ((4) (c 4)))
       r))
-  (define (f2)
+  (define (f2) ;; Same test, but in reverse order
     (let ()
       (set! r (+ 1 (+ 2 (+ 3 (call/cc (lambda (k) (set! a k) 4))))
                  (+ 5 (+ 6 (call/cc (lambda (k) (set! b k) 7))))))
@@ -89,6 +89,9 @@
 	  ((cadr x) (list #f (lambda () x)))
 	  (eq? x ((cadr x))))))
   (expect-t (f))))
+
+(xdescribe "call/cc in argument aborts funcall" (lambda ()
+  (expect = (call/cc (lambda (c) (0 (c 1)))) 1)))
 
 ;; https://gitlab.com/kashell/Kawa/-/blob/master/testsuite/unreach1.scm
 (describe "call/cc unreached 1" (lambda ()
