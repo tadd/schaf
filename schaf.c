@@ -751,11 +751,11 @@ static Value eval_apply(Value env, Value l)
     Value symproc = car(l), args = cdr(l);
     Value proc = eval(env, symproc);
     CHECK_ERROR_LOCATED(proc, l);
-    EXPECT(type, TYPE_PROC, proc);
     if (!value_tag_is(proc, TAG_SYNTAX)) {
         args = map_eval(env, args);
         CHECK_ERROR_LOCATED(args, l);
     }
+    EXPECT(type, TYPE_PROC, proc);
     Value ret = apply(env, proc, args);
     if (UNLIKELY(is_error(ret))) {
         const char *fname = get_func_name(proc);

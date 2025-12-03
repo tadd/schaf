@@ -90,7 +90,7 @@
 	  (eq? x ((cadr x))))))
   (expect-t (f))))
 
-(xdescribe "call/cc in argument aborts funcall" (lambda ()
+(describe "call/cc in argument aborts funcall" (lambda ()
   (expect = (call/cc (lambda (c) (0 (c 1)))) 1)))
 
 ;; https://gitlab.com/kashell/Kawa/-/blob/master/testsuite/unreach1.scm
