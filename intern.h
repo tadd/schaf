@@ -104,8 +104,8 @@ typedef struct {
 typedef struct {
     Procedure proc;
     Value retval;
-    uintptr_t *volatile sp;
-    void *volatile stack;
+    void *sp;
+    void *stack;
     size_t stack_len;
     jmp_buf state;
 } Continuation;
@@ -187,9 +187,9 @@ void pos_to_line_col(int64_t pos, const int64_t *newline_pos, int64_t *line, int
 void *obj_new(ValueTag t, size_t size);
 void source_free(Source *s);
 
-void gc_init(const uintptr_t *volatile base_sp);
+void gc_init(const void *sp);
 void gc_fin(void);
-size_t gc_stack_get_size(const uintptr_t *volatile sp);
+size_t gc_stack_get_size(const void *sp);
 void gc_add_root(const Value *r);
 ATTR_XMALLOC void *gc_malloc(size_t size);
 
@@ -247,6 +247,6 @@ static inline Value list2_const(Value x, Value y)
             .header = { .tag = TAG_PAIR, .immutable = false }, \
             .car = Qundef, .cdr = Qnil \
         })
-#define GET_SP(p) uintptr_t v##p = 0, *volatile p = &v##p; UNPOISON(&p, sizeof(uintptr_t *))
+#define GET_SP(p) uintptr_t v##p = 0; void *volatile p = &v##p; UNPOISON(&p, sizeof(void *))
 
 #endif // INTERN_H

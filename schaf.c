@@ -2265,7 +2265,7 @@ static Value apply_continuation(UNUSED Value env, Value f, Value args)
     EXPECT(arity, PROCEDURE(f)->arity, args);
     Continuation *cont = CONTINUATION(f);
     cont->retval = PROCEDURE(f)->arity == 1 ? car(args) : args;
-    int64_t d = sp - cont->sp;
+    int64_t d = (uintptr_t *) sp - (uintptr_t *) cont->sp;
     if (d < 1)
         d = 1;
     volatile uintptr_t pad[d];
@@ -2986,7 +2986,7 @@ int sch_fin(void)
     return exit_status;
 }
 
-void sch_init(const uintptr_t *volatile sp)
+void sch_init(const void *sp)
 {
     gc_init(sp);
 
