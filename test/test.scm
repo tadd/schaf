@@ -38,7 +38,7 @@
   (expect equal? '"abc" "abc")
   (expect equal? '#t #t)))
 
-(describe "quote shadowing syntatic keywords" (lambda ()
+(describe "quote shadowing syntactic keywords" (lambda ()
   (let ((quote -))
     (noexpect eqv? '1 1))))
 
@@ -152,7 +152,7 @@
            (f (lambda () x)))
       (expect-t (f))))))
 
-(describe "lambdas shadowing syntatic keywords" (lambda ()
+(describe "lambdas shadowing syntactic keywords" (lambda ()
   (expect equal? ((lambda lambda lambda) 'x) '(x))))
 
 ;; 4.1.5. Conditionals
@@ -340,7 +340,7 @@
 (describe "begin" (lambda ()
   (expect = (begin 1 2 3) 3)))
 
-(describe "begin shadowing syntatic keywords" (lambda ()
+(describe "begin shadowing syntactic keywords" (lambda ()
   (expect equal? ((lambda (begin) (begin 1 2 3)) (lambda lambda lambda))
           '(1 2 3))))
 
