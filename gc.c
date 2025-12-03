@@ -34,7 +34,7 @@ typedef struct {
 typedef struct {
     void (*init)(void);
     void (*fin)(void);
-    void *(*malloc)(size_t size);
+    void *(*malloc)(SchEngine *e, size_t size);
     void (*add_root)(const Value *r);
     void (*stat)(HeapStat *stat);
 } GCFunctions;
@@ -48,8 +48,6 @@ static GCFunctions funcs;
 static size_t init_size = 1 * MiB;
 
 static const void *stack_base;
-
-static bool stress, print_stat, initialized;
 
 //
 // Algorithm: Mark-and-sweep
@@ -437,29 +435,29 @@ static void mark(MSHeap *heap)
     mark_jmpbuf(&jmp);
 }
 
-static void ms_gc(MSHeap *heap)
+static void ms_gc(SchEngine *e, MSHeap *heap)
 {
     static bool in_gc = false;
     if (UNLIKELY(in_gc))
         bug("nested GC detected");
     in_gc = true;
-    if (print_stat)
+    if (e->gc_print_stat)
         heap_print_stat("GC begin");
     mark(heap);
     sweep(heap);
-    if (print_stat)
+    if (e->gc_print_stat)
         heap_print_stat("GC end");
     in_gc = false;
 }
 
-static void *ms_malloc(size_t size)
+static void *ms_malloc(SchEngine *e, size_t size)
 {
     MSHeap *heap = gc_data;
-    if (stress)
-        ms_gc(heap);
+    if (e->gc_stress)
+        ms_gc(e, heap);
     void *p = ms_allocate(heap, size);
-    if (!stress && p == NULL) {
-        ms_gc(heap);
+    if (!e->gc_stress && p == NULL) {
+        ms_gc(e, heap);
         p = ms_allocate(heap, size);
     }
     if (p == NULL) {
@@ -537,20 +535,20 @@ static void bmp_init_bitmap(void)
     heap->bitmap = xcalloc(1, idivceil(rawsize, 8U));
 }
 
-static void bmp_gc(MSHeap *heap)
+static void bmp_gc(SchEngine *e, MSHeap *heap)
 {
     bmp_init_bitmap();
-    ms_gc(heap);
+    ms_gc(e, heap);
 }
 
-static void *bmp_malloc(size_t size)
+static void *bmp_malloc(SchEngine *e, size_t size)
 {
     MSHeap *heap = gc_data;
-    if (stress)
-        bmp_gc(heap);
+    if (e->gc_stress)
+        bmp_gc(e, heap);
     void *p = ms_allocate(heap, size);
-    if (!stress && p == NULL) {
-        bmp_gc(heap);
+    if (!e->gc_stress && p == NULL) {
+        bmp_gc(e, heap);
         p = ms_allocate(heap, size);
     }
     if (p == NULL) {
@@ -633,7 +631,7 @@ static void eps_add_slot(EpsHeap *heap)
     heap->slot[heap->size++] = eps_heap_slot_new(last->size * HEAP_RATIO);
 }
 
-static void *eps_malloc(size_t size)
+static void *eps_malloc(UNUSED SchEngine *e, size_t size)
 {
     EpsHeap *heap = gc_data;
     void *p = eps_allocate(heap, size);
@@ -722,28 +720,28 @@ static void error_out_of_memory(void)
           (size_t) round((double) heap_size() / MiB));
 }
 
-#define error_if_gc_initialized() \
-    if (initialized) error("%s called after GC initialization", __func__)
+#define error_if_gc_initialized(e) \
+    if (e->gc_initialized) error("%s called after GC initialization", __func__)
 
-void sch_set_gc_init_size(double init_mib)
+void sch_set_gc_init_size(SchEngine *e, double init_mib)
 {
-    error_if_gc_initialized();
+    error_if_gc_initialized(e);
     init_size = round(init_mib * MiB);
 }
 
-void sch_set_gc_stress(bool b)
+void sch_set_gc_stress(SchEngine *e, bool b)
 {
-    stress = b;
+    e->gc_stress = b;
 }
 
-void sch_set_gc_print_stat(bool b)
+void sch_set_gc_print_stat(SchEngine *e, bool b)
 {
-    print_stat = b;
+    e->gc_print_stat = b;
 }
 
-void sch_set_gc_algorithm(SchGCAlgorithm s)
+void sch_set_gc_algorithm(SchEngine *e, SchGCAlgorithm s)
 {
-    error_if_gc_initialized();
+    error_if_gc_initialized(e);
     switch (s) {
     case SCH_GC_ALGORITHM_EPSILON:
         funcs = GC_FUNCS_EPSILON;
@@ -757,13 +755,17 @@ void sch_set_gc_algorithm(SchGCAlgorithm s)
     }
 }
 
-void gc_init(const void *sp)
+void sch_init_stack(const void *base)
 {
-    stack_base = sp;
+    stack_base = base;
+}
+
+void gc_init(SchEngine *e)
+{
     if (funcs.init == NULL)
         funcs = GC_FUNCS_DEFAULT;
     funcs.init();
-    initialized = true;
+    e->gc_initialized = true;
 }
 
 void gc_fin(void)
@@ -771,10 +773,10 @@ void gc_fin(void)
     funcs.fin();
 }
 
-void *gc_malloc(size_t size)
+void *gc_malloc(SchEngine *e, size_t size)
 {
     size_t asize = align(size);
-    void *p = funcs.malloc(asize);
+    void *p = funcs.malloc(e, asize);
 #ifdef DEBUG
     memset(p, 0, size);
 #endif

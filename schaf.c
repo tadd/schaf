@@ -52,21 +52,21 @@ static const int64_t CFUNCARG_MAX = 3;
 
 // Environment: list of Frames
 // Frame: Table of 'symbol => <value>
-static Value env_toplevel, env_default, env_r5rs, env_null;
-static char **symbol_names; // ("name0" "name1" ...)
+// static Value env_toplevel, env_default, env_r5rs, env_null;
+// static char **symbol_names; // ("name0" "name1" ...)
 Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
 static Value SYM_ELSE, SYM_RARROW;
-static const char *load_basedir;
-static Source **source_data;
-static jmp_buf jmp_exit;
-static uint8_t exit_status; // should be <= 125 to be portable
-static char errmsg[BUFSIZ];
-static Value inner_winders = Qnil; // both inner_* are used in (dynamic-wind)
-static Value inner_continuation = Qfalse;
+// static const char *load_basedir;
+// static Source **source_data;
+// static jmp_buf jmp_exit;
+// static uint8_t exit_status; // should be <= 125 to be portable
+// static char errmsg[BUFSIZ];
+// static Value inner_winders = Qnil; // both inner_* are used in (dynamic-wind)
+// static Value inner_continuation = Qfalse;
 
 // Singletons
-static Value eof_object = Qfalse;
-static Value current_input_port = Qfalse, current_output_port = Qfalse;
+// static Value eof_object = Qfalse;
+// static Value current_input_port = Qfalse, current_output_port = Qfalse;
 #define INIT_SINGLETON(var, val) do { if ((var) == Qfalse) (var) = val; } while (0)
 
 //
@@ -243,12 +243,12 @@ inline Symbol sch_symbol_to_csymbol(Value v)
 }
 
 // symbol->string
-static const char *unintern(Symbol sym)
+static const char *unintern(SchEngine *e, Symbol sym)
 {
-    size_t len = scary_length(symbol_names);
+    size_t len = scary_length(e->symbol_names);
     if (UNLIKELY(sym >= len)) // fatal; every known symbols should have a name
         bug("symbol %lu not found", sym);
-    return symbol_names[sym];
+    return e->symbol_names[sym];
 }
 
 inline const char *sch_string_to_cstr(Value v)
@@ -256,9 +256,9 @@ inline const char *sch_string_to_cstr(Value v)
     return STRING(v);
 }
 
-inline const char *sch_symbol_to_cstr(Value v)
+inline const char *sch_symbol_to_cstr(SchEngine *e, Value v)
 {
-    return unintern(sch_symbol_to_csymbol(v));
+    return unintern(e, sch_symbol_to_csymbol(v));
 }
 
 // define caar, cadr, ... cddddr, 28 procedures, at once
@@ -281,29 +281,29 @@ inline Value sch_integer_new(int64_t i)
 }
 
 // string->symbol
-static Symbol intern(const char *name)
+static Symbol intern(SchEngine *e, const char *name)
 {
     uint64_t i;
-    size_t len = scary_length(symbol_names);
+    size_t len = scary_length(e->symbol_names);
     // find
     for (i = 0; i < len; i++) {
-        if (strcmp(symbol_names[i], name) == 0)
+        if (strcmp(e->symbol_names[i], name) == 0)
             return i;
     }
     // or put at `i`
-    scary_push(&symbol_names, xstrdup(name));
+    scary_push(&e->symbol_names, xstrdup(name));
     return i;
 }
 
-inline Value sch_symbol_new(const char *s)
+inline Value sch_symbol_new(SchEngine *e, const char *s)
 {
-    Symbol sym = intern(s);
+    Symbol sym = intern(e, s);
     return (Value) (sym << FLAG_NBIT_SYM | FLAG_SYM);
 }
 
-void *obj_new(ValueTag t, size_t size)
+void *obj_new(SchEngine *e, ValueTag t, size_t size)
 {
-    Header *h = gc_malloc(size);
+    Header *h = gc_malloc(e, size);
     h->tag = t;
     h->immutable = false;
     return h;
@@ -509,9 +509,9 @@ static Value runtime_error(const char *fmt, ...)
     return (Value) e;
 }
 
-const char *sch_error_message(void)
+const char *sch_error_message(const SchEngine *e)
 {
-    return errmsg;
+    return e->errmsg;
 }
 
 static Value expect_type(Type expected, Value v)
@@ -2978,18 +2978,21 @@ static Value proc_p(UNUSED Value env, Value args)
         scary_free(a); \
     } while (0)
 
-int sch_fin(void)
+int sch_fin(SchEngine *e)
 {
     scary_free_with(source_free, source_data);
-    scary_free_with(free, symbol_names);
+    scary_free_with(free, e->symbol_names);
     gc_fin();
     return exit_status;
 }
 
-void sch_init(const void *sp)
+void sch_init_stack(const void *sp)
 {
     gc_init(sp);
+}
 
+SchEngine *sch_new(void)
+{
     gc_add_root(&eof_object);
     gc_add_root(&current_input_port);
     gc_add_root(&current_output_port);
@@ -2998,7 +3001,7 @@ void sch_init(const void *sp)
 
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
-    symbol_names = scary_new(sizeof(char *));
+    char **symbol_names = scary_new(sizeof(char *));
 #define DEF_SYMBOL(var, name) SYM_##var = sch_symbol_new(name)
     DEF_SYMBOL(ELSE, "else");
     DEF_SYMBOL(QUOTE, "quote");
