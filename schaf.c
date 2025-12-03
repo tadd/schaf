@@ -880,18 +880,31 @@ static void prepend_cfunc_name(const char *name)
     snprintf(errmsg, sizeof(errmsg), "%s: %s", name, tmp);
 }
 
+static bool ignore_lines(FILE *f, int64_t n)
+{
+    char buf[BUFSIZ];
+    for (ssize_t i = 0; i < n; i++) {
+        if (fgets(buf, sizeof(buf), f) == NULL)
+            return false;
+    }
+    return true;
+}
+
 static bool dump_nth_line(const char *filename, int64_t n)
 {
     FILE *f = fopen(filename, "r");
     if (f == NULL)
         return false;
     char buf[BUFSIZ];
-    for (ssize_t i = 1; i < n; i++) // ignore (n-1) lines
-        fgets(buf, sizeof(buf), f);
-    fgets(buf, sizeof(buf), f);
-    fclose(f);
+    bool ret = false;
+    if (!ignore_lines(f, n-1) ||
+        fgets(buf, sizeof(buf), f) == NULL)
+        goto out;
     append_error_message("\n%s", buf); // `buf` includes "\n"
-    return true;
+    ret = true;
+ out:
+    fclose(f);
+    return ret;
 }
 
 // <space><space>...^
