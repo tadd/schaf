@@ -2986,7 +2986,7 @@ int sch_fin(void)
     return exit_status;
 }
 
-void sch_init(const uintptr_t *sp)
+void sch_init(const uintptr_t *volatile sp)
 {
     gc_init(sp);
 
