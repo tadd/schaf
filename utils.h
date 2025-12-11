@@ -36,6 +36,10 @@
 #endif
 #define ATTR_XMALLOC [[nodiscard, gnu::malloc, gnu::returns_nonnull]]
 
+#if __GNUC__ < 13 // does not fully support C23
+#define noreturn gnu::noreturn
+#endif
+
 #pragma GCC visibility push(hidden) // also affects Clang
 
 size_t idivceil(size_t n, size_t aligned);
