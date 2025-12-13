@@ -776,7 +776,7 @@ static Value eval(Value env, Value v)
 {
     if (sch_value_is_symbol(v))
         return lookup_or_error(env, v);
-    if (v == Qnil || !sch_value_is_pair(v))
+    if (!sch_value_is_pair(v))
         return v;
     return eval_apply(env, v);
 }
