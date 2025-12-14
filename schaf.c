@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <math.h>
@@ -12,6 +13,7 @@
 
 #include <libgen.h>
 #include <limits.h>
+#include <sys/select.h>
 #include <unistd.h>
 
 #include "intern.h"
@@ -24,27 +26,31 @@
 //
 
 // Value (uintptr_t):
-//   0b......000 Pointer (Unchangeable pattern!)
-//   0b........1 Integer
-//   0b.......10 Symbol
-//   0b0---00100 #f
-//   0b0---01100 #t
-//   0b0--010100 null
-//   0b0--011100 EOF
-//   0b0-0111100 <undef>
-static const uintptr_t FLAG_NBIT_INT = 1;
-static const uintptr_t FLAG_NBIT_SYM = 2;
-static const uintptr_t FLAG_MASK_INT =   0b1;
-static const uintptr_t FLAG_MASK_SYM =  0b11;
-static const uintptr_t FLAG_MASK_IMM = 0b111; // for 64 bit machine
-static const uintptr_t FLAG_INT      =   0b1;
-static const uintptr_t FLAG_SYM      =  0b10;
-const Value SCH_FALSE = 0b000100U; //  4
-const Value SCH_TRUE  = 0b001100U; // 12
-const Value SCH_NULL  = 0b010100U; // 20; the empty list
+//   0b...............000 Pointer (Unchangeable pattern!)
+//   0b.................1 Integer
+//   0b................10 Symbol
+//   0b0------------00100 #f
+//   0b0------------01100 #t
+//   0b0-----------010100 null
+//   0b0-----------011100 EOF
+//   0b0----------0111100 <undef>
+//   0b0-0{8bits!}1111100 Character
+static const uintptr_t FLAG_NBIT_INT  = 1;
+static const uintptr_t FLAG_NBIT_SYM  = 2;
+static const uintptr_t FLAG_NBIT_CHAR = 7;
+static const uintptr_t FLAG_MASK_INT  =        0b1;
+static const uintptr_t FLAG_MASK_SYM  =       0b11;
+static const uintptr_t FLAG_MASK_IMM  =      0b111; // for 64 bit machine
+static const uintptr_t FLAG_MASK_CHAR = 0b111'1111;
+static const uintptr_t FLAG_INT       =        0b1;
+static const uintptr_t FLAG_SYM       =       0b10;
+static const uintptr_t FLAG_CHAR      = 0b111'1100;
+const Value SCH_FALSE = 0b00'0100U; //  4
+const Value SCH_TRUE  = 0b00'1100U; // 12
+const Value SCH_NULL  = 0b01'0100U; // 20; the empty list
 static
-const Value EOF_OBJ   = 0b011100U; // 28
-const Value SCH_UNDEF = 0b111100U; // 60; may be an error or something internal
+const Value EOF_OBJ   = 0b01'1100U; // 28
+const Value SCH_UNDEF = 0b11'1100U; // 60; may be an error or something internal
 #define BOOL_VAL(v) ((!!(v) << 3U) | 0b100U)
 
 static const int64_t CFUNCARG_MAX = 3;
@@ -93,6 +99,11 @@ static inline bool value_is_immediate(Value v)
 static inline bool value_tag_is(Value v, ValueTag expected)
 {
     return !value_is_immediate(v) && VALUE_TAG(v) == expected;
+}
+
+inline bool sch_value_is_character(Value v)
+{
+    return (v & FLAG_MASK_CHAR) == FLAG_CHAR;
 }
 
 inline bool sch_value_is_string(Value v)
@@ -167,6 +178,8 @@ static Type immediate_type_of(Value v)
         return TYPE_INT;
     if (sch_value_is_symbol(v))
         return TYPE_SYMBOL;
+    if (sch_value_is_character(v))
+        return TYPE_CHAR;
     if (is_boolean(v))
         return TYPE_BOOL;
     if (v == Qnil)
@@ -222,6 +235,8 @@ static const char *value_type_to_string(Type t)
         return "undef";
     case TYPE_PAIR:
         return "pair";
+    case TYPE_CHAR:
+        return "character";
     case TYPE_STRING:
         return "string";
     case TYPE_PROC:
@@ -261,6 +276,11 @@ inline int64_t sch_integer_to_cint(Value x)
 inline Symbol sch_symbol_to_csymbol(Value v)
 {
     return (Symbol) (v >> FLAG_NBIT_SYM);
+}
+
+inline uint8_t sch_character_to_uint8(Value v)
+{
+    return (uint8_t) (v >> FLAG_NBIT_CHAR);
 }
 
 // symbol->string
@@ -328,6 +348,11 @@ void *obj_new(ValueTag t, size_t size)
     h->tag = t;
     h->immutable = false;
     return h;
+}
+
+Value sch_character_new(uint8_t ch)
+{
+    return ((Value) ch) << FLAG_NBIT_CHAR | FLAG_CHAR;
 }
 
 static Value string_new_moved(char *str)
@@ -1500,6 +1525,7 @@ static Value syn_define(Value env, Value args)
     case TYPE_NULL:
     case TYPE_BOOL:
     case TYPE_INT:
+    case TYPE_CHAR:
     case TYPE_STRING:
     case TYPE_PROC:
     case TYPE_VECTOR:
@@ -1549,6 +1575,8 @@ static bool equal(Value x, Value y)
     case TYPE_PAIR:
         return equal(car(x), car(y)) &&
                equal(cdr(x), cdr(y));
+    case TYPE_CHAR:
+        return CHAR(x) == CHAR(y);
     case TYPE_STRING:
         return strcmp(STRING(x), STRING(y)) == 0;
     case TYPE_VECTOR:
@@ -2197,6 +2225,131 @@ static Value proc_string_to_symbol(UNUSED Value env, Value str)
 {
     EXPECT_TYPE(string, str);
     return sch_symbol_new(STRING(str));
+}
+
+// 6.3.4. Characters
+static Value proc_char_p(UNUSED Value env, Value ch)
+{
+    return BOOL_VAL(sch_value_is_character(ch));
+}
+
+#define CHAR_CMP(c1, c2, op) BOOL_VAL(CHAR(c1) op CHAR(c2))
+#define CHAR_CI_CMP(c1, c2, op) BOOL_VAL(tolower(CHAR(c1)) op tolower(CHAR(c2)))
+
+static Value proc_char_eq_p(UNUSED Value env, Value c1, Value c2)
+{
+    EXPECT_TYPE_TWIN(character, c1, c2);
+    return CHAR_CMP(c1, c2, ==);
+}
+
+static Value proc_char_lt_p(UNUSED Value env, Value c1, Value c2)
+{
+    EXPECT_TYPE_TWIN(character, c1, c2);
+    return CHAR_CMP(c1, c2, <);
+}
+
+static Value proc_char_gt_p(UNUSED Value env, Value c1, Value c2)
+{
+    EXPECT_TYPE_TWIN(character, c1, c2);
+    return CHAR_CMP(c1, c2, >);
+}
+
+static Value proc_char_le_p(UNUSED Value env, Value c1, Value c2)
+{
+    EXPECT_TYPE_TWIN(character, c1, c2);
+    return CHAR_CMP(c1, c2, <=);
+}
+
+static Value proc_char_ge_p(UNUSED Value env, Value c1, Value c2)
+{
+    EXPECT_TYPE_TWIN(character, c1, c2);
+    return CHAR_CMP(c1, c2, >=);
+}
+
+static Value proc_char_ci_eq_p(UNUSED Value env, Value c1, Value c2)
+{
+    EXPECT_TYPE_TWIN(character, c1, c2);
+    return CHAR_CI_CMP(c1, c2, ==);
+}
+
+static Value proc_char_ci_lt_p(UNUSED Value env, Value c1, Value c2)
+{
+    EXPECT_TYPE_TWIN(character, c1, c2);
+    return CHAR_CI_CMP(c1, c2, <);
+}
+
+static Value proc_char_ci_gt_p(UNUSED Value env, Value c1, Value c2)
+{
+    EXPECT_TYPE_TWIN(character, c1, c2);
+    return CHAR_CI_CMP(c1, c2, >);
+}
+
+static Value proc_char_ci_le_p(UNUSED Value env, Value c1, Value c2)
+{
+    EXPECT_TYPE_TWIN(character, c1, c2);
+    return CHAR_CI_CMP(c1, c2, <=);
+}
+
+static Value proc_char_ci_ge_p(UNUSED Value env, Value c1, Value c2)
+{
+    EXPECT_TYPE_TWIN(character, c1, c2);
+    return CHAR_CI_CMP(c1, c2, >=);
+}
+
+static Value proc_char_alphabetic_p(UNUSED Value env, Value c)
+{
+    EXPECT_TYPE(character, c);
+    return BOOL_VAL(isalpha(CHAR(c)));
+}
+
+static Value proc_char_numeric_p(UNUSED Value env, Value c)
+{
+    EXPECT_TYPE(character, c);
+    return BOOL_VAL(isdigit(CHAR(c)));
+}
+
+static Value proc_char_whitespace_p(UNUSED Value env, Value c)
+{
+    EXPECT_TYPE(character, c);
+    return BOOL_VAL(isspace(CHAR(c)));
+}
+
+static Value proc_char_upper_case_p(UNUSED Value env, Value c)
+{
+    EXPECT_TYPE(character, c);
+    return BOOL_VAL(isupper(CHAR(c)));
+}
+
+static Value proc_char_to_integer(UNUSED Value env, Value c)
+{
+    EXPECT_TYPE(character, c);
+    return sch_integer_new(CHAR(c));
+}
+
+static Value proc_integer_to_char(UNUSED Value env, Value c)
+{
+    int64_t i = get_int(c);
+    if (i < 0 || i > 0xFF)
+        return runtime_error("integer out of domain");
+    return sch_character_new(i);
+}
+
+static Value proc_char_lower_case_p(UNUSED Value env, Value c)
+{
+    EXPECT_TYPE(character, c);
+    return BOOL_VAL(islower(CHAR(c)));
+}
+
+static Value proc_char_upcase(UNUSED Value env, Value c)
+{
+    EXPECT_TYPE(character, c);
+    return sch_character_new(toupper(CHAR(c)));
+}
+
+static Value proc_char_downcase(UNUSED Value env, Value c)
+{
+    EXPECT_TYPE(character, c);
+    return sch_character_new(tolower(CHAR(c)));
 }
 
 // 6.3.5. Strings
@@ -2887,9 +3040,63 @@ static Value proc_read(UNUSED Value env, Value args)
     return iread(PORT(port)->fp);
 }
 
+static Value port_getc(Value port, bool peek)
+{
+    FILE *fp = PORT(port)->fp;
+    int ch = fgetc(fp);
+    if (ch == EOF)
+        return EOF_OBJ;
+    if (peek)
+        ungetc(ch, fp);
+    return sch_character_new((uint8_t) ch);
+}
+
+static Value proc_read_char(UNUSED Value env, Value args)
+{
+    EXPECT_ARITY_RANGE(0, 1, args);
+    Value port = arg_or_current_port(args, PORT_INPUT);
+    EXPECT_ERROR(port);
+    return port_getc(port, false);
+}
+
+static Value proc_peek_char(UNUSED Value env, Value args)
+{
+    EXPECT_ARITY_RANGE(0, 1, args);
+    Value port = arg_or_current_port(args, PORT_INPUT);
+    EXPECT_ERROR(port);
+    return port_getc(port, true);
+}
+
 static Value proc_eof_object_p(UNUSED Value env, Value obj)
 {
     return BOOL_VAL(obj == EOF_OBJ);
+}
+
+static Value is_readable_fp(FILE *fp)
+{
+    int fd = fileno(fp);
+    fd_set fds;
+    FD_ZERO(&fds);
+    FD_SET(fd, &fds);
+    struct timeval t = { 0, 0 };
+    int ret = select(fd + 1, &fds, NULL, NULL, &t);
+    return BOOL_VAL(ret > 0);
+}
+
+static Value is_char_input_ready(Value vport)
+{
+    const Port *port = PORT(vport);
+    if (port->string != NULL) // string port
+        return Qtrue; // true always
+    return is_readable_fp(port->fp);
+}
+
+static Value proc_char_ready_p(UNUSED Value env, Value args)
+{
+    EXPECT_ARITY_RANGE(0, 1, args);
+    Value port = arg_or_current_port(args, PORT_INPUT);
+    EXPECT_ERROR(port);
+    return is_char_input_ready(port);
 }
 
 // 6.6.3. Output
@@ -2975,6 +3182,7 @@ static void print_object(FILE *f, Value v, Value record, ValuePrinter printer)
 {
     switch (sch_value_type_of(v)) {
     case TYPE_SYMBOL:
+    case TYPE_CHAR:
     case TYPE_STRING:
     case TYPE_NULL:
     case TYPE_BOOL:
@@ -3010,6 +3218,9 @@ static void fdisplay_single(FILE *f, Value v)
         break;
     case TYPE_SYMBOL:
         fprintf(f, "%s", sch_symbol_to_cstr(v));
+        break;
+    case TYPE_CHAR:
+        fprintf(f, "%c", CHAR(v));
         break;
     case TYPE_STRING:
         fprintf(f, "%s", STRING(v));
@@ -3075,6 +3286,17 @@ static Value proc_newline(UNUSED Value env, Value args)
     EXPECT_ERROR(out);
     fputs("\n", PORT(out)->fp);
     return Qfalse;
+}
+
+static Value proc_write_char(UNUSED Value env, Value args)
+{
+    EXPECT_ARITY_RANGE(1, 2, args);
+    Value ch = car(args);
+    EXPECT_TYPE(character, ch);
+    Value port = arg_or_current_port(cdr(args), PORT_OUTPUT);
+    EXPECT_ERROR(port);
+    fputc(CHAR(ch), PORT(port)->fp);
+    return Qnil;
 }
 
 // 6.6.4. System interface
@@ -3210,6 +3432,10 @@ static void inspect_single(FILE *f, Value v)
         break;
     case TYPE_SYMBOL:
         fprintf(f, "'");
+        fdisplay_single(f, v);
+        break;
+    case TYPE_CHAR:
+        fprintf(f, "#\\");
         // fall through
     case TYPE_NULL:
     case TYPE_BOOL:
@@ -3430,26 +3656,26 @@ void sch_init(const void *sp)
     define_procedure(e, "symbol->string", proc_symbol_to_string, 1);
     define_procedure(e, "string->symbol", proc_string_to_symbol, 1);
     // 6.3.4. Characters
-    //- char?
-    //- char=?
-    //- char<?
-    //- char>?
-    //- char<=?
-    //- char>=?
-    //- char-ci=?
-    //- char-ci<?
-    //- char-ci>?
-    //- char-ci<=?
-    //- char-ci>=?
-    //- char-alphabetic?
-    //- char-numeric?
-    //- char-whitespace?
-    //- char-upper-case?
-    //- char-lower-case?
-    //- char->integer
-    //- integer->char
-    //- char-upcase
-    //- char-downcase
+    define_procedure(e, "char?", proc_char_p, 1);
+    define_procedure(e, "char=?", proc_char_eq_p, 2);
+    define_procedure(e, "char<?", proc_char_lt_p, 2);
+    define_procedure(e, "char>?", proc_char_gt_p, 2);
+    define_procedure(e, "char<=?", proc_char_le_p, 2);
+    define_procedure(e, "char>=?", proc_char_ge_p, 2);
+    define_procedure(e, "char-ci=?", proc_char_ci_eq_p, 2);
+    define_procedure(e, "char-ci<?", proc_char_ci_lt_p, 2);
+    define_procedure(e, "char-ci>?", proc_char_ci_gt_p, 2);
+    define_procedure(e, "char-ci<=?", proc_char_ci_le_p, 2);
+    define_procedure(e, "char-ci>=?", proc_char_ci_ge_p, 2);
+    define_procedure(e, "char-alphabetic?", proc_char_alphabetic_p, 1);
+    define_procedure(e, "char-numeric?", proc_char_numeric_p, 1);
+    define_procedure(e, "char-whitespace?", proc_char_whitespace_p, 1);
+    define_procedure(e, "char-upper-case?", proc_char_upper_case_p, 1);
+    define_procedure(e, "char-lower-case?", proc_char_lower_case_p, 1);
+    define_procedure(e, "char->integer", proc_char_to_integer, 1);
+    define_procedure(e, "integer->char", proc_integer_to_char, 1);
+    define_procedure(e, "char-upcase", proc_char_upcase, 1);
+    define_procedure(e, "char-downcase", proc_char_downcase, 1);
     // 6.3.5. Strings
     define_procedure(e, "string?", proc_string_p, 1);
     //- make-string
@@ -3516,15 +3742,15 @@ void sch_init(const void *sp)
     define_procedure(e, "close-output-port", proc_close_output_port, 1);
     // 6.6.2. Input
     define_procedure(e, "read", proc_read, -1);
-    //- read-char
-    //- peek-char
+    define_procedure(e, "read-char", proc_read_char, -1);
+    define_procedure(e, "peek-char", proc_peek_char, -1);
     define_procedure(e, "eof-object?", proc_eof_object_p, 1);
-    //- char-ready?
+    define_procedure(e, "char-ready?", proc_char_ready_p, -1);
     // 6.6.3. Output
     //- write
     define_procedure(e, "display", proc_display, -1);
     define_procedure(e, "newline", proc_newline, -1);
-    //- write-char
+    define_procedure(e, "write-char", proc_write_char, -1);
     // 6.6.4. System interface
     define_procedure(e, "load", proc_load, 1);
 

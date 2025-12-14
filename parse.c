@@ -19,6 +19,7 @@ typedef enum {
     TOK_TYPE_SPLICE,
     TOK_TYPE_INT,
     TOK_TYPE_DOT,
+    TOK_TYPE_CHAR,
     TOK_TYPE_STRING,
     TOK_TYPE_IDENT,
     TOK_TYPE_TRUE,
@@ -66,6 +67,10 @@ DEF_CONST_TOKEN_FUNC(MINUS, "-")
 static inline Token token_int(int64_t i)
 {
     return TOKEN_VAL(INT, sch_integer_new(i));
+}
+static inline Token token_char(uint8_t ch)
+{
+    return TOKEN_VAL(CHAR, sch_character_new(ch));
 }
 static inline Token token_string(const char *s)
 {
@@ -260,11 +265,48 @@ static Token lex_signed_int_with_radix(Parser *p, unsigned radix)
     return lex_int_with_radix(p, coeff, radix);
 }
 
+static Token lex_character_name_rest(Parser *p, const char *expected, int ret)
+{
+    int c;
+    for (const char *s = expected + 2; *s != '\0'; s++) {
+        if ((c = fgetc(p->in)) == EOF)
+            parse_error(p, "character name", "EOF");
+        if (c != *s)
+            parse_error(p, "character name", "'%c' for '%s'", c, expected);
+    }
+    return token_char(ret);
+}
+
+static Token lex_character_name(Parser *p, int c1, int c2)
+{
+    if (c1 == 's' && c2 == 'p')
+        return lex_character_name_rest(p, "space", ' ');
+    else if (c1 == 'n' && c2 == 'e') // newline
+        return lex_character_name_rest(p, "newline", '\n');
+    parse_error(p, "character name", "'%c%c'...", c1, c2);
+}
+
+static Token lex_character(Parser *p)
+{
+    int c1, c2;
+    if ((c1 = fgetc(p->in)) == EOF)
+        parse_error(p, "character constant", "EOF");
+    if (!isalpha(c1) || (c2 = fgetc(p->in)) == EOF)
+        return token_char(c1); // single-character #\\x other than letter
+    if (!isalpha(c2)) {
+        ungetc(c2, p->in);
+        return token_char(c1); // alphabetic #\\x
+    }
+    return lex_character_name(p, c1, c2);
+}
+
 static Token lex_constant(Parser *p)
 {
     unsigned radix;
     int c = fgetc(p->in);
     switch (c) {
+    case '\\':
+        return lex_character(p);
     case 't':
         return TOK_TRUE;
     case 'f':
@@ -418,6 +460,9 @@ static const char *token_stringify(Token t)
         break;
     case TOK_TYPE_IDENT:
         return sch_symbol_to_cstr(t.value);
+    case TOK_TYPE_CHAR:
+        snprintf(buf, sizeof(buf), "'%c'", CHAR(t.value));
+        break;
     case TOK_TYPE_STRING:
         snprintf(buf, sizeof(buf), "\"%s\"", STRING(t.value));
         break;
@@ -526,6 +571,7 @@ static Value parse_expr_token(Parser *p, Token t)
         return Qtrue;
     case TOK_TYPE_FALSE:
         return Qfalse;
+    case TOK_TYPE_CHAR:
     case TOK_TYPE_STRING:
     case TOK_TYPE_INT:
     case TOK_TYPE_IDENT:

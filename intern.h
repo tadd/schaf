@@ -24,6 +24,7 @@ typedef enum {
 // immediate
     TYPE_BOOL,
     TYPE_INT,
+    TYPE_CHAR,
     TYPE_SYMBOL,
     TYPE_NULL,
     TYPE_UNDEF,
@@ -162,6 +163,7 @@ typedef struct {
 #define SYMBOL(v) sch_symbol_to_csymbol(v)
 #define PAIR(v) ((Pair *) v)
 #define LOCATED_PAIR(v) ((LocatedPair *) v)
+#define CHAR(v) sch_character_to_uint8(v)
 #define STRING(v) (((String *) v)->body)
 #define PROCEDURE(v) ((Procedure *) v)
 #define CFUNC(v) ((CFunc *) v)
@@ -202,6 +204,7 @@ ATTR_XMALLOC void *gc_malloc(size_t size);
 
 bool sch_value_is_integer(Value v);
 bool sch_value_is_symbol(Value v);
+bool sch_value_is_character(Value v);
 bool sch_value_is_string(Value v);
 bool sch_value_is_pair(Value v);
 Type sch_value_type_of(Value v);
@@ -210,10 +213,12 @@ int64_t sch_integer_to_cint(Value v);
 const char *sch_symbol_to_cstr(Value v);
 const char *sch_string_to_cstr(Value v);
 Symbol sch_symbol_to_csymbol(Value v);
+uint8_t sch_character_to_uint8(Value v);
 const char *sch_value_to_type_name(Value v);
 
 Value sch_integer_new(int64_t i);
 Value sch_symbol_new(const char *s);
+Value sch_character_new(uint8_t ch);
 Value sch_string_new(const char *s);
 Value sch_string_immutable_new(const char *s);
 
