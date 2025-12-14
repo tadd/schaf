@@ -321,6 +321,13 @@ Value sch_string_new(const char *str)
     return string_new_moved(xstrdup(str));
 }
 
+Value sch_string_immutable_new(const char *str)
+{
+    Value s = sch_string_new(str);
+    HEADER(s)->immutable = true;
+    return s;
+}
+
 static void expect_cfunc_tag(ValueTag tag)
 {
     if (tag == TAG_CFUNC || tag == TAG_SYNTAX)
@@ -2041,6 +2048,19 @@ static Value proc_symbol_p(UNUSED Value env, Value obj)
     return BOOL_VAL(sch_value_is_symbol(obj));
 }
 
+static Value proc_symbol_to_string(UNUSED Value env, Value sym)
+{
+    EXPECT(type, TYPE_SYMBOL, sym);
+    const char *s = sch_symbol_to_cstr(sym);
+    return sch_string_immutable_new(s);
+}
+
+static Value proc_string_to_symbol(UNUSED Value env, Value str)
+{
+    EXPECT(type, TYPE_STRING, str);
+    return sch_symbol_new(STRING(str));
+}
+
 // 6.3.5. Strings
 static Value proc_string_p(UNUSED Value env, Value obj)
 {
@@ -3214,8 +3234,8 @@ void sch_init(const void *sp)
     define_procedure(e, "assoc", proc_assoc, 2);
     // 6.3.3. Symbols
     define_procedure(e, "symbol?", proc_symbol_p, 1);
-    //- symbol->string
-    //- string->symbol
+    define_procedure(e, "symbol->string", proc_symbol_to_string, 1);
+    define_procedure(e, "string->symbol", proc_string_to_symbol, 1);
     // 6.3.4. Characters
     //- char?
     //- char=?
