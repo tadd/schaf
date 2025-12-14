@@ -1030,6 +1030,20 @@
   (noexpect symbol? '())
   (noexpect symbol? #f)))
 
+(describe "symbol->string" (lambda ()
+  (expect string=? (symbol->string 'flying-fish) "flying-fish")
+  (expect string=? (symbol->string 'Martin) "Martin")
+  ;; FIXME: test with string-set!
+  ))
+
+(describe "string->symbol" (lambda ()
+  (expect eq? (string->symbol "flying-fish") 'flying-fish)
+  (expect eq? (string->symbol "Martin") 'Martin)
+  (expect eq? (string->symbol (symbol->string 'JollyWog))
+          'JollyWog)
+  (expect string=? (symbol->string (string->symbol "K. Harper, M.D."))
+          "K. Harper, M.D.")))
+
 ;; 6.3.5. Strings
 (describe "string?" (lambda ()
   (expect string? "foo")
