@@ -3359,8 +3359,10 @@ void sch_init(const void *sp)
     //- imag-part
     //- magnitude
     //- angle
-    //- exact->inexact
-    //- inexact->exact
+    //- inexact
+    //- exact->inexact (alias)
+    //- exact
+    //- inexact->exact (alias)
     // 6.2.6. Numerical input and output
     define_procedure(e, "number->string", proc_number_to_string, 1);
     //- number->string with radix
