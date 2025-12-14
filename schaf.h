@@ -27,6 +27,7 @@ SchValue sch_parse(const char *path);
 SchValue sch_parse_string(const char *in);
 SchValue sch_load(const char *path);
 SchValue sch_eval_string(const char *s);
+SchValue sch_eval_string_single(const char *in);
 
 const char *sch_error_message(void);
 

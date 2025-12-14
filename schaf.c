@@ -982,6 +982,20 @@ Value sch_eval_string(const char *in)
     return v;
 }
 
+#define scary_free_with(f, a) do { \
+        for (size_t i = 0, len = scary_length(a); i < len; i++) \
+            f(a[i]); \
+        scary_free(a); \
+    } while (0)
+
+Value sch_eval_string_single(const char *in)
+{
+    scary_free_with(source_free, source_data);
+    source_data = scary_new(sizeof(Source *));
+    errmsg[0] = '\0';
+    return sch_eval_string(in);
+}
+
 static FILE *open_loadable(const char *path)
 {
     static char rpath[PATH_MAX];
@@ -2971,12 +2985,6 @@ static Value proc_p(UNUSED Value env, Value args)
 //
 // Interpreter things
 //
-
-#define scary_free_with(f, a) do { \
-        for (size_t i = 0, len = scary_length(a); i < len; i++) \
-            f(a[i]); \
-        scary_free(a); \
-    } while (0)
 
 int sch_fin(void)
 {
