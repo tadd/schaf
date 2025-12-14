@@ -1069,6 +1069,25 @@
   (expect string=? (symbol->string (string->symbol "K. Harper, M.D."))
           "K. Harper, M.D.")))
 
+;; 6.3.3. Characters
+(describe "char?" (lambda ()
+  (expect char? #\a)
+  (expect char? #\\)
+  (expect char? #\A)
+  (expect char? #\0)
+  (expect char? #\space)
+  (expect char? #\newline)
+  (expect char? #\ ); space!
+  (expect char? #\
+          ); newline!
+  (expect char? '#\a)
+  (expect char? '#\\)
+
+  (noexpect char? 97)
+  (noexpect char? 'a)
+  (noexpect char? "#\a")
+  (noexpect char? '"#\a")))
+
 ;; 6.3.5. Strings
 (describe "string?" (lambda ()
   (expect string? "foo")

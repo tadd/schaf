@@ -93,6 +93,11 @@ static inline bool value_tag_is(Value v, ValueTag expected)
     return !value_is_immediate(v) && VALUE_TAG(v) == expected;
 }
 
+inline bool sch_value_is_character(Value v)
+{
+    return value_tag_is(v, TAG_CHAR);
+}
+
 inline bool sch_value_is_string(Value v)
 {
     return value_tag_is(v, TAG_STRING);
@@ -111,6 +116,7 @@ static bool value_is_procedure(Value v)
     case TAG_CONTINUATION:
     case TAG_CFUNC_CLOSURE:
         return true;
+    case TAG_CHAR:
     case TAG_STRING:
     case TAG_PAIR:
     case TAG_VECTOR:
@@ -160,6 +166,8 @@ Type sch_value_type_of(Value v)
     if (value_is_immediate(v))
         return immediate_type_of(v);
     switch (VALUE_TAG(v)) {
+    case TAG_CHAR:
+        return TYPE_CHAR;
     case TAG_STRING:
         return TYPE_STRING;
     case TAG_PAIR:
@@ -201,6 +209,8 @@ static const char *value_type_to_string(Type t)
         return "undef";
     case TYPE_PAIR:
         return "pair";
+    case TYPE_CHAR:
+        return "character";
     case TYPE_STRING:
         return "string";
     case TYPE_PROC:
@@ -307,6 +317,13 @@ void *obj_new(ValueTag t, size_t size)
     h->tag = t;
     h->immutable = false;
     return h;
+}
+
+Value sch_character_new(uint8_t ch)
+{
+    Char *c = obj_new(TAG_CHAR, sizeof(Char));
+    c->ch = ch;
+    return (Value) c;
 }
 
 static Value string_new_moved(char *str)
@@ -1469,6 +1486,7 @@ static Value syn_define(Value env, Value args)
     case TYPE_NULL:
     case TYPE_BOOL:
     case TYPE_INT:
+    case TYPE_CHAR:
     case TYPE_STRING:
     case TYPE_PROC:
     case TYPE_VECTOR:
@@ -1518,6 +1536,8 @@ static bool equal(Value x, Value y)
     case TYPE_PAIR:
         return equal(car(x), car(y)) &&
                equal(cdr(x), cdr(y));
+    case TYPE_CHAR:
+        return CHAR(x) == CHAR(y);
     case TYPE_STRING:
         return strcmp(STRING(x), STRING(y)) == 0;
     case TYPE_VECTOR:
@@ -2128,6 +2148,12 @@ static Value proc_string_to_symbol(UNUSED Value env, Value str)
 {
     EXPECT(type, TYPE_STRING, str);
     return sch_symbol_new(STRING(str));
+}
+
+// 6.3.4. Characters
+static Value proc_char_p(UNUSED Value env, Value ch)
+{
+    return BOOL_VAL(sch_value_is_character(ch));
 }
 
 // 6.3.5. Strings
@@ -2945,6 +2971,7 @@ static void print_object(FILE *f, Value v, Value record, ValuePrinter printer)
 {
     switch (sch_value_type_of(v)) {
     case TYPE_SYMBOL:
+    case TYPE_CHAR:
     case TYPE_STRING:
     case TYPE_NULL:
     case TYPE_BOOL:
@@ -2980,6 +3007,9 @@ static void fdisplay_single(FILE *f, Value v)
         break;
     case TYPE_SYMBOL:
         fprintf(f, "%s", sch_symbol_to_cstr(v));
+        break;
+    case TYPE_CHAR:
+        fprintf(f, "%c", CHAR(v));
         break;
     case TYPE_STRING:
         fprintf(f, "%s", STRING(v));
@@ -3181,6 +3211,10 @@ static void inspect_single(FILE *f, Value v)
         break;
     case TYPE_SYMBOL:
         fprintf(f, "'");
+        fdisplay_single(f, v);
+        break;
+    case TYPE_CHAR:
+        fprintf(f, "#\\");
         // fall through
     case TYPE_NULL:
     case TYPE_BOOL:
@@ -3410,7 +3444,7 @@ void sch_init(const void *sp)
     define_procedure(e, "symbol->string", proc_symbol_to_string, 1);
     define_procedure(e, "string->symbol", proc_string_to_symbol, 1);
     // 6.3.4. Characters
-    //- char?
+    define_procedure(e, "char?", proc_char_p, 1);
     //- char=?
     //- char<?
     //- char>?
