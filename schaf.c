@@ -1872,6 +1872,16 @@ static Value proc_number_to_string(UNUSED Value env, Value x)
     return sch_string_new(buf);
 }
 
+static Value proc_string_to_number(UNUSED Value env, Value s)
+{
+    EXPECT_TYPE(string, s);
+    char *endptr = NULL;
+    int64_t i = strtoll(STRING(s), &endptr, 10);
+    if (STRING(s)[0] == '\0' || *endptr != '\0')
+        return Qfalse;
+    return sch_integer_new(i);
+}
+
 // 6.3. Other data types
 // 6.3.1. Booleans
 static Value proc_not(UNUSED Value env, Value x)
@@ -3386,7 +3396,8 @@ void sch_init(const void *sp)
     // 6.2.6. Numerical input and output
     define_procedure(e, "number->string", proc_number_to_string, 1);
     //- number->string with radix
-    //- string->number
+    define_procedure(e, "string->number", proc_string_to_number, 1);
+    //- string->number with radix
     // 6.3. Other data types
     // 6.3.1. Booleans
     define_procedure(e, "not", proc_not, 1);
