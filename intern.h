@@ -216,6 +216,7 @@ const char *sch_value_to_type_name(Value v);
 Value sch_integer_new(int64_t i);
 Value sch_symbol_new(const char *s);
 Value sch_string_new(const char *s);
+Value sch_string_immutable_new(const char *s);
 
 Value cons(Value car, Value cdr);
 Value car(Value v);
