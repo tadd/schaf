@@ -1136,6 +1136,16 @@
     (vector-set! v 1 42)
     (expect = (vector-ref v 1) 42))))
 
+(describe "vector->list" (lambda ()
+  (expect equal? (vector->list '#(dah dah didah)) '(dah dah didah))))
+
+(describe "list->vector" (lambda ()
+  (expect equal? (list->vector '(dah dah didah)) '#(dah dah didah))))
+
+(describe "vector-fill!" (lambda ()
+  (expect equal? (vector-fill! #() 42) #())
+  (expect equal? (vector-fill! #(0 1) 42) #(42 42))))
+
 ;; 6.4. Control features
 (describe "procedure?" (lambda ()
   (expect procedure? car)
