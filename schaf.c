@@ -3495,8 +3495,6 @@ void sch_init(const void *sp)
     //- write-char
     // 6.6.4. System interface
     define_procedure(e, "load", proc_load, 1);
-    //- transcript-on
-    //- transcript-off
 
     env_r5rs = env_dup("r5rs", e);
     gc_add_root(&env_r5rs);
