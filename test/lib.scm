@@ -54,9 +54,14 @@
   (display* "Failed in " test-name ": Expected ")
   (fail-message proc args))
 
+(define (msg-proc-unknown args)
+  (if (= (length args) 1)
+      (msg-proc-1 "??")
+      (msg-proc-2 "??")))
+
 (define (fail-message proc args)
   (let* ((entry (assq proc fail-message-procs))
-         (f (if entry (cdr entry) (msg-proc-1 "??"))))
+         (f (if entry (cdr entry) (msg-proc-unknown args))))
     (apply f args)
     (newline)))
 
