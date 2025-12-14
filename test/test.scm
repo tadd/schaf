@@ -817,6 +817,19 @@
   (expect = (modulo 13 -4) -3)
   (expect = (modulo -13 -4) -1)))
 
+(describe "gcd" (lambda ()
+  (expect = (gcd) 0)
+  (expect = (gcd 32) 32)
+  (expect = (gcd 32 -36) 4)
+  (expect = (gcd 3333 9 3) 3)
+  (expect = (gcd 16 -1024 8 -256) 8)))
+
+(describe "lcm" (lambda ()
+  (expect = (lcm) 1)
+  (expect = (lcm 32) 32)
+  (expect = (lcm 32 -36) 288)
+  (expect = (lcm 2 -16 256 -1024) 1024)))
+
 (describe "expt" (lambda ()
   (expect = (expt 1 1) 1)
   (expect = (expt 2 2) 4)
