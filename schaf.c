@@ -1769,6 +1769,64 @@ static Value proc_modulo(UNUSED Value env, Value x, Value y)
     return sch_integer_new(c);
 }
 
+static int64_t *list_to_int_abs_array(Value l, Value *err)
+{
+    int64_t *a = scary_new(sizeof(int64_t));
+    for (Value p = l; p != Qnil; p = cdr(p)) {
+        Value x = car(p);
+        if (!sch_value_is_integer(x)) {
+            *err = type_error("integer", x);
+            return NULL;
+        }
+        int64_t i = INT(x);
+        scary_push(&a, i < 0 ? -i : i);
+    }
+    return a;
+}
+
+static int64_t gcd(int64_t x, int64_t y)
+{
+    while (y != 0) {
+        int64_t x2 = y;
+        y = x % y;
+        x = x2;
+    }
+    return x;
+}
+
+static Value proc_gcd(UNUSED Value env, Value args)
+{
+    if (args == Qnil)
+        return sch_integer_new(0);
+    Value err = Qfalse;
+    int64_t *a = list_to_int_abs_array(args, &err);
+    EXPECT_ERROR(err);
+    int64_t ret = a[0];
+    for (size_t i = 1, len = scary_length(a); i < len; i++)
+        ret = gcd(ret, a[i]);
+    scary_free(a);
+    return sch_integer_new(ret);
+}
+
+static int64_t lcm(int64_t x, int64_t y)
+{
+    return llabs(x * y) / gcd(x, y);
+}
+
+static Value proc_lcm(UNUSED Value env, Value args)
+{
+    if (args == Qnil)
+        return sch_integer_new(1);
+    Value err = Qfalse;
+    int64_t *a = list_to_int_abs_array(args, &err);
+    EXPECT_ERROR(err);
+    int64_t ret = a[0];
+    for (size_t i = 1, len = scary_length(a); i < len; i++)
+        ret = lcm(ret, a[i]);
+    scary_free(a);
+    return sch_integer_new(ret);
+}
+
 static int64_t expt(int64_t x, int64_t y)
 {
     int64_t z = 1;
@@ -2255,13 +2313,7 @@ static Value proc_vector_p(UNUSED Value env, Value o)
     return BOOL_VAL(value_tag_is(o, TAG_VECTOR));
 }
 
-static Value list_to_vector(Value l)
-{
-    Value v = vector_new();
-    for (Value p = l; p != Qnil; p = cdr(p))
-        vector_push(v, car(p));
-    return v;
-}
+static Value list_to_vector(Value l);
 
 static Value proc_vector(UNUSED Value env, Value args)
 {
@@ -2314,6 +2366,14 @@ static Value vector_to_list(Value *v)
     for (int64_t i = scary_length(v) - 1; i >= 0; i--)
         l = cons(v[i], l) ;
     return l;
+}
+
+static Value list_to_vector(Value l)
+{
+    Value v = vector_new();
+    for (Value p = l; p != Qnil; p = cdr(p))
+        vector_push(v, car(p));
+    return v;
 }
 
 static Value proc_vector_to_list(UNUSED Value env, Value v)
@@ -3308,8 +3368,8 @@ void sch_init(const void *sp)
     define_procedure(e, "quotient", proc_quotient, 2);
     define_procedure(e, "remainder", proc_remainder, 2);
     define_procedure(e, "modulo", proc_modulo, 2);
-    //- gcd
-    //- lcm
+    define_procedure(e, "gcd", proc_gcd, -1);
+    define_procedure(e, "lcm", proc_lcm, -1);
     //- numerator
     //- denominator
     //- floor
