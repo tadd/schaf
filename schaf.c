@@ -326,6 +326,13 @@ Value sch_string_new(const char *str)
     return string_new_moved(xstrdup(str));
 }
 
+Value sch_string_immutable_new(const char *str)
+{
+    Value s = sch_string_new(str);
+    HEADER(s)->immutable = true;
+    return s;
+}
+
 static void expect_cfunc_tag(ValueTag tag)
 {
     if (tag == TAG_CFUNC || tag == TAG_SYNTAX)
@@ -2045,6 +2052,19 @@ static Value proc_symbol_p(UNUSED Value env, Value obj)
     return BOOL_VAL(sch_value_is_symbol(obj));
 }
 
+static Value proc_symbol_to_string(UNUSED Value env, Value sym)
+{
+    EXPECT(type, TYPE_SYMBOL, sym);
+    const char *s = sch_symbol_to_cstr(sym);
+    return sch_string_immutable_new(s);
+}
+
+static Value proc_string_to_symbol(UNUSED Value env, Value str)
+{
+    EXPECT(type, TYPE_STRING, str);
+    return sch_symbol_new(STRING(str));
+}
+
 // 6.3.5. Strings
 static Value proc_string_p(UNUSED Value env, Value obj)
 {
@@ -2115,12 +2135,17 @@ static Value proc_vector_p(UNUSED Value env, Value o)
     return BOOL_VAL(value_tag_is(o, TAG_VECTOR));
 }
 
-static Value proc_vector(UNUSED Value env, Value args)
+static Value list_to_vector(Value l)
 {
     Value v = vector_new();
-    for (Value p = args; p != Qnil; p = cdr(p))
+    for (Value p = l; p != Qnil; p = cdr(p))
         vector_push(v, car(p));
     return v;
+}
+
+static Value proc_vector(UNUSED Value env, Value args)
+{
+    return list_to_vector(args);
 }
 
 static Value proc_make_vector(UNUSED Value env, Value args)
@@ -2161,6 +2186,36 @@ static Value proc_vector_set(UNUSED Value env, Value o, Value k, Value obj)
     if (i < scary_length(v))
         v[i] = obj;
     return Qfalse;
+}
+
+static Value vector_to_list(Value *v)
+{
+    Value l = Qnil;
+    for (int64_t i = scary_length(v) - 1; i >= 0; i--) {
+        l = cons(v[i], l) ;
+    }
+    return l;
+}
+
+static Value proc_vector_to_list(UNUSED Value env, Value v)
+{
+    EXPECT(type, TYPE_VECTOR, v);
+    return vector_to_list(VECTOR(v));
+}
+
+static Value proc_list_to_vector(UNUSED Value env, Value l)
+{
+    EXPECT(list_head, l);
+    return list_to_vector(l);
+}
+
+static Value proc_vector_fill(UNUSED Value env, Value vec, Value fill)
+{
+    EXPECT(type, TYPE_VECTOR, vec);
+    Value *v = VECTOR(vec);
+    for (size_t i = 0, len = scary_length(v); i < len; i++)
+        v[i] = fill;
+    return vec;
 }
 
 // 6.4. Control features
@@ -2744,7 +2799,7 @@ static void print_vector(FILE *f, Value val, Value record, ValuePrinter printer)
     fprintf(f, "#(");
     record = cons(val, record);
     const Value *v = VECTOR(val);
-    for (int64_t i = 0, len = scary_length(v); i < len; i++) {
+    for (size_t i = 0, len = scary_length(v); i < len; i++) {
         Value e = v[i];
         if (!check_circular(f, e, record))
             print_object(f, e, record, printer);
@@ -3218,8 +3273,8 @@ void sch_init(const void *sp)
     define_procedure(e, "assoc", proc_assoc, 2);
     // 6.3.3. Symbols
     define_procedure(e, "symbol?", proc_symbol_p, 1);
-    //- symbol->string
-    //- string->symbol
+    define_procedure(e, "symbol->string", proc_symbol_to_string, 1);
+    define_procedure(e, "string->symbol", proc_string_to_symbol, 1);
     // 6.3.4. Characters
     //- char?
     //- char=?
@@ -3271,9 +3326,9 @@ void sch_init(const void *sp)
     define_procedure(e, "vector-length", proc_vector_length, 1);
     define_procedure(e, "vector-ref", proc_vector_ref, 2);
     define_procedure(e, "vector-set!", proc_vector_set, 3);
-    //- vector->list
-    //- list->vector
-    //- vector-fill!
+    define_procedure(e, "vector->list", proc_vector_to_list, 1);
+    define_procedure(e, "list->vector", proc_list_to_vector, 1);
+    define_procedure(e, "vector-fill!", proc_vector_fill, 2);
 
     // 6.4. Control features
     define_procedure(e, "procedure?", proc_procedure_p, 1);
