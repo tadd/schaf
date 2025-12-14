@@ -2143,10 +2143,67 @@ static Value proc_string_length(UNUSED Value env, Value s)
     return sch_integer_new(strlen(STRING(s)));
 }
 
+#define STRING_CMP(c1, c2, op) BOOL_VAL(strcmp(STRING(c1), STRING(c2)) op 0)
+#define STRING_CI_CMP(c1, c2, op) BOOL_VAL(strcasecmp(STRING(c1), STRING(c2)) op 0)
+
 static Value proc_string_eq(UNUSED Value env, Value s1, Value s2)
 {
     EXPECT_TYPE_TWIN(string, s1, s2);
-    return BOOL_VAL(strcmp(STRING(s1), STRING(s2)) == 0);
+    return STRING_CMP(s1, s2, ==);
+}
+
+static Value proc_string_ci_eq(UNUSED Value env, Value s1, Value s2)
+{
+    EXPECT_TYPE_TWIN(string, s1, s2);
+    return STRING_CI_CMP(s1, s2, ==);
+}
+
+static Value proc_string_lt(UNUSED Value env, Value s1, Value s2)
+{
+    EXPECT_TYPE_TWIN(string, s1, s2);
+    return STRING_CMP(s1, s2, <);
+}
+
+static Value proc_string_gt(UNUSED Value env, Value s1, Value s2)
+{
+    EXPECT_TYPE_TWIN(string, s1, s2);
+    return STRING_CMP(s1, s2, >);
+}
+
+static Value proc_string_le(UNUSED Value env, Value s1, Value s2)
+{
+    EXPECT_TYPE_TWIN(string, s1, s2);
+    return STRING_CMP(s1, s2, <=);
+}
+
+static Value proc_string_ge(UNUSED Value env, Value s1, Value s2)
+{
+    EXPECT_TYPE_TWIN(string, s1, s2);
+    return STRING_CMP(s1, s2, >=);
+}
+
+static Value proc_string_ci_lt(UNUSED Value env, Value s1, Value s2)
+{
+    EXPECT_TYPE_TWIN(string, s1, s2);
+    return STRING_CI_CMP(s1, s2, <);
+}
+
+static Value proc_string_ci_gt(UNUSED Value env, Value s1, Value s2)
+{
+    EXPECT_TYPE_TWIN(string, s1, s2);
+    return STRING_CI_CMP(s1, s2, >);
+}
+
+static Value proc_string_ci_le(UNUSED Value env, Value s1, Value s2)
+{
+    EXPECT_TYPE_TWIN(string, s1, s2);
+    return STRING_CI_CMP(s1, s2, <=);
+}
+
+static Value proc_string_ci_ge(UNUSED Value env, Value s1, Value s2)
+{
+    EXPECT_TYPE_TWIN(string, s1, s2);
+    return STRING_CI_CMP(s1, s2, >=);
 }
 
 static Value proc_substring(UNUSED Value env, Value string, Value vstart, Value vend)
@@ -3330,15 +3387,15 @@ void sch_init(const void *sp)
     //- string-ref
     //- string-set!
     define_procedure(e, "string=?", proc_string_eq, 2);
-    //- string-ci=?
-    //- string<?
-    //- string>?
-    //- string<=?
-    //- string>=?
-    //- string-ci<?
-    //- string-ci>?
-    //- string-ci<=?
-    //- string-ci>=?
+    define_procedure(e, "string-ci=?", proc_string_ci_eq, 2);
+    define_procedure(e, "string<?", proc_string_lt, 2);
+    define_procedure(e, "string>?", proc_string_gt, 2);
+    define_procedure(e, "string<=?", proc_string_le, 2);
+    define_procedure(e, "string>=?", proc_string_ge, 2);
+    define_procedure(e, "string-ci<?", proc_string_ci_lt, 2);
+    define_procedure(e, "string-ci>?", proc_string_ci_gt, 2);
+    define_procedure(e, "string-ci<=?", proc_string_ci_le, 2);
+    define_procedure(e, "string-ci>=?", proc_string_ci_ge, 2);
     define_procedure(e, "substring", proc_substring, 3);
     define_procedure(e, "string-append", proc_string_append, -1);
     //- string->list
