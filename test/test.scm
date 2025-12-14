@@ -852,6 +852,18 @@
   (expect equal? (number->string 16777216) "16777216")
   (expect equal? (number->string -16777216) "-16777216")))
 
+(describe "string->number" (lambda ()
+  (expect equal? (string->number "0") 0)
+  (expect equal? (string->number "1") 1)
+  (expect equal? (string->number "-1") -1)
+  (expect equal? (string->number "16777216") 16777216)
+  (expect equal? (string->number "+16777216") 16777216)
+  (expect equal? (string->number "-16777216") -16777216)
+
+  (expect equal? (string->number "") #f)
+  (expect equal? (string->number " ") #f)
+  (expect equal? (string->number "abc") #f)))
+
 ;; 6.3. Other data types
 ;; 6.3.1. Booleans
 (describe "true/false" (lambda ()
