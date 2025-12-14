@@ -1072,6 +1072,231 @@
   (expect string=? (symbol->string (string->symbol "K. Harper, M.D."))
           "K. Harper, M.D.")))
 
+;; 6.3.3. Characters
+(describe "char?" (lambda ()
+  (expect char? #\a)
+  (expect char? #\\)
+  (expect char? #\#)
+  (expect char? #\A)
+  (expect char? #\0)
+  (expect char? #\space)
+  (expect char? #\newline)
+  (expect char? #\ ); space!
+  (expect char? #\
+          ); newline!
+  (expect char? #\#)
+  (expect char? #\()
+  (expect char? #\))
+  (expect char? '#\a)
+  (expect char? '#\\)
+
+  (noexpect char? 97)
+  (noexpect char? 'a)
+  (noexpect char? "#\a")
+  (noexpect char? '"#\a")))
+
+(describe "char=?" (lambda ()
+  (expect char=? #\a #\a)
+  (expect char=? #\\ #\\)
+  (expect char=? #\space #\space)
+  (expect char=? #\space #\ )
+  (expect char=? #\newline  #\
+          ); newline
+
+  (noexpect char=? #\a #\A)
+  (noexpect char=? #\space #\newline)))
+
+(describe "char<?" (lambda ()
+  (expect char<? #\A #\B)
+  (expect char<? #\a #\b)
+  (expect char<? #\0 #\9)
+  (expect char<? #\0 #\A)
+  (expect char<? #\0 #\a)))
+
+(describe "char>?" (lambda ()
+  (expect char>? #\B #\A)
+  (expect char>? #\b #\a)
+  (expect char>? #\9 #\0)
+  (expect char>? #\A #\0)
+  (expect char>? #\a #\0)))
+
+(describe "char<=?" (lambda ()
+  (expect char<=? #\A #\A)
+  (expect char<=? #\a #\a)
+  (expect char<=? #\0 #\0)
+
+  (expect char<=? #\A #\B)
+  (expect char<=? #\a #\b)
+  (expect char<=? #\0 #\9)
+  (expect char<=? #\0 #\A)
+  (expect char<=? #\0 #\a)))
+
+(describe "char>=?" (lambda ()
+  (expect char>=? #\A #\A)
+  (expect char>=? #\a #\a)
+  (expect char>=? #\0 #\0)
+
+  (expect char>=? #\B #\A)
+  (expect char>=? #\b #\a)
+  (expect char>=? #\9 #\0)
+  (expect char>=? #\A #\0)
+  (expect char>=? #\a #\0)))
+
+(describe "char-ci=?" (lambda ()
+  (expect char-ci=? #\a #\a)
+  (expect char-ci=? #\\ #\\)
+  (expect char-ci=? #\space #\space)
+  (expect char-ci=? #\space #\ )
+  (expect char-ci=? #\newline  #\
+          ); newline
+
+  (expect char-ci=? #\A #\a)
+  (expect char-ci=? #\z #\Z)))
+
+(describe "char-ci<?" (lambda ()
+  (expect char-ci<? #\a #\B)
+  (expect char-ci<? #\b #\Z)
+
+  (expect char-ci<? #\0 #\9)
+  (expect char-ci<? #\0 #\A)
+  (expect char-ci<? #\0 #\a)))
+
+(describe "char-ci>?" (lambda ()
+  (expect char-ci>? #\B #\a)
+  (expect char-ci>? #\Z #\b)
+
+  (expect char-ci>? #\9 #\0)
+  (expect char-ci>? #\A #\0)
+  (expect char-ci>? #\a #\0)))
+
+(describe "char-ci<=?" (lambda ()
+  (expect char-ci<=? #\A #\a)
+  (expect char-ci<=? #\a #\A)
+  (expect char-ci>=? #\0 #\0)
+
+  (expect char-ci<=? #\a #\B)
+  (expect char-ci<=? #\b #\Z)
+
+  (expect char-ci<=? #\0 #\9)
+  (expect char-ci<=? #\0 #\A)
+  (expect char-ci<=? #\0 #\a)))
+
+(describe "char-ci>=?" (lambda ()
+  (expect char-ci>=? #\A #\A)
+  (expect char-ci>=? #\a #\a)
+  (expect char-ci>=? #\0 #\0)
+
+  (expect char-ci>=? #\B #\a)
+  (expect char-ci>=? #\Z #\b)
+
+  (expect char-ci>=? #\9 #\0)
+  (expect char-ci>=? #\A #\0)
+  (expect char-ci>=? #\a #\0)))
+
+(describe "char-alphabetic?" (lambda ()
+  (expect char-alphabetic? #\A)
+  (expect char-alphabetic? #\a)
+
+  (noexpect char-alphabetic? #\0)
+  (noexpect char-alphabetic? #\newline)
+  (noexpect char-alphabetic? #\space)))
+
+(describe "char-numeric?" (lambda ()
+  (expect char-numeric? #\0)
+  (expect char-numeric? #\9)
+
+  (noexpect char-numeric? #\A)
+  (noexpect char-numeric? #\a)
+  (noexpect char-numeric? #\newline)
+  (noexpect char-numeric? #\space)))
+
+(describe "char-whitespace?" (lambda ()
+  (expect char-whitespace? #\newline)
+  (expect char-whitespace? #\space)
+
+  (noexpect char-whitespace? #\0)
+  (noexpect char-whitespace? #\9)
+  (noexpect char-whitespace? #\A)
+  (noexpect char-whitespace? #\a)))
+
+(describe "char-upper-case?" (lambda ()
+  (expect char-upper-case? #\A)
+  (expect char-upper-case? #\Z)
+
+  (noexpect char-upper-case? #\a)
+  (noexpect char-upper-case? #\z)
+  (noexpect char-upper-case? #\0)
+  (noexpect char-upper-case? #\9)
+  (noexpect char-upper-case? #\newline)
+  (noexpect char-upper-case? #\space)))
+
+(describe "char-lower-case?" (lambda ()
+  (expect char-lower-case? #\a)
+  (expect char-lower-case? #\z)
+
+  (noexpect char-lower-case? #\A)
+  (noexpect char-lower-case? #\Z)
+  (noexpect char-lower-case? #\0)
+  (noexpect char-lower-case? #\9)
+  (noexpect char-lower-case? #\newline)
+  (noexpect char-lower-case? #\space)))
+
+(describe "char-upcase" (lambda ()
+  (expect char=? (char-upcase #\a) #\A)
+  (expect char=? (char-upcase #\z) #\Z)
+  (expect char=? (char-upcase #\A) #\A)
+  (expect char=? (char-upcase #\Z) #\Z)
+
+  (expect char=? (char-upcase #\0) #\0)
+  (expect char=? (char-upcase #\space) #\space)))
+
+(describe "char-downcase" (lambda ()
+  (expect char=? (char-downcase #\A) #\a)
+  (expect char=? (char-downcase #\Z) #\z)
+  (expect char=? (char-downcase #\a) #\a)
+  (expect char=? (char-downcase #\z) #\z)
+
+  (expect char=? (char-downcase #\0) #\0)
+  (expect char=? (char-downcase #\space) #\space)))
+
+(describe "char->integer" (lambda ()
+  (expect = (char->integer #\A) (char->integer #\A))
+  (expect = (char->integer #\0) (char->integer #\0))
+
+  (expect <= (char->integer #\A) (char->integer #\A))
+  (expect <= (char->integer #\a) (char->integer #\a))
+  (expect <= (char->integer #\0) (char->integer #\0))
+  (expect <= (char->integer #\A) (char->integer #\B))
+  (expect <= (char->integer #\a) (char->integer #\b))
+  (expect <= (char->integer #\0) (char->integer #\9))
+  (expect <= (char->integer #\0) (char->integer #\A))
+  (expect <= (char->integer #\0) (char->integer #\a))))
+
+(describe "integer->char" (lambda ()
+  (expect char=? (integer->char 0) (integer->char 0))
+  (expect char=? (integer->char 100) (integer->char 100))
+
+  (expect char<=? (integer->char 0) (integer->char 100))
+  (expect char<=? (integer->char 50) (integer->char 100))
+  (expect char<=? (integer->char 100) (integer->char 100))))
+
+
+(describe "char->integer/integer->char round-trip" (lambda ()
+  (define (expect-round-tripped-char ch)
+    (expect char=? (integer->char (char->integer ch)) ch))
+  (define (expect-round-tripped-integer i)
+    (expect = (char->integer (integer->char i)) i))
+
+  (expect-round-tripped-char #\A)
+  (expect-round-tripped-char #\a)
+  (expect-round-tripped-char #\0)
+  (expect-round-tripped-char #\space)
+
+  (expect-round-tripped-integer 0)
+  (expect-round-tripped-integer 50)
+  (expect-round-tripped-integer 100)
+  (expect-round-tripped-integer 200)))
+
 ;; 6.3.5. Strings
 (describe "string?" (lambda ()
   (expect string? "foo")
@@ -1494,6 +1719,35 @@
   (expect equal? (read-file "test/data/trivial.txt") '(1 2 "abc"))
   (expect equal? (read-file "test/data/fact.txt") fact)))
 
+(describe "read-char" (lambda ()
+  (with-input-from-file "test/data/trivial.txt" (lambda ()
+    (expect char=? (read-char) #\()
+    (expect char=? (read-char) #\1)
+    (expect char=? (read-char) #\space)
+    (expect char=? (read-char) #\2)
+    (expect char=? (read-char) #\space)
+    (expect char=? (read-char) #\")
+    (expect char=? (read-char) #\a)
+    (expect char=? (read-char) #\b)
+    (expect char=? (read-char) #\c)
+    (expect char=? (read-char) #\")
+    (expect char=? (read-char) #\))
+    (expect char=? (read-char) #\newline)
+    (expect eof-object? (read-char))
+    (expect eof-object? (read-char))
+    (expect eof-object? (read-char))))))
+
+(describe "peek-char" (lambda ()
+  (with-input-from-file "test/data/trivial.txt" (lambda ()
+    (expect char=? (peek-char) #\()
+    (expect char=? (peek-char) #\()
+    (expect char=? (read-char) #\()
+    (expect char=? (read-char) #\1)
+    (expect char=? (peek-char) #\space)
+    (expect char=? (peek-char) #\space)
+    (expect char=? (read-char) #\space)
+    (expect char=? (read-char) #\2)))))
+
 (describe "read /dev/null" (lambda ()
   (expect eof-object? (read-file "/dev/null"))))
 
@@ -1503,8 +1757,16 @@
       (expect equal? (read) '(1 2 "abc"))
       (expect equal? (read) '(3 4 "def"))))))
 
+(describe "char-ready?" (lambda ()
+  (call-with-input-file "/dev/null"
+    (lambda (p)
+      (expect char-ready? p)
+      (expect char-ready? p)
+      (expect char-ready? p)))))
+
 ;; 6.6.3. Output
 
+;; FIXME: real test
 (describe "display" (lambda ()
   (call-with-output-file "/dev/null"
     (lambda (p)
@@ -1549,12 +1811,22 @@
   (expect-no-stuck-on-display l)
   (expect-no-stuck-on-display v)))
 
+;; FIXME: real test
 (describe "newline" (lambda ()
   (call-with-output-file "/dev/null"
     (lambda (p)
       (display "\"a" p)
       (newline p)
       (display "b\"" p)))))
+
+;; FIXME: real test
+(describe "write-char" (lambda ()
+  (call-with-output-file "/dev/null"
+    (lambda (p)
+      (write-char #\( p)
+      (write-char #\a p)
+      (write-char #\) p)
+      (write-char #\newline p)))))
 
 ;; 6.6.4. System interface
 (describe "load" (lambda ()
