@@ -47,7 +47,7 @@ static void *gc_data; // singleton; maybe a heap or some context
 static GCFunctions funcs;
 static size_t init_size = 1 * MiB;
 
-static const uintptr_t *volatile stack_base;
+static const void *stack_base;
 
 static bool stress, print_stat, initialized;
 
@@ -128,10 +128,10 @@ static void ms_add_root(const Value *r)
     scary_push((void ***) &heap->roots, (const void *) r);
 }
 
-static bool in_heap_range(volatile uintptr_t v)
+static bool in_heap_range(uintptr_t v)
 {
     MSHeap *heap = gc_data;
-    const uint8_t *volatile p = (uint8_t *volatile) v;
+    const uint8_t *p = (uint8_t *) v;
     for (size_t i = 0; i < heap->size; i++) {
         const MSHeapSlot *slot = heap->slot[i];
         if (p >= slot->body && p < slot->body + slot->size)
@@ -163,10 +163,10 @@ static bool is_heap_value(Value v)
 
 static void mark_val(Value v);
 
-static void mark_array(const void *volatile beg, size_t n)
+static void mark_array(const void *beg, size_t n)
 {
     UNPOISON(beg, n * sizeof(uintptr_t));
-    const Value *volatile p = beg;
+    const Value *p = beg;
     for (size_t i = 0; i < n; i++, p++)
         mark_val(*p);
 }
@@ -425,7 +425,7 @@ static void mark_roots(Value **roots)
 static void mark_stack(void)
 {
     GET_SP(sp);
-    mark_array(sp, stack_base - sp);
+    mark_array(sp, (uintptr_t *) stack_base - (uintptr_t *) sp);
 }
 
 static void mark(MSHeap *heap)
@@ -757,7 +757,7 @@ void sch_set_gc_algorithm(SchGCAlgorithm s)
     }
 }
 
-void gc_init(const uintptr_t *volatile sp)
+void gc_init(const void *sp)
 {
     stack_base = sp;
     if (funcs.init == NULL)
@@ -781,7 +781,7 @@ void *gc_malloc(size_t size)
     return p;
 }
 
-size_t gc_stack_get_size(const uintptr_t *volatile sp)
+size_t gc_stack_get_size(const void *sp)
 {
-    return (uint8_t *volatile) stack_base - (uint8_t *volatile) sp;
+    return (uint8_t *) stack_base - (uint8_t *) sp;
 }
