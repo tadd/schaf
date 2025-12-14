@@ -1032,6 +1032,21 @@
   (noexpect symbol? '())
   (noexpect symbol? #f)))
 
+(describe "symbol->string" (lambda ()
+  (expect string=? (symbol->string 'flying-fish) "flying-fish")
+  (expect string=? (symbol->string 'Martin) "Martin")
+  ;; FIXME: error test with string-set!
+  ;; (string-set! (symbol->string 'Martin) 0 "A")
+  ))
+
+(describe "string->symbol" (lambda ()
+  (expect eq? (string->symbol "flying-fish") 'flying-fish)
+  (expect eq? (string->symbol "Martin") 'Martin)
+  (expect eq? (string->symbol (symbol->string 'JollyWog))
+          'JollyWog)
+  (expect string=? (symbol->string (string->symbol "K. Harper, M.D."))
+          "K. Harper, M.D.")))
+
 ;; 6.3.5. Strings
 (describe "string?" (lambda ()
   (expect string? "foo")
@@ -1123,6 +1138,16 @@
     (expect = (vector-ref v 1) 1)
     (vector-set! v 1 42)
     (expect = (vector-ref v 1) 42))))
+
+(describe "vector->list" (lambda ()
+  (expect equal? (vector->list '#(dah dah didah)) '(dah dah didah))))
+
+(describe "list->vector" (lambda ()
+  (expect equal? (list->vector '(dah dah didah)) '#(dah dah didah))))
+
+(describe "vector-fill!" (lambda ()
+  (expect equal? (vector-fill! #() 42) #())
+  (expect equal? (vector-fill! #(0 1) 42) #(42 42))))
 
 ;; 6.4. Control features
 (describe "procedure?" (lambda ()
