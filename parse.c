@@ -601,11 +601,9 @@ static Source *parse_program(Parser *p)
 Source *iparse(FILE *in, const char *filename)
 {
     Parser *p = parser_new(in, filename);
-    Source *src;
+    Source *src = NULL; // for errors
     if (setjmp(p->jmp_error) == 0)
         src = parse_program(p); // success
-    else
-        src = NULL; // got an error
     parser_free(p);
     return src;
 }
@@ -623,11 +621,9 @@ static Value iparse_ast(FILE *in, const char *filename)
 Value parse_datum(FILE *in, const char *filename)
 {
     Parser *p = parser_new(in, filename);
-    Value datum;
+    Value datum = Qundef; // for errors
     if (setjmp(p->jmp_error) == 0)
         datum = parse_expr(p);
-    else
-        datum = Qundef;
     parser_free(p);
     return datum;
 }
