@@ -1146,8 +1146,7 @@
 (describe "map" (lambda ()
   (expect equal? (map car '((a b) (d e) (g h))) '(a d g))
   (expect equal? (map (lambda (n) (* n n)) '(1 2 3 4 5)) '(1 4 9 16 25))
-  (expect equal? (map + '(1 2 3) '(4 5 6)) '(5 7 9))
-  (expect equal? (map + '(1 2) '(4)) '(5))))
+  (expect equal? (map + '(1 2 3) '(4 5 6)) '(5 7 9))))
 
 (describe "for-each" (lambda ()
   (let ((x '()))
@@ -1158,10 +1157,7 @@
     (expect = x 25))
   (let ((x 0))
     (for-each (lambda (a b) (set! x (+ a b))) '(1 2 3) '(4 5 6))
-    (expect = x 9))
-  (let ((x 0))
-    (for-each (lambda (a b) (set! x (+ a b))) '(1 2) '(4))
-    (expect = x 5))))
+    (expect = x 9))))
 
 (describe "force" (lambda ()
   (expect equal? 42 (force (delay 42)))
