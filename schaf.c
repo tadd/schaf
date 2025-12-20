@@ -337,14 +337,11 @@ static void expect_cfunc_arity(int64_t actual)
 }
 
 // generic macros to handle errors and early-returns
-#define CHECK_ERROR_F(v, f) do { \
+#define CHECK_ERROR(v) do { \
         Value V = (v); \
-        if (UNLIKELY(f(V))) \
+        if (UNLIKELY(is_error(V))) \
             return V; \
     } while (0)
-#define CHECK_ERROR(v) CHECK_ERROR_F(v, is_error)
-#define TRUTHY(v) ((v) != Qfalse)
-#define CHECK_ERROR_TRUTHY(v) CHECK_ERROR_F(v, TRUTHY)
 #define CHECK_ERROR_LOCATED(v, l) do { \
         Value V = (v); \
         if (UNLIKELY(is_error(V))) { \
@@ -2207,37 +2204,27 @@ static Value expect_list_of_nil(Value ls)
     return Qfalse;
 }
 
-#define EXPECT_PTR(p, f, ...) do { \
-        Value E = expect_##f(__VA_ARGS__); \
-        if (E != Qfalse) { \
-            *p = E; \
-            return false; \
-        } \
-    } while (0)
-
-static bool cars_cdrs(Value ls, Value *pcars, Value *pcdrs, Value *perr)
+static Value get_cars(Value *pls)
 {
+    Value ls = *pls;
     if (ls == Qnil)
-        return false;
-    EXPECT_PTR(perr, list_of_lists, ls);
+        return Qnil;
+    EXPECT(list_of_lists, ls);
     Value first = car(ls);
     if (first == Qnil) {
-        EXPECT_PTR(perr, list_of_nil, cdr(ls));
-        return false;
+        EXPECT(list_of_nil, cdr(ls));
+        return Qnil;
     }
     Value cars = list1(car(first)), cdrs = list1(cdr(first));
     for (Value p = cdr(ls), lcars = cars, lcdrs = cdrs; p != Qnil; p = cdr(p)) {
         Value l = car(p);
-        if (l == Qnil) {
-            *perr = different_length_list_error();
-            return false;
-        }
+        if (l == Qnil)
+            return different_length_list_error();
         lcars = PAIR(lcars)->cdr = list1(car(l));
         lcdrs = PAIR(lcdrs)->cdr = list1(cdr(l));
     }
-    *pcars = cars;
-    *pcdrs = cdrs;
-    return true;
+    *pls = cdrs;
+    return cars;
 }
 
 static Value proc_map(Value env, Value args)
@@ -2246,14 +2233,13 @@ static Value proc_map(Value env, Value args)
 
     Value proc = car(args);
     EXPECT(type, TYPE_PROC, proc);
-    Value ls = cdr(args);
-    Value ret = DUMMY_PAIR(), e = Qfalse;
-    for (Value last = ret, cars, cdrs, v; cars_cdrs(ls, &cars, &cdrs, &e); ls = cdrs) {
+    Value ls = cdr(args), ret = DUMMY_PAIR();
+    for (Value last = ret, cars, v; (cars = get_cars(&ls)) != Qnil; ) {
+        CHECK_ERROR(cars);
         v = apply(env, proc, cars);
         CHECK_ERROR(v);
         last = PAIR(last)->cdr = list1(v);
     }
-    CHECK_ERROR_TRUTHY(e);
     return cdr(ret);
 }
 
@@ -2261,13 +2247,13 @@ static Value proc_for_each(Value env, Value args)
 {
     EXPECT(arity_min_2, args);
 
-    Value proc = car(args), e = Qfalse;
+    Value proc = car(args);
     EXPECT(type, TYPE_PROC, proc);
-    for (Value ls = cdr(args), cars, cdrs, v; cars_cdrs(ls, &cars, &cdrs, &e); ls = cdrs) {
+    for (Value ls = cdr(args), cars, v; (cars = get_cars(&ls)) != Qnil; ) {
+        CHECK_ERROR(cars);
         v = apply(env, proc, cars);
         CHECK_ERROR(v);
     }
-    CHECK_ERROR_TRUTHY(e);
     return Qfalse;
 }
 
