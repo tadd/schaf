@@ -2186,23 +2186,57 @@ static Value proc_apply(Value env, Value args)
     return apply(env, proc, appargs);
 }
 
+static Value expect_list_of_lists(Value ls)
+{
+    for (Value p = ls; p != Qnil; p = cdr(p))
+        EXPECT(list_head, car(p));
+    return Qfalse;
+}
+
+static Value different_length_list_error(void)
+{
+    return runtime_error("different length list in arguments");
+}
+
+static Value expect_list_of_nil(Value ls)
+{
+    for (Value p = ls; p != Qnil; p = cdr(p)) {
+        if (car(p) != Qnil)
+            return different_length_list_error();
+    }
+    return Qfalse;
+}
+
+#define EXPECT_PTR(p, f, ...) do { \
+        Value E = expect_##f(__VA_ARGS__); \
+        if (E != Qfalse) { \
+            *p = E; \
+            return false; \
+        } \
+    } while (0)
+
 static bool cars_cdrs(Value ls, Value *pcars, Value *pcdrs, Value *perr)
 {
-    Value cars = DUMMY_PAIR(), cdrs = DUMMY_PAIR();
-    for (Value p = ls, lcars = cars, lcdrs = cdrs; p != Qnil; p = cdr(p)) {
+    if (ls == Qnil)
+        return false;
+    EXPECT_PTR(perr, list_of_lists, ls);
+    Value first = car(ls);
+    if (first == Qnil) {
+        EXPECT_PTR(perr, list_of_nil, cdr(ls));
+        return false;
+    }
+    Value cars = list1(car(first)), cdrs = list1(cdr(first));
+    for (Value p = cdr(ls), lcars = cars, lcdrs = cdrs; p != Qnil; p = cdr(p)) {
         Value l = car(p);
-        if (l == Qnil)
-            return false;
-        Value e = expect_type(TYPE_PAIR, l);
-        if (UNLIKELY(is_error(e))) {
-            *perr = e;
+        if (l == Qnil) {
+            *perr = different_length_list_error();
             return false;
         }
         lcars = PAIR(lcars)->cdr = list1(car(l));
         lcdrs = PAIR(lcdrs)->cdr = list1(cdr(l));
     }
-    *pcars = cdr(cars);
-    *pcdrs = cdr(cdrs);
+    *pcars = cars;
+    *pcdrs = cdrs;
     return true;
 }
 

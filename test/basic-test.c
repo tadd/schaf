@@ -294,8 +294,8 @@ Test(schaf, apply_invalid) {
 }
 
 Test(schaf, map) {
-    expect_runtime_error("expected pair but got integer", "(map + 1)");
-    expect_runtime_error("expected pair but got integer", "(for-each + 1)");
+    expect_runtime_error("expected null or pair but got integer", "(map + 1)");
+    expect_runtime_error("expected null or pair but got integer", "(for-each + 1)");
 }
 
 Test(schaf, quasiquotes) {
