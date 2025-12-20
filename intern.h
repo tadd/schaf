@@ -8,6 +8,11 @@
 
 // shortcuts
 typedef SchValue Value;
+typedef
+#ifdef __clang__
+  volatile
+#endif
+  Value vValue; // workaround for clang
 #define Qnil SCH_NULL
 #define Qfalse SCH_FALSE
 #define Qtrue SCH_TRUE

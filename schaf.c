@@ -746,7 +746,7 @@ static const char *get_func_name(Value proc)
 static Value eval_apply(Value env, Value l)
 {
     Value symproc = car(l), args = cdr(l);
-    Value proc = eval(env, symproc);
+    vValue proc = eval(env, symproc); // workaround for -O2
     CHECK_ERROR_LOCATED(proc, l);
     if (!value_tag_is(proc, TAG_SYNTAX)) {
         args = map_eval(env, args);
@@ -1287,8 +1287,10 @@ static Value syn_do(Value env, Value args)
         if (memq(var, vars) != Qfalse)
             return runtime_error("duplicated variable: %s", sch_symbol_to_cstr(var));
         vars = cons(var, vars);
-        if (step != Qnil)
-            steps = cons(cons(var, car(step)), steps);
+        if (step != Qnil) {
+            vValue datum = cons(var, car(step)); // workaround for -O2
+            steps = cons(datum, steps);
+        }
         v = eval(env, init); // in the original env
         CHECK_ERROR(v);
         env_put(doenv, var, v);
@@ -2215,7 +2217,8 @@ static Value get_cars(Value *pls)
         EXPECT(list_of_nil, cdr(ls));
         return Qnil;
     }
-    Value cars = list1(car(first)), cdrs = list1(cdr(first));
+    vValue a = car(first); // workaround for -Og
+    Value cars = list1(a), cdrs = list1(cdr(first));
     for (Value p = cdr(ls), lcars = cars, lcdrs = cdrs; p != Qnil; p = cdr(p)) {
         Value l = car(p);
         if (l == Qnil)

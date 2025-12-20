@@ -484,7 +484,7 @@ static Value parse_list(Parser *p)
         ungetc(c, p->in);
         Value e = parse_expr(p);
         bool first = (ret == last);
-        Value l;
+        vValue l;// workaround for -Og
         if (first && sch_value_is_symbol(e))
             l = located_list1(e, pos);
         else
