@@ -1,6 +1,9 @@
 CC = gcc
 OPTFLAGS ?= -O0 -ggdb3 -DDEBUG
-CFLAGS = -std=gnu2x -Wall -Wextra -I. $(OPTFLAGS) $(XCFLAGS)
+#OPTFLAGS ?= -O3 -flto=auto
+warnflags = -Wcast-align -Wfloat-equal -Wpointer-arith -Wshadow -Wstrict-prototypes \
+	    -Wswitch-enum -Wundef -Wunreachable-code -Wwrite-strings -Wformat=2
+CFLAGS = -std=gnu2x -Wall -Wextra $(warnflags) -I. $(OPTFLAGS) $(XCFLAGS)
 LIBS = -lm
 ANALYZER = -fanalyzer
 SANITIZER = -fsanitize=undefined #,address
