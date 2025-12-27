@@ -1073,6 +1073,7 @@
 (describe "char?" (lambda ()
   (expect char? #\a)
   (expect char? #\\)
+  (expect char? #\#)
   (expect char? #\A)
   (expect char? #\0)
   (expect char? #\space)
@@ -1080,6 +1081,9 @@
   (expect char? #\ ); space!
   (expect char? #\
           ); newline!
+  (expect char? #\#)
+  (expect char? #\()
+  (expect char? #\))
   (expect char? '#\a)
   (expect char? '#\\)
 
@@ -1087,6 +1091,53 @@
   (noexpect char? 'a)
   (noexpect char? "#\a")
   (noexpect char? '"#\a")))
+
+(describe "char=?" (lambda ()
+  (expect char=? #\a #\a)
+  (expect char=? #\\ #\\)
+  (expect char=? #\space #\space)
+  (expect char=? #\space #\ )
+  (expect char=? #\newline  #\
+          ); newline
+
+  (noexpect char=? #\a #\A)
+  (noexpect char=? #\space #\newline)))
+
+(describe "char<?" (lambda ()
+  (expect char<? #\A #\B)
+  (expect char<? #\a #\b)
+  (expect char<? #\0 #\9)
+  (expect char<? #\0 #\A)
+  (expect char<? #\0 #\a)))
+
+(describe "char>?" (lambda ()
+  (expect char>? #\B #\A)
+  (expect char>? #\b #\a)
+  (expect char>? #\9 #\0)
+  (expect char>? #\A #\0)
+  (expect char>? #\a #\0)))
+
+(describe "char<=?" (lambda ()
+  (expect char<=? #\A #\A)
+  (expect char<=? #\a #\a)
+  (expect char<=? #\0 #\0)
+
+  (expect char<=? #\A #\B)
+  (expect char<=? #\a #\b)
+  (expect char<=? #\0 #\9)
+  (expect char<=? #\0 #\A)
+  (expect char<=? #\0 #\a)))
+
+(describe "char>=?" (lambda ()
+  (expect char>=? #\A #\A)
+  (expect char>=? #\a #\a)
+  (expect char>=? #\0 #\0)
+
+  (expect char>=? #\B #\A)
+  (expect char>=? #\b #\a)
+  (expect char>=? #\9 #\0)
+  (expect char>=? #\A #\0)
+  (expect char>=? #\a #\0)))
 
 ;; 6.3.5. Strings
 (describe "string?" (lambda ()
