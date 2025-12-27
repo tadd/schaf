@@ -2155,6 +2155,11 @@ static Value proc_char_p(UNUSED Value env, Value ch)
     return BOOL_VAL(sch_value_is_character(ch));
 }
 
+static Value proc_char_eq_p(UNUSED Value env, Value c1, Value c2)
+{
+    return BOOL_VAL(CHAR(c1) == CHAR(c2));
+}
+
 // 6.3.5. Strings
 static Value proc_string_p(UNUSED Value env, Value obj)
 {
@@ -3409,7 +3414,7 @@ void sch_init(const void *sp)
     define_procedure(e, "string->symbol", proc_string_to_symbol, 1);
     // 6.3.4. Characters
     define_procedure(e, "char?", proc_char_p, 1);
-    //- char=?
+    define_procedure(e, "char=?", proc_char_eq_p, 2);
     //- char<?
     //- char>?
     //- char<=?
