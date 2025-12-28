@@ -15,7 +15,7 @@
 
 #define value_idfunc list
 #define V(x) \
-    _Generic(x, int: sch_integer_new, char *: sch_string_new, Value: value_idfunc)(x)
+    _Generic(x, int: sch_integer_new, const char *: sch_string_new, Value: value_idfunc)(x)
 #define expect_value_eq(expected, actual) do { \
         Value vexp = expected, vact = actual; \
         if (sch_value_is_integer(vexp)) \
@@ -33,10 +33,10 @@
             expect_value_eq(car(exp), car(act)); \
     } while (0)
 #define expect_pair_eq(ecar, ecdr, act) do { \
-        Value a = act; \
-        cr_expect(sch_value_is_pair(a)); \
-        expect_value_eq(V(ecar), car(a)); \
-        expect_value_eq(V(ecdr), cdr(a)); \
+        Value A = act; \
+        cr_expect(sch_value_is_pair(A)); \
+        expect_value_eq(V(ecar), car(A)); \
+        expect_value_eq(V(ecdr), cdr(A)); \
     } while (0)
 
 #define expect_int_eq(exp, act) cr_expect(eq(int, exp, act))

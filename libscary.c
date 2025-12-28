@@ -41,6 +41,10 @@ enum {
     SCARY_INC_RATIO = 2,
 };
 
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wcast-align"
+#endif
+
 static inline void *opaque(Scary *a)
 {
     return a->space;

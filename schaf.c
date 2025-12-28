@@ -484,6 +484,11 @@ static Value closure_new(Value env, Value params, Value body)
 // Errors
 //
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat=2"
+#endif
+
 [[noreturn]]
 void raise_error(jmp_buf buf, const char *fmt, ...)
 {
@@ -505,6 +510,10 @@ static Value runtime_error(const char *fmt, ...)
     ERROR(e) = scary_new(sizeof(StackFrame *));
     return (Value) e;
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 const char *sch_error_message(void)
 {
