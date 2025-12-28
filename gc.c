@@ -24,6 +24,7 @@ enum {
     MiB = 1024 * 1024,
     HEAP_RATIO = 2,
     TABMAX = 1024,
+    PTR_ALIGN = 16U,
 };
 
 typedef struct {
@@ -59,7 +60,7 @@ typedef struct MSHeader {
     bool used;
     bool living;
     size_t size;
-    alignas(16) struct MSHeader *next;
+    alignas(PTR_ALIGN) struct MSHeader *next;
 } MSHeader;
 enum {
     MS_HEADER_OFFSET = offsetof(MSHeader, next)
@@ -85,7 +86,7 @@ typedef struct {
 
 static inline size_t align(size_t size)
 {
-    return iceil(size, 16U);
+    return iceil(size, PTR_ALIGN);
 }
 
 static void init_header(MSHeader *h, size_t size, MSHeader *next)
@@ -142,7 +143,7 @@ static bool in_heap_range(uintptr_t v)
 
 static bool is_valid_pointer(Value v)
 {
-    return v % 16U == 0 && v > 0; // XXX
+    return v % PTR_ALIGN == 0 && v > 0; // XXX
 }
 
 static bool is_valid_header(Value v)
@@ -152,7 +153,7 @@ static bool is_valid_header(Value v)
     if (VALUE_TAG(v) > TAG_LAST)
         return false;
     size_t size = MS_HEADER_FROM_VAL(v)->size;
-    return size > 0 && size % 16U == 0 &&
+    return size > 0 && size % PTR_ALIGN == 0 &&
         size <= sizeof(Continuation) + MS_HEADER_OFFSET;
 }
 
