@@ -43,11 +43,11 @@ microbench: schaf
 %.san.o: %.c
 	$(CC) $(CFLAGS) $(SANITIZER) -c $< -o $@
 
-gc.o gc.san.o: intern.h schaf.h utils.h
+gc.o gc.san.o: intern.h schaf.h utils.h libscary.h
 libscary.o libscary.san.o: libscary.h
 main.o main.san.o: schaf.h utils.h
-parse.o parse.san.o: intern.h schaf.h utils.h
-schaf.o schaf.san.o: intern.h libscary.h schaf.h utils.h
+parse.o parse.san.o: intern.h schaf.h utils.h libscary.h
+schaf.o schaf.san.o: intern.h schaf.h utils.h libscary.h
 utils.o utils.san.o: utils.h
 
 .PHONY: all clean analyze sanitize microbench
