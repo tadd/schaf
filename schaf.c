@@ -484,12 +484,6 @@ static Value closure_new(Value env, Value params, Value body)
 // Errors
 //
 
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wformat=2"
-#endif
-
-[[noreturn]]
 void raise_error(jmp_buf buf, const char *fmt, ...)
 {
     va_list ap;
@@ -500,6 +494,7 @@ void raise_error(jmp_buf buf, const char *fmt, ...)
 }
 
 // error_new() or
+[[gnu::format(printf, 1, 2)]]
 static Value runtime_error(const char *fmt, ...)
 {
     va_list ap;
@@ -510,10 +505,6 @@ static Value runtime_error(const char *fmt, ...)
     ERROR(e) = scary_new(sizeof(StackFrame *));
     return (Value) e;
 }
-
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
 
 const char *sch_error_message(void)
 {
@@ -560,7 +551,7 @@ static bool length_in_range(Value l, int64_t min, int64_t max)
 
 static Value arity_error(const char *op, int64_t expected, int64_t actual)
 {
-    return runtime_error("wrong number of arguments: expected %s%d but got %d",
+    return runtime_error("wrong number of arguments: expected %s%"PRId64" but got %"PRId64,
                          op, expected, actual);
 }
 
