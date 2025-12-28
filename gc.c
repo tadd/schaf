@@ -84,6 +84,10 @@ typedef struct {
     uint8_t *bitmap;
 } MSHeap;
 
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wcast-align"
+#endif
+
 static inline size_t align(size_t size)
 {
     return iceil(size, PTR_ALIGN);
