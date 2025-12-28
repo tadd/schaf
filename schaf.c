@@ -484,16 +484,10 @@ static Value closure_new(Value env, Value params, Value body)
 // Errors
 //
 
-[[gnu::format(printf, 2, 0)]]
-static void error_message_set_v_at(size_t at, const char *fmt, va_list ap)
-{
-    vsnprintf(errmsg + at, sizeof(errmsg) - at, fmt, ap);
-}
-
 [[gnu::format(printf, 1, 0)]]
-void error_message_set_v(const char *fmt, va_list ap)
+static void error_message_append_v(const char *fmt, va_list ap)
 {
-    error_message_set_v_at(0, fmt, ap);
+    vsnprintf(errmsg, sizeof(errmsg), fmt, ap);
 }
 
 [[gnu::format(printf, 1, 2)]]
@@ -501,7 +495,17 @@ static void error_message_append(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    error_message_set_v_at(strlen(errmsg), fmt, ap);
+    error_message_append_v(fmt, ap);
+    va_end(ap);
+}
+
+[[gnu::format(printf, 1, 2)]]
+void error_message_set(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    errmsg[0] = '\0'; // clear
+    error_message_append_v(fmt, ap);
     va_end(ap);
 }
 
