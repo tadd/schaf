@@ -229,7 +229,7 @@ const char *sch_value_to_type_name(Value v)
 
 inline int64_t sch_integer_to_cint(Value x)
 {
-#if __x86_64__
+#ifdef __x86_64__
     return (int64_t) x >> FLAG_NBIT_INT;
 #else
     int64_t i = x;
@@ -2067,7 +2067,7 @@ static Value proc_substring(UNUSED Value env, Value string, Value vstart, Value 
         return runtime_error("start index %"PRId64" must be <= end index %"PRId64, start, end);
     size_t len = strlen(s);
     if (UNLIKELY((size_t) end > len))
-        return runtime_error("end index %"PRId64" must be <= string length %"PRId64, end, len);
+        return runtime_error("end index %"PRId64" must be <= string length %zu", end, len);
     size_t newlen = end - start;
     char buf[newlen+1];
     strncpy(buf, s + start, newlen);
