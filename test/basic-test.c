@@ -15,7 +15,8 @@
 
 #define value_idfunc list
 #define V(x) \
-    _Generic(x, int: sch_integer_new, const char *: sch_string_new, Value: value_idfunc)(x)
+    _Generic(x, int: sch_integer_new, Value: value_idfunc, \
+             char *: sch_string_new, const char *: sch_string_new)(x)
 #define expect_value_eq(expected, actual) do { \
         Value vexp = expected, vact = actual; \
         if (sch_value_is_integer(vexp)) \
