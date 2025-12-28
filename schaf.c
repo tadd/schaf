@@ -484,13 +484,35 @@ static Value closure_new(Value env, Value params, Value body)
 // Errors
 //
 
-void raise_error(jmp_buf buf, const char *fmt, ...)
+[[gnu::format(printf, 2, 0)]]
+static void error_message_set_v_at(size_t at, const char *fmt, va_list ap)
+{
+    vsnprintf(errmsg + at, sizeof(errmsg) - at, fmt, ap);
+}
+
+[[gnu::format(printf, 1, 0)]]
+void error_message_set_v(const char *fmt, va_list ap)
+{
+    error_message_set_v_at(0, fmt, ap);
+}
+
+[[gnu::format(printf, 1, 2)]]
+static void error_message_append(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    vsnprintf(errmsg, sizeof(errmsg), fmt, ap);
+    error_message_set_v_at(strlen(errmsg), fmt, ap);
     va_end(ap);
-    longjmp(buf, 1);
+}
+
+static void error_message_prepend(const char *s)
+{
+    if (s == NULL)
+        return;
+    char tmp[sizeof(errmsg)];
+    strcpy(tmp, errmsg);
+    snprintf(errmsg, sizeof(errmsg), "%s: ", s);
+    error_message_append("%s", tmp);
 }
 
 // error_new() or
@@ -499,7 +521,7 @@ static Value runtime_error(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    vsnprintf(errmsg, sizeof(errmsg), fmt, ap);
+    error_message_set_v(fmt, ap);
     va_end(ap);
     Error *e = obj_new(TAG_ERROR, sizeof(Error));
     ERROR(e) = scary_new(sizeof(StackFrame *));
@@ -778,17 +800,6 @@ static Value eval(Value env, Value v)
     return eval_apply(env, v);
 }
 
-[[gnu::format(printf, 1, 2)]]
-static int append_error_message(const char *fmt, ...)
-{
-    size_t len = strlen(errmsg);
-    va_list ap;
-    va_start(ap, fmt);
-    int n = vsnprintf(errmsg + len, sizeof(errmsg) - len, fmt, ap);
-    va_end(ap);
-    return n;
-}
-
 static const int64_t *filename_to_newline_pos(const char *filename)
 {
     for (size_t i = 0, len = scary_length(source_data); i < len; i++) {
@@ -809,11 +820,11 @@ static void dump_line_column(const char *filename, const StackFrame *f)
     int64_t line, col;
     const int64_t *newline_pos = filename_to_newline_pos(filename);
     if (newline_pos == NULL) {
-        append_error_message("\n\t<unknown>");
+        error_message_append("\n\t<unknown>");
         return;
     }
     frame_to_line_col(f, newline_pos, &line, &col);
-    append_error_message("\n\t%s:%"PRId64":%"PRId64" in ",
+    error_message_append("\n\t%s:%"PRId64":%"PRId64" in ",
                          filename, line, col);
 }
 
@@ -844,37 +855,27 @@ static const char *find_filename(Value pair)
 static void dump_callee_name(const StackFrame *next)
 {
     if (next == NULL) {
-        append_error_message("<toplevel>");
+        error_message_append("<toplevel>");
         return;
     }
     Value sym = car(next->loc);
     if (!sch_value_is_symbol(sym)) {
-        append_error_message("<unknown>");
+        error_message_append("<unknown>");
         return;
     }
     const char *name = sch_symbol_to_cstr(sym);
-    append_error_message("'%s'", name);
+    error_message_append("'%s'", name);
 }
 
 static void dump_frame(const StackFrame *f, const StackFrame *next)
 {
     const char *filename = find_filename(f->loc);
     if (filename == NULL) {
-        append_error_message("\n\t<unknown>");
+        error_message_append("\n\t<unknown>");
         return;
     }
     dump_line_column(filename, f);
     dump_callee_name(next);
-}
-
-static void prepend_cfunc_name(const char *name)
-{
-    if (name == NULL)
-        return;
-    size_t len = strlen(name) + 2;// strlen(": ")
-    char tmp[sizeof(errmsg) - len];
-    snprintf(tmp, sizeof(tmp), "%s", errmsg);
-    snprintf(errmsg, sizeof(errmsg), "%s: %s", name, tmp);
 }
 
 static bool ignore_lines(FILE *f, int64_t n)
@@ -897,7 +898,7 @@ static bool dump_nth_line(const char *filename, int64_t n)
     if (!ignore_lines(f, n-1) ||
         fgets(buf, sizeof(buf), f) == NULL)
         goto out;
-    append_error_message("\n%s", buf); // `buf` includes "\n"
+    error_message_append("\n%s", buf); // `buf` includes "\n"
     ret = true;
  out:
     fclose(f);
@@ -908,8 +909,8 @@ static bool dump_nth_line(const char *filename, int64_t n)
 static void dump_column_point(int64_t col)
 {
     for (ssize_t i = 1; i < col; i++)
-        append_error_message(" ");
-    append_error_message("^");
+        error_message_append(" ");
+    error_message_append("^");
 }
 
 static void dump_error_line_with_point(const StackFrame *f)
@@ -932,7 +933,7 @@ static void dump_stack_trace(StackFrame *const *call_stack)
     if (len == 0)
         return;
     const StackFrame *top = call_stack[0];
-    prepend_cfunc_name(top->func_name);
+    error_message_prepend(top->func_name);
     dump_error_line_with_point(top);
     for (size_t i = 0; i < len - 1; i++)
         dump_frame(call_stack[i], call_stack[i+1]);

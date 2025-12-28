@@ -102,6 +102,16 @@ static void get_line_and_column(const Parser *p, int64_t *line, int64_t *col)
     pos_to_line_col(pos, p->newline_pos, line, col);
 }
 
+[[noreturn]]
+static void raise_error(jmp_buf buf, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    error_message_set_v(fmt, ap);
+    va_end(ap);
+    longjmp(buf, 1);
+}
+
 #define parse_error(p, exp, act, ...) do { \
         int64_t line, col; \
         get_line_and_column(p, &line, &col); \
