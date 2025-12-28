@@ -524,17 +524,16 @@ static const GCFunctions GC_FUNCS_DEFAULT = GC_FUNCS_MARK_SWEEP;
 // Algorithm: Mark-and-sweep + Bitmap Marking
 //
 
-typedef uint64_t align_t[2];
 static uintptr_t bitmap_index(const void *p)
 {
     MSHeap *heap = gc_data;
-    return (align_t *) p - (align_t *) heap->low;
+    return ((uint8_t *) p - (uint8_t *) heap->low) / PTR_ALIGN;
 }
 
 static void bmp_init_bitmap(void)
 {
     MSHeap *heap = gc_data;
-    size_t rawsize = (align_t *) heap->high - (align_t *) heap->low;
+    size_t rawsize = bitmap_index(heap->high);
     heap->bitmap = xcalloc(1, idivceil(rawsize, 8U));
 }
 
