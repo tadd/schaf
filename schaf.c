@@ -519,7 +519,18 @@ static void error_message_prepend(const char *s)
     error_message_append("%s", tmp);
 }
 
-// error_new() or
+#if 1
+static Value error_new(void)
+{
+    Error *e = obj_new(TAG_ERROR, sizeof(Error));
+    ERROR(e) = scary_new(sizeof(StackFrame *));
+    return (Value) e;
+}
+#define runtime_error(fmt, ...) ({ \
+            error_message_set(fmt __VA_OPT__(,) __VA_ARGS__); \
+            error_new(); \
+        })
+#else
 [[gnu::format(printf, 1, 2)]]
 static Value runtime_error(const char *fmt, ...)
 {
@@ -531,6 +542,7 @@ static Value runtime_error(const char *fmt, ...)
     ERROR(e) = scary_new(sizeof(StackFrame *));
     return (Value) e;
 }
+#endif
 
 const char *sch_error_message(void)
 {
