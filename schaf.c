@@ -2220,6 +2220,36 @@ static Value proc_char_ci_ge_p(UNUSED Value env, Value c1, Value c2)
     return CHAR_CI_CMP(c1, c2, >=);
 }
 
+static Value proc_char_alphabetic_p(UNUSED Value env, Value c)
+{
+    EXPECT(type, TYPE_CHAR, c);
+    return BOOL_VAL(isalpha(CHAR(c)));
+}
+
+static Value proc_char_numeric_p(UNUSED Value env, Value c)
+{
+    EXPECT(type, TYPE_CHAR, c);
+    return BOOL_VAL(isdigit(CHAR(c)));
+}
+
+static Value proc_char_whitespace_p(UNUSED Value env, Value c)
+{
+    EXPECT(type, TYPE_CHAR, c);
+    return BOOL_VAL(isspace(CHAR(c)));
+}
+
+static Value proc_char_upper_case_p(UNUSED Value env, Value c)
+{
+    EXPECT(type, TYPE_CHAR, c);
+    return BOOL_VAL(isupper(CHAR(c)));
+}
+
+static Value proc_char_lower_case_p(UNUSED Value env, Value c)
+{
+    EXPECT(type, TYPE_CHAR, c);
+    return BOOL_VAL(islower(CHAR(c)));
+}
+
 // 6.3.5. Strings
 static Value proc_string_p(UNUSED Value env, Value obj)
 {
@@ -3519,11 +3549,11 @@ void sch_init(const void *sp)
     define_procedure(e, "char-ci>?", proc_char_ci_gt_p, 2);
     define_procedure(e, "char-ci<=?", proc_char_ci_le_p, 2);
     define_procedure(e, "char-ci>=?", proc_char_ci_ge_p, 2);
-    //- char-alphabetic?
-    //- char-numeric?
-    //- char-whitespace?
-    //- char-upper-case?
-    //- char-lower-case?
+    define_procedure(e, "char-alphabetic?", proc_char_alphabetic_p, 1);
+    define_procedure(e, "char-numeric?", proc_char_numeric_p, 1);
+    define_procedure(e, "char-whitespace?", proc_char_whitespace_p, 1);
+    define_procedure(e, "char-upper-case?", proc_char_upper_case_p, 1);
+    define_procedure(e, "char-lower-case?", proc_char_lower_case_p, 1);
     //- char->integer
     //- integer->char
     //- char-upcase
