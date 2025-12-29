@@ -1238,6 +1238,62 @@
   (noexpect char-lower-case? #\newline)
   (noexpect char-lower-case? #\space)))
 
+(describe "char-upcase" (lambda ()
+  (expect char=? (char-upcase #\a) #\A)
+  (expect char=? (char-upcase #\z) #\Z)
+  (expect char=? (char-upcase #\A) #\A)
+  (expect char=? (char-upcase #\Z) #\Z)
+
+  (expect char=? (char-upcase #\0) #\0)
+  (expect char=? (char-upcase #\space) #\space)))
+
+(describe "char-downcase" (lambda ()
+  (expect char=? (char-downcase #\A) #\a)
+  (expect char=? (char-downcase #\Z) #\z)
+  (expect char=? (char-downcase #\a) #\a)
+  (expect char=? (char-downcase #\z) #\z)
+
+  (expect char=? (char-downcase #\0) #\0)
+  (expect char=? (char-downcase #\space) #\space)))
+
+(describe "char->integer" (lambda ()
+  (expect = (char->integer #\A) (char->integer #\A))
+  (expect = (char->integer #\0) (char->integer #\0))
+
+  (expect <= (char->integer #\A) (char->integer #\A))
+  (expect <= (char->integer #\a) (char->integer #\a))
+  (expect <= (char->integer #\0) (char->integer #\0))
+  (expect <= (char->integer #\A) (char->integer #\B))
+  (expect <= (char->integer #\a) (char->integer #\b))
+  (expect <= (char->integer #\0) (char->integer #\9))
+  (expect <= (char->integer #\0) (char->integer #\A))
+  (expect <= (char->integer #\0) (char->integer #\a))))
+
+(describe "integer->char" (lambda ()
+  (expect char=? (integer->char 0) (integer->char 0))
+  (expect char=? (integer->char 100) (integer->char 100))
+
+  (expect char<=? (integer->char 0) (integer->char 100))
+  (expect char<=? (integer->char 50) (integer->char 100))
+  (expect char<=? (integer->char 100) (integer->char 100))))
+
+
+(describe "char->integer/integer->char round-trip" (lambda ()
+  (define (expect-round-tripped-char ch)
+    (expect char=? (integer->char (char->integer ch)) ch))
+  (define (expect-round-tripped-integer i)
+    (expect = (char->integer (integer->char i)) i))
+
+  (expect-round-tripped-char #\A)
+  (expect-round-tripped-char #\a)
+  (expect-round-tripped-char #\0)
+  (expect-round-tripped-char #\space)
+
+  (expect-round-tripped-integer 0)
+  (expect-round-tripped-integer 50)
+  (expect-round-tripped-integer 100)
+  (expect-round-tripped-integer 200)))
+
 ;; 6.3.5. Strings
 (describe "string?" (lambda ()
   (expect string? "foo")

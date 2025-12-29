@@ -2244,10 +2244,36 @@ static Value proc_char_upper_case_p(UNUSED Value env, Value c)
     return BOOL_VAL(isupper(CHAR(c)));
 }
 
+static Value proc_char_to_integer(UNUSED Value env, Value c)
+{
+    EXPECT(type, TYPE_CHAR, c);
+    return sch_integer_new(CHAR(c));
+}
+
+static Value proc_integer_to_char(UNUSED Value env, Value c)
+{
+    int64_t i = get_int(c);
+    if (i < 0 || i > 0xFF)
+        return runtime_error("integer out of domain");
+    return sch_character_new(i);
+}
+
 static Value proc_char_lower_case_p(UNUSED Value env, Value c)
 {
     EXPECT(type, TYPE_CHAR, c);
     return BOOL_VAL(islower(CHAR(c)));
+}
+
+static Value proc_char_upcase(UNUSED Value env, Value c)
+{
+    EXPECT(type, TYPE_CHAR, c);
+    return sch_character_new(toupper(CHAR(c)));
+}
+
+static Value proc_char_downcase(UNUSED Value env, Value c)
+{
+    EXPECT(type, TYPE_CHAR, c);
+    return sch_character_new(tolower(CHAR(c)));
 }
 
 // 6.3.5. Strings
@@ -3554,10 +3580,10 @@ void sch_init(const void *sp)
     define_procedure(e, "char-whitespace?", proc_char_whitespace_p, 1);
     define_procedure(e, "char-upper-case?", proc_char_upper_case_p, 1);
     define_procedure(e, "char-lower-case?", proc_char_lower_case_p, 1);
-    //- char->integer
-    //- integer->char
-    //- char-upcase
-    //- char-downcase
+    define_procedure(e, "char->integer", proc_char_to_integer, 1);
+    define_procedure(e, "integer->char", proc_integer_to_char, 1);
+    define_procedure(e, "char-upcase", proc_char_upcase, 1);
+    define_procedure(e, "char-downcase", proc_char_downcase, 1);
     // 6.3.5. Strings
     define_procedure(e, "string?", proc_string_p, 1);
     //- make-string
