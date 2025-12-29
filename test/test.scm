@@ -1139,6 +1139,57 @@
   (expect char>=? #\A #\0)
   (expect char>=? #\a #\0)))
 
+(describe "char-ci=?" (lambda ()
+  (expect char-ci=? #\a #\a)
+  (expect char-ci=? #\\ #\\)
+  (expect char-ci=? #\space #\space)
+  (expect char-ci=? #\space #\ )
+  (expect char-ci=? #\newline  #\
+          ); newline
+
+  (expect char-ci=? #\A #\a)
+  (expect char-ci=? #\z #\Z)))
+
+(describe "char-ci<?" (lambda ()
+  (expect char-ci<? #\a #\B)
+  (expect char-ci<? #\b #\Z)
+
+  (expect char-ci<? #\0 #\9)
+  (expect char-ci<? #\0 #\A)
+  (expect char-ci<? #\0 #\a)))
+
+(describe "char-ci>?" (lambda ()
+  (expect char-ci>? #\B #\a)
+  (expect char-ci>? #\Z #\b)
+
+  (expect char-ci>? #\9 #\0)
+  (expect char-ci>? #\A #\0)
+  (expect char-ci>? #\a #\0)))
+
+(describe "char-ci<=?" (lambda ()
+  (expect char-ci<=? #\A #\a)
+  (expect char-ci<=? #\a #\A)
+  (expect char-ci>=? #\0 #\0)
+
+  (expect char-ci<=? #\a #\B)
+  (expect char-ci<=? #\b #\Z)
+
+  (expect char-ci<=? #\0 #\9)
+  (expect char-ci<=? #\0 #\A)
+  (expect char-ci<=? #\0 #\a)))
+
+(describe "char-ci>=?" (lambda ()
+  (expect char-ci>=? #\A #\A)
+  (expect char-ci>=? #\a #\a)
+  (expect char-ci>=? #\0 #\0)
+
+  (expect char-ci>=? #\B #\a)
+  (expect char-ci>=? #\Z #\b)
+
+  (expect char-ci>=? #\9 #\0)
+  (expect char-ci>=? #\A #\0)
+  (expect char-ci>=? #\a #\0)))
+
 ;; 6.3.5. Strings
 (describe "string?" (lambda ()
   (expect string? "foo")

@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <math.h>
@@ -2156,34 +2157,67 @@ static Value proc_char_p(UNUSED Value env, Value ch)
     return BOOL_VAL(sch_value_is_character(ch));
 }
 
+#define CHAR_CMP(c1, c2, op) BOOL_VAL(CHAR(c1) op CHAR(c2))
+#define CHAR_CI_CMP(c1, c2, op) BOOL_VAL(tolower(CHAR(c1)) op tolower(CHAR(c2)))
+
 static Value proc_char_eq_p(UNUSED Value env, Value c1, Value c2)
 {
     EXPECT(type_twin, TYPE_CHAR, c1, c2);
-    return BOOL_VAL(CHAR(c1) == CHAR(c2));
+    return CHAR_CMP(c1, c2, ==);
 }
 
 static Value proc_char_lt_p(UNUSED Value env, Value c1, Value c2)
 {
     EXPECT(type_twin, TYPE_CHAR, c1, c2);
-    return BOOL_VAL(CHAR(c1) < CHAR(c2));
+    return CHAR_CMP(c1, c2, <);
 }
 
 static Value proc_char_gt_p(UNUSED Value env, Value c1, Value c2)
 {
     EXPECT(type_twin, TYPE_CHAR, c1, c2);
-    return BOOL_VAL(CHAR(c1) > CHAR(c2));
+    return CHAR_CMP(c1, c2, >);
 }
 
 static Value proc_char_le_p(UNUSED Value env, Value c1, Value c2)
 {
     EXPECT(type_twin, TYPE_CHAR, c1, c2);
-    return BOOL_VAL(CHAR(c1) <= CHAR(c2));
+    return CHAR_CMP(c1, c2, <=);
 }
 
 static Value proc_char_ge_p(UNUSED Value env, Value c1, Value c2)
 {
     EXPECT(type_twin, TYPE_CHAR, c1, c2);
-    return BOOL_VAL(CHAR(c1) >= CHAR(c2));
+    return CHAR_CMP(c1, c2, >=);
+}
+
+static Value proc_char_ci_eq_p(UNUSED Value env, Value c1, Value c2)
+{
+    EXPECT(type_twin, TYPE_CHAR, c1, c2);
+    return CHAR_CI_CMP(c1, c2, ==);
+}
+
+static Value proc_char_ci_lt_p(UNUSED Value env, Value c1, Value c2)
+{
+    EXPECT(type_twin, TYPE_CHAR, c1, c2);
+    return CHAR_CI_CMP(c1, c2, <);
+}
+
+static Value proc_char_ci_gt_p(UNUSED Value env, Value c1, Value c2)
+{
+    EXPECT(type_twin, TYPE_CHAR, c1, c2);
+    return CHAR_CI_CMP(c1, c2, >);
+}
+
+static Value proc_char_ci_le_p(UNUSED Value env, Value c1, Value c2)
+{
+    EXPECT(type_twin, TYPE_CHAR, c1, c2);
+    return CHAR_CI_CMP(c1, c2, <=);
+}
+
+static Value proc_char_ci_ge_p(UNUSED Value env, Value c1, Value c2)
+{
+    EXPECT(type_twin, TYPE_CHAR, c1, c2);
+    return CHAR_CI_CMP(c1, c2, >=);
 }
 
 // 6.3.5. Strings
@@ -3480,11 +3514,11 @@ void sch_init(const void *sp)
     define_procedure(e, "char>?", proc_char_gt_p, 2);
     define_procedure(e, "char<=?", proc_char_le_p, 2);
     define_procedure(e, "char>=?", proc_char_ge_p, 2);
-    //- char-ci=?
-    //- char-ci<?
-    //- char-ci>?
-    //- char-ci<=?
-    //- char-ci>=?
+    define_procedure(e, "char-ci=?", proc_char_ci_eq_p, 2);
+    define_procedure(e, "char-ci<?", proc_char_ci_lt_p, 2);
+    define_procedure(e, "char-ci>?", proc_char_ci_gt_p, 2);
+    define_procedure(e, "char-ci<=?", proc_char_ci_le_p, 2);
+    define_procedure(e, "char-ci>=?", proc_char_ci_ge_p, 2);
     //- char-alphabetic?
     //- char-numeric?
     //- char-whitespace?
