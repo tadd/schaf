@@ -852,6 +852,31 @@
   (expect equal? (number->string 16777216) "16777216")
   (expect equal? (number->string -16777216) "-16777216")))
 
+(describe "number->string with radix" (lambda ()
+  (expect equal? (number->string 0 10) "0")
+  (expect equal? (number->string 1 10) "1")
+  (expect equal? (number->string -1 10) "-1")
+  (expect equal? (number->string 16777216 10) "16777216")
+  (expect equal? (number->string -16777216 10) "-16777216")
+
+  (expect equal? (number->string 0 2) "0")
+  (expect equal? (number->string 1 2) "1")
+  (expect equal? (number->string -1 2) "-1")
+  (expect equal? (number->string 16777216 2) "1000000000000000000000000")
+  (expect equal? (number->string -16777216 2) "-1000000000000000000000000")
+
+  (expect equal? (number->string 0 8) "0")
+  (expect equal? (number->string 1 8) "1")
+  (expect equal? (number->string -1 8) "-1")
+  (expect equal? (number->string 16777216 8) "100000000")
+  (expect equal? (number->string -16777216 8) "-100000000")
+
+  (expect equal? (number->string 0 16) "0")
+  (expect equal? (number->string 1 16) "1")
+  (expect equal? (number->string -1 16) "-1")
+  (expect equal? (number->string 16777216 16) "1000000")
+  (expect equal? (number->string -16777216 16) "-1000000")))
+
 (describe "string->number" (lambda ()
   (expect equal? (string->number "0") 0)
   (expect equal? (string->number "1") 1)
@@ -863,6 +888,58 @@
   (expect equal? (string->number "") #f)
   (expect equal? (string->number " ") #f)
   (expect equal? (string->number "abc") #f)))
+
+(describe "string->number with radix" (lambda ()
+  (expect equal? (string->number "0" 10) 0)
+  (expect equal? (string->number "1" 10) 1)
+  (expect equal? (string->number "-1" 10) -1)
+  (expect equal? (string->number "16777216" 10) 16777216)
+  (expect equal? (string->number "+16777216" 10) 16777216)
+  (expect equal? (string->number "-16777216" 10) -16777216)
+
+  (expect equal? (string->number "0" 2) 0)
+  (expect equal? (string->number "1" 2) 1)
+  (expect equal? (string->number "-1" 2) -1)
+  (expect equal? (string->number "1000000000000000000000000" 2) 16777216)
+  (expect equal? (string->number "-1000000000000000000000000" 2) -16777216)
+
+  (expect equal? (string->number "0" 8) 0)
+  (expect equal? (string->number "1" 8) 1)
+  (expect equal? (string->number "-1" 8) -1)
+  (expect equal? (string->number "100000000" 8) 16777216)
+  (expect equal? (string->number "-100000000" 8) -16777216)
+
+  (expect equal? (string->number "0" 16) 0)
+  (expect equal? (string->number "1" 16) 1)
+  (expect equal? (string->number "-1" 16) -1)
+  (expect equal? (string->number "1000000" 16) 16777216)
+  (expect equal? (string->number "-1000000" 16) -16777216)))
+
+(describe "make-string" (lambda ()
+  (expect = (string-length (make-string 10)) 10)
+  (expect = (string-length (make-string 1024)) 1024)
+
+  (expect string=? (make-string 3 #\a) "aaa")
+  (expect string=? (make-string 5 #\space) "     ")))
+
+(describe "string" (lambda ()
+  (expect string=? (string) "")
+  (expect string=? (string #\space) " ")
+  (expect string=? (string #\a #\b #\c) "abc")
+  (expect string=? (string #\a #\space #\c) "a c")))
+
+(describe "string-ref" (lambda ()
+  (expect char=? (string-ref "abc" 0) #\a)
+  (expect char=? (string-ref "abc" 1) #\b)
+  (expect char=? (string-ref "abc" 2) #\c)
+  (expect char=? (string-ref " " 0) #\space)))
+
+(describe "string-set!" (lambda ()
+  (let ((s "foo"))
+    (string-set! s 0 #\b)
+    (expect string=? s "boo")
+    (string-set! s 2 #\space)
+    (expect string=? s "bo "))))
 
 ;; 6.3. Other data types
 ;; 6.3.1. Booleans
@@ -1057,10 +1134,7 @@
 
 (describe "symbol->string" (lambda ()
   (expect string=? (symbol->string 'flying-fish) "flying-fish")
-  (expect string=? (symbol->string 'Martin) "Martin")
-  ;; FIXME: error test with string-set!
-  ;; (string-set! (symbol->string 'Martin) 0 "A")
-  ))
+  (expect string=? (symbol->string 'Martin) "Martin")))
 
 (describe "string->symbol" (lambda ()
   (expect eq? (string->symbol "flying-fish") 'flying-fish)
@@ -1410,6 +1484,38 @@
   (expect equal? (string-append "a" "bc") "abc")
   (expect equal? (string-append "(" "foo" ")") "(foo)")
   (expect equal? (string-append "(" "f" "" "o" "o" "" ")") "(foo)")))
+
+(describe "string->list" (lambda ()
+  (expect equal? (string->list "abc") '(#\a #\b #\c))
+  (expect equal? (string->list "") '())
+  (expect equal? (string->list "  ") '(#\space #\space))))
+
+(describe "list->string" (lambda ()
+  (expect equal? (list->string '(#\a #\b #\c)) "abc")
+  (expect equal? (list->string '()) "")
+  (expect equal? (list->string '(#\space #\space)) "  ")))
+
+(describe "string->list/list->string round-trip" (lambda ()
+  (expect string=? (list->string (string->list "abc")) "abc")
+  (expect string=? (list->string (string->list "")) "")
+  (expect string=? (list->string (string->list "  ")) "  ")))
+
+(describe "string-copy" (lambda ()
+  (let* ((s "foo")
+         (t (string-copy s)))
+    (expect string=? t s)
+    (string-set! t 0 #\b)
+    (expect char=? (string-ref t 0) #\b)
+    (expect char=? (string-ref s 0) #\f)
+    (noexpect string=? t s))))
+
+(describe "string-fill!" (lambda ()
+  (let ((empty "")
+        (foo "foo"))
+    (string-fill! empty #\a)
+    (expect string=? empty "")
+    (string-fill! foo #\a)
+    (expect string=? foo "aaa"))))
 
 ;; 6.3.6. Vectors
 (describe "vector" (lambda ()
