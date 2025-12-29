@@ -915,6 +915,19 @@
   (expect equal? (string->number "1000000" 16) 16777216)
   (expect equal? (string->number "-1000000" 16) -16777216)))
 
+(describe "make-string" (lambda ()
+  (expect = (string-length (make-string 10)) 10)
+  (expect = (string-length (make-string 1024)) 1024)
+
+  (expect string=? (make-string 3 #\a) "aaa")
+  (expect string=? (make-string 5 #\space) "     ")))
+
+(describe "string" (lambda ()
+  (expect string=? (string) "")
+  (expect string=? (string #\space) " ")
+  (expect string=? (string #\a #\b #\c) "abc")
+  (expect string=? (string #\a #\space #\c) "a c")))
+
 ;; 6.3. Other data types
 ;; 6.3.1. Booleans
 (describe "true/false" (lambda ()

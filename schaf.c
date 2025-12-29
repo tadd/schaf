@@ -2310,6 +2310,37 @@ static Value proc_string_p(UNUSED Value env, Value obj)
     return BOOL_VAL(sch_value_is_string(obj));
 }
 
+static Value proc_make_string(UNUSED Value env, Value args)
+{
+    EXPECT(arity_range, 1, 2, args);
+    int k = get_non_negative_int(car(args));
+    uint8_t pad = ' ';
+    if (cdr(args) != Qnil) {
+        Value ch = cadr(args);
+        EXPECT(type, TYPE_CHAR, ch);
+        if (ch == '\0')
+            return runtime_error("cannot use '\\0' as characters currently");
+        pad = CHAR(ch);
+    }
+    char s[k + 1];
+    memset(s, pad, k);
+    s[k] = '\0';
+    return sch_string_new(s);
+}
+
+static Value proc_string(UNUSED Value env, Value args)
+{
+    int64_t len = length(args), i = 0;
+    char s[len + 1];
+    for (Value p = args; p != Qnil; p = cdr(p), i++) {
+        Value ch = car(p);
+        EXPECT(type, TYPE_CHAR, ch);
+        s[i] = CHAR(ch);
+    }
+    s[len] = '\0';
+    return sch_string_new(s);
+}
+
 static Value proc_string_length(UNUSED Value env, Value s)
 {
     EXPECT(type, TYPE_STRING, s);
@@ -3612,8 +3643,8 @@ void sch_init(const void *sp)
     define_procedure(e, "char-downcase", proc_char_downcase, 1);
     // 6.3.5. Strings
     define_procedure(e, "string?", proc_string_p, 1);
-    //- make-string
-    //- string
+    define_procedure(e, "make-string", proc_make_string, -1);
+    define_procedure(e, "string", proc_string, -1);
     define_procedure(e, "string-length", proc_string_length, 1);
     //- string-ref
     //- string-set!
