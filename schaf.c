@@ -1855,21 +1855,49 @@ static Value proc_expt(UNUSED Value env, Value x, Value y)
 }
 
 // 6.2.6. Numerical input and output
-static Value proc_number_to_string(UNUSED Value env, Value x)
+static Value proc_number_to_string(UNUSED Value env, Value args)
 {
-    char buf[22]; // log10(UINT64_MAX)+2
-    EXPECT(type, TYPE_INT, x);
-    int64_t n = INT(x);
-    snprintf(buf, sizeof(buf), "%"PRId64, n);
+    EXPECT(arity_range, 1, 2, args);
+    int64_t n = get_int(car(args));
+    int64_t radix = (cdr(args) != Qnil) ? get_int(cadr(args)) : 10;
+    char buf[66]; // in case of radix == 2 (64-bit integer) + sign + \0
+    if (radix == 10) {
+        snprintf(buf, sizeof(buf), "%"PRId64, n);
+        return sch_string_new(buf);
+    }
+    const char *sign = "";
+    if (n < 0) {
+        sign = "-";
+        n *= -1;
+    }
+    switch (radix) {
+    case 2:
+        snprintf(buf, sizeof(buf), "%s%"PRIb64, sign, n);
+        break;
+    case 8:
+        snprintf(buf, sizeof(buf), "%s%"PRIo64, sign, n);
+        break;
+    case 16:
+        snprintf(buf, sizeof(buf), "%s%"PRIX64, sign, n);
+        break;
+    default:
+        return runtime_error("invalid radix: %"PRId64, radix);
+    }
     return sch_string_new(buf);
 }
 
-static Value proc_string_to_number(UNUSED Value env, Value s)
+static Value proc_string_to_number(UNUSED Value env, Value args)
 {
+    EXPECT(arity_range, 1, 2, args);
+    Value s = car(args);
     EXPECT(type, TYPE_STRING, s);
-    char *endptr = NULL;
-    int64_t i = strtoll(STRING(s), &endptr, 10);
-    if (STRING(s)[0] == '\0' || *endptr != '\0')
+    if (STRING(s)[0] == '\0')
+        return Qfalse;
+    int64_t radix = (cdr(args) != Qnil) ? get_int(cadr(args)) : 10;
+    char *ep;
+    errno = 0;
+    int64_t i = strtoll(STRING(s), &ep, radix);
+    if (errno != 0 || (i == 0 && STRING(s) == ep))
         return Qfalse;
     return sch_integer_new(i);
 }
@@ -3528,10 +3556,8 @@ void sch_init(const void *sp)
     //- exact
     //- inexact->exact (alias)
     // 6.2.6. Numerical input and output
-    define_procedure(e, "number->string", proc_number_to_string, 1);
-    //- number->string with radix
-    define_procedure(e, "string->number", proc_string_to_number, 1);
-    //- string->number with radix
+    define_procedure(e, "number->string", proc_number_to_string, -1);
+    define_procedure(e, "string->number", proc_string_to_number, -1);
     // 6.3. Other data types
     // 6.3.1. Booleans
     define_procedure(e, "not", proc_not, 1);

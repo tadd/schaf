@@ -852,6 +852,31 @@
   (expect equal? (number->string 16777216) "16777216")
   (expect equal? (number->string -16777216) "-16777216")))
 
+(describe "number->string with radix" (lambda ()
+  (expect equal? (number->string 0 10) "0")
+  (expect equal? (number->string 1 10) "1")
+  (expect equal? (number->string -1 10) "-1")
+  (expect equal? (number->string 16777216 10) "16777216")
+  (expect equal? (number->string -16777216 10) "-16777216")
+
+  (expect equal? (number->string 0 2) "0")
+  (expect equal? (number->string 1 2) "1")
+  (expect equal? (number->string -1 2) "-1")
+  (expect equal? (number->string 16777216 2) "1000000000000000000000000")
+  (expect equal? (number->string -16777216 2) "-1000000000000000000000000")
+
+  (expect equal? (number->string 0 8) "0")
+  (expect equal? (number->string 1 8) "1")
+  (expect equal? (number->string -1 8) "-1")
+  (expect equal? (number->string 16777216 8) "100000000")
+  (expect equal? (number->string -16777216 8) "-100000000")
+
+  (expect equal? (number->string 0 16) "0")
+  (expect equal? (number->string 1 16) "1")
+  (expect equal? (number->string -1 16) "-1")
+  (expect equal? (number->string 16777216 16) "1000000")
+  (expect equal? (number->string -16777216 16) "-1000000")))
+
 (describe "string->number" (lambda ()
   (expect equal? (string->number "0") 0)
   (expect equal? (string->number "1") 1)
@@ -863,6 +888,32 @@
   (expect equal? (string->number "") #f)
   (expect equal? (string->number " ") #f)
   (expect equal? (string->number "abc") #f)))
+
+(describe "string->number with radix" (lambda ()
+  (expect equal? (string->number "0" 10) 0)
+  (expect equal? (string->number "1" 10) 1)
+  (expect equal? (string->number "-1" 10) -1)
+  (expect equal? (string->number "16777216" 10) 16777216)
+  (expect equal? (string->number "+16777216" 10) 16777216)
+  (expect equal? (string->number "-16777216" 10) -16777216)
+
+  (expect equal? (string->number "0" 2) 0)
+  (expect equal? (string->number "1" 2) 1)
+  (expect equal? (string->number "-1" 2) -1)
+  (expect equal? (string->number "1000000000000000000000000" 2) 16777216)
+  (expect equal? (string->number "-1000000000000000000000000" 2) -16777216)
+
+  (expect equal? (string->number "0" 8) 0)
+  (expect equal? (string->number "1" 8) 1)
+  (expect equal? (string->number "-1" 8) -1)
+  (expect equal? (string->number "100000000" 8) 16777216)
+  (expect equal? (string->number "-100000000" 8) -16777216)
+
+  (expect equal? (string->number "0" 16) 0)
+  (expect equal? (string->number "1" 16) 1)
+  (expect equal? (string->number "-1" 16) -1)
+  (expect equal? (string->number "1000000" 16) 16777216)
+  (expect equal? (string->number "-1000000" 16) -16777216)))
 
 ;; 6.3. Other data types
 ;; 6.3.1. Booleans
