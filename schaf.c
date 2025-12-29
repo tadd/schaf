@@ -2347,7 +2347,7 @@ static Value proc_string_length(UNUSED Value env, Value s)
     return sch_integer_new(strlen(STRING(s)));
 }
 
-static Value proc_string_ref(UNUSED Value env, Value vs, Value vk)
+static Value expect_string_with_valid_index(Value vs, Value vk)
 {
     EXPECT(type, TYPE_STRING, vs);
     int64_t k = get_non_negative_int(vk);
@@ -2355,19 +2355,24 @@ static Value proc_string_ref(UNUSED Value env, Value vs, Value vk)
     ssize_t len = strlen(s);
     if (k >= len)
         return runtime_error("invalid index %"PRId64, k);
+    return Qfalse;
+}
+
+static Value proc_string_ref(UNUSED Value env, Value vs, Value vk)
+{
+    EXPECT(string_with_valid_index, vs, vk);
+    const char *s = STRING(vs);
+    int64_t k = INT(vk);
     return sch_character_new(s[k]);
 }
 
 static Value proc_string_set(UNUSED Value env, Value vs, Value vk, Value ch)
 {
-    EXPECT(type, TYPE_STRING, vs);
+    EXPECT(string_with_valid_index, vs, vk);
     EXPECT(mutable, vs);
-    int64_t k = get_non_negative_int(vk);
     EXPECT(type, TYPE_CHAR, ch);
     char *s = STRING(vs);
-    ssize_t len = strlen(s);
-    if (k >= len)
-        return runtime_error("invalid index %"PRId64, k);
+    int64_t k = INT(vk);
     s[k] = CHAR(ch);
     return Qfalse;
 }
