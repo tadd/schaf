@@ -1890,21 +1890,49 @@ static Value proc_expt(UNUSED Value env, Value x, Value y)
 }
 
 // 6.2.6. Numerical input and output
-static Value proc_number_to_string(UNUSED Value env, Value x)
+static Value proc_number_to_string(UNUSED Value env, Value args)
 {
-    char buf[22]; // log10(UINT64_MAX)+2
-    EXPECT_TYPE(integer, x);
-    int64_t n = INT(x);
-    snprintf(buf, sizeof(buf), "%"PRId64, n);
+    EXPECT_ARITY_RANGE(1, 2, args);
+    int64_t n = get_int(car(args));
+    int64_t radix = (cdr(args) != Qnil) ? get_int(cadr(args)) : 10;
+    char buf[66]; // in case of radix == 2 (64-bit integer) + sign + \0
+    if (radix == 10) {
+        snprintf(buf, sizeof(buf), "%"PRId64, n);
+        return sch_string_new(buf);
+    }
+    const char *sign = "";
+    if (n < 0) {
+        sign = "-";
+        n *= -1;
+    }
+    switch (radix) {
+    case 2:
+        snprintf(buf, sizeof(buf), "%s%"PRIb64, sign, n);
+        break;
+    case 8:
+        snprintf(buf, sizeof(buf), "%s%"PRIo64, sign, n);
+        break;
+    case 16:
+        snprintf(buf, sizeof(buf), "%s%"PRIX64, sign, n);
+        break;
+    default:
+        return runtime_error("invalid radix: %"PRId64, radix);
+    }
     return sch_string_new(buf);
 }
 
-static Value proc_string_to_number(UNUSED Value env, Value s)
+static Value proc_string_to_number(UNUSED Value env, Value args)
 {
+    EXPECT_ARITY_RANGE(1, 2, args);
+    Value s = car(args);
     EXPECT_TYPE(string, s);
-    char *endptr = NULL;
-    int64_t i = strtoll(STRING(s), &endptr, 10);
-    if (STRING(s)[0] == '\0' || *endptr != '\0')
+    if (STRING(s)[0] == '\0')
+        return Qfalse;
+    int64_t radix = (cdr(args) != Qnil) ? get_int(cadr(args)) : 10;
+    char *ep;
+    errno = 0;
+    int64_t i = strtoll(STRING(s), &ep, radix);
+    if (errno != 0 || (i == 0 && STRING(s) == ep))
         return Qfalse;
     return sch_integer_new(i);
 }
@@ -2357,10 +2385,71 @@ static Value proc_string_p(UNUSED Value env, Value obj)
     return BOOL_VAL(sch_value_is_string(obj));
 }
 
+static Value proc_make_string(UNUSED Value env, Value args)
+{
+    EXPECT_ARITY_RANGE(1, 2, args);
+    int k = get_non_negative_int(car(args));
+    uint8_t pad = ' ';
+    if (cdr(args) != Qnil) {
+        Value ch = cadr(args);
+        EXPECT_TYPE(character, ch);
+        if (ch == '\0')
+            return runtime_error("cannot use '\\0' as characters currently");
+        pad = CHAR(ch);
+    }
+    char s[k + 1];
+    memset(s, pad, k);
+    s[k] = '\0';
+    return sch_string_new(s);
+}
+
+static Value proc_string(UNUSED Value env, Value args)
+{
+    int64_t len = length(args), i = 0;
+    char s[len + 1];
+    for (Value p = args; p != Qnil; p = cdr(p), i++) {
+        Value ch = car(p);
+        EXPECT_TYPE(character, ch);
+        s[i] = CHAR(ch);
+    }
+    s[len] = '\0';
+    return sch_string_new(s);
+}
+
 static Value proc_string_length(UNUSED Value env, Value s)
 {
     EXPECT_TYPE(string, s);
     return sch_integer_new(strlen(STRING(s)));
+}
+
+static Value expect_string_with_valid_index(Value vs, Value vk)
+{
+    EXPECT_TYPE(string, vs);
+    int64_t k = get_non_negative_int(vk);
+    const char *s = STRING(vs);
+    ssize_t len = strlen(s);
+    EXPECT(k < len, "invalid index %"PRId64, k);
+    return Qfalse;
+}
+
+#define EXPECT_STRING_WITH_VALID_INDEX(s, k) EXPECT_ERROR(expect_string_with_valid_index(s, k))
+
+static Value proc_string_ref(UNUSED Value env, Value vs, Value vk)
+{
+    EXPECT_STRING_WITH_VALID_INDEX(vs, vk);
+    const char *s = STRING(vs);
+    int64_t k = INT(vk);
+    return sch_character_new(s[k]);
+}
+
+static Value proc_string_set(UNUSED Value env, Value vs, Value vk, Value ch)
+{
+    EXPECT_MUTABLE(vs);
+    EXPECT_STRING_WITH_VALID_INDEX(vs, vk);
+    char *s = STRING(vs);
+    int64_t k = INT(vk);
+    s[k] = CHAR(ch);
+    return Qfalse;
 }
 
 #define STRING_CMP(c1, c2, op) BOOL_VAL(strcmp(STRING(c1), STRING(c2)) op 0)
@@ -2455,6 +2544,47 @@ static Value proc_string_append(UNUSED Value env, Value args)
     for (Value p = args; p != Qnil; p = cdr(p))
         strcat(s, STRING(car(p)));
     return string_new_moved(s);
+}
+
+static Value proc_string_to_list(UNUSED Value env, Value str)
+{
+    EXPECT_TYPE(string, str);
+    const char *s = STRING(str);
+    Value l = DUMMY_PAIR(), last = l;
+    for (size_t i = 0, len = strlen(s); i < len; i++)
+        last = PAIR(last)->cdr = list1(sch_character_new(s[i]));
+    return cdr(l);
+}
+
+static Value proc_list_to_string(UNUSED Value env, Value l)
+{
+    EXPECT_LIST_HEAD(l);
+    char *s = scary_new(sizeof(char));
+    for (Value p = l; p != Qnil; p = cdr(p)) {
+        Value e = car(p);
+        EXPECT_TYPE(character, e);
+        scary_push(&s, (char) CHAR(e));
+    }
+    scary_push(&s, (char) '\0');
+    Value ret = sch_string_new((s));
+    scary_free(s);
+    return ret;
+}
+
+static Value proc_string_copy(UNUSED Value env, Value str)
+{
+    EXPECT_TYPE(string, str);
+    return sch_string_new(STRING(str));
+}
+
+static Value proc_string_fill(UNUSED Value env, Value str, Value ch)
+{
+    EXPECT_TYPE(string, str);
+    EXPECT_TYPE(character, ch);
+    char *p = STRING(str);
+    size_t len = strlen(p);
+    memset(p, CHAR(ch), len);
+    return Qfalse;
 }
 
 // 6.3.6. Vectors
@@ -3632,10 +3762,8 @@ void sch_init(const void *sp)
     //- exact->inexact
     //- inexact->exact
     // 6.2.6. Numerical input and output
-    define_procedure(e, "number->string", proc_number_to_string, 1);
-    //- number->string with radix
-    define_procedure(e, "string->number", proc_string_to_number, 1);
-    //- string->number with radix
+    define_procedure(e, "number->string", proc_number_to_string, -1);
+    define_procedure(e, "string->number", proc_string_to_number, -1);
     // 6.3. Other data types
     // 6.3.1. Booleans
     define_procedure(e, "not", proc_not, 1);
@@ -3690,11 +3818,11 @@ void sch_init(const void *sp)
     define_procedure(e, "char-downcase", proc_char_downcase, 1);
     // 6.3.5. Strings
     define_procedure(e, "string?", proc_string_p, 1);
-    //- make-string
-    //- string
+    define_procedure(e, "make-string", proc_make_string, -1);
+    define_procedure(e, "string", proc_string, -1);
     define_procedure(e, "string-length", proc_string_length, 1);
-    //- string-ref
-    //- string-set!
+    define_procedure(e, "string-ref", proc_string_ref, 2);
+    define_procedure(e, "string-set!", proc_string_set, 3);
     define_procedure(e, "string=?", proc_string_eq, 2);
     define_procedure(e, "string-ci=?", proc_string_ci_eq, 2);
     define_procedure(e, "string<?", proc_string_lt, 2);
@@ -3707,10 +3835,10 @@ void sch_init(const void *sp)
     define_procedure(e, "string-ci>=?", proc_string_ci_ge, 2);
     define_procedure(e, "substring", proc_substring, 3);
     define_procedure(e, "string-append", proc_string_append, -1);
-    //- string->list
-    //- list->string
-    //- string-copy
-    //- string-fill!
+    define_procedure(e, "string->list", proc_string_to_list, 1);
+    define_procedure(e, "list->string", proc_list_to_string, 1);
+    define_procedure(e, "string-copy", proc_string_copy, 1);
+    define_procedure(e, "string-fill!", proc_string_fill, 2);
     // 6.3.6. Vectors
     define_procedure(e, "vector?", proc_vector_p, 1);
     define_procedure(e, "make-vector", proc_make_vector, -1);
