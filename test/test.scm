@@ -928,6 +928,19 @@
   (expect string=? (string #\a #\b #\c) "abc")
   (expect string=? (string #\a #\space #\c) "a c")))
 
+(describe "string-ref" (lambda ()
+  (expect char=? (string-ref "abc" 0) #\a)
+  (expect char=? (string-ref "abc" 1) #\b)
+  (expect char=? (string-ref "abc" 2) #\c)
+  (expect char=? (string-ref " " 0) #\space)))
+
+(describe "string-set!" (lambda ()
+  (let ((s "foo"))
+    (string-set! s 0 #\b)
+    (expect string=? s "boo")
+    (string-set! s 2 #\space)
+    (expect string=? s "bo "))))
+
 ;; 6.3. Other data types
 ;; 6.3.1. Booleans
 (describe "true/false" (lambda ()
