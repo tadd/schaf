@@ -2347,6 +2347,31 @@ static Value proc_string_length(UNUSED Value env, Value s)
     return sch_integer_new(strlen(STRING(s)));
 }
 
+static Value proc_string_ref(UNUSED Value env, Value vs, Value vk)
+{
+    EXPECT(type, TYPE_STRING, vs);
+    int64_t k = get_non_negative_int(vk);
+    const char *s = STRING(vs);
+    ssize_t len = strlen(s);
+    if (k >= len)
+        return runtime_error("invalid index %"PRId64, k);
+    return sch_character_new(s[k]);
+}
+
+static Value proc_string_set(UNUSED Value env, Value vs, Value vk, Value ch)
+{
+    EXPECT(type, TYPE_STRING, vs);
+    EXPECT(mutable, vs);
+    int64_t k = get_non_negative_int(vk);
+    EXPECT(type, TYPE_CHAR, ch);
+    char *s = STRING(vs);
+    ssize_t len = strlen(s);
+    if (k >= len)
+        return runtime_error("invalid index %"PRId64, k);
+    s[k] = CHAR(ch);
+    return Qfalse;
+}
+
 static inline int vstrcmp(Value s1, Value s2)
 {
     return strcmp(STRING(s1), STRING(s2));
@@ -3646,8 +3671,8 @@ void sch_init(const void *sp)
     define_procedure(e, "make-string", proc_make_string, -1);
     define_procedure(e, "string", proc_string, -1);
     define_procedure(e, "string-length", proc_string_length, 1);
-    //- string-ref
-    //- string-set!
+    define_procedure(e, "string-ref", proc_string_ref, 2);
+    define_procedure(e, "string-set!", proc_string_set, 3);
     define_procedure(e, "string=?", proc_string_eq, 2);
     define_procedure(e, "string-ci=?", proc_string_ci_eq, 2);
     define_procedure(e, "string<?", proc_string_lt, 2);
