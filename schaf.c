@@ -2377,74 +2377,66 @@ static Value proc_string_set(UNUSED Value env, Value vs, Value vk, Value ch)
     return Qfalse;
 }
 
-static inline int vstrcmp(Value s1, Value s2)
-{
-    return strcmp(STRING(s1), STRING(s2));
-}
-
-static inline int vstrcasecmp(Value s1, Value s2)
-{
-    return strcasecmp(STRING(s1), STRING(s2));
-}
+#define STRING_CMP(c1, c2, op) BOOL_VAL(strcmp(STRING(c1), STRING(c2)) op 0)
+#define STRING_CI_CMP(c1, c2, op) BOOL_VAL(strcasecmp(STRING(c1), STRING(c2)) op 0)
 
 static Value proc_string_eq(UNUSED Value env, Value s1, Value s2)
 {
     EXPECT(type_twin, TYPE_STRING, s1, s2);
-    return BOOL_VAL(vstrcmp(s1, s2) == 0);
+    return STRING_CMP(s1, s2, ==);
 }
 
 static Value proc_string_ci_eq(UNUSED Value env, Value s1, Value s2)
 {
     EXPECT(type_twin, TYPE_STRING, s1, s2);
-    return BOOL_VAL(vstrcasecmp(s1, s2) == 0);
+    return STRING_CI_CMP(s1, s2, ==);
 }
 
 static Value proc_string_lt(UNUSED Value env, Value s1, Value s2)
 {
     EXPECT(type_twin, TYPE_STRING, s1, s2);
-    return BOOL_VAL(vstrcmp(s1, s2) < 0);
+    return STRING_CMP(s1, s2, <);
 }
 
 static Value proc_string_gt(UNUSED Value env, Value s1, Value s2)
 {
     EXPECT(type_twin, TYPE_STRING, s1, s2);
-    return BOOL_VAL(vstrcmp(s1, s2) > 0);
+    return STRING_CMP(s1, s2, >);
 }
 
 static Value proc_string_le(UNUSED Value env, Value s1, Value s2)
 {
     EXPECT(type_twin, TYPE_STRING, s1, s2);
-    return BOOL_VAL(vstrcmp(s1, s2) <= 0);
+    return STRING_CMP(s1, s2, <=);
 }
 
 static Value proc_string_ge(UNUSED Value env, Value s1, Value s2)
 {
     EXPECT(type_twin, TYPE_STRING, s1, s2);
-    return BOOL_VAL(vstrcmp(s1, s2) >= 0);
+    return STRING_CMP(s1, s2, >=);
 }
 
-static Value proc_string_ci_lt(UNUSED Value env, Value s1, Value s2)
-{
+static Value proc_string_ci_lt(UNUSED Value env, Value s1, Value s2) {
     EXPECT(type_twin, TYPE_STRING, s1, s2);
-    return BOOL_VAL(vstrcasecmp(s1, s2) < 0);
+    return STRING_CI_CMP(s1, s2, <);
 }
 
 static Value proc_string_ci_gt(UNUSED Value env, Value s1, Value s2)
 {
     EXPECT(type_twin, TYPE_STRING, s1, s2);
-    return BOOL_VAL(vstrcasecmp(s1, s2) > 0);
+    return STRING_CI_CMP(s1, s2, >);
 }
 
 static Value proc_string_ci_le(UNUSED Value env, Value s1, Value s2)
 {
     EXPECT(type_twin, TYPE_STRING, s1, s2);
-    return BOOL_VAL(vstrcasecmp(s1, s2) <= 0);
+    return STRING_CI_CMP(s1, s2, <=);
 }
 
 static Value proc_string_ci_ge(UNUSED Value env, Value s1, Value s2)
 {
     EXPECT(type_twin, TYPE_STRING, s1, s2);
-    return BOOL_VAL(vstrcasecmp(s1, s2) >= 0);
+    return STRING_CI_CMP(s1, s2, >=);
 }
 
 static Value proc_substring(UNUSED Value env, Value string, Value vstart, Value vend)
