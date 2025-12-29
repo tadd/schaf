@@ -1190,6 +1190,54 @@
   (expect char-ci>=? #\A #\0)
   (expect char-ci>=? #\a #\0)))
 
+(describe "char-alphabetic?" (lambda ()
+  (expect char-alphabetic? #\A)
+  (expect char-alphabetic? #\a)
+
+  (noexpect char-alphabetic? #\0)
+  (noexpect char-alphabetic? #\newline)
+  (noexpect char-alphabetic? #\space)))
+
+(describe "char-numeric?" (lambda ()
+  (expect char-numeric? #\0)
+  (expect char-numeric? #\9)
+
+  (noexpect char-numeric? #\A)
+  (noexpect char-numeric? #\a)
+  (noexpect char-numeric? #\newline)
+  (noexpect char-numeric? #\space)))
+
+(describe "char-whitespace?" (lambda ()
+  (expect char-whitespace? #\newline)
+  (expect char-whitespace? #\space)
+
+  (noexpect char-whitespace? #\0)
+  (noexpect char-whitespace? #\9)
+  (noexpect char-whitespace? #\A)
+  (noexpect char-whitespace? #\a)))
+
+(describe "char-upper-case?" (lambda ()
+  (expect char-upper-case? #\A)
+  (expect char-upper-case? #\Z)
+
+  (noexpect char-upper-case? #\a)
+  (noexpect char-upper-case? #\z)
+  (noexpect char-upper-case? #\0)
+  (noexpect char-upper-case? #\9)
+  (noexpect char-upper-case? #\newline)
+  (noexpect char-upper-case? #\space)))
+
+(describe "char-lower-case?" (lambda ()
+  (expect char-lower-case? #\a)
+  (expect char-lower-case? #\z)
+
+  (noexpect char-lower-case? #\A)
+  (noexpect char-lower-case? #\Z)
+  (noexpect char-lower-case? #\0)
+  (noexpect char-lower-case? #\9)
+  (noexpect char-lower-case? #\newline)
+  (noexpect char-lower-case? #\space)))
+
 ;; 6.3.5. Strings
 (describe "string?" (lambda ()
   (expect string? "foo")
