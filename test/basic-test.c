@@ -170,19 +170,20 @@ Test(schaf, cxr) {
     expect_vint_eq(42, caaaar(parse_expr_string("((((42))))")));
 }
 
-#define expect_immutable_pair_error(s) \
-    expect_runtime_error("cannot modify immutable pair", s)
+#define expect_immutable_object_error(s) \
+    expect_runtime_error("cannot modify immutable object", s)
+
 Test(schaf, set_cxr) {
-    expect_immutable_pair_error("(set-car! '(1) 2)");
-    expect_immutable_pair_error("(set-cdr! '(1) '(2))");
-    expect_immutable_pair_error("(set-car! `(1) 2)");
-    expect_immutable_pair_error("(set-cdr! `(1) '(2))");
-    expect_immutable_pair_error("(set-car! `(,1) 2)");
-    expect_immutable_pair_error("(set-cdr! `(,1) '(2))");
-    expect_immutable_pair_error("(set-car! `(,@'(1)) 2)");
-    expect_immutable_pair_error("(set-cdr! `(,@'(1)) '(2))");
-    expect_immutable_pair_error("(set-car! `(,@`(1)) 2)");
-    expect_immutable_pair_error("(set-cdr! `(,@`(1)) '(2))");
+    expect_immutable_object_error("(set-car! '(1) 2)");
+    expect_immutable_object_error("(set-cdr! '(1) '(2))");
+    expect_immutable_object_error("(set-car! `(1) 2)");
+    expect_immutable_object_error("(set-cdr! `(1) '(2))");
+    expect_immutable_object_error("(set-car! `(,1) 2)");
+    expect_immutable_object_error("(set-cdr! `(,1) '(2))");
+    expect_immutable_object_error("(set-car! `(,@'(1)) 2)");
+    expect_immutable_object_error("(set-cdr! `(,@'(1)) '(2))");
+    expect_immutable_object_error("(set-car! `(,@`(1)) 2)");
+    expect_immutable_object_error("(set-cdr! `(,@`(1)) '(2))");
 }
 
 Test(schaf, parse_ident) {

@@ -1830,24 +1830,25 @@ static Value proc_cdr(UNUSED Value env, Value pair)
     return cdr(pair);
 }
 
-static Value expect_mutable_pair(Value pair)
+static Value expect_mutable(Value o)
 {
-    EXPECT(type, TYPE_PAIR, pair);
-    if (HEADER(pair)->immutable)
-        return runtime_error("cannot modify immutable pair");
+    if (HEADER(o)->immutable)
+        return runtime_error("cannot modify immutable object");
     return Qfalse;
 }
 
 static Value proc_set_car(UNUSED Value env, Value pair, Value obj)
 {
-    EXPECT(mutable_pair, pair);
+    EXPECT(type, TYPE_PAIR, pair);
+    EXPECT(mutable, pair);
     PAIR(pair)->car = obj;
     return pair;
 }
 
 static Value proc_set_cdr(UNUSED Value env, Value pair, Value obj)
 {
-    EXPECT(mutable_pair, pair);
+    EXPECT(type, TYPE_PAIR, pair);
+    EXPECT(mutable, pair);
     PAIR(pair)->cdr = obj;
     return pair;
 }
@@ -2150,6 +2151,7 @@ static Value proc_vector_ref(UNUSED Value env, Value o, Value k)
 static Value proc_vector_set(UNUSED Value env, Value o, Value k, Value obj)
 {
     EXPECT(type, TYPE_VECTOR, o);
+    EXPECT(mutable, o);
     size_t i = get_non_negative_int(k);
     Value *v = VECTOR(o);
     if (i < scary_length(v))
