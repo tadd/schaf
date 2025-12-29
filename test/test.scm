@@ -917,32 +917,6 @@
   (expect = (string->number "1000000" 16) 16777216)
   (expect = (string->number "-1000000" 16) -16777216)))
 
-(describe "make-string" (lambda ()
-  (expect = (string-length (make-string 10)) 10)
-  (expect = (string-length (make-string 1024)) 1024)
-
-  (expect string=? (make-string 3 #\a) "aaa")
-  (expect string=? (make-string 5 #\space) "     ")))
-
-(describe "string" (lambda ()
-  (expect string=? (string) "")
-  (expect string=? (string #\space) " ")
-  (expect string=? (string #\a #\b #\c) "abc")
-  (expect string=? (string #\a #\space #\c) "a c")))
-
-(describe "string-ref" (lambda ()
-  (expect char=? (string-ref "abc" 0) #\a)
-  (expect char=? (string-ref "abc" 1) #\b)
-  (expect char=? (string-ref "abc" 2) #\c)
-  (expect char=? (string-ref " " 0) #\space)))
-
-(describe "string-set!" (lambda ()
-  (let ((s "foo"))
-    (string-set! s 0 #\b)
-    (expect string=? s "boo")
-    (string-set! s 2 #\space)
-    (expect string=? s "bo "))))
-
 ;; 6.3. Other data types
 ;; 6.3.1. Booleans
 (describe "true/false" (lambda ()
@@ -1315,24 +1289,6 @@
   (noexpect char-lower-case? #\newline)
   (noexpect char-lower-case? #\space)))
 
-(describe "char-upcase" (lambda ()
-  (expect char=? (char-upcase #\a) #\A)
-  (expect char=? (char-upcase #\z) #\Z)
-  (expect char=? (char-upcase #\A) #\A)
-  (expect char=? (char-upcase #\Z) #\Z)
-
-  (expect char=? (char-upcase #\0) #\0)
-  (expect char=? (char-upcase #\space) #\space)))
-
-(describe "char-downcase" (lambda ()
-  (expect char=? (char-downcase #\A) #\a)
-  (expect char=? (char-downcase #\Z) #\z)
-  (expect char=? (char-downcase #\a) #\a)
-  (expect char=? (char-downcase #\z) #\z)
-
-  (expect char=? (char-downcase #\0) #\0)
-  (expect char=? (char-downcase #\space) #\space)))
-
 (describe "char->integer" (lambda ()
   (expect = (char->integer #\A) (char->integer #\A))
   (expect = (char->integer #\0) (char->integer #\0))
@@ -1354,7 +1310,6 @@
   (expect char<=? (integer->char 50) (integer->char 100))
   (expect char<=? (integer->char 100) (integer->char 100))))
 
-
 (describe "char->integer/integer->char round-trip" (lambda ()
   (define (expect-round-tripped-char ch)
     (expect char=? (integer->char (char->integer ch)) ch))
@@ -1371,6 +1326,24 @@
   (expect-round-tripped-integer 100)
   (expect-round-tripped-integer 200)))
 
+(describe "char-upcase" (lambda ()
+  (expect char=? (char-upcase #\a) #\A)
+  (expect char=? (char-upcase #\z) #\Z)
+  (expect char=? (char-upcase #\A) #\A)
+  (expect char=? (char-upcase #\Z) #\Z)
+
+  (expect char=? (char-upcase #\0) #\0)
+  (expect char=? (char-upcase #\space) #\space)))
+
+(describe "char-downcase" (lambda ()
+  (expect char=? (char-downcase #\A) #\a)
+  (expect char=? (char-downcase #\Z) #\z)
+  (expect char=? (char-downcase #\a) #\a)
+  (expect char=? (char-downcase #\z) #\z)
+
+  (expect char=? (char-downcase #\0) #\0)
+  (expect char=? (char-downcase #\space) #\space)))
+
 ;; 6.3.5. Strings
 (describe "string?" (lambda ()
   (expect string? "foo")
@@ -1382,10 +1355,36 @@
   (noexpect string? #f)
   (noexpect string? string?)))
 
+(describe "make-string" (lambda ()
+  (expect = (string-length (make-string 10)) 10)
+  (expect = (string-length (make-string 1024)) 1024)
+
+  (expect string=? (make-string 3 #\a) "aaa")
+  (expect string=? (make-string 5 #\space) "     ")))
+
+(describe "string" (lambda ()
+  (expect string=? (string) "")
+  (expect string=? (string #\space) " ")
+  (expect string=? (string #\a #\b #\c) "abc")
+  (expect string=? (string #\a #\space #\c) "a c")))
+
 (describe "string-length" (lambda ()
   (expect = (string-length "foo") 3)
   (expect = (string-length "o") 1)
   (expect = (string-length "") 0)))
+
+(describe "string-ref" (lambda ()
+  (expect char=? (string-ref "abc" 0) #\a)
+  (expect char=? (string-ref "abc" 1) #\b)
+  (expect char=? (string-ref "abc" 2) #\c)
+  (expect char=? (string-ref " " 0) #\space)))
+
+(describe "string-set!" (lambda ()
+  (let ((s "foo"))
+    (string-set! s 0 #\b)
+    (expect string=? s "boo")
+    (string-set! s 2 #\space)
+    (expect string=? s "bo "))))
 
 (describe "string=?" (lambda ()
   (expect string=? "foo" "foo")
