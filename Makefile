@@ -6,8 +6,7 @@ warnflags = -Wcast-align -Wfloat-equal -Wpointer-arith -Wshadow -Wstrict-prototy
 CFLAGS = -std=gnu2x -Wall -Wextra $(warnflags) -I. $(OPTFLAGS) $(XCFLAGS)
 LIBS = -lm
 ANALYZER = -fanalyzer
-UBSAN = -fsanitize=undefined
-ASAN = -fsanitize=address
+SANITIZER = -fsanitize=undefined,address
 
 OBJ_COMMON = gc.o libscary.o parse.o schaf.o utils.o
 OBJ = $(OBJ_COMMON) main.o
@@ -18,19 +17,13 @@ schaf: $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
 clean:
-	rm -f schaf schaf-*san test/basic-test test/basic-test-*san *.o test/*.o
+	rm -f schaf schaf-san test/basic-test test/basic-test-san *.o test/*.o
 
 analyze: $(OBJ:.o=.analyzer)
-sanitize: ubsan
+sanitize: schaf-san test-san
 
-ubsan: schaf-ubsan test-ubsan
-asan: schaf-asan test-asan
-
-schaf-ubsan: $(OBJ:.o=.ubsan.o)
-	$(CC) $(CFLAGS) $(UBSAN) -o $@ $^ $(LIBS)
-
-schaf-asan: $(OBJ:.o=.asan.o)
-	$(CC) $(CFLAGS) $(ASAN) -o $@ $^ $(LIBS)
+schaf-san: $(OBJ:.o=.san.o)
+	$(CC) $(CFLAGS) $(SANITIZER) -o $@ $^ $(LIBS)
 
 microbench: schaf
 	@$(MAKE) -C $@
@@ -44,11 +37,8 @@ microbench: schaf
 %.analyzer: %.c
 	$(CC) $(CFLAGS) $(ANALYZER) -c $< -o /dev/null
 
-%.ubsan.o: %.c
-	$(CC) $(CFLAGS) $(UBSAN) -c $< -o $@
-
-%.asan.o: %.c
-	$(CC) $(CFLAGS) $(ASAN) -c $< -o $@
+%.san.o: %.c
+	$(CC) $(CFLAGS) $(SANITIZER) -c $< -o $@
 
 gc.o: intern.h schaf.h utils.h libscary.h
 gc.%.o: intern.h schaf.h utils.h libscary.h
@@ -63,53 +53,45 @@ schaf.%.o: intern.h schaf.h utils.h libscary.h
 utils.o: utils.h
 utils.%.o: utils.h
 
-.PHONY: all clean analyze ubsan asan microbench
+.PHONY: all clean analyze sanitize microbench
 
 #
 # Test
 #
 OBJ_TEST = $(OBJ_COMMON) test/basic-test.o
-TIMEOUT_SEC = 2
-TIMEOUT_SEC_LONGER = 40
+TIMEOUT_SEC = 20
+TIMEOUT_SEC_LONGER = 60
 RUNNER = timeout $(TIMEOUT_SEC)
 
 test: test-c test-scheme
-test-ubsan: test-c-ubsan test-scheme-ubsan
-test-asan: test-c-asan test-scheme-asan
-test-stress: test-scheme-stress test-scheme-stress-ubsan
-test-all: test test-ubsan test-stress
+test-san: test-c-san test-scheme-san
+test-stress: test-scheme-stress test-scheme-stress-san
+test-all: test test-san test-stress
 
-test-c-asan test-scheme-asan: RUNNER := ASAN_OPTIONS=detect_stack_use_after_return=0 $(RUNNER)
-test-scheme-stress test-scheme-stress-ubsan: TIMEOUT_SEC := $(TIMEOUT_SEC_LONGER)
+test-scheme-stress test-scheme-stress-san: TIMEOUT_SEC := $(TIMEOUT_SEC_LONGER)
+test-c-san test-scheme-san test-scheme-stress-san: RUNNER := ASAN_OPTIONS=detect_stack_use_after_return=0 $(RUNNER)
 
 test-c: test/basic-test
 	$(RUNNER) ./$<
-test-c-ubsan: test/basic-test-ubsan
-	$(RUNNER) ./$<
-test-c-asan: test/basic-test-asan
+test-c-san: test/basic-test-san
 	$(RUNNER) ./$<
 
 test-scheme: schaf
 	$(RUNNER) ./$< test/test.scm
-test-scheme-ubsan: schaf-ubsan
-	$(RUNNER) ./$< test/test.scm
-test-scheme-asan: schaf-asan
+test-scheme-san: schaf-san
 	$(RUNNER) ./$< test/test.scm
 test-scheme-stress: schaf
 	$(RUNNER) ./$< -S test/test.scm
-test-scheme-stress-ubsan: schaf-ubsan
+test-scheme-stress-san: schaf-san
 	$(RUNNER) ./$< -S test/test.scm
 
 test/basic-test: $(OBJ_TEST)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) -lcriterion
-test/basic-test-ubsan: $(OBJ_TEST:.o=.ubsan.o)
-	$(CC) $(CFLAGS) $(UBSAN) -o $@ $^ $(LIBS) -lcriterion
-test/basic-test-asan: $(OBJ_TEST:.o=.asan.o)
-	$(CC) $(CFLAGS) $(ASAN) -o $@ $^ $(LIBS) -lcriterion
+test/basic-test-san: $(OBJ_TEST:.o=.san.o)
+	$(CC) $(CFLAGS) $(SANITIZER) -o $@ $^ $(LIBS) -lcriterion
 
 test/basic-test.o: schaf.h utils.h
 test/basic-test.%.o: schaf.h utils.h
 
-.PHONY: test test-all test-ubsan test-c test-c-ubsan test-scheme test-scheme-ubsan \
-	test-asan test-c-asan test-scheme-asan \
-	test-scheme-stress test-scheme-stress-ubsan
+.PHONY: test test-all test-san test-c test-c-san test-scheme test-scheme-san \
+	test-scheme-stress test-scheme-stress-san

@@ -33,30 +33,30 @@ jobs:
     - name: Warnings to Errors
       run: echo XCFLAGS=-Werror >> "$GITHUB_ENV"
     - name: Make binaries
-      run: make -j4 schaf{,-ubsan} test/basic-test{,-ubsan}
+      run: make -j4 schaf{,-san} test/basic-test{,-san}
     - name: Test
       run: make test
-    - name: Test with Undefined Behavior Sanitizer
+    - name: Test with Sanitizers
       run: make sanitize
     - name: Test with stress
       run: make test-stress
     - name: Test optimized
       run: make clean && make -j4 test OPTFLAGS='-O3 -flto=auto'
-    - name: Test optimized with Undefined Behavior Sanitizer
+    - name: Test optimized with Sanitizers
       run: make -j4 sanitize OPTFLAGS='-O3 -flto=auto'
     - name: Test optimized with stress
       run: make test-stress OPTFLAGS='-O3 -flto=auto'
     - name: Clang - Make binaries
-      run: make clean && make -j4 schaf{,-ubsan} test/basic-test{,-ubsan} CC=clang
+      run: make clean && make -j4 schaf{,-san} test/basic-test{,-san} CC=clang
     - name: Clang - Test
       run: make test CC=clang
-    - name: Clang - Test with Undefined Behavior Sanitizer
+    - name: Clang - Test with Sanitizers
       run: make sanitize CC=clang
     - name: Clang - Test with stress
       run: make test-stress CC=clang
     - name: Clang - Test optimized
       run: make clean && make -j4 test CC=clang OPTFLAGS='-O3 -flto=auto'
-    - name: Clang - Test optimized with Undefined Behavior Sanitizer
+    - name: Clang - Test optimized with Sanitizers
       run: make -j4 sanitize CC=clang OPTFLAGS='-O3 -flto=auto'
     - name: Clang - Test optimized with stress
       run: make test-stress CC=clang OPTFLAGS='-O3 -flto=auto'
