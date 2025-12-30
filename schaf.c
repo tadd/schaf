@@ -2310,7 +2310,7 @@ static Value continuation_new(int64_t n)
     return (Value) c;
 }
 
-[[gnu::noinline]]
+[[gnu::noinline, gnu::no_sanitize_address]]
 static bool continuation_set(Value c)
 {
     GET_SP(sp); // must be the first!
