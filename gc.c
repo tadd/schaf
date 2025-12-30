@@ -330,9 +330,13 @@ static void free_val(Value v)
     case TAG_VECTOR:
         scary_free(VECTOR(v));
         break;
-    case TAG_ERROR:
-        scary_free(ERROR(v));
+    case TAG_ERROR: {
+        StackFrame **e = ERROR(v);
+        for (size_t i = 0, len = scary_length(e); i < len; i++)
+            free(e[i]);
+        scary_free(e);
         break;
+    }
     case TAG_CFUNC:
     case TAG_SYNTAX:
     case TAG_CFUNC_CLOSURE:
