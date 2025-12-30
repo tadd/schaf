@@ -11,9 +11,15 @@ SANITIZER = -fsanitize=undefined #,address
 OBJ_COMMON = gc.o libscary.o parse.o schaf.o utils.o
 OBJ = $(OBJ_COMMON) main.o
 
-all: schaf
+all: $(SCHAF)
 
-schaf: $(OBJ)
+schaf-opt %.opt.o: OPTFLAGS = -O3 -flto=auto
+schaf-opt %.opt.o: SCHAF = schaf-opt
+
+schaf-opt: $(OBJ:.o=.opt.o)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
+
+$(SCHAF):
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
 clean:
@@ -25,7 +31,7 @@ sanitize: schaf-san test-san
 schaf-san: $(OBJ:.o=.san.o)
 	$(CC) $(CFLAGS) $(SANITIZER) -o $@ $^ $(LIBS)
 
-microbench: schaf
+microbench: $(SCHAF)
 	@$(MAKE) -C $@
 
 %.o: %.c
@@ -36,6 +42,9 @@ microbench: schaf
 
 %.s: %.c # for diff
 	$(CC) -S -fno-asynchronous-unwind-tables $(CFLAGS) -c $<
+
+%.opt.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
 %.analyzer: %.c
 	$(CC) $(CFLAGS) $(ANALYZER) -c $< -o /dev/null
@@ -79,11 +88,11 @@ test-c: test/basic-test
 test-c-san: test/basic-test-san
 	$(RUNNER) ./$<
 
-test-scheme: schaf
+test-scheme: $(SCHAF)
 	$(RUNNER) ./$< test/test.scm
 test-scheme-san: schaf-san
 	$(RUNNER) ./$< test/test.scm
-test-scheme-stress: schaf
+test-scheme-stress: $(SCHAF)
 	$(RUNNER) ./$< -S test/test.scm
 test-scheme-stress-san: schaf-san
 	$(RUNNER) ./$< -S test/test.scm
