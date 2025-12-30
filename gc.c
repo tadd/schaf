@@ -431,12 +431,6 @@ static void mark_stack(void)
 {
     GET_SP(sp);
     const uintptr_t *beg = stack_base, *end = sp;
-#ifdef __SANITIZE_ADDRESS__
-    if (end > beg) {
-        beg = sp;
-        end = stack_base;
-    }
-#endif
     mark_array(end, beg - end);
 }
 

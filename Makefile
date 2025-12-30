@@ -8,8 +8,6 @@ LIBS = -lm
 ANALYZER = -fanalyzer
 UBSAN = -fsanitize=undefined
 ASAN = -fsanitize=address
-TIMEOUT = timeout 2
-TIMEOUT_LONGER = timeout 40
 
 OBJ_COMMON = gc.o libscary.o parse.o schaf.o utils.o
 OBJ = $(OBJ_COMMON) main.o
@@ -23,6 +21,7 @@ clean:
 	rm -f schaf schaf-*san test/basic-test test/basic-test-*san *.o test/*.o
 
 analyze: $(OBJ:.o=.analyzer)
+sanitize: ubsan
 
 ubsan: schaf-ubsan test-ubsan
 asan: schaf-asan test-asan
@@ -70,6 +69,9 @@ utils.%.o: utils.h
 # Test
 #
 OBJ_TEST = $(OBJ_COMMON) test/basic-test.o
+TIMEOUT_SEC = 2
+TIMEOUT_SEC_LONGER = 40
+RUNNER = timeout $(TIMEOUT_SEC)
 
 test: test-c test-scheme
 test-ubsan: test-c-ubsan test-scheme-ubsan
@@ -77,23 +79,26 @@ test-asan: test-c-asan test-scheme-asan
 test-stress: test-scheme-stress test-scheme-stress-ubsan
 test-all: test test-ubsan test-stress
 
+test-c-asan test-scheme-asan: RUNNER := ASAN_OPTIONS=detect_stack_use_after_return=0 $(RUNNER)
+test-scheme-stress test-scheme-stress-ubsan: TIMEOUT_SEC := $(TIMEOUT_SEC_LONGER)
+
 test-c: test/basic-test
-	$(TIMEOUT) ./$<
+	$(RUNNER) ./$<
 test-c-ubsan: test/basic-test-ubsan
-	$(TIMEOUT) ./$<
+	$(RUNNER) ./$<
 test-c-asan: test/basic-test-asan
-	$(TIMEOUT) ./$<
+	$(RUNNER) ./$<
 
 test-scheme: schaf
-	$(TIMEOUT) ./$< test/test.scm
+	$(RUNNER) ./$< test/test.scm
 test-scheme-ubsan: schaf-ubsan
-	$(TIMEOUT) ./$< test/test.scm
+	$(RUNNER) ./$< test/test.scm
 test-scheme-asan: schaf-asan
-	$(TIMEOUT) ./$< test/test.scm
+	$(RUNNER) ./$< test/test.scm
 test-scheme-stress: schaf
-	$(TIMEOUT_LONGER) ./$< -S test/test.scm
+	$(RUNNER) ./$< -S test/test.scm
 test-scheme-stress-ubsan: schaf-ubsan
-	$(TIMEOUT_LONGER) ./$< -S test/test.scm
+	$(RUNNER) ./$< -S test/test.scm
 
 test/basic-test: $(OBJ_TEST)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) -lcriterion
