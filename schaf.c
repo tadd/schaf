@@ -2290,7 +2290,7 @@ static Value apply_continuation(UNUSED Value env, Value f, Value args)
     EXPECT(arity, PROCEDURE(f)->arity, args);
     Continuation *cont = CONTINUATION(f);
     cont->retval = PROCEDURE(f)->arity == 1 ? car(args) : args;
-    int64_t d = (uintptr_t *) sp - (uintptr_t *) cont->sp;
+    size_t d = iceil(ptrdiff_abs(sp, cont->sp), sizeof(uintptr_t));
     if (d < 1)
         d = 1;
     volatile uintptr_t pad[d];

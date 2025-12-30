@@ -133,7 +133,7 @@ static void ms_add_root(const Value *r)
     scary_push((void ***) &heap->roots, (const void *) r);
 }
 
-static bool in_heap_range(uintptr_t v)
+static bool in_heap_range(Value v)
 {
     MSHeap *heap = gc_data;
     const uint8_t *p = (uint8_t *) v;
@@ -430,12 +430,11 @@ static void mark_roots(Value **roots)
 static void mark_stack(void)
 {
     GET_SP(sp);
-    uintptr_t *beg = (uintptr_t *) stack_base, *end = (uintptr_t *) sp;
+    const uintptr_t *beg = stack_base, *end = sp;
 #ifdef __SANITIZE_ADDRESS__
     if (end > beg) {
-        uintptr_t *tmp = beg;
-        beg = end;
-        end = tmp;
+        beg = sp;
+        end = stack_base;
     }
 #endif
     mark_array(end, beg - end);
@@ -539,7 +538,7 @@ static const GCFunctions GC_FUNCS_DEFAULT = GC_FUNCS_MARK_SWEEP;
 static uintptr_t bitmap_index(const void *p)
 {
     MSHeap *heap = gc_data;
-    return ((uint8_t *) p - (uint8_t *) heap->low) / PTR_ALIGN;
+    return ptrdiff_abs(p, heap->low) / PTR_ALIGN;
 }
 
 static void bmp_init_bitmap(void)
@@ -795,5 +794,5 @@ void *gc_malloc(size_t size)
 
 size_t gc_stack_get_size(const void *sp)
 {
-    return (uint8_t *) stack_base - (uint8_t *) sp;
+    return ptrdiff_abs(stack_base, sp);
 }

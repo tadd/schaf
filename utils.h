@@ -50,6 +50,7 @@
 
 size_t idivceil(size_t n, size_t aligned);
 size_t iceil(size_t n, size_t aligned);
+size_t ptrdiff_abs(const void *p, const void *q);
 [[noreturn, gnu::format(printf, 1, 2)]]
 void error(const char *fmt, ...);
 ATTR_XMALLOC void *xmalloc(size_t size);

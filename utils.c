@@ -20,6 +20,12 @@ size_t iceil(size_t n, size_t aligned)
     return idivceil(n, aligned) * aligned;
 }
 
+size_t ptrdiff_abs(const void *p, const void *q)
+{
+    const uint8_t *x = p, *y = q;
+    return (x > y) ? x - y : y - x;
+}
+
 void error(const char *fmt, ...)
 {
     va_list ap;
