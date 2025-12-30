@@ -69,7 +69,7 @@ test-stress: test-scheme-stress test-scheme-stress-san
 test-all: test test-san test-stress
 
 test-scheme-stress test-scheme-stress-san: TIMEOUT_SEC := $(TIMEOUT_SEC_LONGER)
-test-c-san test-scheme-san test-scheme-stress-san: RUNNER := ASAN_OPTIONS=detect_stack_use_after_return=0 $(RUNNER)
+test-c-san test-scheme-san test-scheme-stress-san: export ASAN_OPTIONS = detect_stack_use_after_return=0
 
 test-c: test/basic-test
 	$(RUNNER) ./$<
