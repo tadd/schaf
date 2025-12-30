@@ -49,7 +49,7 @@ static size_t init_size = 1 * MiB;
 
 static const void *stack_base;
 
-static bool stress, print_stat, initialized;
+static bool stress, print_stat, initialized, enabled = true;
 
 //
 // Algorithm: Mark-and-sweep
@@ -459,6 +459,8 @@ static void mark(MSHeap *heap)
 
 static void ms_gc(MSHeap *heap)
 {
+    if (!enabled)
+        return;
     static bool in_gc = false;
     if (UNLIKELY(in_gc))
         bug("nested GC detected");
@@ -562,6 +564,8 @@ static void bmp_init_bitmap(void)
 
 static void bmp_gc(MSHeap *heap)
 {
+    if (!enabled)
+        return;
     bmp_init_bitmap();
     ms_gc(heap);
 }
@@ -795,6 +799,11 @@ void sch_set_gc_algorithm(SchGCAlgorithm s)
         funcs = GC_FUNCS_MARK_SWEEP_BITMAP;
         break;
     }
+}
+
+void sch_set_gc_enabled(bool b)
+{
+    enabled = b;
 }
 
 void gc_init(const void *sp)
