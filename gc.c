@@ -426,16 +426,30 @@ static void mark_roots(Value **roots)
         mark_val(*roots[i]);
 }
 
+#ifdef __SANITIZE_ADDRESS__
+static void *current_fake_stack = (void *) 1;
+
+static const void *fake_ptr_to_real_ptr(const void *p)
+{
+    if (current_fake_stack == (void *) 1)
+        current_fake_stack = __asan_get_current_fake_stack();
+    if (current_fake_stack == NULL)
+        return p; // as is
+    const void *q = __asan_addr_is_in_fake_stack(current_fake_stack, (void *) p, NULL, NULL);
+    if (q == NULL)
+        return p;
+    return q;
+}
+#endif
+
 [[gnu::noinline]]
 static void mark_stack(void)
 {
     GET_SP(sp);
     const uintptr_t *beg = stack_base, *end = sp;
 #ifdef __SANITIZE_ADDRESS__
-    if (end > beg) {
-        beg = sp;
-        end = stack_base;
-    }
+    beg = fake_ptr_to_real_ptr(beg);
+    end = fake_ptr_to_real_ptr(end);
 #endif
     mark_array(end, beg - end);
 }
