@@ -6,6 +6,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#if !defined(__SANITIZE_ADDRESS__) && defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define __SANITIZE_ADDRESS__ 1
+#endif
+#endif
+
 #ifdef __SANITIZE_ADDRESS__
 #include <sanitizer/asan_interface.h>
 #else

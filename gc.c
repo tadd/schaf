@@ -430,7 +430,15 @@ static void mark_roots(Value **roots)
 static void mark_stack(void)
 {
     GET_SP(sp);
-    mark_array(sp, (uintptr_t *) stack_base - (uintptr_t *) sp);
+    uintptr_t *beg = (uintptr_t *) stack_base, *end = (uintptr_t *) sp;
+#ifdef __SANITIZE_ADDRESS__
+    if (end > beg) {
+        uintptr_t *tmp = beg;
+        beg = end;
+        end = tmp;
+    }
+#endif
+    mark_array(end, beg - end);
 }
 
 static void mark(MSHeap *heap)
