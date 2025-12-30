@@ -30,8 +30,10 @@ jobs:
         brew install criterion coreutils
         echo CPATH="/opt/homebrew/include:$CPATH" >> "$GITHUB_ENV"
         echo LIBRARY_PATH="/opt/homebrew/lib:$LIBRARY_PATH" >> "$GITHUB_ENV"
-    - name: Warnings to Errors
-      run: echo XCFLAGS=-Werror >> "$GITHUB_ENV"
+    - name: Setup environmental variables
+      run: |
+        echo OPTFLAGS='-Og -ggdb3 -DDEBUG' >> "$GITHUB_ENV"
+        echo XCFLAGS=-Werror >> "$GITHUB_ENV"
     - name: Make binaries
       run: make -j4 schaf{,-san} test/basic-test{,-san}
     - name: Test
