@@ -59,8 +59,8 @@ utils.%.o: utils.h
 # Test
 #
 OBJ_TEST = $(OBJ_COMMON) test/basic-test.o
-TIMEOUT_SEC = 20
-TIMEOUT_SEC_LONGER = 60
+TIMEOUT_SEC ?= 20
+TIMEOUT_SEC_LONGER ?= 60
 RUNNER = timeout $(TIMEOUT_SEC)
 
 test: test-c test-scheme
