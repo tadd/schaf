@@ -14,8 +14,14 @@ OBJ = $(OBJ_COMMON) main.o
 
 all: schaf
 
-schaf: $(OBJ)
+schaf schaf-ubsan schaf-asan:
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
+
+schaf: $(OBJ)
+schaf-ubsan: CFLAGS := $(CFLAGS) $(UBSAN)
+schaf-ubsan: $(OBJ:.o=.ubsan.o)
+schaf-asan: CFLAGS := $(CFLAGS) $(ASAN)
+schaf-asan: $(OBJ:.o=.asan.o)
 
 clean:
 	rm -f schaf schaf-*san test/basic-test test/basic-test-*san *.o test/*.o
@@ -25,12 +31,6 @@ sanitize: ubsan
 
 ubsan: schaf-ubsan test-ubsan
 asan: schaf-asan test-asan
-
-schaf-ubsan: $(OBJ:.o=.ubsan.o)
-	$(CC) $(CFLAGS) $(UBSAN) -o $@ $^ $(LIBS)
-
-schaf-asan: $(OBJ:.o=.asan.o)
-	$(CC) $(CFLAGS) $(ASAN) -o $@ $^ $(LIBS)
 
 microbench: schaf
 	@$(MAKE) -C $@
@@ -45,10 +45,10 @@ microbench: schaf
 	$(CC) $(CFLAGS) $(ANALYZER) -c $< -o /dev/null
 
 %.ubsan.o: %.c
-	$(CC) $(CFLAGS) $(UBSAN) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 %.asan.o: %.c
-	$(CC) $(CFLAGS) $(ASAN) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 gc.o: intern.h schaf.h utils.h libscary.h
 gc.%.o: intern.h schaf.h utils.h libscary.h
@@ -83,29 +83,34 @@ test-c-asan test-scheme-asan: RUNNER := ASAN_OPTIONS=detect_stack_use_after_retu
 test-scheme-stress test-scheme-stress-ubsan: TIMEOUT_SEC := $(TIMEOUT_SEC_LONGER)
 
 test-c: test/basic-test
-	$(RUNNER) ./$<
 test-c-ubsan: test/basic-test-ubsan
-	$(RUNNER) ./$<
 test-c-asan: test/basic-test-asan
+
+test-c test-c-ubsan test-c-asan:
 	$(RUNNER) ./$<
 
 test-scheme: schaf
-	$(RUNNER) ./$< test/test.scm
 test-scheme-ubsan: schaf-ubsan
-	$(RUNNER) ./$< test/test.scm
 test-scheme-asan: schaf-asan
-	$(RUNNER) ./$< test/test.scm
+
 test-scheme-stress: schaf
-	$(RUNNER) ./$< -S test/test.scm
 test-scheme-stress-ubsan: schaf-ubsan
+
+test-scheme test-scheme-ubsan test-scheme-asan:
+	$(RUNNER) ./$< test/test.scm
+
+test-scheme-stress test-scheme-stress-ubsan:
 	$(RUNNER) ./$< -S test/test.scm
 
 test/basic-test: $(OBJ_TEST)
-	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) -lcriterion
+
+test/basic-test-ubsan: CFLAGS := $(CFLAGS) $(UBSAN)
 test/basic-test-ubsan: $(OBJ_TEST:.o=.ubsan.o)
-	$(CC) $(CFLAGS) $(UBSAN) -o $@ $^ $(LIBS) -lcriterion
+test/basic-test-asan: CFLAGS := $(CFLAGS) $(ASAN)
 test/basic-test-asan: $(OBJ_TEST:.o=.asan.o)
-	$(CC) $(CFLAGS) $(ASAN) -o $@ $^ $(LIBS) -lcriterion
+
+test/basic-test test/basic-test-ubsan test/basic-test-asan:
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) -lcriterion
 
 test/basic-test.o: schaf.h utils.h
 test/basic-test.%.o: schaf.h utils.h
