@@ -31,8 +31,11 @@ microbench: schaf
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-%.s: %.c
-	$(CC) -S -fverbose-asm $(CFLAGS) -c $<
+%.human.s: %.c
+	$(CC) -S -fverbose-asm $(CFLAGS) -c $< -o $@
+
+%.s: %.c # for diff
+	$(CC) -S -fno-asynchronous-unwind-tables $(CFLAGS) -c $<
 
 %.analyzer: %.c
 	$(CC) $(CFLAGS) $(ANALYZER) -c $< -o /dev/null
