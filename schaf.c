@@ -3352,6 +3352,17 @@ static Value proc_newline(UNUSED Value env, Value args)
     return Qfalse;
 }
 
+static Value proc_write_char(UNUSED Value env, Value args)
+{
+    EXPECT(arity_range, 1, 2, args);
+    Value ch = car(args);
+    EXPECT(type, TYPE_CHAR, ch);
+    Value port = arg_or_current_port(cdr(args), PORT_OUTPUT);
+    CHECK_ERROR(port);
+    fputc(CHAR(ch), PORT(port)->fp);
+    return Qnil;
+}
+
 // 6.6.4. System interface
 static Value proc_load(UNUSED Value env, Value path)
 {
@@ -3820,7 +3831,7 @@ void sch_init(const void *sp)
     //- write
     define_procedure(e, "display", proc_display, -1);
     define_procedure(e, "newline", proc_newline, -1);
-    //- write-char
+    define_procedure(e, "write-char", proc_write_char, -1);
     // 6.6.4. System interface
     define_procedure(e, "load", proc_load, 1);
 
