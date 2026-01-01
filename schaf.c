@@ -2185,6 +2185,14 @@ static Value proc_char_p(UNUSED Value env, Value ch)
     return BOOL_VAL(sch_value_is_character(ch));
 }
 
+static Value expect_c_char(Value v)
+{
+    EXPECT(type, TYPE_CHAR, v);
+    if (CHAR(v) != '\0')
+        return Qfalse;
+    return runtime_error("cannot use '\\0' as a character in strings currently");
+}
+
 #define CHAR_CMP(c1, c2, op) BOOL_VAL(CHAR(c1) op CHAR(c2))
 #define CHAR_CI_CMP(c1, c2, op) BOOL_VAL(tolower(CHAR(c1)) op tolower(CHAR(c2)))
 
@@ -2317,9 +2325,7 @@ static Value proc_make_string(UNUSED Value env, Value args)
     uint8_t pad = ' ';
     if (cdr(args) != Qnil) {
         Value ch = cadr(args);
-        EXPECT(type, TYPE_CHAR, ch);
-        if (ch == '\0')
-            return runtime_error("cannot use '\\0' as characters currently");
+        EXPECT(c_char, ch);
         pad = CHAR(ch);
     }
     char s[k + 1];
@@ -2334,7 +2340,7 @@ static Value proc_string(UNUSED Value env, Value args)
     char s[len + 1];
     for (Value p = args; p != Qnil; p = cdr(p), i++) {
         Value ch = car(p);
-        EXPECT(type, TYPE_CHAR, ch);
+        EXPECT(c_char, ch);
         s[i] = CHAR(ch);
     }
     s[len] = '\0';
@@ -2370,7 +2376,7 @@ static Value proc_string_set(UNUSED Value env, Value vs, Value vk, Value ch)
 {
     EXPECT(string_with_valid_index, vs, vk);
     EXPECT(mutable, vs);
-    EXPECT(type, TYPE_CHAR, ch);
+    EXPECT(c_char, ch);
     char *s = STRING(vs);
     int64_t k = INT(vk);
     s[k] = CHAR(ch);
@@ -2488,7 +2494,7 @@ static Value proc_list_to_string(UNUSED Value env, Value l)
     char *s = scary_new(sizeof(char));
     for (Value p = l; p != Qnil; p = cdr(p)) {
         Value e = car(p);
-        EXPECT(type, TYPE_CHAR, e);
+        EXPECT(c_char, e);
         scary_push(&s, (char) CHAR(e));
     }
     scary_push(&s, (char) '\0');
@@ -2506,7 +2512,7 @@ static Value proc_string_copy(UNUSED Value env, Value str)
 static Value proc_string_fill(UNUSED Value env, Value str, Value ch)
 {
     EXPECT(type, TYPE_STRING, str);
-    EXPECT(type, TYPE_CHAR, ch);
+    EXPECT(c_char, ch);
     char *p = STRING(str);
     size_t len = strlen(p);
     memset(p, CHAR(ch), len);
