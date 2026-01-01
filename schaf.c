@@ -3125,6 +3125,33 @@ static Value proc_read(UNUSED Value env, Value args)
     return iread(PORT(port)->fp);
 }
 
+static Value port_getc(Value port, bool peek)
+{
+    FILE *fp = PORT(port)->fp;
+    int ch = fgetc(fp);
+    if (ch == EOF)
+        return get_eof_object();
+    if (peek)
+        ungetc(ch, fp);
+    return sch_character_new((uint8_t) ch);
+}
+
+static Value proc_read_char(UNUSED Value env, Value args)
+{
+    EXPECT(arity_range, 0, 1, args);
+    Value port = arg_or_current_port(args, PORT_INPUT);
+    CHECK_ERROR(port);
+    return port_getc(port, false);
+}
+
+static Value proc_peek_char(UNUSED Value env, Value args)
+{
+    EXPECT(arity_range, 0, 1, args);
+    Value port = arg_or_current_port(args, PORT_INPUT);
+    CHECK_ERROR(port);
+    return port_getc(port, true);
+}
+
 static Value proc_eof_object_p(UNUSED Value env, Value obj)
 {
     return BOOL_VAL(value_tag_is(obj, TAG_EOF));
@@ -3779,8 +3806,8 @@ void sch_init(const void *sp)
     define_procedure(e, "close-output-port", proc_close_output_port, 1);
     // 6.6.2. Input
     define_procedure(e, "read", proc_read, -1);
-    //- read-char
-    //- peek-char
+    define_procedure(e, "read-char", proc_read_char, -1);
+    define_procedure(e, "peek-char", proc_peek_char, -1);
     define_procedure(e, "eof-object?", proc_eof_object_p, 1);
     //- char-ready?
     // 6.6.3. Output
