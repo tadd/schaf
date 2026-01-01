@@ -20,9 +20,32 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v6
     - if: runner.os == 'Linux'
+      name: Update pacakge list and calc cache key
+      env:
+        PACKAGES: 'libcriterion-dev valgrind'
+      run: |
+        echo PACKAGES=$PACKAGES >> "$GITHUB_ENV"
+        sudo apt update
+        h=$(apt-cache policy $PACKAGES | sha256sum | cut -d ' ' -f 1)
+        echo CACHE_KEY=$h >> "$GITHUB_ENV"
+        mkdir -p apt-cache
+    - if: runner.os == 'Linux'
+      name: Cache deb files
+      uses: actions/cache@v5
+      with:
+        path: ./apt-cache
+        key: apt-${{ env.CACHE_KEY }}
+    - if: runner.os == 'Linux'
       name: Install native packages in Linux
       run: |
-        sudo apt install -U --no-install-recommends libcriterion-dev valgrind
+        if [[ ! -z `ls apt-cache` ]]; then
+          sudo cp -r ./apt-cache/* /var/cache/apt/
+          sudo chown -R root: /var/cache/apt/*
+          fi
+        sudo apt install -o Binary::apt::APT::Keep-Downloaded-Packages=true \
+        --no-install-recommends $PACKAGES
+        sudo cp -a /var/cache/apt/* ./apt-cache
+        sudo chown -R $USER: ./apt-cache
     - if: runner.os == 'macOS'
       name: Install native packages in macOS
       run: |
