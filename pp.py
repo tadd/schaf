@@ -64,8 +64,8 @@ class SchafPrinter:
         s = [f'{param(k)} = {format_value(self.val[k])}' for k in keys]
         return ', '.join(s)
 
-    def stringify(self):
-        s = cfuncall('sch_stringify', self.val).string()
+    def inspect(self):
+        s = cfuncall('sch_inspect', self.val).string()
         return expr(s)
 
 class ProcedurePrinter(SchafPrinter):
@@ -181,7 +181,7 @@ class ValuePrinter(SchafPrinter):
         if self.is_self_format:
             val = f'{{{self.format_as(ty)}}}'
         else:
-            val = self.stringify()
+            val = self.inspect()
         return f'{addr} {ty}: {val}'
 
 class PP (Command):
