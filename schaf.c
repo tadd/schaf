@@ -3579,9 +3579,17 @@ static void inspect_single(FILE *f, Value v)
         fprintf(f, "'");
         fdisplay_single(f, v);
         break;
-    case TYPE_CHAR:
+    case TYPE_CHAR: {
         fprintf(f, "#\\");
-        // fall through
+        int ch = CHAR(v);
+        if (ch == ' ')
+            fprintf(f, "space");
+        else if (ch == '\n')
+            fprintf(f, "newline");
+        else
+            fdisplay_single(f, v);
+        break;
+    }
     case TYPE_NULL:
     case TYPE_BOOL:
     case TYPE_INT:
