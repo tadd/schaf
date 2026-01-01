@@ -2385,6 +2385,11 @@ static Value proc_string_p(UNUSED Value env, Value obj)
     return BOOL_VAL(sch_value_is_string(obj));
 }
 
+#define EXPECT_C_CHAR(v) do { \
+        EXPECT_TYPE(character, v); \
+        EXPECT(CHAR(v) != '\0', "cannot use '\\0' as a character in strings currently"); \
+    } while (0)
+
 static Value proc_make_string(UNUSED Value env, Value args)
 {
     EXPECT_ARITY_RANGE(1, 2, args);
@@ -2392,9 +2397,7 @@ static Value proc_make_string(UNUSED Value env, Value args)
     uint8_t pad = ' ';
     if (cdr(args) != Qnil) {
         Value ch = cadr(args);
-        EXPECT_TYPE(character, ch);
-        if (ch == '\0')
-            return runtime_error("cannot use '\\0' as characters currently");
+        EXPECT_C_CHAR(ch);
         pad = CHAR(ch);
     }
     char s[k + 1];
@@ -2409,7 +2412,7 @@ static Value proc_string(UNUSED Value env, Value args)
     char s[len + 1];
     for (Value p = args; p != Qnil; p = cdr(p), i++) {
         Value ch = car(p);
-        EXPECT_TYPE(character, ch);
+        EXPECT_C_CHAR(ch);
         s[i] = CHAR(ch);
     }
     s[len] = '\0';
@@ -2445,6 +2448,7 @@ static Value proc_string_ref(UNUSED Value env, Value vs, Value vk)
 static Value proc_string_set(UNUSED Value env, Value vs, Value vk, Value ch)
 {
     EXPECT_MUTABLE(vs);
+    EXPECT_C_CHAR(ch);
     EXPECT_STRING_WITH_VALID_INDEX(vs, vk);
     char *s = STRING(vs);
     int64_t k = INT(vk);
@@ -2562,7 +2566,7 @@ static Value proc_list_to_string(UNUSED Value env, Value l)
     char *s = scary_new(sizeof(char));
     for (Value p = l; p != Qnil; p = cdr(p)) {
         Value e = car(p);
-        EXPECT_TYPE(character, e);
+        EXPECT_C_CHAR(e);
         scary_push(&s, (char) CHAR(e));
     }
     scary_push(&s, (char) '\0');
@@ -2580,7 +2584,7 @@ static Value proc_string_copy(UNUSED Value env, Value str)
 static Value proc_string_fill(UNUSED Value env, Value str, Value ch)
 {
     EXPECT_TYPE(string, str);
-    EXPECT_TYPE(character, ch);
+    EXPECT_C_CHAR(ch);
     char *p = STRING(str);
     size_t len = strlen(p);
     memset(p, CHAR(ch), len);
