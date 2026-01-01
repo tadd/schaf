@@ -1869,6 +1869,7 @@
 
 ;; 6.6.3. Output
 
+;; FIXME: real test
 (describe "display" (lambda ()
   (call-with-output-file "/dev/null"
     (lambda (p)
@@ -1913,12 +1914,22 @@
   (expect-no-stuck-on-display l)
   (expect-no-stuck-on-display v)))
 
+;; FIXME: real test
 (describe "newline" (lambda ()
   (call-with-output-file "/dev/null"
     (lambda (p)
       (display "\"a" p)
       (newline p)
       (display "b\"" p)))))
+
+;; FIXME: real test
+(describe "write-char" (lambda ()
+  (call-with-output-file "/dev/null"
+    (lambda (p)
+      (write-char #\( p)
+      (write-char #\a p)
+      (write-char #\) p)
+      (write-char #\newline p)))))
 
 ;; 6.6.4. System interface
 (describe "load" (lambda ()
