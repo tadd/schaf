@@ -481,27 +481,28 @@ static void *ms_malloc(size_t size)
     return p;
 }
 
+static void ms_stat_slot(HeapStat *stat, const MSHeapSlot *slot)
+{
+    stat->size += slot->size;
+    const MSHeader *h;
+    for (const uint8_t *p = slot->body, *endp = p + slot->size; p < endp; p += HSIZE(h->size)) {
+        h = MS_HEADER(p);
+        size_t j = h->size - 1;
+        if (j > TABMAX)
+            j = TABMAX;
+        if (h->used) {
+            stat->used += h->size;
+            stat->tab_used[j]++;
+        } else
+            stat->tab_free[j]++;
+    }
+}
+
 static void ms_stat(HeapStat *stat)
 {
     MSHeap *heap = gc_data;
-    memset(stat->tab_free, 0, sizeof(stat->tab_free));
-    memset(stat->tab_used, 0, sizeof(stat->tab_used));
-    for (size_t i = 0; i < heap->size; i++) {
-        MSHeapSlot *slot = heap->slot[i];
-        stat->size += slot->size;
-        MSHeader *h;
-        for (uint8_t *p = slot->body, *endp = p + slot->size; p < endp; p += h->size) {
-            h = MS_HEADER(p);
-            size_t j = h->size - 1;
-            if (j > TABMAX)
-                j = TABMAX;
-            if (h->used) {
-                stat->used += h->size;
-                stat->tab_used[j]++;
-            } else
-                stat->tab_free[j]++;
-        }
-    }
+    for (size_t i = 0; i < heap->size; i++)
+        ms_stat_slot(stat, heap->slot[i]);
 }
 
 #define free_slots(slot, size) do { \
@@ -660,8 +661,6 @@ static void eps_add_root(UNUSED const Value *p) {} // dummy
 static void eps_stat(HeapStat *stat)
 {
     EpsHeap *heap = gc_data;
-    memset(stat->tab_free, 0, sizeof(stat->tab_free));
-    memset(stat->tab_used, 0, sizeof(stat->tab_used));
     stat->size = stat->used = 0;
     for (size_t i = 0; i < heap->size; i++) {
         EpsHeapSlot *slot = heap->slot[i];
@@ -700,6 +699,7 @@ static void heap_print_stat_table(const char *header, size_t tab[])
 
 static void heap_stat(HeapStat *stat)
 {
+    memset(stat, 0, sizeof(HeapStat));
     funcs.stat(stat);
 }
 
