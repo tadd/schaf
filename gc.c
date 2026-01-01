@@ -29,7 +29,8 @@ enum {
 
 typedef struct {
     size_t size, used;
-    size_t tab_free[TABMAX+1], tab_used[TABMAX+1];
+    size_t tab_free[TABMAX], tab_used[TABMAX];
+    size_t *tab_free_larger, *tab_used_larger;
 } HeapStat;
 
 typedef struct {
@@ -488,8 +489,11 @@ static void ms_stat_slot(HeapStat *stat, const MSHeapSlot *slot)
     for (const uint8_t *p = slot->body, *endp = p + slot->size; p < endp; p += HSIZE(h->size)) {
         h = MS_HEADER(p);
         size_t j = h->size - 1;
-        if (j > TABMAX)
-            j = TABMAX;
+        if (j > TABMAX) {
+            size_t **tab = h->used ? &stat->tab_used_larger : &stat->tab_free_larger;
+            scary_push(tab, h->size);
+            continue;
+        }
         if (h->used) {
             stat->used += h->size;
             stat->tab_used[j]++;
@@ -686,21 +690,36 @@ void gc_add_root(const Value *r)
     funcs.add_root(r);
 }
 
-static void heap_print_stat_table(const char *header, size_t tab[])
+static void heap_print_stat_table(const char *subheader, size_t tab[], const size_t *large)
 {
-    debug("%s:", header);
+    debug("%s:", subheader);
     for (size_t i = 0; i < TABMAX; i++) {
         if (tab[i] > 0)
             fprintf(stderr, "    [%5zu] %zu\n", i+1, tab[i]);
     }
-    if (tab[TABMAX] > 0)
-        fprintf(stderr, "    [>%d] %zu\n", TABMAX, tab[TABMAX]);
+    size_t len = scary_length(large);
+    if (len == 0)
+        return;
+    fprintf(stderr, "    [>%d] %zu ", TABMAX, len);
+    fprintf(stderr, "'(%zu", large[0]);
+    for (size_t i = 1; i < len; i++) {
+        fprintf(stderr, " %zu", large[i]);
+    }
+    fprintf(stderr, ")\n");
 }
 
 static void heap_stat(HeapStat *stat)
 {
     memset(stat, 0, sizeof(HeapStat));
+    stat->tab_free_larger = scary_new(sizeof(size_t));
+    stat->tab_used_larger = scary_new(sizeof(size_t));
     funcs.stat(stat);
+}
+
+static void heap_stat_fin(HeapStat *stat)
+{
+    scary_free(stat->tab_free_larger);
+    scary_free(stat->tab_used_larger);
 }
 
 static void heap_print_stat(const char *header)
@@ -713,8 +732,9 @@ static void heap_print_stat(const char *header)
     long r = lround(((double) stat.used / stat.size) * 1000);
     debug("heap usage: %*zu / %*zu (%3ld.%1ld%%)",
           n, stat.used, n, stat.size, r/10, r%10);
-    heap_print_stat_table("used", stat.tab_used);
-    heap_print_stat_table("free", stat.tab_free);
+    heap_print_stat_table("used", stat.tab_used, stat.tab_used_larger);
+    heap_print_stat_table("free", stat.tab_free, stat.tab_free_larger);
+    heap_stat_fin(&stat);
     debug("");
 }
 
@@ -722,7 +742,9 @@ static size_t heap_size(void)
 {
     HeapStat stat;
     heap_stat(&stat);
-    return stat.size;
+    size_t size = stat.size;
+    heap_stat_fin(&stat);
+    return size;
 }
 
 static void error_out_of_memory(void)
