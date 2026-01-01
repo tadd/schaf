@@ -29,8 +29,8 @@ typedef enum {
     TYPE_UNDEF,
 // boxed (tagged)
     TYPE_PAIR,
-    TYPE_CHAR,
     TYPE_STRING,
+    TYPE_CHAR,
     TYPE_PROC,
     TYPE_VECTOR,
     TYPE_ENV,
@@ -41,8 +41,8 @@ typedef enum {
 
 typedef enum {
     TAG_PAIR,
-    TAG_CHAR,
     TAG_STRING,
+    TAG_CHAR,
     TAG_CFUNC,
     TAG_SYNTAX, // almost a C Function
     TAG_CLOSURE,
