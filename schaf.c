@@ -2472,6 +2472,31 @@ static Value proc_string_append(UNUSED Value env, Value args)
     return string_new_moved(s);
 }
 
+static Value proc_string_to_list(UNUSED Value env, Value str)
+{
+    EXPECT(type, TYPE_STRING, str);
+    const char *s = STRING(str);
+    Value l = DUMMY_PAIR(), last = l;
+    for (size_t i = 0, len = strlen(s); i < len; i++)
+        last = PAIR(last)->cdr = list1(sch_character_new(s[i]));
+    return cdr(l);
+}
+
+static Value proc_list_to_string(UNUSED Value env, Value l)
+{
+    EXPECT(list_head, l);
+    char *s = scary_new(sizeof(char));
+    for (Value p = l; p != Qnil; p = cdr(p)) {
+        Value e = car(p);
+        EXPECT(type, TYPE_CHAR, e);
+        scary_push(&s, (char) CHAR(e));
+    }
+    scary_push(&s, (char) '\0');
+    Value ret = sch_string_new((s));
+    scary_free(s);
+    return ret;
+}
+
 // 6.3.6. Vectors
 Value vector_new(void)
 {
@@ -3690,8 +3715,8 @@ void sch_init(const void *sp)
     define_procedure(e, "string-ci>=?", proc_string_ci_ge, 2);
     define_procedure(e, "substring", proc_substring, 3);
     define_procedure(e, "string-append", proc_string_append, -1);
-    //- string->list
-    //- list->string
+    define_procedure(e, "string->list", proc_string_to_list, 1);
+    define_procedure(e, "list->string", proc_list_to_string, 1);
     //- string-copy
     //- string-fill!
     // 6.3.6. Vectors

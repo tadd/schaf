@@ -1486,6 +1486,21 @@
   (expect equal? (string-append "(" "foo" ")") "(foo)")
   (expect equal? (string-append "(" "f" "" "o" "o" "" ")") "(foo)")))
 
+(describe "string->list" (lambda ()
+  (expect equal? (string->list "abc") '(#\a #\b #\c))
+  (expect equal? (string->list "") '())
+  (expect equal? (string->list "  ") '(#\space #\space))))
+
+(describe "list->string" (lambda ()
+  (expect equal? (list->string '(#\a #\b #\c)) "abc")
+  (expect equal? (list->string '()) "")
+  (expect equal? (list->string '(#\space #\space)) "  ")))
+
+(describe "string->list/list->string round-trip" (lambda ()
+  (expect string=? (list->string (string->list "abc")) "abc")
+  (expect string=? (list->string (string->list "")) "")
+  (expect string=? (list->string (string->list "  ")) "  ")))
+
 ;; 6.3.6. Vectors
 (describe "vector" (lambda ()
   (expect equal? #() (vector))
