@@ -138,7 +138,7 @@ static bool in_heap_range(Value v)
     const uint8_t *p = (uint8_t *) v;
     for (size_t i = 0; i < heap->size; i++) {
         const MSHeapSlot *slot = heap->slot[i];
-        if (p >= slot->body + MS_HEADER_OFFSET && p < slot->body + slot->size)
+        if (p > slot->body && p < slot->body + slot->size)
             return true;
     }
     return false;
@@ -149,9 +149,11 @@ static bool is_valid_pointer(Value v)
     return v % PTR_ALIGN == 0 && v > 0; // XXX
 }
 
-static bool is_valid_bool(const bool *b)
+static bool is_valid_flags(const MSHeader *h)
 {
-    uint8_t u = *(const uint8_t *) b;
+    uint8_t living = *(const uint8_t *) &h->living;
+    uint8_t used = *(const uint8_t *) &h->used;
+    uint8_t u = living | used;
     return u == true || u == false;
 }
 
@@ -162,7 +164,7 @@ static bool is_valid_header(Value v)
     if (VALUE_TAG(v) > TAG_LAST)
         return false;
     const MSHeader *h = MS_HEADER_FROM_VAL(v);
-    if (!is_valid_bool(&h->living) || !is_valid_bool(&h->used))
+    if (!is_valid_flags(h))
         return false;
     size_t size = h->size;
     return size > 0 && size % PTR_ALIGN == 0 &&
