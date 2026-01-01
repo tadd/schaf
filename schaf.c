@@ -2497,6 +2497,22 @@ static Value proc_list_to_string(UNUSED Value env, Value l)
     return ret;
 }
 
+static Value proc_string_copy(UNUSED Value env, Value str)
+{
+    EXPECT(type, TYPE_STRING, str);
+    return sch_string_new(STRING(str));
+}
+
+static Value proc_string_fill(UNUSED Value env, Value str, Value ch)
+{
+    EXPECT(type, TYPE_STRING, str);
+    EXPECT(type, TYPE_CHAR, ch);
+    char *p = STRING(str);
+    size_t len = strlen(p);
+    memset(p, CHAR(ch), len);
+    return Qfalse;
+}
+
 // 6.3.6. Vectors
 Value vector_new(void)
 {
@@ -3717,8 +3733,8 @@ void sch_init(const void *sp)
     define_procedure(e, "string-append", proc_string_append, -1);
     define_procedure(e, "string->list", proc_string_to_list, 1);
     define_procedure(e, "list->string", proc_list_to_string, 1);
-    //- string-copy
-    //- string-fill!
+    define_procedure(e, "string-copy", proc_string_copy, 1);
+    define_procedure(e, "string-fill!", proc_string_fill, 2);
     // 6.3.6. Vectors
     define_procedure(e, "vector?", proc_vector_p, 1);
     define_procedure(e, "make-vector", proc_make_vector, -1);

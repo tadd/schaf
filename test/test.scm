@@ -1501,6 +1501,23 @@
   (expect string=? (list->string (string->list "")) "")
   (expect string=? (list->string (string->list "  ")) "  ")))
 
+(describe "string-copy" (lambda ()
+  (let* ((s "foo")
+         (t (string-copy s)))
+    (expect string=? t s)
+    (string-set! t 0 #\b)
+    (expect char=? (string-ref t 0) #\b)
+    (expect char=? (string-ref s 0) #\f)
+    (noexpect string=? t s))))
+
+(describe "string-fill!" (lambda ()
+  (let ((empty "")
+        (foo "foo"))
+    (string-fill! empty #\a)
+    (expect string=? empty "")
+    (string-fill! foo #\a)
+    (expect string=? foo "aaa"))))
+
 ;; 6.3.6. Vectors
 (describe "vector" (lambda ()
   (expect equal? #() (vector))
