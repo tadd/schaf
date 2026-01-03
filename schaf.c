@@ -3064,32 +3064,8 @@ int sch_fin(void)
     return exit_status;
 }
 
-void sch_init(const void *sp)
+static void init_syntaxes(Value e)
 {
-    gc_init(sp);
-
-    gc_add_root(&eof_object);
-    gc_add_root(&current_input_port);
-    gc_add_root(&current_output_port);
-    gc_add_root(&inner_winders);
-    gc_add_root(&inner_continuation);
-
-    static char basedir[PATH_MAX];
-    load_basedir = getcwd(basedir, sizeof(basedir));
-    symbol_names = scary_new(sizeof(char *));
-#define DEF_SYMBOL(var, name) SYM_##var = sch_symbol_new(name)
-    DEF_SYMBOL(ELSE, "else");
-    DEF_SYMBOL(QUOTE, "quote");
-    DEF_SYMBOL(QUASIQUOTE, "quasiquote");
-    DEF_SYMBOL(UNQUOTE, "unquote");
-    DEF_SYMBOL(UNQUOTE_SPLICING, "unquote-splicing");
-    DEF_SYMBOL(RARROW, "=>");
-    source_data = scary_new(sizeof(Source *));
-
-    env_toplevel = env_new("default");
-    gc_add_root(&env_toplevel);
-    Value e = env_toplevel;
-
     // 4. Expressions
 
     // 4.1. Primitive expression types
@@ -3131,11 +3107,11 @@ void sch_init(const void *sp)
     define_syntax(e, "define", syn_define, -1);
     // 5.3. Syntax definitions
     //- define-syntax
-    env_null = env_dup("null", e);
-    gc_add_root(&env_null);
+}
 
-    // 6. Standard procedures
-
+// 6. Standard procedures
+static void init_procedures(Value e)
+{
     // 6.1. Equivalence predicates
     define_procedure(e, "eqv?", proc_eq, 2); // alias
     define_procedure(e, "eq?", proc_eq, 2);
@@ -3209,7 +3185,6 @@ void sch_init(const void *sp)
     define_procedure(e, "vector-length", proc_vector_length, 1);
     define_procedure(e, "vector-ref", proc_vector_ref, 2);
     define_procedure(e, "vector-set!", proc_vector_set, 3);
-
     // 6.4. Control features
     define_procedure(e, "procedure?", proc_procedure_p, 1);
     define_procedure(e, "apply", proc_apply, -1);
@@ -3249,11 +3224,11 @@ void sch_init(const void *sp)
     define_procedure(e, "newline", proc_newline, -1);
     // 6.6.4. System interface
     define_procedure(e, "load", proc_load, 1);
+}
 
-    env_r5rs = env_dup("r5rs", e);
-    gc_add_root(&env_r5rs);
-
-    // Extensions from R7RS
+// Extensions from R7RS
+static void init_extension_procedures_r7rs(Value e)
+{
     // (scheme base)
     define_procedure(e, "close-port", proc_close_port, 1);
     define_procedure(e, "read-string", proc_read_string, -1);
@@ -3263,14 +3238,59 @@ void sch_init(const void *sp)
     define_procedure(e, "exit", proc_exit, -1);
     // (scheme lazy)
     define_procedure(e, "promise?", proc_promise_p, 1);
+}
 
-    // Local Extensions
+// Local Extensions of Schaf
+static void init_extension_procedures_local(Value e)
+{
     define_syntax(e, "_defined?", syn_defined_p, 1);
     define_procedure(e, "_cputime", proc_cputime, 0);
     define_procedure(e, "p", proc_p, -1);
     define_procedure(e, "print", proc_print, -1); // like Gauche
     define_procedure(e, "schaf-environment", proc_schaf_environment, 0);
+}
 
+void sch_init(const void *sp)
+{
+    gc_init(sp);
+
+    gc_add_root(&eof_object);
+    gc_add_root(&current_input_port);
+    gc_add_root(&current_output_port);
+    gc_add_root(&inner_winders);
+    gc_add_root(&inner_continuation);
+
+    static char basedir[PATH_MAX];
+    load_basedir = getcwd(basedir, sizeof(basedir));
+    symbol_names = scary_new(sizeof(char *));
+#define DEF_SYMBOL(var, name) SYM_##var = sch_symbol_new(name)
+    DEF_SYMBOL(ELSE, "else");
+    DEF_SYMBOL(QUOTE, "quote");
+    DEF_SYMBOL(QUASIQUOTE, "quasiquote");
+    DEF_SYMBOL(UNQUOTE, "unquote");
+    DEF_SYMBOL(UNQUOTE_SPLICING, "unquote-splicing");
+    DEF_SYMBOL(RARROW, "=>");
+    source_data = scary_new(sizeof(Source *));
+
+    env_toplevel = env_new("default");
+    gc_add_root(&env_toplevel);
+
+    Value e = env_toplevel;
+
+    // 4. Expressions
+    // 5. Program structure
+    init_syntaxes(e);
+    env_null = env_dup("null", e);
+    gc_add_root(&env_null);
+
+    // 6. Standard procedures
+    init_procedures(e);
+    env_r5rs = env_dup("r5rs", e);
+    gc_add_root(&env_r5rs);
+
+    // Extensions
+    init_extension_procedures_r7rs(e);
+    init_extension_procedures_local(e);
     env_default = env_dup("default", e);
     gc_add_root(&env_default);
 }
