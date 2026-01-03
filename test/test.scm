@@ -1109,7 +1109,8 @@
 (describe "symbol->string" (lambda ()
   (expect string=? (symbol->string 'flying-fish) "flying-fish")
   (expect string=? (symbol->string 'Martin) "Martin")
-  ;; FIXME: test with string-set!
+  ;; FIXME: error test with string-set!
+  ;; (string-set! (symbol->string 'Martin) 0 "A")
   ))
 
 (describe "string->symbol" (lambda ()
