@@ -71,13 +71,23 @@ class SchafPrinter:
     def format_casted(self, ty):
         return format_value(self.val.cast(ty))
 
-    def format_members(self, *keys):
+    def format_fields(self, *keys):
         s = [f'{param(k)} = {format_value(self.val[k])}' for k in keys]
         return ', '.join(s)
 
     def stringify(self):
         s = cfuncall('sch_stringify', self.val).string()
         return expr(s)
+
+    def fields(self):
+        f = self.FIELDS
+        if super().fields:
+            f += super().fields()
+        return f
+
+    def to_string(self):
+        fields = self.fields() if self.fields else self.TYPE.fields()
+        return self.format_fields(*fields)
 
 class ProcedurePrinter(SchafPrinter):
     TYPE = lookup_type('Procedure')
@@ -86,7 +96,7 @@ class ProcedurePrinter(SchafPrinter):
         return [f.name for f in self.TYPE.fields() if f.name != 'proc']
 
     def to_string(self):
-        return self.format_members('arity', 'apply')
+        return self.format_fields('arity', 'apply')
 
 class CFuncPrinter(ProcedurePrinter):
     TYPE = lookup_type('CFunc')
@@ -107,7 +117,7 @@ class ClosurePrinter(ProcedurePrinter):
 
     def to_string(self):
         sup = self.format_casted(super().TYPE)
-        s = self.format_members(*self.child_fields())
+        s = self.format_fields(*self.child_fields())
         return f'{sup}, {s}'
 
 class ContinuationPrinter(ProcedurePrinter):
@@ -130,9 +140,6 @@ class CFuncClosurePrinter(CFuncPrinter):
 class TablePrinter(SchafPrinter):
     TYPE = lookup_type('Table')
 
-    def to_string(self):
-        return self.format_members(*self.TYPE.fields())
-
 class EnvPrinter(SchafPrinter):
     TYPE = lookup_type('Env')
 
@@ -140,14 +147,14 @@ class EnvPrinter(SchafPrinter):
         ty = TablePrinter.TYPE.pointer()
         tab = self.val['table'].cast(ty).dereference()
         s = f'{param("table")} = {tab}'
-        t = self.format_members('parent')
+        t = self.format_fields('parent')
         return f'{s}, {t}'
 
 class ErrorPrinter(SchafPrinter):
     TYPE = lookup_type('Error')
 
     def to_string(self):
-        return self.format_members('call_stack')
+        return self.format_fields('call_stack')
 
 class ValuePrinter(SchafPrinter):
     TYPE = lookup_type('SchValue')
