@@ -1316,7 +1316,7 @@
 (describe "open-output-file" (lambda ()
   (let ((p (open-output-file "/dev/null")))
     (expect output-port? p)
-    (close-input-port p))))
+    (close-output-port p))))
 
 (describe "close-input-port" (lambda ()
   (let ((p (open-input-file "/dev/null")))

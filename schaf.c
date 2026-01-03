@@ -2581,7 +2581,7 @@ static void close_port(Value v)
         return;
     fclose(p->fp);
     p->fp = NULL; // guarantee safety
-    if (p->string != (void *) 1U) // avoid mark
+    if (p->string != (void *) 1U) // avoid to free dummy in string port
         free(p->string);
     p->string = NULL;
 }
@@ -2591,6 +2591,38 @@ static Value proc_close_port(UNUSED Value env, Value port)
     EXPECT(type, TYPE_PORT, port);
     close_port(port);
     return Qfalse;
+}
+
+static const char *port_type_string(PortType type)
+{
+    return type == PORT_INPUT ? "input" : "output";
+}
+
+static Value expect_port_type(Value port, PortType expected)
+{
+    EXPECT(type, TYPE_PORT, port);
+    PortType actual = PORT(port)->type;
+    if (actual == expected)
+        return Qfalse;
+    return runtime_error("expected %s port but got %s port",
+                         port_type_string(expected), port_type_string(actual));
+}
+
+static Value close_typed_port(Value port, PortType type)
+{
+    EXPECT(port_type, port, type);
+    close_port(port);
+    return Qfalse;
+}
+
+static Value proc_close_input_port(UNUSED Value env, Value port)
+{
+    return close_typed_port(port, PORT_INPUT);
+}
+
+static Value proc_close_output_port(UNUSED Value env, Value port)
+{
+    return close_typed_port(port, PORT_OUTPUT);
 }
 
 // 6.6.2. Input
@@ -3185,8 +3217,8 @@ void sch_init(const void *sp)
     define_procedure(e, "with-output-to-file", proc_with_output_to_file, 2);
     define_procedure(e, "open-input-file", proc_open_input_file, 1);
     define_procedure(e, "open-output-file", proc_open_output_file, 1);
-    define_procedure(e, "close-output-port", proc_close_port, 1); // alias
-    define_procedure(e, "close-input-port", proc_close_port, 1);  // alias
+    define_procedure(e, "close-input-port", proc_close_input_port, 1);
+    define_procedure(e, "close-output-port", proc_close_output_port, 1);
     // 6.6.2. Input
     define_procedure(e, "read", proc_read, -1);
     define_procedure(e, "eof-object?", proc_eof_object_p, 1);
