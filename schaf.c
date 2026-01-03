@@ -2464,6 +2464,7 @@ static void close_port(Value port);
 static Value call_with_file(Value env, Value path, Value thunk, PortType type)
 {
     Value file = open_port(STRING(path), type);
+    CHECK_ERROR(file);
     Value ret = apply(env, thunk, list1(file));
     close_port(file);
     return ret;
@@ -2553,7 +2554,9 @@ static Value proc_open_output_file(UNUSED Value env, Value path)
 static Value with_file(Value env, Value path, Value thunk, Value *curr_port, PortType type)
 {
     Value orig = *curr_port;
-    *curr_port = open_port(STRING(path), type);
+    Value newer = open_port(STRING(path), type);
+    CHECK_ERROR(newer);
+    *curr_port = newer;
     Value ret = apply(env, thunk, Qnil);
     close_port(*curr_port);
     *curr_port = orig;
