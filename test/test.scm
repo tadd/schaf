@@ -1867,6 +1867,13 @@
       (expect equal? (read) '(1 2 "abc"))
       (expect equal? (read) '(3 4 "def"))))))
 
+(describe "char-ready?" (lambda ()
+  (call-with-input-file "/dev/null"
+    (lambda (p)
+      (expect char-ready? p)
+      (expect char-ready? p)
+      (expect char-ready? p)))))
+
 ;; 6.6.3. Output
 
 ;; FIXME: real test

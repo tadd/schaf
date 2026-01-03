@@ -13,6 +13,7 @@
 
 #include <libgen.h>
 #include <limits.h>
+#include <sys/select.h>
 #include <unistd.h>
 
 #include "intern.h"
@@ -3163,6 +3164,33 @@ static Value proc_eof_object_p(UNUSED Value env, Value obj)
     return BOOL_VAL(value_tag_is(obj, TAG_EOF));
 }
 
+static Value is_readable_fp(FILE *fp)
+{
+    int fd = fileno(fp);
+    fd_set fds;
+    FD_ZERO(&fds);
+    FD_SET(fd, &fds);
+    struct timeval t = { 0, 0 };
+    int ret = select(fd + 1, &fds, NULL, NULL, &t);
+    return BOOL_VAL(ret > 0);
+}
+
+static Value is_char_input_ready(Value vport)
+{
+    const Port *port = PORT(vport);
+    if (port->string != NULL) // string port
+        return Qtrue; // true always
+    return is_readable_fp(port->fp);
+}
+
+static Value proc_char_ready_p(UNUSED Value env, Value args)
+{
+    EXPECT(arity_range, 0, 1, args);
+    Value port = arg_or_current_port(args, PORT_INPUT);
+    CHECK_ERROR(port);
+    return is_char_input_ready(port);
+}
+
 // 6.6.3. Output
 static const char *file_to_name(const FILE *fp)
 {
@@ -3826,7 +3854,7 @@ void sch_init(const void *sp)
     define_procedure(e, "read-char", proc_read_char, -1);
     define_procedure(e, "peek-char", proc_peek_char, -1);
     define_procedure(e, "eof-object?", proc_eof_object_p, 1);
-    //- char-ready?
+    define_procedure(e, "char-ready?", proc_char_ready_p, -1);
     // 6.6.3. Output
     //- write
     define_procedure(e, "display", proc_display, -1);
