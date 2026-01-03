@@ -96,5 +96,9 @@ test/basic-test-san: $(OBJ_TEST:.o=.san.o)
 test/basic-test.o: schaf.h utils.h
 test/basic-test.%.o: schaf.h utils.h
 
+# Keep portability
+gauche-test: # Do not forget to make `local?` #f
+	gosh -Itest test.scm
+
 .PHONY: test test-all test-san test-c test-c-san test-scheme test-scheme-san \
-	test-scheme-stress test-scheme-stress-san
+	test-scheme-stress test-scheme-stress-san gauche-test

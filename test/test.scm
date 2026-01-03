@@ -1,4 +1,4 @@
-(load "./lib.scm")
+(load "lib.scm")
 
 (define r7rs? #t)             ;; tweak me when to use other pure-R5RS implementations
 (define local? (and r7rs? #t));; tweak me when to use any other implementations
@@ -1446,10 +1446,10 @@
 
 ;; 6.6.4. System interface
 (describe "load" (lambda ()
-  (load "./data/fact.txt")
+  (load "data/fact.txt")
   (expect = (fact 5) 120)))
 
-(load "./test-callcc.scm")
+(load "test-callcc.scm")
 
 ;;
 ;; R7RS
