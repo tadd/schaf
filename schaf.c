@@ -3403,6 +3403,82 @@ void sch_display(Value v)
     fdisplay(stdout, v);
 }
 
+static void inspect_string(FILE *f, const char *s)
+{
+    const char *p = s;
+    fprintf(f, "\"");
+    for (const char *pbs; (pbs = strchr(p, '\\')) != NULL; p = pbs + 1) {
+        fprintf(f, "%.*s", (int) (pbs - p), p);
+        fprintf(f, "%s", "\\\\"); // two slashes
+    }
+    fprintf(f, "%s\"", p);
+}
+
+static void inspect_character(FILE *f, uint8_t ch)
+{
+    fprintf(f, "#\\");
+    if (ch == ' ')
+        fprintf(f, "space");
+    else if (ch == '\n')
+        fprintf(f, "newline");
+    else
+        fprintf(f, "%c", ch);
+}
+
+static void inspect_single(FILE *f, Value v)
+{
+    switch (sch_value_type_of(v)) {
+    case TYPE_STRING:
+        inspect_string(f, STRING(v));
+        break;
+    case TYPE_SYMBOL:
+        fprintf(f, "'");
+        fdisplay_single(f, v);
+        break;
+    case TYPE_CHAR:
+        inspect_character(f, CHAR(v));
+        break;
+    case TYPE_NULL:
+    case TYPE_BOOL:
+    case TYPE_INT:
+    case TYPE_PROC:
+    case TYPE_UNDEF:
+    case TYPE_ENV:
+    case TYPE_PORT:
+    case TYPE_PROMISE:
+    case TYPE_EOF:
+        fdisplay_single(f, v);
+        break;
+    case TYPE_PAIR:
+    case TYPE_VECTOR:
+        bug("invalid type %s", sch_value_to_type_name(v));
+    }
+}
+
+static void inspect(FILE *f, Value v)
+{
+    print_object(f, v, Qnil, inspect_single);
+}
+
+char *sch_inspect(Value v)
+{
+    char *s;
+    FILE *fp = mopen_w(&s);
+    inspect(fp, v);
+    fclose(fp);
+    return s;
+}
+
+static Value proc_write(UNUSED Value env, Value args)
+{
+    EXPECT_ARITY_RANGE(1, 2, args);
+    Value obj = car(args);
+    Value out = arg_or_current_port(cdr(args), PORT_OUTPUT);
+    EXPECT_ERROR(out);
+    inspect(PORT(out)->fp, obj);
+    return Qfalse;
+}
+
 static Value proc_display(UNUSED Value env, Value args)
 {
     EXPECT_ARITY_RANGE(1, 2, args);
@@ -3554,72 +3630,6 @@ static Value proc_print(UNUSED Value env, Value l)
 static Value proc_schaf_environment(UNUSED Value env)
 {
     return env_dup(NULL, env_default);
-}
-
-static void inspect_string(FILE *f, const char *s)
-{
-    const char *p = s;
-    fprintf(f, "\"");
-    for (const char *pbs; (pbs = strchr(p, '\\')) != NULL; p = pbs + 1) {
-        fprintf(f, "%.*s", (int) (pbs - p), p);
-        fprintf(f, "%s", "\\\\"); // two slashes
-    }
-    fprintf(f, "%s\"", p);
-}
-
-static void inspect_character(FILE *f, uint8_t ch)
-{
-    fprintf(f, "#\\");
-    if (ch == ' ')
-        fprintf(f, "space");
-    else if (ch == '\n')
-        fprintf(f, "newline");
-    else
-        fprintf(f, "%c", ch);
-}
-
-static void inspect_single(FILE *f, Value v)
-{
-    switch (sch_value_type_of(v)) {
-    case TYPE_STRING:
-        inspect_string(f, STRING(v));
-        break;
-    case TYPE_SYMBOL:
-        fprintf(f, "'");
-        fdisplay_single(f, v);
-        break;
-    case TYPE_CHAR:
-        inspect_character(f, CHAR(v));
-        break;
-    case TYPE_NULL:
-    case TYPE_BOOL:
-    case TYPE_INT:
-    case TYPE_PROC:
-    case TYPE_UNDEF:
-    case TYPE_ENV:
-    case TYPE_PORT:
-    case TYPE_PROMISE:
-    case TYPE_EOF:
-        fdisplay_single(f, v);
-        break;
-    case TYPE_PAIR:
-    case TYPE_VECTOR:
-        bug("invalid type %s", sch_value_to_type_name(v));
-    }
-}
-
-static void inspect(FILE *f, Value v)
-{
-    print_object(f, v, Qnil, inspect_single);
-}
-
-char *sch_inspect(Value v)
-{
-    char *s;
-    FILE *fp = mopen_w(&s);
-    inspect(fp, v);
-    fclose(fp);
-    return s;
 }
 
 static Value proc_p(UNUSED Value env, Value args)
@@ -3899,7 +3909,7 @@ void sch_init(const void *sp)
     define_procedure(e, "eof-object?", proc_eof_object_p, 1);
     define_procedure(e, "char-ready?", proc_char_ready_p, -1);
     // 6.6.3. Output
-    //- write
+    define_procedure(e, "write", proc_write, -1);
     define_procedure(e, "display", proc_display, -1);
     define_procedure(e, "newline", proc_newline, -1);
     define_procedure(e, "write-char", proc_write_char, -1);
