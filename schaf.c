@@ -2601,7 +2601,7 @@ static const char *port_type_string(PortType type)
     return type == PORT_INPUT ? "input" : "output";
 }
 
-static Value expect_port_type(Value port, PortType expected)
+static Value expect_port(PortType expected, Value port)
 {
     EXPECT(type, TYPE_PORT, port);
     PortType actual = PORT(port)->type;
@@ -2613,7 +2613,7 @@ static Value expect_port_type(Value port, PortType expected)
 
 static Value close_typed_port(Value port, PortType type)
 {
-    EXPECT(port_type, port, type);
+    EXPECT(port, type, port);
     close_port(port);
     return Qfalse;
 }
@@ -2654,7 +2654,7 @@ static Value arg_or_current_port(Value arg, PortType type)
     if (arg == Qnil)
         return type == PORT_OUTPUT ? get_current_output_port() : get_current_input_port();
     Value p = car(arg);
-    EXPECT(type, TYPE_PORT, p);
+    EXPECT(port, type, p);
     return p;
 }
 
@@ -2905,7 +2905,7 @@ static Value proc_open_output_string(UNUSED Value env)
 
 static Value proc_get_output_string(UNUSED Value env, Value port)
 {
-    EXPECT(type, TYPE_PORT, port);
+    EXPECT(port, PORT_OUTPUT, port);
     Port *p = PORT(port);
     if (p->string == NULL)
         return runtime_error("not a string port");
