@@ -1933,6 +1933,14 @@
       (write-char #\) p)
       (write-char #\newline p)))))
 
+;; FIXME: real test
+(describe "write" (lambda ()
+  (call-with-output-file "/dev/null"
+    (lambda (p)
+      (write #\( p)
+      (write "a\\b" p)
+      (write 42 p)))))
+
 ;; 6.6.4. System interface
 (describe "load" (lambda ()
   (load "data/fact.txt")
