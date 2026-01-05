@@ -3567,29 +3567,41 @@ static Value proc_schaf_environment(UNUSED Value env)
     return env_dup(NULL, env_default);
 }
 
+static void inspect_string(FILE *f, const char *s)
+{
+    const char *p = s;
+    fprintf(f, "\"");
+    for (const char *pbs; (pbs = strchr(p, '\\')) != NULL; p = pbs + 1) {
+        fprintf(f, "%.*s", (int) (pbs - p), p);
+        fprintf(f, "%s", "\\\\"); // two slashes
+    }
+    fprintf(f, "%s\"", p);
+}
+
+static void inspect_character(FILE *f, uint8_t ch)
+{
+    fprintf(f, "#\\");
+    if (ch == ' ')
+        fprintf(f, "space");
+    else if (ch == '\n')
+        fprintf(f, "newline");
+    else
+        fprintf(f, "%c", ch);
+}
+
 static void inspect_single(FILE *f, Value v)
 {
     switch (sch_value_type_of(v)) {
     case TYPE_STRING:
-        fprintf(f, "\"");
-        fdisplay_single(f, v);
-        fprintf(f, "\"");
+        inspect_string(f, STRING(v));
         break;
     case TYPE_SYMBOL:
         fprintf(f, "'");
         fdisplay_single(f, v);
         break;
-    case TYPE_CHAR: {
-        fprintf(f, "#\\");
-        int ch = CHAR(v);
-        if (ch == ' ')
-            fprintf(f, "space");
-        else if (ch == '\n')
-            fprintf(f, "newline");
-        else
-            fdisplay_single(f, v);
+    case TYPE_CHAR:
+        inspect_character(f, CHAR(v));
         break;
-    }
     case TYPE_NULL:
     case TYPE_BOOL:
     case TYPE_INT:
