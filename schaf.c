@@ -2884,7 +2884,7 @@ static Value proc_read_string(UNUSED Value env, Value args)
 {
     EXPECT(arity_range, 1, 2, args);
     size_t k = get_non_negative_int(car(args));
-    Value port = arg_or_current_port(cdr(args), false);
+    Value port = arg_or_current_port(cdr(args), PORT_INPUT);
     CHECK_ERROR(port);
     return read_string(k, PORT(port)->fp);
 }
