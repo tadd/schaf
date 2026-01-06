@@ -460,7 +460,7 @@ static void mark(MSHeap *heap)
 static void ms_gc(MSHeap *heap)
 {
     static bool in_gc = false;
-    if (UNLIKELY(in_gc))
+    if (in_gc)
         bug("nested GC detected");
     in_gc = true;
     if (print_stat)
@@ -486,7 +486,7 @@ static void *ms_malloc(size_t size)
         ms_add_slot(heap);
         p = ms_allocate(heap, size);
     }
-    if (UNLIKELY(p == NULL))
+    if (p == NULL)
         error_out_of_memory();
     return p;
 }
@@ -580,7 +580,7 @@ static void *bmp_malloc(size_t size)
         ms_add_slot(heap);
         p = ms_allocate(heap, size);
     }
-    if (UNLIKELY(p == NULL))
+    if (p == NULL)
         error_out_of_memory();
     return p;
 }
@@ -664,7 +664,7 @@ static void *eps_malloc(size_t size)
         eps_add_slot(heap);
         p = eps_allocate(heap, size);
     }
-    if (UNLIKELY(p == NULL))
+    if (p == NULL)
         error_out_of_memory();
     return p;
 }

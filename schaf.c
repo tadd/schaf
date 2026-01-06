@@ -246,7 +246,7 @@ inline Symbol sch_symbol_to_csymbol(Value v)
 static const char *unintern(Symbol sym)
 {
     size_t len = scary_length(symbol_names);
-    if (UNLIKELY(sym >= len)) // fatal; every known symbols should have a name
+    if (sym >= len) // fatal; every known symbols should have a name
         bug("symbol %lu not found", sym);
     return symbol_names[sym];
 }
@@ -323,14 +323,14 @@ Value sch_string_new(const char *str)
 
 static void expect_cfunc_tag(ValueTag tag)
 {
-    if (LIKELY(tag == TAG_CFUNC || tag == TAG_SYNTAX))
+    if (tag == TAG_CFUNC || tag == TAG_SYNTAX)
         return;
     bug_invalid_tag(tag);
 }
 
 static void expect_cfunc_arity(int64_t actual)
 {
-    if (LIKELY(actual <= CFUNCARG_MAX))
+    if (actual <= CFUNCARG_MAX)
         return;
     bug("arity too large: expected ..%"PRId64" but got %"PRId64,
         CFUNCARG_MAX, actual);
@@ -339,12 +339,12 @@ static void expect_cfunc_arity(int64_t actual)
 // generic macros to handle errors and early-returns
 #define CHECK_ERROR(v) do { \
         Value V = (v); \
-        if (UNLIKELY(is_error(V))) \
+        if (is_error(V)) \
             return V; \
     } while (0)
 #define CHECK_ERROR_LOCATED(v, l) do { \
         Value V = (v); \
-        if (UNLIKELY(is_error(V))) { \
+        if (is_error(V)) { \
             if (scary_length(ERROR(V)) == 0) \
                 push_stack_frame(V, NULL, (l)); \
             return V; \
@@ -514,7 +514,7 @@ const char *sch_error_message(void)
 static Value expect_type(Type expected, Value v)
 {
     Type t = sch_value_type_of(v);
-    if (LIKELY(t == expected))
+    if (t == expected)
         return Qfalse;
     return runtime_error("expected %s but got %s",
                          value_type_to_string(expected), value_type_to_string(t));
@@ -523,7 +523,7 @@ static Value expect_type(Type expected, Value v)
 static Value expect_type_twin(Type expected, Value x, Value y)
 {
     Value v = expect_type(expected, x);
-    if (UNLIKELY(is_error(v)))
+    if (is_error(v))
         return v;
     return expect_type(expected, y);
 }
@@ -531,7 +531,7 @@ static Value expect_type_twin(Type expected, Value x, Value y)
 static Value expect_type_or(Type e1, Type e2, Value v)
 {
     Type t = sch_value_type_of(v);
-    if (LIKELY(t == e1 || t == e2))
+    if (t == e1 || t == e2)
         return Qfalse;
     return runtime_error("expected %s or %s but got %s",
                          value_type_to_string(e1), value_type_to_string(e2),
@@ -557,7 +557,7 @@ static Value arity_error(const char *op, int64_t expected, int64_t actual)
 
 static Value expect_arity_range(int64_t min, int64_t max, Value args)
 {
-    if (LIKELY(length_in_range(args, min, max)))
+    if (length_in_range(args, min, max))
         return Qfalse;
     return runtime_error("wrong number of arguments: expected %"PRId64"..%"PRId64
                          " but got %"PRId64, min, max, length(args));
@@ -565,49 +565,49 @@ static Value expect_arity_range(int64_t min, int64_t max, Value args)
 
 static Value expect_arity(int64_t expected, Value args)
 {
-    if (LIKELY(expected < 0 || length_in_range(args, expected, expected)))
+    if (expected < 0 || length_in_range(args, expected, expected))
         return Qfalse;
     return arity_error("", expected, length(args));
 }
 
 static Value expect_arity_min_1(Value args)
 {
-    if (LIKELY(args != Qnil))
+    if (args != Qnil)
         return Qfalse;
     return arity_error(">= ", 1, 0);
 }
 
 static Value expect_arity_min_2(Value args)
 {
-    if (LIKELY(args != Qnil && cdr(args) != Qnil))
+    if (args != Qnil && cdr(args) != Qnil)
         return Qfalse;
     return arity_error(">= ", 2, length(args));
 }
 
 static Value expect_arity_0(Value args)
 {
-    if (LIKELY(args == Qnil))
+    if (args == Qnil)
         return Qfalse;
     return arity_error("", 0, length(args));
 }
 
 static Value expect_arity_1(Value args)
 {
-    if (LIKELY(args != Qnil && cdr(args) == Qnil))
+    if (args != Qnil && cdr(args) == Qnil)
         return Qfalse;
     return arity_error("", 1, length(args));
 }
 
 static Value expect_arity_2(Value args)
 {
-    if (LIKELY(args != Qnil && cdr(args) != Qnil && cddr(args) == Qnil))
+    if (args != Qnil && cdr(args) != Qnil && cddr(args) == Qnil)
         return Qfalse;
     return arity_error("", 2, length(args));
 }
 
 static Value expect_arity_3(Value args)
 {
-    if (LIKELY(args != Qnil && cdr(args) != Qnil && cddr(args) != Qnil && cdddr(args) == Qnil))
+    if (args != Qnil && cdr(args) != Qnil && cddr(args) != Qnil && cdddr(args) == Qnil)
         return Qfalse;
     return arity_error("", 3, length(args));
 }
@@ -624,7 +624,7 @@ static Value env_new(const char *name)
 
 static Value env_dup(const char *name, const Value orig)
 {
-    if (UNLIKELY(ENV(orig)->parent != Qfalse))
+    if (ENV(orig)->parent != Qfalse)
         bug("duplication of chained environment not permitted");
     Env *e = obj_new(TAG_ENV, sizeof(Env));
     e->name = name != NULL ? name : ENV(orig)->name;
@@ -754,7 +754,7 @@ static Value eval_apply(Value env, Value l)
     }
     EXPECT(type, TYPE_PROC, proc);
     Value ret = apply(env, proc, args);
-    if (UNLIKELY(is_error(ret))) {
+    if (is_error(ret)) {
         const char *fname = get_func_name(proc);
         return push_stack_frame(ret, fname, l);
     }
@@ -1001,7 +1001,7 @@ static FILE *open_loadable(const char *path)
 Value sch_load(const char *path)
 {
     FILE *in = open_loadable(path);
-    if (UNLIKELY(in == NULL))
+    if (in == NULL)
         error("can't open file: %s", path);
     Value retval = iload(in, path);
     fclose(in);
@@ -1749,7 +1749,7 @@ static int64_t expt(int64_t x, int64_t y)
 
 #define get_non_negative_int(x) ({ \
             int64_t N = get_int(x); \
-            if (UNLIKELY(N < 0)) \
+            if (N < 0) \
                 return runtime_error("must be non-negative: %"PRId64, N); \
             N; \
         })
@@ -1832,7 +1832,7 @@ static Value proc_cdr(UNUSED Value env, Value pair)
 
 static Value expect_mutable(Value o)
 {
-    if (UNLIKELY(HEADER(o)->immutable))
+    if (HEADER(o)->immutable)
         return runtime_error("cannot modify immutable object");
     return Qfalse;
 }
@@ -2064,10 +2064,10 @@ static Value proc_substring(UNUSED Value env, Value string, Value vstart, Value 
     EXPECT(type, TYPE_STRING, string);
     const char *s = STRING(string);
     int64_t start = get_non_negative_int(vstart), end = get_non_negative_int(vend);
-    if (UNLIKELY(start > end))
+    if (start > end)
         return runtime_error("start index %"PRId64" must be <= end index %"PRId64, start, end);
     size_t len = strlen(s);
-    if (UNLIKELY((size_t) end > len))
+    if ((size_t) end > len)
         return runtime_error("end index %"PRId64" must be <= string length %zu", end, len);
     size_t newlen = end - start;
     char buf[newlen+1];
@@ -2202,7 +2202,7 @@ static Value different_length_list_error(void)
 static Value expect_list_of_nil(Value ls)
 {
     for (Value p = ls; p != Qnil; p = cdr(p)) {
-        if (UNLIKELY(car(p) != Qnil))
+        if (car(p) != Qnil)
             return different_length_list_error();
     }
     return Qfalse;
@@ -2435,7 +2435,7 @@ static Value proc_eval(UNUSED Value genv, Value expr, Value env)
 
 static Value expect_r5rs(Value version)
 {
-    if (LIKELY(sch_value_is_integer(version) && INT(version) == 5))
+    if (sch_value_is_integer(version && INT(version) == 5))
         return Qfalse;
     return runtime_error("only integer '5' is allowed for environment version");
 }
@@ -2606,7 +2606,7 @@ static Value expect_port(PortType expected, Value port)
 {
     EXPECT(type, TYPE_PORT, port);
     PortType actual = PORT(port)->type;
-    if (LIKELY(actual == expected))
+    if (actual == expected)
         return Qfalse;
     return runtime_error("expected %s port but got %s port",
                          port_type_string(expected), port_type_string(actual));

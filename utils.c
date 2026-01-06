@@ -40,7 +40,7 @@ void error(const char *fmt, ...)
 void *xmalloc(size_t size)
 {
     void *p = malloc(size);
-    if (UNLIKELY(p == NULL))
+    if (p == NULL)
         error("malloc(%zu) failed", size);
     return p;
 }
@@ -48,7 +48,7 @@ void *xmalloc(size_t size)
 void *xcalloc(size_t nmem, size_t memsize)
 {
     void *p = calloc(nmem, memsize);
-    if (UNLIKELY(p == NULL))
+    if (p == NULL)
         error("calloc(%zu, %zu) failed", nmem, memsize);
     return p;
 }
@@ -56,7 +56,7 @@ void *xcalloc(size_t nmem, size_t memsize)
 void *xrealloc(void *orig, size_t size)
 {
     void *p = realloc(orig, size);
-    if (UNLIKELY(p == NULL))
+    if (p == NULL)
         error("realloc(.., %zu) failed", size);
     return p;
 }
@@ -71,7 +71,7 @@ FILE *mopen(const char *s)
 {
     errno = 0;
     FILE *fp = fmemopen((char *) s, strlen(s), "r");
-    if (UNLIKELY(fp == NULL)) // we do not care that at caller
+    if (fp == NULL) // we do not care that at caller
         error("fmemopen failed: %s", strerror(errno));
     return fp;
 }
@@ -81,7 +81,7 @@ FILE *mopen_w(char **p)
     static size_t dummy;
     errno = 0;
     FILE *fp = open_memstream(p, &dummy);
-    if (UNLIKELY(fp == NULL))
+    if (fp == NULL)
         error("open_memstream failed: %s", strerror(errno));
     return fp;
 }
@@ -242,7 +242,7 @@ static inline bool table_too_many_elements(const Table *t)
 // `value` can't be TABLE_NOT_FOUND
 Table *table_put(Table *t, uint64_t key, uint64_t value)
 {
-    if (UNLIKELY(value == TABLE_NOT_FOUND))
+    if (value == TABLE_NOT_FOUND)
         bug("got invalid value == TABLE_NOT_FOUND");
     if (table_too_many_elements(t))
         table_resize(t);
@@ -270,7 +270,7 @@ uint64_t table_get(const Table *t, uint64_t key)
 
 bool table_set(Table *t, uint64_t key, uint64_t value)
 {
-    if (UNLIKELY(value == TABLE_NOT_FOUND))
+    if (value == TABLE_NOT_FOUND)
         bug("got invalid value == TABLE_NOT_FOUND");
     List *p = find(t, key);
     if (p == NULL)
