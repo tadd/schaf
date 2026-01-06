@@ -269,7 +269,6 @@ static void mark_val(Value v)
         mark_val(p->val);
         break;
     }
-    case TAG_CHAR:
     case TAG_STRING:
     case TAG_CFUNC:
     case TAG_SYNTAX:
@@ -348,7 +347,6 @@ static void free_val(Value v)
         scary_free(e);
         break;
     }
-    case TAG_CHAR:
     case TAG_CFUNC:
     case TAG_SYNTAX:
     case TAG_CFUNC_CLOSURE:

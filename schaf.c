@@ -26,20 +26,24 @@
 //
 
 // Value (uintptr_t):
-//   0b.....000 Pointer (Unchangeable pattern!)
-//   0b.......1 Integer
-//   0b......10 Symbol
-//   0b0--00100 #f
-//   0b0--01100 #t
-//   0b0-010100 null
-//   0b0-011100 <undef>
-static const uintptr_t FLAG_NBIT_INT = 1;
-static const uintptr_t FLAG_NBIT_SYM = 2;
-static const uintptr_t FLAG_MASK_INT =   0b1;
-static const uintptr_t FLAG_MASK_SYM =  0b11;
-static const uintptr_t FLAG_MASK_IMM = 0b111; // for 64 bit machine
-static const uintptr_t FLAG_INT      =   0b1;
-static const uintptr_t FLAG_SYM      =  0b10;
+//   0b..............000 Pointer (Unchangeable pattern!)
+//   0b................1 Integer
+//   0b...............10 Symbol
+//   0b0-----------00100 #f
+//   0b0-----------01100 #t
+//   0b0----------010100 null
+//   0b0----------011100 <undef>
+//   0b0-0{8bits!}111100 Character
+static const uintptr_t FLAG_NBIT_INT  = 1;
+static const uintptr_t FLAG_NBIT_SYM  = 2;
+static const uintptr_t FLAG_NBIT_CHAR = 6;
+static const uintptr_t FLAG_MASK_INT  =      0b1;
+static const uintptr_t FLAG_MASK_SYM  =     0b11;
+static const uintptr_t FLAG_MASK_IMM  =    0b111; // for 64 bit machine
+static const uintptr_t FLAG_MASK_CHAR = 0b111111;
+static const uintptr_t FLAG_INT       =      0b1;
+static const uintptr_t FLAG_SYM       =     0b10;
+static const uintptr_t FLAG_CHAR      = 0b111100;
 const Value SCH_FALSE = 0b00100U;
 const Value SCH_TRUE  = 0b01100U;
 const Value SCH_NULL  = 0b10100U; // emtpy list
@@ -97,7 +101,7 @@ static inline bool value_tag_is(Value v, ValueTag expected)
 
 inline bool sch_value_is_character(Value v)
 {
-    return value_tag_is(v, TAG_CHAR);
+    return (v & FLAG_MASK_CHAR) == FLAG_CHAR;
 }
 
 inline bool sch_value_is_string(Value v)
@@ -118,7 +122,6 @@ static bool value_is_procedure(Value v)
     case TAG_CONTINUATION:
     case TAG_CFUNC_CLOSURE:
         return true;
-    case TAG_CHAR:
     case TAG_STRING:
     case TAG_PAIR:
     case TAG_VECTOR:
@@ -156,6 +159,8 @@ static Type immediate_type_of(Value v)
         return TYPE_INT;
     if (sch_value_is_symbol(v))
         return TYPE_SYMBOL;
+    if (sch_value_is_character(v))
+        return TYPE_CHAR;
     if (v == Qtrue || v == Qfalse)
         return TYPE_BOOL;
     if (v == Qundef)
@@ -168,8 +173,6 @@ Type sch_value_type_of(Value v)
     if (value_is_immediate(v))
         return immediate_type_of(v);
     switch (VALUE_TAG(v)) {
-    case TAG_CHAR:
-        return TYPE_CHAR;
     case TAG_STRING:
         return TYPE_STRING;
     case TAG_PAIR:
@@ -254,6 +257,11 @@ inline Symbol sch_symbol_to_csymbol(Value v)
     return (Symbol) (v >> FLAG_NBIT_SYM);
 }
 
+inline uint8_t sch_character_to_uint8(Value v)
+{
+    return (uint8_t) (v >> FLAG_NBIT_CHAR);
+}
+
 // symbol->string
 static const char *unintern(Symbol sym)
 {
@@ -323,9 +331,7 @@ void *obj_new(ValueTag t, size_t size)
 
 Value sch_character_new(uint8_t ch)
 {
-    Char *c = obj_new(TAG_CHAR, sizeof(Char));
-    c->ch = ch;
-    return (Value) c;
+    return ((Value) ch) << FLAG_NBIT_CHAR | FLAG_CHAR;
 }
 
 static Value string_new_moved(char *str)
