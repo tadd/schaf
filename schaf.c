@@ -26,32 +26,32 @@
 //
 
 // Value (uintptr_t):
-//   0b...............000 Pointer (Unchangeable pattern!)
-//   0b.................1 Integer
-//   0b................10 Symbol
-//   0b0------------00100 #f
-//   0b0------------01100 #t
-//   0b0-----------010100 null
-//   0b0-----------011100 EOF
-//   0b0----------0111100 <undef>
-//   0b0-0{8bits!}1111100 Character
+//   0b............000 Pointer (Unchangeable pattern!)
+//   0b..............1 Integer
+//   0b.............10 Symbol
+//   0b0-0{8bits!}0100 Character
+//   0b0--------001100 #f
+//   0b0--------011100 #t
+//   0b0-------0101100 null
+//   0b0-------0111100 EOF
+//   0b0------01111100 <undef>
 static const uintptr_t FLAG_NBIT_INT  = 1;
 static const uintptr_t FLAG_NBIT_SYM  = 2;
-static const uintptr_t FLAG_NBIT_CHAR = 7;
-static const uintptr_t FLAG_MASK_INT  =        0b1;
-static const uintptr_t FLAG_MASK_SYM  =       0b11;
-static const uintptr_t FLAG_MASK_IMM  =      0b111; // for 64 bit machine
-static const uintptr_t FLAG_MASK_CHAR = 0b111'1111;
-static const uintptr_t FLAG_INT       =        0b1;
-static const uintptr_t FLAG_SYM       =       0b10;
-static const uintptr_t FLAG_CHAR      = 0b111'1100;
-const Value SCH_FALSE = 0b00'0100U; //  4
-const Value SCH_TRUE  = 0b00'1100U; // 12
-const Value SCH_NULL  = 0b01'0100U; // 20; the empty list
+static const uintptr_t FLAG_NBIT_CHAR = 4;
+static const uintptr_t FLAG_MASK_INT  =    0b1;
+static const uintptr_t FLAG_MASK_SYM  =   0b11;
+static const uintptr_t FLAG_MASK_IMM  =  0b111; // for 64 bit machine
+static const uintptr_t FLAG_MASK_CHAR = 0b1111;
+static const uintptr_t FLAG_INT       =    0b1;
+static const uintptr_t FLAG_SYM       =   0b10;
+static const uintptr_t FLAG_CHAR      = 0b0100;
+const Value SCH_FALSE = 0b000'1100U; //  12
+const Value SCH_TRUE  = 0b001'1100U; //  28
+const Value SCH_NULL  = 0b010'1100U; //  44; the empty list
 static
-const Value EOF_OBJ   = 0b01'1100U; // 28
-const Value SCH_UNDEF = 0b11'1100U; // 60; may be an error or something internal
-#define BOOL_VAL(v) ((!!(v) << 3U) | 0b100U)
+const Value EOF_OBJ   = 0b011'1100U; //  60
+const Value SCH_UNDEF = 0b111'1100U; // 124; may be an error or something internal
+#define BOOL_VAL(v) ((!!(v) << 4U) | 0b1100U)
 
 static const int64_t CFUNCARG_MAX = 3;
 
