@@ -42,7 +42,6 @@ typedef enum {
 typedef enum {
     TAG_PAIR,
     TAG_STRING,
-    TAG_CHAR,
     TAG_CFUNC,
     TAG_SYNTAX, // almost a C Function
     TAG_CLOSURE,
@@ -72,11 +71,6 @@ typedef struct {
     Pair pair;   // inherit
     int64_t pos; // value from ftell(3)
 } LocatedPair;
-
-typedef struct {
-    Header header;
-    uint8_t ch;
-} Char;
 
 typedef struct {
     Header header;
@@ -170,7 +164,7 @@ typedef struct {
 #define SYMBOL(v) sch_symbol_to_csymbol(v)
 #define PAIR(v) ((Pair *) v)
 #define LOCATED_PAIR(v) ((LocatedPair *) v)
-#define CHAR(v) (((Char *) v)->ch)
+#define CHAR(v) sch_character_to_uint8(v)
 #define STRING(v) (((String *) v)->body)
 #define PROCEDURE(v) ((Procedure *) v)
 #define CFUNC(v) ((CFunc *) v)
@@ -218,6 +212,7 @@ int64_t sch_integer_to_cint(Value v);
 const char *sch_symbol_to_cstr(Value v);
 const char *sch_string_to_cstr(Value v);
 Symbol sch_symbol_to_csymbol(Value v);
+uint8_t sch_character_to_uint8(Value v);
 const char *sch_value_to_type_name(Value v);
 
 Value sch_integer_new(int64_t i);
