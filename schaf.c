@@ -1832,7 +1832,7 @@ static Value proc_cdr(UNUSED Value env, Value pair)
 
 static Value expect_mutable(Value o)
 {
-    if (HEADER(o)->immutable)
+    if (UNLIKELY(HEADER(o)->immutable))
         return runtime_error("cannot modify immutable object");
     return Qfalse;
 }
@@ -2202,7 +2202,7 @@ static Value different_length_list_error(void)
 static Value expect_list_of_nil(Value ls)
 {
     for (Value p = ls; p != Qnil; p = cdr(p)) {
-        if (car(p) != Qnil)
+        if (UNLIKELY(car(p) != Qnil))
             return different_length_list_error();
     }
     return Qfalse;
@@ -2435,7 +2435,7 @@ static Value proc_eval(UNUSED Value genv, Value expr, Value env)
 
 static Value expect_r5rs(Value version)
 {
-    if (sch_value_is_integer(version) && INT(version) == 5)
+    if (LIKELY(sch_value_is_integer(version) && INT(version) == 5))
         return Qfalse;
     return runtime_error("only integer '5' is allowed for environment version");
 }
@@ -2606,7 +2606,7 @@ static Value expect_port(PortType expected, Value port)
 {
     EXPECT(type, TYPE_PORT, port);
     PortType actual = PORT(port)->type;
-    if (actual == expected)
+    if (LIKELY(actual == expected))
         return Qfalse;
     return runtime_error("expected %s port but got %s port",
                          port_type_string(expected), port_type_string(actual));
