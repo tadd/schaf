@@ -30,6 +30,7 @@
 //   0b0--00100 #f
 //   0b0--01100 #t
 //   0b0-010100 <undef>
+//   0b0-011100 null
 static const uintptr_t FLAG_NBIT_SYM = 2;
 static const uintptr_t FLAG_NBIT_INT = 1;
 static const uintptr_t FLAG_MASK     = 0b111; // for 64 bit machine
