@@ -1279,7 +1279,6 @@ static Value syn_do(Value env, Value args)
     Value bindings = car(args), tests = cadr(args), body = cddr(args);
     EXPECT(list_head, bindings);
     const Pair *ptests = get(PAIR, tests);
-
     Value doenv = env_inherit(env);
     Value steps = Qnil, vars = Qnil, v;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
@@ -1346,16 +1345,15 @@ static Value qq(Value env, Value datum, int64_t depth)
         return eval(env, datum);
     if (datum == Qnil || !sch_value_is_pair(datum))
         return datum;
-    Value a = car(datum), d = cdr(datum);
+    const Pair *p = PAIR(datum);
+    Value a = p->car, d = p->cdr;
     if (a == SYM_QUASIQUOTE) {
-        const Pair *pd = get(PAIR, d);
-        Value v = qq(env, pd->car, depth + 1);
+        Value v = qq(env, get(PAIR, d)->car, depth + 1);
         CHECK_ERROR(v);
         return list2_const(a, v);
     }
     if (a == SYM_UNQUOTE || a == SYM_UNQUOTE_SPLICING) {
-        const Pair *pd = get(PAIR, d);
-        Value v = qq(env, pd->car, depth - 1);
+        Value v = qq(env, get(PAIR, d)->car, depth - 1);
         CHECK_ERROR(v);
         return depth == 1 ? v : list2_const(a, v);
     }
