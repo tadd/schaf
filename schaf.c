@@ -456,8 +456,9 @@ static Value cfunc_closure_new(const char *name, void *cfunc, Value data)
 
 static Value eval_body(Value env, Value body);
 static Value env_inherit(Value parent);
-static Value env_put(Value env, Value key, Value value);
+static Value env_put(Value env, Symbol key, Value value);
 static Value expect_arity(int64_t expected, Value args);
+static Value expect_type(Type expected, Value v);
 
 //PTR
 static Value apply_closure(UNUSED Value env, Value proc, Value args)
@@ -468,10 +469,10 @@ static Value apply_closure(UNUSED Value env, Value proc, Value args)
     Value localenv = env_inherit(cl->env);
     Value params = cl->params;
     if (arity == -1)
-        env_put(localenv, params, args);
+        env_put(localenv, get(SYMBOL, params), args);
     else {
         for (Value pa = args, pp = params; pa != Qnil; pa = cdr(pa), pp = cdr(pp))
-            env_put(localenv, car(pp), car(pa));
+            env_put(localenv, get(SYMBOL, car(pp)), car(pa));
     }
     return eval_body(localenv, cl->body);
 }
@@ -650,12 +651,12 @@ static Value env_inherit(Value parent)
     return e;
 }
 
-static Value env_put(Value env, Value key, Value value)
+static Value env_put(Value env, Symbol key, Value value)
 {
     Table *t = ENV(env)->table;
     if (t == NULL)
         t = ENV(env)->table = table_new();
-    table_put(t, SYMBOL(key), value);
+    table_put(t, key, value);
     return env;
 }
 
@@ -674,14 +675,13 @@ static bool env_set(Value env, Value key, Value value)
 }
 
 // chained!!
-static Value env_get(const Value env, Value name)
+static Value env_get(const Value env, Symbol name)
 {
-    Symbol sym = SYMBOL(name);
     for (Value p = env; p != Qfalse; p = ENV(p)->parent) {
         Table *t = ENV(p)->table;
         if (t == NULL)
             continue;
-        Value v = table_get(t, sym);
+        Value v = table_get(t, name);
         if (v != TABLE_NOT_FOUND)
             return v;
     }
@@ -691,12 +691,12 @@ static Value env_get(const Value env, Value name)
 // Note: Do not mistake this for "(define-syntax ...)" which related to macros
 static void define_syntax(Value env, const char *name, void *cfunc, int64_t arity)
 {
-    env_put(env, sch_symbol_new(name), syntax_new(name, cfunc, arity));
+    env_put(env, intern(name), syntax_new(name, cfunc, arity));
 }
 
 static void define_procedure(Value env, const char *name, void *cfunc, int64_t arity)
 {
-    env_put(env, sch_symbol_new(name), cfunc_new(name, cfunc, arity));
+    env_put(env, intern(name), cfunc_new(name, cfunc, arity));
 }
 
 //
@@ -771,18 +771,18 @@ static Value eval_apply(Value env, Value l)
     return ret;
 }
 
-static Value lookup_or_error(Value env, Value v)
+static Value lookup_or_error(Value env, Symbol key)
 {
-    Value p = env_get(env, v);
+    Value p = env_get(env, key);
     if (p == Qundef)
-        return runtime_error("unbound variable: %s", sch_symbol_to_cstr(v));
+        return runtime_error("unbound variable: %s", unintern(key));
     return p;
 }
 
 static Value eval(Value env, Value v)
 {
     if (sch_value_is_symbol(v))
-        return lookup_or_error(env, v);
+        return lookup_or_error(env, SYMBOL(v));
     if (!sch_value_is_pair(v))
         return v;
     return eval_apply(env, v);
@@ -1190,17 +1190,18 @@ static Value let(Value env, Value var, Value bindings, Value body)
         EXPECT(type, TYPE_PAIR, b);
         if (length(b) != 2)
             return runtime_error("malformed binding: %s", sch_stringify(b));
-        Value ident = car(b), expr = cadr(b);
-        EXPECT(type, TYPE_SYMBOL, ident);
+        Value ident = car(b);
+        Symbol sym = get(SYMBOL, ident);
+        Value expr = cadr(b);
         if (named)
             lparams = PAIR(lparams)->cdr = list1(ident);
         Value val = eval(env, expr);
         CHECK_ERROR(val);
-        env_put(localenv, ident, val);
+        env_put(localenv, sym, val);
     }
     if (named) {
         Value proc = closure_new(localenv, cdr(params), body);
-        env_put(localenv, var, proc); // letenv affects as proc->env
+        env_put(localenv, get(SYMBOL, var), proc); // letenv affects as proc->env
     }
     return eval_body(localenv, body);
 }
@@ -1228,8 +1229,8 @@ static Value let_star(Value env, Value bindings, Value body)
         EXPECT(type, TYPE_PAIR, b);
         if (length(b) != 2)
             return runtime_error("malformed binding: %s", sch_stringify(b));
-        Value ident = car(b), expr = cadr(b);
-        EXPECT(type, TYPE_SYMBOL, ident);
+        Symbol ident = get(SYMBOL, car(b));
+        Value expr = cadr(b);
         localenv = env_inherit(localenv);
         Value val = eval(localenv, expr);
         CHECK_ERROR(val);
@@ -1253,8 +1254,7 @@ static Value letrec(Value env, Value bindings, Value body)
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
         const Pair *pr = get(PAIR, b);
-        Value ident = pr->car;
-        EXPECT(type, TYPE_SYMBOL, ident);
+        Symbol ident = get(SYMBOL, pr->car);
         Value pval = get(PAIR, pr->cdr)->car;
         Value val = eval(localenv, pval);
         CHECK_ERROR(val);
@@ -1286,7 +1286,6 @@ static Value syn_do(Value env, Value args)
     Value bindings = car(args), tests = cadr(args), body = cddr(args);
     EXPECT(list_head, bindings);
     const Pair *ptests = get(PAIR, tests);
-
     Value localenv = env_inherit(env);
     Value steps = Qnil, vars = Qnil, v;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
@@ -1297,7 +1296,7 @@ static Value syn_do(Value env, Value args)
             return runtime_error("malformed binding: %s", sch_stringify(b));
         const Pair *pbd = get(PAIR, pb->cdr);
         Value var = pb->car, init = pbd->car, step = pbd->cdr;
-        EXPECT(type, TYPE_SYMBOL, var);
+        Symbol svar = get(SYMBOL, var);
         if (memq(var, vars) != Qfalse)
             return runtime_error("duplicated variable: %s", sch_symbol_to_cstr(var));
         vars = cons(var, vars);
@@ -1307,7 +1306,7 @@ static Value syn_do(Value env, Value args)
         }
         v = eval(env, init); // in the original env
         CHECK_ERROR(v);
-        env_put(localenv, var, v);
+        env_put(localenv, svar, v);
     }
     Value test = ptests->car, exprs = ptests->cdr;
     while ((v = eval(localenv, test)) == Qfalse) {
@@ -1353,16 +1352,15 @@ static Value qq(Value env, Value datum, int64_t depth)
         return eval(env, datum);
     if (datum == Qnil || !sch_value_is_pair(datum))
         return datum;
-    Value a = car(datum), d = cdr(datum);
+    const Pair *p = PAIR(datum);
+    Value a = p->car, d = p->cdr;
     if (a == SYM_QUASIQUOTE) {
-        const Pair *pd = get(PAIR, d);
-        Value v = qq(env, pd->car, depth + 1);
+        Value v = qq(env, get(PAIR, d)->car, depth + 1);
         CHECK_ERROR(v);
         return list2_const(a, v);
     }
     if (a == SYM_UNQUOTE || a == SYM_UNQUOTE_SPLICING) {
-        const Pair *pd = get(PAIR, d);
-        Value v = qq(env, pd->car, depth - 1);
+        Value v = qq(env, get(PAIR, d)->car, depth - 1);
         CHECK_ERROR(v);
         return depth == 1 ? v : list2_const(a, v);
     }
@@ -1442,15 +1440,14 @@ static Value syn_unquote_splicing(UNUSED Value env, UNUSED Value args)
 // 5.2. Definitions
 static Value define_variable(Value env, Value ident, Value expr)
 {
-    EXPECT(type, TYPE_SYMBOL, ident);
-
+    Symbol sident = get(SYMBOL, ident);
     Value val = eval(env, expr);
     CHECK_ERROR(val);
     bool found = false;
     if (ENV(env)->parent == Qfalse)
         found = env_set(env, ident, val);
     if (!found)
-        env_put(env, ident, val); // prepend new
+        env_put(env, sident, val); // prepend new
     return Qfalse;
 }
 
@@ -2949,7 +2946,7 @@ static Value syn_defined_p(Value env, Value name)
 {
     if (!sch_value_is_symbol(name))
         return Qfalse;
-    return BOOL_VAL(env_get(env, name) != Qundef);
+    return BOOL_VAL(env_get(env, SYMBOL(name)) != Qundef);
 }
 
 static Value proc_cputime(UNUSED Value env) // in micro sec
