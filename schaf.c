@@ -29,19 +29,19 @@
 //   0b......10 Symbol
 //   0b0--00100 #f
 //   0b0--01100 #t
-//   0b0-010100 <undef>
-//   0b0-011100 null
-static const uintptr_t FLAG_NBIT_SYM = 2;
+//   0b0-010100 null
+//   0b0-011100 <undef>
 static const uintptr_t FLAG_NBIT_INT = 1;
-static const uintptr_t FLAG_MASK     = 0b111; // for 64 bit machine
-static const uintptr_t FLAG_MASK_SYM =  0b11;
+static const uintptr_t FLAG_NBIT_SYM = 2;
 static const uintptr_t FLAG_MASK_INT =   0b1;
-static const uintptr_t FLAG_SYM      =  0b10;
+static const uintptr_t FLAG_MASK_SYM =  0b11;
+static const uintptr_t FLAG_MASK_IMM = 0b111; // for 64 bit machine
 static const uintptr_t FLAG_INT      =   0b1;
-const Value SCH_NULL  = 0b11100U; // emtpy list
+static const uintptr_t FLAG_SYM      =  0b10;
 const Value SCH_FALSE = 0b00100U;
 const Value SCH_TRUE  = 0b01100U;
-const Value SCH_UNDEF = 0b10100U; // may be an error or something
+const Value SCH_NULL  = 0b10100U; // emtpy list
+const Value SCH_UNDEF = 0b11100U; // may be an error or something internal
 #define BOOL_VAL(v) ((!!(v) << 3U) | 0b100U)
 
 static const int64_t CFUNCARG_MAX = 3;
@@ -85,7 +85,7 @@ inline bool sch_value_is_symbol(Value v)
 
 static inline bool value_is_immediate(Value v)
 {
-    return v & FLAG_MASK;
+    return v & FLAG_MASK_IMM;
 }
 
 static inline bool value_tag_is(Value v, ValueTag expected)
