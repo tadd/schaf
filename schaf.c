@@ -230,7 +230,7 @@ const char *sch_value_to_type_name(Value v)
 inline int64_t sch_integer_to_cint(Value x)
 {
 #ifdef __x86_64__
-    return (int64_t) x >> FLAG_NBIT_INT;
+    return ((int64_t) x) >> FLAG_NBIT_INT;
 #else
     int64_t i = x;
     return (i - 1) / (1 << FLAG_NBIT_INT);
@@ -239,7 +239,7 @@ inline int64_t sch_integer_to_cint(Value x)
 
 inline Symbol sch_symbol_to_csymbol(Value v)
 {
-    return (Symbol) v >> FLAG_NBIT_SYM;
+    return (Symbol) (v >> FLAG_NBIT_SYM);
 }
 
 // symbol->string
@@ -298,7 +298,7 @@ static Symbol intern(const char *name)
 inline Value sch_symbol_new(const char *s)
 {
     Symbol sym = intern(s);
-    return (Value) (sym << FLAG_NBIT_SYM | FLAG_SYM);
+    return (((Value) sym) << FLAG_NBIT_SYM) | FLAG_SYM;
 }
 
 void *obj_new(ValueTag t, size_t size)
