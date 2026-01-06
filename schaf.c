@@ -26,29 +26,29 @@
 //
 
 // Value (uintptr_t):
-//   0b............000 Pointer (Unchangeable pattern!)
-//   0b..............1 Integer
-//   0b.............10 Symbol
-//   0b0-0{8bits!}0100 Character
-//   0b0--------001100 #f
-//   0b0--------011100 #t
-//   0b0-------0101100 null
-//   0b0-------0111100 <undef>
-static const uintptr_t FLAG_NBIT_INT  = 1;
+//   0b...........000 Pointer (Unchangeable pattern!)
+//   0b............01 Integer
+//   0b............10 Symbol
+//   0b0-0{8bits!}011 Character
+//   0b0--------00111 #f
+//   0b0--------01111 #t
+//   0b0-------010111 null
+//   0b0-------011111 <undef>
+static const uintptr_t FLAG_NBIT_INT  = 2;
 static const uintptr_t FLAG_NBIT_SYM  = 2;
-static const uintptr_t FLAG_NBIT_CHAR = 4;
-static const uintptr_t FLAG_MASK_INT  =    0b1;
-static const uintptr_t FLAG_MASK_SYM  =   0b11;
-static const uintptr_t FLAG_MASK_IMM  =  0b111; // for 64 bit machine
-static const uintptr_t FLAG_MASK_CHAR = 0b1111;
-static const uintptr_t FLAG_INT       =    0b1;
-static const uintptr_t FLAG_SYM       =   0b10;
-static const uintptr_t FLAG_CHAR      = 0b0100;
-const Value SCH_FALSE = 0b001100U;
-const Value SCH_TRUE  = 0b011100U;
-const Value SCH_NULL  = 0b101100U; // emtpy list
-const Value SCH_UNDEF = 0b111100U; // may be an error or something
-#define BOOL_VAL(v) ((!!(v) << 4U) | 0b1100U)
+static const uintptr_t FLAG_NBIT_CHAR = 3;
+static const uintptr_t FLAG_MASK_INT  =  0b11;
+static const uintptr_t FLAG_MASK_SYM  =  0b11;
+static const uintptr_t FLAG_MASK_IMM  = 0b111; // for 64 bit machine
+static const uintptr_t FLAG_MASK_CHAR = 0b111;
+static const uintptr_t FLAG_INT       =  0b01;
+static const uintptr_t FLAG_SYM       =  0b10;
+static const uintptr_t FLAG_CHAR      = 0b011;
+const Value SCH_FALSE = 0b00111U;
+const Value SCH_TRUE  = 0b01111U;
+const Value SCH_NULL  = 0b10111U; // emtpy list
+const Value SCH_UNDEF = 0b11111U; // may be an error or something
+#define BOOL_VAL(v) ((!!(v) << 3U) | 0b111U)
 
 static const int64_t CFUNCARG_MAX = 3;
 
@@ -81,7 +81,7 @@ static Value current_input_port = Qfalse, current_output_port = Qfalse;
 
 inline bool sch_value_is_integer(Value v)
 {
-    return v & FLAG_MASK_INT;
+    return (v & FLAG_MASK_INT) == FLAG_INT;
 }
 
 inline bool sch_value_is_symbol(Value v)
@@ -248,7 +248,7 @@ inline int64_t sch_integer_to_cint(Value x)
     return ((int64_t) x) >> FLAG_NBIT_INT;
 #else
     int64_t i = x;
-    return (i - 1) / (1 << FLAG_NBIT_INT);
+    return (i - FLAG_INT_NBIT) / (1 << FLAG_NBIT_INT);
 #endif
 }
 
@@ -297,7 +297,7 @@ CXRS(DEF_CXR)
 inline Value sch_integer_new(int64_t i)
 {
     Value v = i;
-    return v << FLAG_NBIT_INT | FLAG_INT;
+    return (v << FLAG_NBIT_INT) | FLAG_INT;
 }
 
 // string->symbol
