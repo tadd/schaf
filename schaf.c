@@ -356,6 +356,11 @@ static void expect_cfunc_arity(int64_t actual)
         } \
     } while (0)
 #define EXPECT(f, ...) CHECK_ERROR(expect_##f(__VA_ARGS__))
+#define get(t, x) ({ \
+            Value X = x; \
+            EXPECT(type, TYPE_##t, X); \
+            t(X); \
+        })
 
 static Value expect_arity_0(Value args);
 static Value expect_arity_1(Value args);
@@ -1102,9 +1107,9 @@ static Value syn_cond(Value env, Value clauses)
 
     for (Value p = clauses; p != Qnil; p = cdr(p)) {
         Value clause = car(p);
-        EXPECT(type, TYPE_PAIR, clause);
-        Value test = car(clause);
-        Value exprs = cdr(clause);
+        const Pair *pr = get(PAIR, clause);
+        Value test = pr->car;
+        Value exprs = pr->cdr;
         if (test == SYM_ELSE)
             return eval_body(env, exprs);
         Value t = eval(env, test);
@@ -1138,8 +1143,8 @@ static Value syn_case(Value env, Value args)
 
     for (Value p = clauses; p != Qnil; p = cdr(p)) {
         Value clause = car(p);
-        EXPECT(type, TYPE_PAIR, clause);
-        Value data = car(clause), exprs = cdr(clause);
+        const Pair *pr = get(PAIR, clause);
+        Value data = pr->car, exprs = pr->cdr;
         EXPECT(type, TYPE_PAIR, exprs);
         if (data == SYM_ELSE)
             return eval_body(env, exprs);
@@ -1247,10 +1252,11 @@ static Value letrec(Value env, Value bindings, Value body)
     Value localenv = env_inherit(env);
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
-        EXPECT(type, TYPE_PAIR, b);
-        Value ident = car(b);
+        const Pair *pr = get(PAIR, b);
+        Value ident = pr->car;
         EXPECT(type, TYPE_SYMBOL, ident);
-        Value val = eval(localenv, cadr(b));
+        Value pval = get(PAIR, pr->cdr)->car;
+        Value val = eval(localenv, pval);
         CHECK_ERROR(val);
         env_put(localenv, ident, val);
     }
@@ -1279,17 +1285,18 @@ static Value syn_do(Value env, Value args)
 
     Value bindings = car(args), tests = cadr(args), body = cddr(args);
     EXPECT(list_head, bindings);
-    EXPECT(type, TYPE_PAIR, tests);
+    const Pair *ptests = get(PAIR, tests);
 
     Value localenv = env_inherit(env);
     Value steps = Qnil, vars = Qnil, v;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
-        EXPECT(type, TYPE_PAIR, b);
+        const Pair *pb = get(PAIR, b);
         int64_t l = length(b);
         if (l < 2 || l > 3)
             return runtime_error("malformed binding: %s", sch_stringify(b));
-        Value var = car(b), init = cadr(b), step = cddr(b);
+        const Pair *pbd = get(PAIR, pb->cdr);
+        Value var = pb->car, init = pbd->car, step = pbd->cdr;
         EXPECT(type, TYPE_SYMBOL, var);
         if (memq(var, vars) != Qfalse)
             return runtime_error("duplicated variable: %s", sch_symbol_to_cstr(var));
@@ -1302,7 +1309,7 @@ static Value syn_do(Value env, Value args)
         CHECK_ERROR(v);
         env_put(localenv, var, v);
     }
-    Value test = car(tests), exprs = cdr(tests);
+    Value test = ptests->car, exprs = ptests->cdr;
     while ((v = eval(localenv, test)) == Qfalse) {
         if (body != Qnil) {
             v = eval_body(localenv, body);
@@ -1348,14 +1355,14 @@ static Value qq(Value env, Value datum, int64_t depth)
         return datum;
     Value a = car(datum), d = cdr(datum);
     if (a == SYM_QUASIQUOTE) {
-        EXPECT(type, TYPE_PAIR, d);
-        Value v = qq(env, car(d), depth + 1);
+        const Pair *pd = get(PAIR, d);
+        Value v = qq(env, pd->car, depth + 1);
         CHECK_ERROR(v);
         return list2_const(a, v);
     }
     if (a == SYM_UNQUOTE || a == SYM_UNQUOTE_SPLICING) {
-        EXPECT(type, TYPE_PAIR, d);
-        Value v = qq(env, car(d), depth - 1);
+        const Pair *pd = get(PAIR, d);
+        Value v = qq(env, pd->car, depth - 1);
         CHECK_ERROR(v);
         return depth == 1 ? v : list2_const(a, v);
     }
@@ -1392,7 +1399,7 @@ static Value qq_list(Value env, Value datum, int64_t depth)
     for (Value last = ret, p = datum; p != Qnil; p = cdr(p)) {
         bool is_simple = !sch_value_is_pair(p);
         if (is_simple || is_quoted_terminal(p)) {
-            EXPECT(type, TYPE_PAIR, cdr(ret));
+            EXPECT(type, TYPE_PAIR, cdr(ret)); // XXX
             if (!is_simple) {
                 p = qq(env, p, depth);
                 CHECK_ERROR(p);
@@ -1549,21 +1556,15 @@ static Value proc_integer_p(UNUSED Value env, Value obj)
     return BOOL_VAL(sch_value_is_integer(obj));
 }
 
-#define get_int(x) ({ \
-            Value X = x; \
-            EXPECT(type, TYPE_INT, X); \
-            INT(X); \
-        })
-
 typedef bool (*RelOpFunc)(int64_t x, int64_t y);
 static Value relop(RelOpFunc func, Value args)
 {
     EXPECT(arity_min_2, args);
 
     Value p = args;
-    int64_t x = get_int(car(p));
+    int64_t x = get(INT, car(p));
     while ((p = cdr(p)) != Qnil) {
-        int64_t y = get_int(car(p));
+        int64_t y = get(INT, car(p));
         if (!func(x, y))
             return Qfalse;
         x = y;
@@ -1630,9 +1631,9 @@ static Value proc_even_p(UNUSED Value env, Value obj)
 static Value proc_max(UNUSED Value env, Value args)
 {
     EXPECT(arity_min_1, args);
-    int64_t max = get_int(car(args));
+    int64_t max = get(INT, car(args));
     for (Value p = cdr(args); p != Qnil; p = cdr(p)) {
-        int64_t x = get_int(car(p));
+        int64_t x = get(INT, car(p));
         if (max < x)
             max = x;
     }
@@ -1642,9 +1643,9 @@ static Value proc_max(UNUSED Value env, Value args)
 static Value proc_min(UNUSED Value env, Value args)
 {
     EXPECT(arity_min_1, args);
-    int64_t min = get_int(car(args));
+    int64_t min = get(INT, car(args));
     for (Value p = cdr(args); p != Qnil; p = cdr(p)) {
-        int64_t x = get_int(car(p));
+        int64_t x = get(INT, car(p));
         if (min > x)
             min = x;
     }
@@ -1655,7 +1656,7 @@ static Value proc_add(UNUSED Value env, Value args)
 {
     int64_t y = 0;
     for (Value p = args; p != Qnil; p = cdr(p))
-        y += get_int(car(p));
+        y += get(INT, car(p));
     return sch_integer_new(y);
 }
 
@@ -1663,12 +1664,12 @@ static Value proc_sub(UNUSED Value env, Value args)
 {
     EXPECT(arity_min_1, args);
 
-    int64_t y = get_int(car(args));
+    int64_t y = get(INT, car(args));
     Value p = cdr(args);
     if (p == Qnil)
         return sch_integer_new(-y);
     for (; p != Qnil; p = cdr(p))
-        y -= get_int(car(p));
+        y -= get(INT, car(p));
     return sch_integer_new(y);
 }
 
@@ -1676,7 +1677,7 @@ static Value proc_mul(UNUSED Value env, Value args)
 {
     int64_t y = 1;
     for (Value p = args; p != Qnil; p = cdr(p))
-        y *= get_int(car(p));
+        y *= get(INT, car(p));
     return sch_integer_new(y);
 }
 
@@ -1689,7 +1690,7 @@ static Value proc_div(UNUSED Value env, Value args)
 {
     EXPECT(arity_min_1, args);
 
-    int64_t y = get_int(car(args));
+    int64_t y = get(INT, car(args));
     Value p = cdr(args);
     if (p == Qnil) {
         if (y == 0)
@@ -1697,7 +1698,7 @@ static Value proc_div(UNUSED Value env, Value args)
         return sch_integer_new(1 / y); // 0, 1, -1
     }
     for (; p != Qnil; p = cdr(p)) {
-        int64_t x = get_int(car(p));
+        int64_t x = get(INT, car(p));
         if (x == 0)
             return divzero_error();
         y /= x;
@@ -1707,13 +1708,13 @@ static Value proc_div(UNUSED Value env, Value args)
 
 static Value proc_abs(UNUSED Value env, Value x)
 {
-    int64_t n = get_int(x);
+    int64_t n = get(INT, x);
     return sch_integer_new(n < 0 ? -n : n);
 }
 
 static Value proc_quotient(UNUSED Value env, Value x, Value y)
 {
-    int64_t a = get_int(x), b = get_int(y);
+    int64_t a = get(INT, x), b = get(INT, y);
     if (b == 0)
         return divzero_error();
     return sch_integer_new(a / b);
@@ -1721,7 +1722,7 @@ static Value proc_quotient(UNUSED Value env, Value x, Value y)
 
 static Value proc_remainder(UNUSED Value env, Value x, Value y)
 {
-    int64_t a = get_int(x), b = get_int(y);
+    int64_t a = get(INT, x), b = get(INT, y);
     if (b == 0)
         return divzero_error();
     int64_t c = a % b;
@@ -1730,7 +1731,7 @@ static Value proc_remainder(UNUSED Value env, Value x, Value y)
 
 static Value proc_modulo(UNUSED Value env, Value x, Value y)
 {
-    int64_t a = get_int(x), b = get_int(y);
+    int64_t a = get(INT, x), b = get(INT, y);
     if (b == 0)
         return divzero_error();
     int64_t c = a % b;
@@ -1755,7 +1756,7 @@ static int64_t expt(int64_t x, int64_t y)
 }
 
 #define get_non_negative_int(x) ({ \
-            int64_t N = get_int(x); \
+            int64_t N = get(INT, x); \
             if (N < 0) \
                 return runtime_error("must be non-negative: %"PRId64, N); \
             N; \
@@ -1763,7 +1764,7 @@ static int64_t expt(int64_t x, int64_t y)
 
 static Value proc_expt(UNUSED Value env, Value x, Value y)
 {
-    int64_t a = get_int(x), b = get_non_negative_int(y);
+    int64_t a = get(INT, x), b = get_non_negative_int(y);
     int64_t c;
     if (b == 0)
         c = 1;
@@ -1778,8 +1779,7 @@ static Value proc_expt(UNUSED Value env, Value x, Value y)
 static Value proc_number_to_string(UNUSED Value env, Value x)
 {
     char buf[22]; // log10(UINT64_MAX)+2
-    EXPECT(type, TYPE_INT, x);
-    int64_t n = INT(x);
+    int64_t n = get(INT, x);
     snprintf(buf, sizeof(buf), "%"PRId64, n);
     return sch_string_new(buf);
 }
@@ -1827,14 +1827,12 @@ static Value proc_cons(UNUSED Value env, Value car, Value cdr)
 
 static Value proc_car(UNUSED Value env, Value pair)
 {
-    EXPECT(type, TYPE_PAIR, pair);
-    return car(pair);
+    return get(PAIR, pair)->car;
 }
 
 static Value proc_cdr(UNUSED Value env, Value pair)
 {
-    EXPECT(type, TYPE_PAIR, pair);
-    return cdr(pair);
+    return get(PAIR, pair)->cdr;
 }
 
 static Value expect_mutable(Value o)
@@ -1846,17 +1844,17 @@ static Value expect_mutable(Value o)
 
 static Value proc_set_car(UNUSED Value env, Value pair, Value obj)
 {
-    EXPECT(type, TYPE_PAIR, pair);
+    Pair *p = get(PAIR, pair);
     EXPECT(mutable, pair);
-    PAIR(pair)->car = obj;
+    p->car = obj;
     return pair;
 }
 
 static Value proc_set_cdr(UNUSED Value env, Value pair, Value obj)
 {
-    EXPECT(type, TYPE_PAIR, pair);
+    Pair *p = get(PAIR, pair);
     EXPECT(mutable, pair);
-    PAIR(pair)->cdr = obj;
+    p->cdr = obj;
     return pair;
 }
 
@@ -2867,9 +2865,8 @@ static Value proc_newline(UNUSED Value env, Value args)
 // 6.6.4. System interface
 static Value proc_load(UNUSED Value env, Value path)
 {
-    EXPECT(type, TYPE_STRING, path);
     // Current spec: path is always relative
-    return load_inner(STRING(path));
+    return load_inner(get(STRING, path));
 }
 
 //
