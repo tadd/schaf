@@ -451,8 +451,9 @@ static Value cfunc_closure_new(const char *name, void *cfunc, Value data)
 
 static Value eval_body(Value env, Value body);
 static Value env_inherit(Value parent);
-static Value env_put(Value env, Value key, Value value);
+static Value env_put(Value env, Symbol key, Value value);
 static Value expect_arity(int64_t expected, Value args);
+static Value expect_type(Type expected, Value v);
 
 //PTR
 static Value apply_closure(UNUSED Value env, Value proc, Value args)
@@ -463,10 +464,10 @@ static Value apply_closure(UNUSED Value env, Value proc, Value args)
     Value clenv = env_inherit(cl->env);
     Value params = cl->params;
     if (arity == -1)
-        env_put(clenv, params, args);
+        env_put(clenv, get(SYMBOL, params), args);
     else {
         for (Value pa = args, pp = params; pa != Qnil; pa = cdr(pa), pp = cdr(pp))
-            env_put(clenv, car(pp), car(pa));
+            env_put(clenv, get(SYMBOL, car(pp)), car(pa));
     }
     return eval_body(clenv, cl->body);
 }
@@ -686,12 +687,12 @@ static Value env_get(const Value env, Value name)
 // Note: Do not mistake this for "(define-syntax ...)" which related to macros
 static void define_syntax(Value env, const char *name, void *cfunc, int64_t arity)
 {
-    env_put(env, sch_symbol_new(name), syntax_new(name, cfunc, arity));
+    env_put(env, intern(name), syntax_new(name, cfunc, arity));
 }
 
 static void define_procedure(Value env, const char *name, void *cfunc, int64_t arity)
 {
-    env_put(env, sch_symbol_new(name), cfunc_new(name, cfunc, arity));
+    env_put(env, intern(name), cfunc_new(name, cfunc, arity));
 }
 
 //
@@ -1185,8 +1186,8 @@ static Value let(Value env, Value var, Value bindings, Value body)
         EXPECT(type, TYPE_PAIR, b);
         if (length(b) != 2)
             return runtime_error("malformed binding: %s", sch_stringify(b));
-        Value ident = car(b), expr = cadr(b);
-        EXPECT(type, TYPE_SYMBOL, ident);
+        Symbol ident = get(SYMBOL, car(b));
+        Value expr = cadr(b);
         if (named)
             lparams = PAIR(lparams)->cdr = list1(ident);
         Value val = eval(env, expr);
@@ -1195,7 +1196,7 @@ static Value let(Value env, Value var, Value bindings, Value body)
     }
     if (named) {
         Value proc = closure_new(letenv, cdr(params), body);
-        env_put(letenv, var, proc); // letenv affects as proc->env
+        env_put(letenv, get(SYMBOL, var), proc); // letenv affects as proc->env
     }
     return eval_body(letenv, body);
 }
@@ -1223,8 +1224,8 @@ static Value let_star(Value env, Value bindings, Value body)
         EXPECT(type, TYPE_PAIR, b);
         if (length(b) != 2)
             return runtime_error("malformed binding: %s", sch_stringify(b));
-        Value ident = car(b), expr = cadr(b);
-        EXPECT(type, TYPE_SYMBOL, ident);
+        Symbol ident = get(SYMBOL, car(b));
+        Value expr = cadr(b);
         letenv = env_inherit(letenv);
         Value val = eval(letenv, expr);
         CHECK_ERROR(val);
@@ -1253,8 +1254,7 @@ static Value syn_letrec(Value env, Value args)
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
         const Pair *pr = get(PAIR, b);
-        Value ident = pr->car;
-        EXPECT(type, TYPE_SYMBOL, ident);
+        Symbol ident = get(SYMBOL, pr->car);
         Value pval = get(PAIR, pr->cdr)->car;
         Value val = eval(letenv, pval);
         CHECK_ERROR(val);
@@ -1289,7 +1289,7 @@ static Value syn_do(Value env, Value args)
             return runtime_error("malformed binding: %s", sch_stringify(b));
         const Pair *pbd = get(PAIR, pb->cdr);
         Value var = pb->car, init = pbd->car, step = pbd->cdr;
-        EXPECT(type, TYPE_SYMBOL, var);
+        Symbol svar = get(SYMBOL, var);
         if (memq(var, vars) != Qfalse)
             return runtime_error("duplicated variable: %s", sch_symbol_to_cstr(var));
         vars = cons(var, vars);
@@ -1299,7 +1299,7 @@ static Value syn_do(Value env, Value args)
         }
         v = eval(env, init); // in the original env
         CHECK_ERROR(v);
-        env_put(doenv, var, v);
+        env_put(doenv, svar, v);
     }
     Value test = ptests->car, exprs = ptests->cdr;
     while ((v = eval(doenv, test)) == Qfalse) {
@@ -1433,15 +1433,14 @@ static Value syn_unquote_splicing(UNUSED Value env, UNUSED Value args)
 // 5.2. Definitions
 static Value define_variable(Value env, Value ident, Value expr)
 {
-    EXPECT(type, TYPE_SYMBOL, ident);
-
+    Symbol sident = get(SYMBOL, ident);
     Value val = eval(env, expr);
     CHECK_ERROR(val);
     bool found = false;
     if (env == env_toplevel)
         found = env_set(env, ident, val);
     if (!found)
-        env_put(env, ident, val); // prepend new
+        env_put(env, sident, val); // prepend new
     return Qfalse;
 }
 
