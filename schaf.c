@@ -26,29 +26,29 @@
 //
 
 // Value (uintptr_t):
-//   0b............000 Pointer (Unchangeable pattern!)
-//   0b..............1 Integer
-//   0b.............10 Symbol
-//   0b0-0{8bits!}0100 Character
-//   0b0--------001100 #f
-//   0b0--------011100 #t
-//   0b0-------0101100 null
-//   0b0-------0111100 <undef>
+//   0b...........000 Pointer (Unchangeable pattern!)
+//   0b.............1 Integer
+//   0b...........010 Symbol
+//   0b0-0{8bits!}100 Character
+//   0b0--------00110 #f
+//   0b0--------01110 #t
+//   0b0-------010110 null
+//   0b0-------011110 <undef>
 static const uintptr_t FLAG_NBIT_INT  = 1;
-static const uintptr_t FLAG_NBIT_SYM  = 2;
-static const uintptr_t FLAG_NBIT_CHAR = 4;
-static const uintptr_t FLAG_MASK_INT  =    0b1;
-static const uintptr_t FLAG_MASK_SYM  =   0b11;
-static const uintptr_t FLAG_MASK_IMM  =  0b111; // for 64 bit machine
-static const uintptr_t FLAG_MASK_CHAR = 0b1111;
-static const uintptr_t FLAG_INT       =    0b1;
-static const uintptr_t FLAG_SYM       =   0b10;
-static const uintptr_t FLAG_CHAR      = 0b0100;
-const Value SCH_FALSE = 0b001100U;
-const Value SCH_TRUE  = 0b011100U;
-const Value SCH_NULL  = 0b101100U; // emtpy list
-const Value SCH_UNDEF = 0b111100U; // may be an error or something
-#define BOOL_VAL(v) ((!!(v) << 4U) | 0b1100U)
+static const uintptr_t FLAG_NBIT_SYM  = 3;
+static const uintptr_t FLAG_NBIT_CHAR = 3;
+static const uintptr_t FLAG_MASK_INT  =   0b1;
+static const uintptr_t FLAG_MASK_SYM  = 0b111;
+static const uintptr_t FLAG_MASK_IMM  = 0b111; // for 64 bit machine
+static const uintptr_t FLAG_MASK_CHAR = 0b111;
+static const uintptr_t FLAG_INT       =   0b1;
+static const uintptr_t FLAG_SYM       = 0b010;
+static const uintptr_t FLAG_CHAR      = 0b100;
+const Value SCH_FALSE = 0b00110U;
+const Value SCH_TRUE  = 0b01110U;
+const Value SCH_NULL  = 0b10110U; // emtpy list
+const Value SCH_UNDEF = 0b11110U; // may be an error or something
+#define BOOL_VAL(v) ((!!(v) << 3U) | 0b110U)
 
 static const int64_t CFUNCARG_MAX = 3;
 
