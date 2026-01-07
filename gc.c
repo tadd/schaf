@@ -271,6 +271,7 @@ static void mark_val(MSHeap *heap, Value v)
         mark_val(heap, p->val);
         break;
     }
+    case TAG_REAL:
     case TAG_STRING:
     case TAG_CFUNC:
     case TAG_SYNTAX:
@@ -349,6 +350,7 @@ static void free_val(Value v)
         scary_free(e);
         break;
     }
+    case TAG_REAL:
     case TAG_CFUNC:
     case TAG_SYNTAX:
     case TAG_CFUNC_CLOSURE:
