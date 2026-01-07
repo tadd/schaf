@@ -104,6 +104,11 @@ inline bool sch_value_is_character(Value v)
     return (v & FLAG_MASK_CHAR) == FLAG_CHAR;
 }
 
+inline bool sch_value_is_real(Value v)
+{
+    return value_tag_is(v, TAG_REAL);
+}
+
 inline bool sch_value_is_string(Value v)
 {
     return value_tag_is(v, TAG_STRING);
@@ -122,6 +127,7 @@ static bool sch_value_is_procedure(Value v)
     case TAG_CONTINUATION:
     case TAG_CFUNC_CLOSURE:
         return true;
+    case TAG_REAL:
     case TAG_STRING:
     case TAG_PAIR:
     case TAG_VECTOR:
@@ -193,6 +199,8 @@ Type sch_value_type_of(Value v)
     if (value_is_immediate(v))
         return immediate_type_of(v);
     switch (VALUE_TAG(v)) {
+    case TAG_REAL:
+        return TYPE_REAL;
     case TAG_STRING:
         return TYPE_STRING;
     case TAG_PAIR:
@@ -234,6 +242,8 @@ static const char *value_type_to_string(Type t)
         return "undef";
     case TYPE_PAIR:
         return "pair";
+    case TYPE_REAL:
+        return "real";
     case TYPE_CHAR:
         return "character";
     case TYPE_STRING:
@@ -270,6 +280,11 @@ inline int64_t sch_integer_to_cint(Value x)
     int64_t i = x;
     return (i - 1) / (1 << FLAG_NBIT_INT);
 #endif
+}
+
+inline double sch_real_to_double(Value v)
+{
+    return REAL(v);
 }
 
 inline Symbol sch_symbol_to_csymbol(Value v)
@@ -347,6 +362,13 @@ void *obj_new(ValueTag t, size_t size)
     h->tag = t;
     h->immutable = false;
     return h;
+}
+
+Value sch_real_new(double d)
+{
+    Real *r = obj_new(TAG_REAL, sizeof(Real));
+    REAL(r) = d;
+    return (Value) r;
 }
 
 Value sch_character_new(uint8_t ch)
@@ -1524,6 +1546,7 @@ static Value syn_define(Value env, Value args)
     case TYPE_NULL:
     case TYPE_BOOL:
     case TYPE_INT:
+    case TYPE_REAL:
     case TYPE_CHAR:
     case TYPE_STRING:
     case TYPE_PROC:
@@ -1565,15 +1588,22 @@ static bool vector_equal(const Value *x, const Value *y)
 
 static bool equal(Value x, Value y)
 {
-    if (x == y)
-        return true;
-    Type tx = sch_value_type_of(x), ty = sch_value_type_of(y);
+    Type tx = sch_value_type_of(x);
+    if (x == y) {
+        return tx != TYPE_REAL || !isnan(REAL(x));
+    }
+    Type ty = sch_value_type_of(y);
     if (tx != ty)
         return false;
     switch (tx) {
     case TYPE_PAIR:
         return equal(car(x), car(y)) &&
                equal(cdr(x), cdr(y));
+    case TYPE_REAL:
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+        return REAL(x) == REAL(y) && !isnan(REAL(x));
+#pragma GCC diagnostic pop
     case TYPE_CHAR:
         return CHAR(x) == CHAR(y);
     case TYPE_STRING:
@@ -1602,26 +1632,82 @@ static Value proc_equal(UNUSED Value env, Value x, Value y)
 
 // 6.2. Numbers
 // 6.2.5. Numerical operations
-static Value proc_integer_p(UNUSED Value env, Value obj)
+static bool sch_value_is_number(Value x)
 {
-    return BOOL_VAL(sch_value_is_integer(obj));
+    Type t = sch_value_type_of(x);
+    return t == TYPE_INT || t == TYPE_REAL;
 }
 
-#define get_int(x) ({ \
+static Value proc_number_p(UNUSED Value env, Value obj)
+{
+    return BOOL_VAL(sch_value_is_number(obj));
+}
+
+static Value proc_real_p(UNUSED Value env, Value obj)
+{
+    // FIXME: cope with other than integer and real
+    return BOOL_VAL(sch_value_is_number(obj));
+}
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+static bool is_integer_like_double(double d)
+{
+    return isfinite(d) && d == floor(d);
+}
+#pragma GCC diagnostic pop
+
+static bool is_integer_like_real(Value x)
+{
+    if (!sch_value_is_real(x))
+        return false;
+    return is_integer_like_double(REAL(x));
+}
+
+static Value proc_integer_p(UNUSED Value env, Value x)
+{
+    return BOOL_VAL(sch_value_is_integer(x) || is_integer_like_real(x));
+}
+
+static Value proc_exact_p(UNUSED Value env, Value x)
+{
+    return BOOL_VAL(sch_value_is_integer(x));
+}
+
+static Value proc_inexact_p(UNUSED Value env, Value x)
+{
+    return BOOL_VAL(sch_value_is_real(x));
+}
+
+// Represents the tower from the botom: int -> real -> ...
+typedef enum {
+    NUM_TYPE_INT,
+    NUM_TYPE_REAL,
+} NumType;
+
+#define EXPECT_NUMBER_TYPE(t) \
+    EXPECT(t == TYPE_INT || t == TYPE_REAL, \
+           "expected number but got %s", value_type_to_string(t))
+#define get_num_type(x) ({ \
+            Type T = sch_value_type_of(x); \
+            EXPECT_NUMBER_TYPE(T); \
+            T == TYPE_INT ? NUM_TYPE_INT : NUM_TYPE_REAL; \
+        });
+#define get_double(x) ({ \
             Value X = x; \
-            EXPECT_TYPE(integer, X); \
-            INT(X); \
+            NumType NT = get_num_type(X); \
+            NT == NUM_TYPE_INT ? (double) INT(X) : REAL(X); \
         })
 
-typedef bool (*RelOpFunc)(int64_t x, int64_t y);
+typedef bool (*RelOpFunc)(double x, double y);
+
 static Value relop(RelOpFunc func, Value args)
 {
     EXPECT_ARITY_MIN_2(args);
-
     Value p = args;
-    int64_t x = get_int(car(p));
+    double x = get_double(car(p));
     while ((p = cdr(p)) != Qnil) {
-        int64_t y = get_int(car(p));
+        double y = get_double(car(p));
         if (!func(x, y))
             return Qfalse;
         x = y;
@@ -1629,11 +1715,14 @@ static Value relop(RelOpFunc func, Value args)
     return Qtrue;
 }
 
-static inline bool relop_eq(int64_t x, int64_t y) { return x == y; }
-static inline bool relop_lt(int64_t x, int64_t y) { return x <  y; }
-static inline bool relop_le(int64_t x, int64_t y) { return x <= y; }
-static inline bool relop_gt(int64_t x, int64_t y) { return x >  y; }
-static inline bool relop_ge(int64_t x, int64_t y) { return x >= y; }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+static inline bool relop_eq(double x, double y) { return x == y; }
+#pragma GCC diagnostic pop
+static inline bool relop_lt(double x, double y) { return x <  y; }
+static inline bool relop_le(double x, double y) { return x <= y; }
+static inline bool relop_gt(double x, double y) { return x >  y; }
+static inline bool relop_ge(double x, double y) { return x >= y; }
 
 static Value proc_numeq(UNUSED Value env, Value args)
 {
@@ -1660,82 +1749,150 @@ static Value proc_ge(UNUSED Value env, Value args)
     return relop(relop_ge, args);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+static bool zero_p(Value x)
+{
+    if (sch_value_is_integer(x))
+        return INT(x) == 0;
+    return sch_value_is_real(x) && REAL(x) == 0.0;
+}
+#pragma GCC diagnostic pop
+
 static Value proc_zero_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) == 0);
+    return BOOL_VAL(zero_p(obj));
 }
 
 static Value proc_positive_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) > 0);
+    if (sch_value_is_integer(obj))
+        return BOOL_VAL(INT(obj) > 0);
+    return BOOL_VAL(sch_value_is_real(obj) && REAL(obj) > 0.0);
 }
 
 static Value proc_negative_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) < 0);
+    if (sch_value_is_integer(obj))
+        return BOOL_VAL(INT(obj) < 0);
+    return BOOL_VAL(sch_value_is_real(obj) && REAL(obj) < 0.0);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
 static Value proc_odd_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) % 2 != 0);
+    if (sch_value_is_integer(obj))
+        return BOOL_VAL(INT(obj) % 2 != 0);
+    if (!is_integer_like_real(obj))
+        return Qfalse;
+    double d = REAL(obj), half = d / 2.0;
+    return BOOL_VAL(isfinite(d) && half != floor(half));
 }
 
 static Value proc_even_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) % 2 == 0);
+    if (sch_value_is_integer(obj))
+        return BOOL_VAL(INT(obj) % 2 == 0);
+    if (!is_integer_like_real(obj))
+        return Qfalse;
+    double d = REAL(obj), half = d / 2.0;
+    return BOOL_VAL(isfinite(d) && half == floor(half));
 }
+#pragma GCC diagnostic pop
+
+#define get_double_and_inexactness(x, b) ({ \
+            Value X = x; \
+            NumType NT = get_num_type(X); \
+            NT == NUM_TYPE_INT ? (double) INT(X) : (b = true, REAL(X)); \
+        })
+#define double_to_integer_or_real(inexact, d) (inexact ? sch_real_new(d) : sch_integer_new((int64_t) d))
 
 static Value proc_max(UNUSED Value env, Value args)
 {
     EXPECT_ARITY_MIN_1(args);
-    int64_t max = get_int(car(args));
-    for (Value p = cdr(args); p != Qnil; p = cdr(p)) {
-        int64_t x = get_int(car(p));
+    Value p = args, vmax = car(p);
+    bool inexact = false;
+    double max = get_double_and_inexactness(vmax, inexact);
+    while ((p = cdr(p)) != Qnil) {
+        Value v = car(p);
+        double x = get_double_and_inexactness(v, inexact);
         if (max < x)
             max = x;
     }
-    return sch_integer_new(max);
+    return double_to_integer_or_real(inexact, max);
 }
 
 static Value proc_min(UNUSED Value env, Value args)
 {
     EXPECT_ARITY_MIN_1(args);
-    int64_t min = get_int(car(args));
-    for (Value p = cdr(args); p != Qnil; p = cdr(p)) {
-        int64_t x = get_int(car(p));
+    Value p = args, vmin = car(p);
+    bool inexact = false;
+    double min = get_double_and_inexactness(vmin, inexact);
+    while ((p = cdr(p)) != Qnil) {
+        Value v = car(p);
+        double x = get_double_and_inexactness(v, inexact);
         if (min > x)
             min = x;
     }
-    return sch_integer_new(min);
+    return double_to_integer_or_real(inexact, min);
+}
+
+#define get_num_as_double(x, t) ({ \
+            Value X = x; \
+            t == NUM_TYPE_INT ? (double) INT(X) : REAL(X); \
+        })
+
+static inline Value num_new(double x, NumType t)
+{
+    return t == NUM_TYPE_INT ? sch_integer_new(x) : sch_real_new(x);
 }
 
 static Value proc_add(UNUSED Value env, Value args)
 {
-    int64_t y = 0;
-    for (Value p = args; p != Qnil; p = cdr(p))
-        y += get_int(car(p));
-    return sch_integer_new(y);
+    double y = 0.0;
+    NumType ret_type = NUM_TYPE_INT;
+    for (Value p = args; p != Qnil; p = cdr(p)) {
+        Value x = car(p);
+        NumType t = get_num_type(x);
+        if (ret_type < t)
+            ret_type = t;
+        y += get_num_as_double(x, t);
+    }
+    return num_new(y, ret_type);
 }
 
 static Value proc_sub(UNUSED Value env, Value args)
 {
     EXPECT_ARITY_MIN_1(args);
 
-    int64_t y = get_int(car(args));
-    Value p = cdr(args);
+    Value x = car(args), p = cdr(args);
+    NumType ret_type = get_num_type(x);
+    double y = get_num_as_double(x, ret_type);
     if (p == Qnil)
-        return sch_integer_new(-y);
-    for (; p != Qnil; p = cdr(p))
-        y -= get_int(car(p));
-    return sch_integer_new(y);
+        return num_new(-y, ret_type);
+    for (; p != Qnil; p = cdr(p)) {
+        x = car(p);
+        NumType t = get_num_type(x);
+        if (ret_type < t)
+            ret_type = t;
+        y -= get_num_as_double(x, t);
+    }
+    return num_new(y, ret_type);
 }
 
 static Value proc_mul(UNUSED Value env, Value args)
 {
-    int64_t y = 1;
-    for (Value p = args; p != Qnil; p = cdr(p))
-        y *= get_int(car(p));
-    return sch_integer_new(y);
+    double y = 1.0;
+    NumType ret_type = NUM_TYPE_INT;
+    for (Value p = args; p != Qnil; p = cdr(p)) {
+        Value x = car(p);
+        NumType t = get_num_type(x);
+        if (ret_type < t)
+            ret_type = t;
+        y *= get_num_as_double(car(p), t);
+    }
+    return num_new(y, ret_type);
 }
 
 static inline Value divzero_error(void)
@@ -1747,69 +1904,79 @@ static Value proc_div(UNUSED Value env, Value args)
 {
     EXPECT_ARITY_MIN_1(args);
 
-    int64_t y = get_int(car(args));
-    Value p = cdr(args);
+    Value x = car(args), p = cdr(args);
+    NumType ret_type = get_num_type(x);
+    double y = get_num_as_double(x, ret_type);
     if (p == Qnil) {
-        if (y == 0)
+        if (ret_type == NUM_TYPE_INT && INT(x) == 0)
             return divzero_error();
-        return sch_integer_new(1 / y); // 0, 1, -1
+        return num_new(1.0 / y, ret_type); // 0, 1, -1
     }
     for (; p != Qnil; p = cdr(p)) {
-        int64_t x = get_int(car(p));
-        if (x == 0)
+        x = car(p);
+        NumType t = get_num_type(x);
+        double d = get_num_as_double(x, t);
+        if (ret_type < t)
+            ret_type = t;
+        else if (ret_type == NUM_TYPE_INT && INT(x) == 0)
             return divzero_error();
-        y /= x;
+        y /= d;
     }
-    return sch_integer_new(y);
+    return num_new(y, ret_type);
 }
 
 static Value proc_abs(UNUSED Value env, Value x)
 {
-    int64_t n = get_int(x);
-    return sch_integer_new(n < 0 ? -n : n);
+    NumType t = get_num_type(x);
+    double d = get_num_as_double(x, t);
+    return num_new(d < 0 ? -d : d, t);
 }
+
+#define get_int_like_real(x, inexact) ({ \
+            double D = REAL(x); \
+            EXPECT(is_integer_like_double(D), \
+                   "expected integer-like double but got %f", D); \
+            inexact = true; \
+            (int64_t) D; \
+        })
+#define get_int_like(x, inexact) ({ \
+            Value X = x; \
+            NumType NT = get_num_type(X); \
+            NT == NUM_TYPE_INT ? INT(X) : get_int_like_real(X, inexact); \
+        })
+#define int_to_integer_or_real(inexact, v) ({ \
+            int64_t I = v; \
+            inexact ? sch_real_new(I) : sch_integer_new(I); \
+        })
 
 static Value proc_quotient(UNUSED Value env, Value x, Value y)
 {
-    int64_t a = get_int(x), b = get_int(y);
+    bool inexact = false;
+    int64_t a = get_int_like(x, inexact), b = get_int_like(y, inexact);
     if (b == 0)
         return divzero_error();
-    return sch_integer_new(a / b);
+    return int_to_integer_or_real(inexact, a / b);
 }
 
 static Value proc_remainder(UNUSED Value env, Value x, Value y)
 {
-    int64_t a = get_int(x), b = get_int(y);
+    bool inexact = false;
+    int64_t a = get_int_like(x, inexact), b = get_int_like(y, inexact);
     if (b == 0)
         return divzero_error();
-    int64_t c = a % b;
-    return sch_integer_new(c);
+    return int_to_integer_or_real(inexact, a % b);
 }
 
 static Value proc_modulo(UNUSED Value env, Value x, Value y)
 {
-    int64_t a = get_int(x), b = get_int(y);
+    bool inexact = false;
+    int64_t a = get_int_like(x, inexact), b = get_int_like(y, inexact);
     if (b == 0)
         return divzero_error();
     int64_t c = a % b;
     if ((a < 0 && b > 0) || (a > 0 && b < 0))
         c += b;
-    return sch_integer_new(c);
-}
-
-static int64_t *list_to_int_abs_array(Value l, Value *err)
-{
-    int64_t *a = scary_new(sizeof(int64_t));
-    for (Value p = l; p != Qnil; p = cdr(p)) {
-        Value x = car(p);
-        if (!sch_value_is_integer(x)) {
-            *err = type_error("integer", x);
-            return NULL;
-        }
-        int64_t i = INT(x);
-        scary_push(&a, i < 0 ? -i : i);
-    }
-    return a;
+    return int_to_integer_or_real(inexact, c);
 }
 
 static int64_t gcd(int64_t x, int64_t y)
@@ -1822,18 +1989,20 @@ static int64_t gcd(int64_t x, int64_t y)
     return x;
 }
 
+#define get_int_like_abs(x, inexact) ({ \
+            int64_t I = get_int_like(x, inexact); \
+            I < 0 ? -I : I; \
+        })
+
 static Value proc_gcd(UNUSED Value env, Value args)
 {
-    if (args == Qnil)
-        return sch_integer_new(0);
-    Value err = Qfalse;
-    int64_t *a = list_to_int_abs_array(args, &err);
-    EXPECT_ERROR(err);
-    int64_t ret = a[0];
-    for (size_t i = 1, len = scary_length(a); i < len; i++)
-        ret = gcd(ret, a[i]);
-    scary_free(a);
-    return sch_integer_new(ret);
+    bool inexact = false;
+    int64_t ret = 0, x;
+    for (Value p = args; p != Qnil; p = cdr(p)) {
+        x = get_int_like(car(p), inexact);
+        ret = gcd(ret, x);
+    }
+    return int_to_integer_or_real(inexact, labs(ret));
 }
 
 static int64_t lcm(int64_t x, int64_t y)
@@ -1843,58 +2012,188 @@ static int64_t lcm(int64_t x, int64_t y)
 
 static Value proc_lcm(UNUSED Value env, Value args)
 {
-    if (args == Qnil)
-        return sch_integer_new(1);
-    Value err = Qfalse;
-    int64_t *a = list_to_int_abs_array(args, &err);
-    EXPECT_ERROR(err);
-    int64_t ret = a[0];
-    for (size_t i = 1, len = scary_length(a); i < len; i++)
-        ret = lcm(ret, a[i]);
-    scary_free(a);
-    return sch_integer_new(ret);
-}
-
-static int64_t expt(int64_t x, int64_t y)
-{
-    int64_t z = 1;
-    while (y > 0) {
-        if ((y % 2) == 0) {
-            x *= x;
-            y /= 2;
-        } else {
-            z *= x;
-            y--;
-        }
+    bool inexact = false;
+    int64_t ret = 1, x;
+    for (Value p = args; p != Qnil; p = cdr(p)) {
+        x = get_int_like(car(p), inexact);
+        ret = lcm(ret, x);
     }
-    return z;
+    return int_to_integer_or_real(inexact, labs(ret));
 }
 
-#define get_non_negative_int(x) ({ \
-            int64_t N = get_int(x); \
-            EXPECT(N >= 0, "must be non-negative: %"PRId64, N); \
-            N; \
-        })
+static Value proc_numerator(UNUSED Value env, Value x)
+{
+    EXPECT_TYPE(number, x);
+    return x; // FIXME: support rational
+}
+
+static Value proc_denominator(UNUSED Value env, UNUSED Value x)
+{
+    EXPECT_TYPE(number, x);
+    return sch_value_is_integer(x) ?
+        sch_integer_new(1) : sch_real_new(1); // FIXME: support rational
+}
+
+static inline Value rounding_func(double (*func)(double), Value x)
+{
+    bool inexact = false;
+    double dx = get_double_and_inexactness(x, inexact);
+    double y = func(dx);
+    return double_to_integer_or_real(inexact, y);
+}
+
+static Value proc_floor(UNUSED Value env, Value x)
+{
+    return rounding_func(floor, x);
+}
+
+static Value proc_ceiling(UNUSED Value env, Value x)
+{
+    return rounding_func(ceil, x);
+}
+
+static Value proc_truncate(UNUSED Value env, Value x)
+{
+    return rounding_func(trunc, x);
+}
+
+static Value proc_round(UNUSED Value env, Value x)
+{
+    return rounding_func(round, x);
+}
+
+static inline Value math_func(double (*func)(double), Value x)
+{
+    return sch_real_new(func(get_double(x)));
+}
+
+static Value proc_exp(UNUSED Value env, Value x)
+{
+    return math_func(exp, x);
+}
+
+static Value proc_log(UNUSED Value env, Value x)
+{
+    return math_func(log, x);
+}
+
+static Value proc_sin(UNUSED Value env, Value x)
+{
+    return math_func(sin, x);
+}
+
+static Value proc_cos(UNUSED Value env, Value x)
+{
+    return math_func(cos, x);
+}
+
+static Value proc_tan(UNUSED Value env, Value x)
+{
+    return math_func(tan, x);
+}
+
+static Value proc_asin(UNUSED Value env, Value x)
+{
+    return math_func(asin, x);
+}
+
+static Value proc_acos(UNUSED Value env, Value x)
+{
+    return math_func(acos, x);
+}
+
+static inline Value math_func2(double (*func)(double, double), Value x, Value y)
+{
+    double dx = get_double(x), dy = get_double(y);
+    return sch_real_new(func(dx, dy));
+}
+
+static Value proc_atan(UNUSED Value env, Value args)
+{
+    EXPECT_ARITY_RANGE(1, 2, args);
+    Value d = cdr(args);
+    if (d == Qnil)
+        return math_func(atan, car(args));
+    return math_func2(atan2, car(args), car(d));
+}
+
+static Value proc_sqrt(UNUSED Value env, Value x)
+{
+    return math_func(sqrt, x);
+}
 
 static Value proc_expt(UNUSED Value env, Value x, Value y)
 {
-    int64_t a = get_int(x), b = get_non_negative_int(y);
-    int64_t c;
-    if (b == 0)
-        c = 1;
-    else if (a == 0)
-        c = 0;
-    else
-        c = expt(a, b);
-    return sch_integer_new(c);
+    NumType tx = get_num_type(x);
+    NumType ty = get_num_type(y);
+    NumType tret = (tx == NUM_TYPE_INT && ty == tx) ? tx : NUM_TYPE_REAL;
+    double a = get_num_as_double(x, tx), b = get_num_as_double(y, ty);
+    double c = pow(a, b);
+    return num_new(c, tret);
+}
+
+static Value proc_make_rectangular(UNUSED Value env, Value x, Value y)
+{
+    EXPECT_TYPE_TWIN(number, x, y);
+    EXPECT(zero_p(y), "complex number not supported yet");
+    return x; // FIXME: support complex
+}
+
+static Value proc_make_polar(UNUSED Value env, Value x, Value y)
+{
+    EXPECT_TYPE_TWIN(number, x, y);
+    EXPECT(zero_p(y), "complex number not supported yet");
+    return x; // FIXME: support complex
+}
+
+static Value proc_real_part(UNUSED Value env, Value x)
+{
+    EXPECT_TYPE(number, x);
+    return x; // FIXME: support complex
+}
+
+static Value proc_imag_part(UNUSED Value env, Value x)
+{
+    EXPECT_TYPE(number, x);
+    return sch_integer_new(0); // FIXME: support complex
+}
+
+static Value proc_magnitude(UNUSED Value env, Value x)
+{
+    NumType t = get_num_type(x);
+    double d = get_num_as_double(x, t);
+    return num_new(d < 0 ? -d : d, t); // FIXME: support complex
+}
+
+static Value proc_angle(UNUSED Value env, UNUSED Value x)
+{
+    return sch_real_new(0.0); // FIXME: support complex
+}
+
+static Value proc_exact_to_inexact(UNUSED Value env, Value x)
+{
+    return sch_real_new(get_double(x)); // FIXME: support complex
+}
+
+static Value proc_inexact_to_exact(UNUSED Value env, Value x)
+{
+    return sch_integer_new(lround(get_double(x))); // FIXME: support complex
 }
 
 // 6.2.6. Numerical input and output
+#define get_int(x) ({ \
+            Value X = x; \
+            EXPECT_TYPE(integer, X); \
+            INT(X); \
+        })
+
+// FIXME: Integrate with parse.c
 static Value proc_number_to_string(UNUSED Value env, Value args)
 {
     EXPECT_ARITY_RANGE(1, 2, args);
     int64_t n = get_int(car(args));
-    int64_t radix = (cdr(args) != Qnil) ? get_int(cadr(args)) : 10;
+    Value opt = cdr(args);
+    int64_t radix = (opt != Qnil) ? get_int(car(opt)) : 10;
     char buf[66]; // in case of radix == 2 (64-bit integer) + sign + \0
     if (radix == 10) {
         snprintf(buf, sizeof(buf), "%"PRId64, n);
@@ -1924,17 +2223,12 @@ static Value proc_number_to_string(UNUSED Value env, Value args)
 static Value proc_string_to_number(UNUSED Value env, Value args)
 {
     EXPECT_ARITY_RANGE(1, 2, args);
-    Value s = car(args);
-    EXPECT_TYPE(string, s);
-    if (STRING(s)[0] == '\0')
-        return Qfalse;
-    int64_t radix = (cdr(args) != Qnil) ? get_int(cadr(args)) : 10;
-    char *ep;
-    errno = 0;
-    int64_t i = strtoll(STRING(s), &ep, radix);
-    if (errno != 0 || (i == 0 && STRING(s) == ep))
-        return Qfalse;
-    return sch_integer_new(i);
+    Value vstr = car(args);
+    EXPECT_TYPE(string, vstr);
+    const char *s = STRING(vstr);
+    Value opt = cdr(args);
+    int64_t radix = (opt != Qnil) ? get_int(car(opt)) : 0;
+    return parse_number_string(s, radix);
 }
 
 // 6.3. Other data types
@@ -2149,6 +2443,12 @@ static Value list_tail(Value list, int64_t k)
     EXPECT(i == k, "list is shorter than %"PRId64, k);
     return p;
 }
+
+#define get_non_negative_int(x) ({ \
+            int64_t N = get_int(x); \
+            EXPECT(N >= 0, "must be non-negative: %"PRId64, N); \
+            N; \
+        })
 
 static Value proc_list_tail(UNUSED Value env, Value list, Value vk)
 {
@@ -3327,6 +3627,7 @@ static void print_object(FILE *f, Value v, Value record, ValuePrinter printer)
 {
     switch (sch_value_type_of(v)) {
     case TYPE_SYMBOL:
+    case TYPE_REAL:
     case TYPE_CHAR:
     case TYPE_STRING:
     case TYPE_NULL:
@@ -3363,6 +3664,9 @@ static void fdisplay_single(FILE *f, Value v)
         break;
     case TYPE_SYMBOL:
         fprintf(f, "%s", sch_symbol_to_cstr(v));
+        break;
+    case TYPE_REAL:
+        fprintf(f, "%f", REAL(v));
         break;
     case TYPE_CHAR:
         fprintf(f, "%c", CHAR(v));
@@ -3452,6 +3756,7 @@ static void inspect_single(FILE *f, Value v)
     case TYPE_NULL:
     case TYPE_BOOL:
     case TYPE_INT:
+    case TYPE_REAL:
     case TYPE_PROC:
     case TYPE_UNDEF:
     case TYPE_ENV:
@@ -3741,13 +4046,13 @@ void sch_init(const void *sp)
     define_procedure(e, "equal?", proc_equal, 2);
     // 6.2. Numbers
     // 6.2.5. Numerical operations
-    define_procedure(e, "number?", proc_integer_p, 1); // alias
-    //- complex?
-    //- rational?
-    //- real?
+    define_procedure(e, "number?", proc_number_p, 1);
+    define_procedure(e, "complex?", proc_number_p, 1); // alias
+    define_procedure(e, "rational?", proc_real_p, 1); // alias
+    define_procedure(e, "real?", proc_real_p, 1);
     define_procedure(e, "integer?", proc_integer_p, 1);
-    //- exact?
-    //- inexact?
+    define_procedure(e, "exact?", proc_exact_p, 1);
+    define_procedure(e, "inexact?", proc_inexact_p, 1);
     define_procedure(e, "=", proc_numeq, -1);
     define_procedure(e, "<", proc_lt, -1);
     define_procedure(e, ">", proc_gt, -1);
@@ -3770,31 +4075,31 @@ void sch_init(const void *sp)
     define_procedure(e, "modulo", proc_modulo, 2);
     define_procedure(e, "gcd", proc_gcd, -1);
     define_procedure(e, "lcm", proc_lcm, -1);
-    //- numerator
-    //- denominator
-    //- floor
-    //- ceiling
-    //- truncate
-    //- round
+    define_procedure(e, "numerator", proc_numerator, 1);
+    define_procedure(e, "denominator", proc_denominator, 1);
+    define_procedure(e, "floor", proc_floor, 1);
+    define_procedure(e, "ceiling", proc_ceiling, 1);
+    define_procedure(e, "truncate", proc_truncate, 1);
+    define_procedure(e, "round", proc_round, 1);
     //- rationalize
-    //- exp
-    //- log
-    //- sin
-    //- cos
-    //- tan
-    //- asin
-    //- acos
-    //- atan
-    //- sqrt
+    define_procedure(e, "exp", proc_exp, 1);
+    define_procedure(e, "log", proc_log, 1);
+    define_procedure(e, "sin", proc_sin, 1);
+    define_procedure(e, "cos", proc_cos, 1);
+    define_procedure(e, "tan", proc_tan, 1);
+    define_procedure(e, "asin", proc_asin, 1);
+    define_procedure(e, "acos", proc_acos, 1);
+    define_procedure(e, "atan", proc_atan, -1);
+    define_procedure(e, "sqrt", proc_sqrt, 1);
     define_procedure(e, "expt", proc_expt, 2);
-    //- make-rectangular
-    //- make-polar
-    //- real-part
-    //- imag-part
-    //- magnitude
-    //- angle
-    //- exact->inexact
-    //- inexact->exact
+    define_procedure(e, "make-rectangular", proc_make_rectangular, 2);
+    define_procedure(e, "make-polar", proc_make_polar, 2);
+    define_procedure(e, "real-part", proc_real_part, 1);
+    define_procedure(e, "imag-part", proc_imag_part, 1);
+    define_procedure(e, "magnitude", proc_magnitude, 1);
+    define_procedure(e, "angle", proc_angle, 1);
+    define_procedure(e, "exact->inexact", proc_exact_to_inexact, 1);
+    define_procedure(e, "inexact->exact", proc_inexact_to_exact, 1);
     // 6.2.6. Numerical input and output
     define_procedure(e, "number->string", proc_number_to_string, -1);
     define_procedure(e, "string->number", proc_string_to_number, -1);

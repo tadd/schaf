@@ -1,0 +1,17 @@
+<%
+N = 1024
+NTERM = 4
+def seq
+  NTERM.times.map { rand*256-128 }.join(' ')
+end
+-%>
+(define (add)
+  ;; random real numbers in [-128,127]
+<% ((1024/NTERM)-1).times do -%>
+  (+ <%= seq %>)
+<% end -%>
+  (+ <%= seq %>))
+
+(do ((i 0 (+ i 1)))
+    ((= i 29000) #t)
+  (add))

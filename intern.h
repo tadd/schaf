@@ -30,6 +30,9 @@ typedef enum {
     TYPE_UNDEF,
 // boxed (tagged)
     TYPE_PAIR,
+    TYPE_REAL,
+    // TYPE_RATIONAL,
+    // TYPE_COMPLEX,
     TYPE_STRING,
     TYPE_PROC,
     TYPE_VECTOR,
@@ -41,6 +44,9 @@ typedef enum {
 
 typedef enum {
     TAG_PAIR,
+    TAG_REAL,
+    // TAG_RATIONAL,
+    // TAG_COMPLEX,
     TAG_STRING,
     TAG_CFUNC,
     TAG_SYNTAX, // almost a C Function
@@ -71,6 +77,11 @@ typedef struct {
     Pair pair;   // inherit
     int64_t pos; // value from ftell(3)
 } LocatedPair;
+
+typedef struct {
+    Header header;
+    double value;
+} Real;
 
 typedef struct {
     Header header;
@@ -164,6 +175,7 @@ typedef struct {
 #define SYMBOL(v) sch_symbol_to_csymbol(v)
 #define PAIR(v) ((Pair *) v)
 #define LOCATED_PAIR(v) ((LocatedPair *) v)
+#define REAL(v) (((Real *) v)->value)
 #define CHAR(v) sch_character_to_uint8(v)
 #define STRING(v) (((String *) v)->body)
 #define PROCEDURE(v) ((Procedure *) v)
@@ -189,6 +201,7 @@ extern Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
 
 Source *iparse(FILE *in, const char *filename);
 Value parse_datum(FILE *in, const char *filename);
+Value parse_number_string(const char *s, unsigned radix);
 void pos_to_line_col(int64_t pos, const int64_t *newline_pos, int64_t *line, int64_t *col);
 [[gnu::format(printf, 1, 2)]]
 void print_error_message(const char *fmt, ...);
@@ -205,12 +218,14 @@ ATTR_XMALLOC void *gc_malloc(size_t size);
 
 bool sch_value_is_integer(Value v);
 bool sch_value_is_symbol(Value v);
+bool sch_value_is_real(Value v);
 bool sch_value_is_character(Value v);
 bool sch_value_is_string(Value v);
 bool sch_value_is_pair(Value v);
 Type sch_value_type_of(Value v);
 
 int64_t sch_integer_to_cint(Value v);
+double sch_real_to_double(Value v);
 const char *sch_symbol_to_cstr(Value v);
 const char *sch_string_to_cstr(Value v);
 Symbol sch_symbol_to_csymbol(Value v);
@@ -218,6 +233,7 @@ uint8_t sch_character_to_uint8(Value v);
 const char *sch_value_to_type_name(Value v);
 
 Value sch_integer_new(int64_t i);
+Value sch_real_new(double d);
 Value sch_symbol_new(const char *s);
 Value sch_character_new(uint8_t ch);
 Value sch_string_new(const char *s);
