@@ -1624,9 +1624,25 @@ static Value proc_real_p(UNUSED Value env, Value obj)
     return BOOL_VAL(t == TYPE_INT || t == TYPE_REAL);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+static bool is_integer_like_real(Value x)
+{
+    if (!sch_value_is_real(x))
+        return false;
+    double d = REAL(x);
+    return isfinite(d) && d == floor(d);
+}
+#pragma GCC diagnostic pop
+
+static bool is_integer_like(Value x)
+{
+    return sch_value_is_integer(x) || is_integer_like_real(x);
+}
+
 static Value proc_integer_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj));
+    return BOOL_VAL(is_integer_like(obj));
 }
 
 #define get_int(x) ({ \
@@ -1727,53 +1743,129 @@ static Value proc_ge(UNUSED Value env, Value args)
     return relop(relop_int_ge, relop_real_ge, args);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
 static Value proc_zero_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) == 0);
+    if (sch_value_is_integer(obj))
+        return BOOL_VAL(INT(obj) == 0);
+    return BOOL_VAL(sch_value_is_real(obj) && REAL(obj) == 0.0);
 }
+#pragma GCC diagnostic pop
 
 static Value proc_positive_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) > 0);
+    if (sch_value_is_integer(obj))
+        return BOOL_VAL(INT(obj) > 0);
+    return BOOL_VAL(sch_value_is_real(obj) && REAL(obj) > 0.0);
 }
 
 static Value proc_negative_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) < 0);
+    if (sch_value_is_integer(obj))
+        return BOOL_VAL(INT(obj) < 0);
+    return BOOL_VAL(sch_value_is_real(obj) && REAL(obj) < 0.0);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
 static Value proc_odd_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) % 2 != 0);
+    if (sch_value_is_integer(obj))
+        return BOOL_VAL(INT(obj) % 2 != 0);
+    if (!is_integer_like_real(obj))
+        return Qfalse;
+    double d = REAL(obj), half = d / 2.0;
+    return BOOL_VAL(isfinite(d) && half != floor(half));
 }
 
 static Value proc_even_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) % 2 == 0);
+    if (sch_value_is_integer(obj))
+        return BOOL_VAL(INT(obj) % 2 == 0);
+    if (!is_integer_like_real(obj))
+        return Qfalse;
+    double d = REAL(obj), half = d / 2.0;
+    return BOOL_VAL(isfinite(d) && half == floor(half));
 }
+#pragma GCC diagnostic pop
 
-static Value proc_max(UNUSED Value env, Value args)
+static Value max_int(Value args)
 {
-    EXPECT(arity_min_1, args);
-    int64_t max = get_int(car(args));
-    for (Value p = cdr(args); p != Qnil; p = cdr(p)) {
-        int64_t x = get_int(car(p));
+    int64_t max = get_int_maybe(car(args));
+    if (max == INT_MAX)
+        return args;
+    for (Value prev = args, p; (p = cdr(prev)) != Qnil; prev = p) {
+        int64_t x = get_int_maybe(car(p));
+        if (x == INT_MAX)
+            return prev;
         if (max < x)
             max = x;
     }
     return sch_integer_new(max);
 }
 
-static Value proc_min(UNUSED Value env, Value args)
+static Value max_real(Value args)
+{
+    Value p = args, vmax = car(p);
+    double max = get_double(vmax);
+    while ((p = cdr(p)) != Qnil) {
+        Value v = car(p);
+        double x = get_double(v);
+        if (max < x) {
+            max = x;
+            vmax = v;
+        }
+    }
+    return vmax;
+}
+
+static Value proc_max(UNUSED Value env, Value args)
 {
     EXPECT(arity_min_1, args);
-    int64_t min = get_int(car(args));
-    for (Value p = cdr(args); p != Qnil; p = cdr(p)) {
-        int64_t x = get_int(car(p));
+    Value ret = max_int(args);
+    if (sch_value_is_integer(ret))
+        return ret;
+    return max_real(ret);
+}
+
+static Value min_int(Value args)
+{
+    int64_t min = get_int_maybe(car(args));
+    if (min == INT_MAX)
+        return args;
+    for (Value prev = args, p; (p = cdr(prev)) != Qnil; prev = p) {
+        int64_t x = get_int_maybe(car(p));
+        if (x == INT_MAX)
+            return prev;
         if (min > x)
             min = x;
     }
     return sch_integer_new(min);
+}
+
+static Value min_real(Value args)
+{
+    Value p = args, vmin = car(p);
+    double min = get_double(vmin);
+    while ((p = cdr(p)) != Qnil) {
+        Value v = car(p);
+        double x = get_double(v);
+        if (min > x) {
+            min = x;
+            vmin = v;
+        }
+    }
+    return vmin;
+}
+
+static Value proc_min(UNUSED Value env, Value args)
+{
+    EXPECT(arity_min_1, args);
+    Value ret = min_int(args);
+    if (sch_value_is_integer(ret))
+        return ret;
+    return min_real(ret);
 }
 
 static Value proc_add(UNUSED Value env, Value args)
