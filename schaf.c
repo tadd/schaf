@@ -1633,22 +1633,42 @@ static Value proc_equal(UNUSED Value env, Value x, Value y)
 
 // 6.2. Numbers
 // 6.2.5. Numerical operations
+static bool is_number(Value x)
+{
+    Type t = sch_value_type_of(x);
+    return t == TYPE_INT || t == TYPE_REAL;
+}
+
 static Value proc_number_p(UNUSED Value env, Value obj)
 {
-    // FIXME: cope with other than integer
-    Type t = sch_value_type_of(obj);
-    return BOOL_VAL(t == TYPE_INT || t == TYPE_REAL);
+    return BOOL_VAL(is_number(obj));
 }
 
 static Value proc_real_p(UNUSED Value env, Value obj)
 {
-    Type t = sch_value_type_of(obj);
-    return BOOL_VAL(t == TYPE_INT || t == TYPE_REAL);
+    // FIXME: cope with other than integer and real
+    return BOOL_VAL(is_number(obj));
+}
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+static bool is_integer_like_real(Value x)
+{
+    if (!sch_value_is_real(x))
+        return false;
+    double d = REAL(x);
+    return isfinite(d) && d == floor(d);
+}
+#pragma GCC diagnostic pop
+
+static bool is_integer_like(Value x)
+{
+    return sch_value_is_integer(x) || is_integer_like_real(x);
 }
 
 static Value proc_integer_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj));
+    return BOOL_VAL(is_integer_like(obj));
 }
 
 typedef bool (*RelOpFunc)(double x, double y);
@@ -1714,29 +1734,83 @@ static Value proc_ge(UNUSED Value env, Value args)
     return relop(relop_ge, args);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
 static Value proc_zero_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) == 0);
+    if (sch_value_is_integer(obj))
+        return BOOL_VAL(INT(obj) == 0);
+    return BOOL_VAL(sch_value_is_real(obj) && REAL(obj) == 0.0);
 }
+#pragma GCC diagnostic pop
 
 static Value proc_positive_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) > 0);
+    if (sch_value_is_integer(obj))
+        return BOOL_VAL(INT(obj) > 0);
+    return BOOL_VAL(sch_value_is_real(obj) && REAL(obj) > 0.0);
 }
 
 static Value proc_negative_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) < 0);
+    if (sch_value_is_integer(obj))
+        return BOOL_VAL(INT(obj) < 0);
+    return BOOL_VAL(sch_value_is_real(obj) && REAL(obj) < 0.0);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
 static Value proc_odd_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) % 2 != 0);
+    if (sch_value_is_integer(obj))
+        return BOOL_VAL(INT(obj) % 2 != 0);
+    if (!is_integer_like_real(obj))
+        return Qfalse;
+    double d = REAL(obj), half = d / 2.0;
+    return BOOL_VAL(isfinite(d) && half != floor(half));
 }
 
 static Value proc_even_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) % 2 == 0);
+    if (sch_value_is_integer(obj))
+        return BOOL_VAL(INT(obj) % 2 == 0);
+    if (!is_integer_like_real(obj))
+        return Qfalse;
+    double d = REAL(obj), half = d / 2.0;
+    return BOOL_VAL(isfinite(d) && half == floor(half));
+}
+#pragma GCC diagnostic pop
+
+static Value proc_max(UNUSED Value env, Value args)
+{
+    EXPECT_ARITY_MIN_1(args);
+    Value p = args, vmax = car(p);
+    double max = get_double(vmax);
+    while ((p = cdr(p)) != Qnil) {
+        Value v = car(p);
+        double x = get_double(v);
+        if (max < x) {
+            max = x;
+            vmax = v;
+        }
+    }
+    return vmax;
+}
+
+static Value proc_min(UNUSED Value env, Value args)
+{
+    EXPECT_ARITY_MIN_1(args);
+    Value p = args, vmin = car(p);
+    double min = get_double(vmin);
+    while ((p = cdr(p)) != Qnil) {
+        Value v = car(p);
+        double x = get_double(v);
+        if (min > x) {
+            min = x;
+            vmin = v;
+        }
+    }
+    return vmin;
 }
 
 #define get_int(x) ({ \
@@ -1744,29 +1818,6 @@ static Value proc_even_p(UNUSED Value env, Value obj)
             EXPECT_TYPE(integer, X); \
             INT(X); \
         })
-static Value proc_max(UNUSED Value env, Value args)
-{
-    EXPECT_ARITY_MIN_1(args);
-    int64_t max = get_int(car(args));
-    for (Value p = cdr(args); p != Qnil; p = cdr(p)) {
-        int64_t x = get_int(car(p));
-        if (max < x)
-            max = x;
-    }
-    return sch_integer_new(max);
-}
-
-static Value proc_min(UNUSED Value env, Value args)
-{
-    EXPECT_ARITY_MIN_1(args);
-    int64_t min = get_int(car(args));
-    for (Value p = cdr(args); p != Qnil; p = cdr(p)) {
-        int64_t x = get_int(car(p));
-        if (min > x)
-            min = x;
-    }
-    return sch_integer_new(min);
-}
 
 static Value proc_add(UNUSED Value env, Value args)
 {
