@@ -1651,21 +1651,28 @@ static Value proc_integer_p(UNUSED Value env, Value obj)
     return BOOL_VAL(sch_value_is_integer(obj));
 }
 
-#define get_int(x) ({ \
+typedef bool (*RelOpFunc)(double x, double y);
+
+#define EXPECT_TYPE_OR_RAW(t1, t2, v) do { \
+        Type T0 = sch_value_type_of(v); \
+        EXPECT(T0 == t1 || T0 == t2,\
+               "expected %s or %s but got %s", \
+               value_type_to_string(t1), value_type_to_string(t2), value_type_to_string(T0)); \
+    } while (0)
+#define get_double(x) ({ \
             Value X = x; \
-            EXPECT_TYPE(integer, X); \
-            INT(X); \
+            Type T = sch_value_type_of(X); \
+            EXPECT_TYPE_OR_RAW(TYPE_INT, TYPE_REAL, T); \
+            T == TYPE_INT ? (double) INT(X) : REAL(X); \
         })
 
-typedef bool (*RelOpFunc)(int64_t x, int64_t y);
 static Value relop(RelOpFunc func, Value args)
 {
     EXPECT_ARITY_MIN_2(args);
-
     Value p = args;
-    int64_t x = get_int(car(p));
+    double x = get_double(car(p));
     while ((p = cdr(p)) != Qnil) {
-        int64_t y = get_int(car(p));
+        double y = get_double(car(p));
         if (!func(x, y))
             return Qfalse;
         x = y;
@@ -1673,11 +1680,14 @@ static Value relop(RelOpFunc func, Value args)
     return Qtrue;
 }
 
-static inline bool relop_eq(int64_t x, int64_t y) { return x == y; }
-static inline bool relop_lt(int64_t x, int64_t y) { return x <  y; }
-static inline bool relop_le(int64_t x, int64_t y) { return x <= y; }
-static inline bool relop_gt(int64_t x, int64_t y) { return x >  y; }
-static inline bool relop_ge(int64_t x, int64_t y) { return x >= y; }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+static inline bool relop_eq(double x, double y) { return x == y; }
+#pragma GCC diagnostic pop
+static inline bool relop_lt(double x, double y) { return x <  y; }
+static inline bool relop_le(double x, double y) { return x <= y; }
+static inline bool relop_gt(double x, double y) { return x >  y; }
+static inline bool relop_ge(double x, double y) { return x >= y; }
 
 static Value proc_numeq(UNUSED Value env, Value args)
 {
@@ -1729,6 +1739,11 @@ static Value proc_even_p(UNUSED Value env, Value obj)
     return BOOL_VAL(sch_value_is_integer(obj) && INT(obj) % 2 == 0);
 }
 
+#define get_int(x) ({ \
+            Value X = x; \
+            EXPECT_TYPE(integer, X); \
+            INT(X); \
+        })
 static Value proc_max(UNUSED Value env, Value args)
 {
     EXPECT_ARITY_MIN_1(args);
@@ -1934,6 +1949,7 @@ static Value proc_expt(UNUSED Value env, Value x, Value y)
 }
 
 // 6.2.6. Numerical input and output
+// FIXME: Integrate with parse.c
 static Value proc_number_to_string(UNUSED Value env, Value args)
 {
     EXPECT_ARITY_RANGE(1, 2, args);
