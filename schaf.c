@@ -1603,6 +1603,11 @@ static Value proc_equal(UNUSED Value env, Value x, Value y)
 
 // 6.2. Numbers
 // 6.2.5. Numerical operations
+static Value proc_number_p(UNUSED Value env, Value obj)
+{
+    return BOOL_VAL(sch_value_is_integer(obj));
+}
+
 static Value proc_integer_p(UNUSED Value env, Value obj)
 {
     return BOOL_VAL(sch_value_is_integer(obj));
@@ -3729,7 +3734,7 @@ void sch_init(const void *sp)
     define_procedure(e, "equal?", proc_equal, 2);
     // 6.2. Numbers
     // 6.2.5. Numerical operations
-    define_procedure(e, "number?", proc_integer_p, 1); // alias
+    define_procedure(e, "number?", proc_number_p, 1);
     //- complex?
     //- rational?
     //- real?
