@@ -106,6 +106,11 @@ inline bool sch_value_is_character(Value v)
     return (v & FLAG_MASK_CHAR) == FLAG_CHAR;
 }
 
+inline bool sch_value_is_real(Value v)
+{
+    return value_tag_is(v, TAG_REAL);
+}
+
 inline bool sch_value_is_string(Value v)
 {
     return value_tag_is(v, TAG_STRING);
@@ -124,6 +129,7 @@ static bool sch_value_is_procedure(Value v)
     case TAG_CONTINUATION:
     case TAG_CFUNC_CLOSURE:
         return true;
+    case TAG_REAL:
     case TAG_STRING:
     case TAG_PAIR:
     case TAG_VECTOR:
@@ -196,6 +202,8 @@ Type sch_value_type_of(Value v)
     if (value_is_immediate(v))
         return immediate_type_of(v);
     switch (VALUE_TAG(v)) {
+    case TAG_REAL:
+        return TYPE_REAL;
     case TAG_STRING:
         return TYPE_STRING;
     case TAG_PAIR:
@@ -235,6 +243,8 @@ static const char *value_type_to_string(Type t)
         return "undef";
     case TYPE_PAIR:
         return "pair";
+    case TYPE_REAL:
+        return "real";
     case TYPE_CHAR:
         return "character";
     case TYPE_STRING:
@@ -271,6 +281,11 @@ inline int64_t sch_integer_to_cint(Value x)
     int64_t i = x;
     return (i - 1) / (1 << FLAG_NBIT_INT);
 #endif
+}
+
+inline double sch_real_to_double(Value v)
+{
+    return REAL(v);
 }
 
 inline Symbol sch_symbol_to_csymbol(Value v)
@@ -348,6 +363,13 @@ void *obj_new(ValueTag t, size_t size)
     h->tag = t;
     h->immutable = false;
     return h;
+}
+
+Value sch_real_new(double d)
+{
+    Real *r = obj_new(TAG_REAL, sizeof(Real));
+    REAL(r) = d;
+    return (Value) r;
 }
 
 Value sch_character_new(uint8_t ch)
@@ -1525,6 +1547,7 @@ static Value syn_define(Value env, Value args)
     case TYPE_NULL:
     case TYPE_BOOL:
     case TYPE_INT:
+    case TYPE_REAL:
     case TYPE_CHAR:
     case TYPE_STRING:
     case TYPE_PROC:
@@ -1566,15 +1589,22 @@ static bool vector_equal(const Value *x, const Value *y)
 
 static bool equal(Value x, Value y)
 {
-    if (x == y)
-        return true;
-    Type tx = sch_value_type_of(x), ty = sch_value_type_of(y);
+    Type tx = sch_value_type_of(x);
+    if (x == y) {
+        return tx != TYPE_REAL || !isnan(REAL(x));
+    }
+    Type ty = sch_value_type_of(y);
     if (tx != ty)
         return false;
     switch (tx) {
     case TYPE_PAIR:
         return equal(car(x), car(y)) &&
                equal(cdr(x), cdr(y));
+    case TYPE_REAL:
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+        return REAL(x) == REAL(y) && !isnan(REAL(x));
+#pragma GCC diagnostic pop
     case TYPE_CHAR:
         return CHAR(x) == CHAR(y);
     case TYPE_STRING:
@@ -1605,7 +1635,14 @@ static Value proc_equal(UNUSED Value env, Value x, Value y)
 // 6.2.5. Numerical operations
 static Value proc_number_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_integer(obj));
+    // FIXME: cope with other than integer
+    Type t = sch_value_type_of(obj);
+    return BOOL_VAL(t == TYPE_INT || t == TYPE_REAL);
+}
+
+static Value proc_real_p(UNUSED Value env, Value obj)
+{
+    return BOOL_VAL(sch_value_is_real(obj));
 }
 
 static Value proc_integer_p(UNUSED Value env, Value obj)
@@ -3321,6 +3358,7 @@ static void print_object(FILE *f, Value v, Value record, ValuePrinter printer)
 {
     switch (sch_value_type_of(v)) {
     case TYPE_SYMBOL:
+    case TYPE_REAL:
     case TYPE_CHAR:
     case TYPE_STRING:
     case TYPE_NULL:
@@ -3357,6 +3395,9 @@ static void fdisplay_single(FILE *f, Value v)
         break;
     case TYPE_SYMBOL:
         fprintf(f, "%s", sch_symbol_to_cstr(v));
+        break;
+    case TYPE_REAL:
+        fprintf(f, "%f", REAL(v));
         break;
     case TYPE_CHAR:
         fprintf(f, "%c", CHAR(v));
@@ -3446,6 +3487,7 @@ static void inspect_single(FILE *f, Value v)
     case TYPE_NULL:
     case TYPE_BOOL:
     case TYPE_INT:
+    case TYPE_REAL:
     case TYPE_PROC:
     case TYPE_UNDEF:
     case TYPE_ENV:
@@ -3737,7 +3779,7 @@ void sch_init(const void *sp)
     define_procedure(e, "number?", proc_number_p, 1);
     //- complex?
     //- rational?
-    //- real?
+    define_procedure(e, "real?", proc_real_p, 1);
     define_procedure(e, "integer?", proc_integer_p, 1);
     //- exact?
     //- inexact?
