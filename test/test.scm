@@ -825,7 +825,9 @@
   (expect = (min -1 -2.1 -3.1) -3.1)))
 
 (describe "+" (lambda ()
-  (expect = (+ 42 21) 63)))
+  (expect = (+ 42 21) 63)
+  (expect = (+ 42 2.1) 44.1)
+  (expect = (+ -1.2 2) 0.8)))
 
 (describe "-" (lambda ()
   (expect = (- 42 21) 21)

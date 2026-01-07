@@ -1611,6 +1611,12 @@ static Value proc_equal(UNUSED Value env, Value x, Value y)
 
 // 6.2. Numbers
 // 6.2.5. Numerical operations
+
+typedef enum {
+    NUM_TYPE_INT,
+    NUM_TYPE_REAL,
+} NumType;
+
 static Value proc_number_p(UNUSED Value env, Value obj)
 {
     // FIXME: cope with other than integer
@@ -1868,12 +1874,59 @@ static Value proc_min(UNUSED Value env, Value args)
     return min_real(ret);
 }
 
-static Value proc_add(UNUSED Value env, Value args)
+static Value expect_number_type(Type t)
+{
+    if (t == TYPE_INT || t == TYPE_REAL)
+        return Qfalse;
+    return runtime_error("expected number but got %s",
+                         value_type_to_string(t));
+}
+
+#define get_num_type(x) ({ \
+            Type T = sch_value_type_of(x); \
+            EXPECT(number_type, T); \
+            T == TYPE_INT ? NUM_TYPE_INT : NUM_TYPE_REAL; \
+        });
+
+static Value real_add(int64_t sum, Value args)
+{
+    double y = sum;
+    Value p = args;
+    for (; p != Qnil; p = cdr(p)) {
+        Value x = car(p);
+        NumType t = get_num_type(x);
+        switch (t) {
+        case NUM_TYPE_INT:
+            y += (double) INT(x);
+            break;
+        case NUM_TYPE_REAL:
+            y += REAL(x);
+        }
+    }
+    return sch_real_new(y);
+}
+
+static Value int_add(Value args)
 {
     int64_t y = 0;
-    for (Value p = args; p != Qnil; p = cdr(p))
-        y += get_int(car(p));
+    Value p = args;
+    for (; p != Qnil; p = cdr(p)) {
+        Value x = car(p);
+        NumType t = get_num_type(x);
+        switch (t) {
+        case NUM_TYPE_INT:
+            y += INT(x);
+            break;
+        case NUM_TYPE_REAL:
+            return real_add(y, p);
+        }
+    }
     return sch_integer_new(y);
+}
+
+static Value proc_add(UNUSED Value env, Value args)
+{
+    return int_add(args);
 }
 
 static Value proc_sub(UNUSED Value env, Value args)
