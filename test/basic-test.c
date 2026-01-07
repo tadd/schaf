@@ -241,7 +241,7 @@ Test(schaf, runtime_error_line_column) {
 
 Test(schaf, runtime_error_frames) {
     expect_runtime_error(
-"-: expected integer but got procedure\n"
+"-: expected number but got procedure\n"
 "\t<inline>:1:14 in 'f'\n"
 "\t<inline>:2:2 in <toplevel>"
 ,
