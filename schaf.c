@@ -1642,7 +1642,8 @@ static Value proc_number_p(UNUSED Value env, Value obj)
 
 static Value proc_real_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(sch_value_is_real(obj));
+    Type t = sch_value_type_of(obj);
+    return BOOL_VAL(t == TYPE_INT || t == TYPE_REAL);
 }
 
 static Value proc_integer_p(UNUSED Value env, Value obj)

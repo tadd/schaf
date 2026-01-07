@@ -62,8 +62,15 @@
 #define expect_vint_eq(exp, act) expect_vx_eq(TYPE_INT, integer, int, exp, act)
 #define expect_vstr_eq(exp, act) expect_vx_eq(TYPE_STRING, string, str, exp, act)
 #define expect_vsym_eq(exp, act) expect_vx_eq(TYPE_SYMBOL, symbol, str, exp, act)
+#define expect_vreal_eq(exp, act) do { \
+        Value a = act; \
+        expect_no_error(a); \
+        expect_int_eq(TYPE_REAL, sch_value_type_of(a)); \
+        cr_expect(eq(dbl, exp, REAL(a))); \
+    } while (0)
 
 #define expect_vint_eq_parsed(exp, act) expect_x_eq_parsed(vint, exp, act)
+#define expect_vreal_eq_parsed(exp, act) expect_x_eq_parsed(vreal, exp, act)
 #define expect_vstr_eq_parsed(exp, act) expect_x_eq_parsed(vstr, exp, act)
 #define expect_vsym_eq_parsed(exp, act) expect_x_eq_parsed(vsym, exp, act)
 #define expect_list_eq_parsed(exp, act) expect_x_eq_parsed(list, exp, act)
@@ -141,6 +148,11 @@ Test(schaf, parse_prefixed_int) {
     expect_vint_eq_parsed(42, "#x2a");
     expect_vint_eq_parsed(42, "#x+2a");
     expect_vint_eq_parsed(-42, "#x-2a");
+}
+
+Test(schaf, parse_real) {
+    expect_vreal_eq_parsed(42, "42.0");
+    expect_vreal_eq_parsed(-42, "-42.0");
 }
 
 Test(schaf, parse_nil) {
