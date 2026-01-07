@@ -603,6 +603,15 @@
   (expect number? -1)
   (expect number? -1000000)
 
+  ;; FIXME
+  ;; (expect number? #e1e10)
+  ;; (expect number? 3.0)
+  ;; (expect number? 3+0i)
+  ;; (expect number? 3+4i)
+  ;; (expect number? -2.5+0.0i)
+  ;; (expect number? 6/10)
+  ;; (expect number? 8/4)
+
   (noexpect number? 'a)
   (noexpect number? '())
   (noexpect number? '(1))
