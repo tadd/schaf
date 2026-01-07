@@ -1671,20 +1671,27 @@ static Value proc_integer_p(UNUSED Value env, Value obj)
     return BOOL_VAL(is_integer_like(obj));
 }
 
-typedef bool (*RelOpFunc)(double x, double y);
+// Represents the tower from the botom: int -> real -> ...
+typedef enum {
+    NUM_TYPE_INT,
+    NUM_TYPE_REAL,
+} NumType;
 
-#define EXPECT_TYPE_OR_RAW(t1, t2, v) do { \
-        Type T0 = sch_value_type_of(v); \
-        EXPECT(T0 == t1 || T0 == t2,\
-               "expected %s or %s but got %s", \
-               value_type_to_string(t1), value_type_to_string(t2), value_type_to_string(T0)); \
-    } while (0)
+#define EXPECT_NUMBER_TYPE(t) \
+    EXPECT(t == TYPE_INT || t == TYPE_REAL, \
+           "expected number but got %s", value_type_to_string(t))
+#define get_num_type(x) ({ \
+            Type T = sch_value_type_of(x); \
+            EXPECT_NUMBER_TYPE(T); \
+            T == TYPE_INT ? NUM_TYPE_INT : NUM_TYPE_REAL; \
+        });
 #define get_double(x) ({ \
             Value X = x; \
-            Type T = sch_value_type_of(X); \
-            EXPECT_TYPE_OR_RAW(TYPE_INT, TYPE_REAL, T); \
-            T == TYPE_INT ? (double) INT(X) : REAL(X); \
+            NumType NT = get_num_type(X); \
+            NT == NUM_TYPE_INT ? (double) INT(X) : REAL(X); \
         })
+
+typedef bool (*RelOpFunc)(double x, double y);
 
 static Value relop(RelOpFunc func, Value args)
 {
@@ -1813,39 +1820,61 @@ static Value proc_min(UNUSED Value env, Value args)
     return vmin;
 }
 
-#define get_int(x) ({ \
+#define get_num_as_double(x, t) ({ \
             Value X = x; \
-            EXPECT_TYPE(integer, X); \
-            INT(X); \
+            t == NUM_TYPE_INT ? (double) INT(X) : REAL(X); \
         })
+
+static inline Value num_new(double x, NumType t)
+{
+    return t == NUM_TYPE_INT ? sch_integer_new(x) : sch_real_new(x);
+}
 
 static Value proc_add(UNUSED Value env, Value args)
 {
-    int64_t y = 0;
-    for (Value p = args; p != Qnil; p = cdr(p))
-        y += get_int(car(p));
-    return sch_integer_new(y);
+    double y = 0.0;
+    NumType ret_type = NUM_TYPE_INT;
+    for (Value p = args; p != Qnil; p = cdr(p)) {
+        Value x = car(p);
+        NumType t = get_num_type(x);
+        if (ret_type < t)
+            ret_type = t;
+        y += get_num_as_double(x, t);
+    }
+    return num_new(y, ret_type);
 }
 
 static Value proc_sub(UNUSED Value env, Value args)
 {
     EXPECT_ARITY_MIN_1(args);
 
-    int64_t y = get_int(car(args));
-    Value p = cdr(args);
+    Value x = car(args), p = cdr(args);
+    NumType ret_type = get_num_type(x);
+    double y = get_num_as_double(x, ret_type);
     if (p == Qnil)
-        return sch_integer_new(-y);
-    for (; p != Qnil; p = cdr(p))
-        y -= get_int(car(p));
-    return sch_integer_new(y);
+        return num_new(-y, ret_type);
+    for (; p != Qnil; p = cdr(p)) {
+        x = car(p);
+        NumType t = get_num_type(x);
+        if (ret_type < t)
+            ret_type = t;
+        y -= get_num_as_double(x, t);
+    }
+    return num_new(y, ret_type);
 }
 
 static Value proc_mul(UNUSED Value env, Value args)
 {
-    int64_t y = 1;
-    for (Value p = args; p != Qnil; p = cdr(p))
-        y *= get_int(car(p));
-    return sch_integer_new(y);
+    double y = 1.0;
+    NumType ret_type = NUM_TYPE_INT;
+    for (Value p = args; p != Qnil; p = cdr(p)) {
+        Value x = car(p);
+        NumType t = get_num_type(x);
+        if (ret_type < t)
+            ret_type = t;
+        y *= get_num_as_double(car(p), t);
+    }
+    return num_new(y, ret_type);
 }
 
 static inline Value divzero_error(void)
@@ -1857,21 +1886,32 @@ static Value proc_div(UNUSED Value env, Value args)
 {
     EXPECT_ARITY_MIN_1(args);
 
-    int64_t y = get_int(car(args));
-    Value p = cdr(args);
+    Value x = car(args), p = cdr(args);
+    NumType ret_type = get_num_type(x);
+    double y = get_num_as_double(x, ret_type);
     if (p == Qnil) {
-        if (y == 0)
+        if (ret_type == NUM_TYPE_INT && INT(x) == 0)
             return divzero_error();
-        return sch_integer_new(1 / y); // 0, 1, -1
+        return num_new(1.0 / y, ret_type); // 0, 1, -1
     }
     for (; p != Qnil; p = cdr(p)) {
-        int64_t x = get_int(car(p));
-        if (x == 0)
+        x = car(p);
+        NumType t = get_num_type(x);
+        double d = get_num_as_double(x, t);
+        if (ret_type < t)
+            ret_type = t;
+        else if (ret_type == NUM_TYPE_INT && INT(x) == 0)
             return divzero_error();
-        y /= x;
+        y /= d;
     }
-    return sch_integer_new(y);
+    return num_new(y, ret_type);
 }
+
+#define get_int(x) ({ \
+            Value X = x; \
+            EXPECT_TYPE(integer, X); \
+            INT(X); \
+        })
 
 static Value proc_abs(UNUSED Value env, Value x)
 {
