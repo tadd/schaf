@@ -18,6 +18,7 @@ typedef enum {
     TOK_TYPE_COMMA,
     TOK_TYPE_SPLICE,
     TOK_TYPE_INT,
+    TOK_TYPE_REAL,
     TOK_TYPE_DOT,
     TOK_TYPE_CHAR,
     TOK_TYPE_STRING,
@@ -67,6 +68,10 @@ DEF_CONST_TOKEN_FUNC(MINUS, "-")
 static inline Token token_int(int64_t i)
 {
     return TOKEN_VAL(INT, sch_integer_new(i));
+}
+static inline Token token_real(double d)
+{
+    return TOKEN_VAL(REAL, sch_real_new(d));
 }
 static inline Token token_char(uint8_t ch)
 {
@@ -331,13 +336,21 @@ static Token lex_constant(Parser *p)
     return lex_signed_int_with_radix(p, radix);
 }
 
-static Token lex_int(Parser *p, int coeff)
+static Token lex_num(Parser *p, int coeff)
 {
     int64_t i;
     int n = fscanf(p->in, "%"PRId64, &i);
     if (n != 1)
-        parse_error(p, "integer digits", "invalid string");
-    return token_int(coeff * i);
+        parse_error(p, "digits", "invalid string");
+    int c = fgetc(p->in);
+    ungetc(c, p->in);
+    if (c != '.')
+        return token_int(coeff * i);
+    double d;
+    n = fscanf(p->in, "%lf", &d);
+    if (n != 1)
+        parse_error(p, "digits", "invalid string");
+    return token_real(coeff * (i + d));
 }
 
 static int fpeekc(FILE *in)
@@ -353,7 +366,7 @@ static Token lex_after_sign(Parser *p, int csign)
     int dig = isdigit(c);
     bool minus = csign == '-';
     if (dig)
-        return lex_int(p, minus * -2 + 1);
+        return lex_num(p, minus * -2 + 1);
     return minus ? TOK_MINUS() : TOK_PLUS();
 }
 
@@ -427,7 +440,7 @@ static Token lex(Parser *p)
     }
     if (isdigit(c)) {
         ungetc(c, p->in);
-        return lex_int(p, 1);
+        return lex_num(p, 1);
     }
     if (is_initial(c))
         return lex_ident(p, c);
@@ -457,6 +470,9 @@ static const char *token_stringify(Token t)
         return "#(";
     case TOK_TYPE_INT:
         snprintf(buf, sizeof(buf), "%"PRId64, sch_integer_to_cint(t.value));
+        break;
+    case TOK_TYPE_REAL:
+        snprintf(buf, sizeof(buf), "%g", REAL(t.value));
         break;
     case TOK_TYPE_IDENT:
         return sch_symbol_to_cstr(t.value);
@@ -574,6 +590,7 @@ static Value parse_expr_token(Parser *p, Token t)
     case TOK_TYPE_CHAR:
     case TOK_TYPE_STRING:
     case TOK_TYPE_INT:
+    case TOK_TYPE_REAL:
     case TOK_TYPE_IDENT:
         return t.value;
     case TOK_TYPE_EOF:
