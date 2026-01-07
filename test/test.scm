@@ -604,8 +604,8 @@
   (expect number? -1000000)
 
   ;; FIXME
+  (expect number? 3.0)
   ;; (expect number? #e1e10)
-  ;; (expect number? 3.0)
   ;; (expect number? 3+0i)
   ;; (expect number? 3+4i)
   ;; (expect number? -2.5+0.0i)
@@ -619,6 +619,19 @@
   (noexpect number? #t)
   (noexpect number? #f)
   (noexpect number? number?)))
+
+(describe "real?" (lambda ()
+  (expect real? 0.0)
+  (expect real? -0.0)
+  (expect real? 1.0)
+  (expect real? -1.0)
+  (expect real? 100000.0)
+  (expect real? -100000.0)
+  (expect real? -3.141592)
+
+  (expect real? 0)
+  (expect real? 1)
+  (expect real? -1)))
 
 (describe "integer?" (lambda ()
   (expect integer? 0)
