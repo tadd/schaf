@@ -140,6 +140,11 @@ inline static bool is_error(Value v)
     return value_tag_is(v, TAG_ERROR);
 }
 
+inline static bool is_boolean(Value v)
+{
+    return v == Qtrue || v == Qfalse;
+}
+
 static Type immediate_type_of(Value v)
 {
     if (v == Qnil)
@@ -148,7 +153,7 @@ static Type immediate_type_of(Value v)
         return TYPE_INT;
     if (sch_value_is_symbol(v))
         return TYPE_SYMBOL;
-    if (v == Qtrue || v == Qfalse)
+    if (is_boolean(v))
         return TYPE_BOOL;
     if (v == Qundef)
         return TYPE_UNDEF;
@@ -1786,7 +1791,7 @@ static Value proc_not(UNUSED Value env, Value x)
 
 static Value proc_boolean_p(UNUSED Value env, Value x)
 {
-    return BOOL_VAL(x == Qtrue || x == Qfalse);
+    return BOOL_VAL(is_boolean(x));
 }
 
 // 6.3.2. Pairs and lists
