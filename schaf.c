@@ -527,10 +527,9 @@ static Value expect_type(Type expected, Value v)
 
 static Value expect_type_twin(Type expected, Value x, Value y)
 {
-    Value v = expect_type(expected, x);
-    if (is_error(v))
-        return v;
-    return expect_type(expected, y);
+    EXPECT(type, expected, x);
+    EXPECT(type, expected, y);
+    return Qfalse;
 }
 
 static Value expect_type_or(Type e1, Type e2, Value v)
