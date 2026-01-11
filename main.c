@@ -81,7 +81,9 @@ static void usage(FILE *out)
     usage_opt(out, "-p", "Print the last expression before exit.");
     usage_opt(out, "-P", "Only parse and print syntax list without evaluation.");
     usage_opt(out, "-s", "Print heap statistics before/after GC.");
+#ifndef SMALL_GC
     usage_opt(out, "--gc=<algorithm>", "Specify GC algorithm: mark-sweep, mark-sweep+bitmap, epsilon.");
+#endif
     usage_opt(out, "-S, --gc-stress", "Put stress on GC.");
     usage_opt(out, "-T", "Print consumed CPU time at exit.");
     usage_opt(out, "-h, --help", "Print this help.");
@@ -97,7 +99,9 @@ typedef struct {
     const char *path;
     const char *script;
     double init_heap_size_mib;
+#ifndef SMALL_GC
     SchGCAlgorithm gc_algorithm;
+#endif
     bool print;
     bool parse_only;
     bool cputime;
@@ -107,6 +111,7 @@ typedef struct {
     bool interacitve;
 } SchOption;
 
+#ifndef SMALL_GC
 static int get_gc_algorithm(const char *s)
 {
     static const struct {
@@ -133,6 +138,7 @@ static void parse_opt_longer(SchOption *o, const char *name, const char *value)
         o->gc_algorithm = s;
     }
 }
+#endif
 
 static double parse_posnum(const char *s)
 {
@@ -147,13 +153,17 @@ static SchOption parse_opt(int argc, char *const *argv)
 {
     const OptLonger opts[] = {
         { "help", 'h', false },
+#ifndef SMALL_GC
         { "gc", 0, true },
+#endif
         { "gc-stress", 'S', false },
         {}
     };
     SchOption o = {
         .init_heap_size_mib = 0.0,
+#ifndef SMALL_GC
         .gc_algorithm = 0,
+#endif
     };
     OptLongerData data = { 0 };
     int opt;
@@ -185,9 +195,11 @@ static SchOption parse_opt(int argc, char *const *argv)
             break;
         case 'h':
             usage(stdout);
+#ifndef SMALL_GC
         case 0:
             parse_opt_longer(&o, data.name, data.value);
             break;
+#endif
         case '?':
             usage(stderr);
         }
@@ -286,8 +298,10 @@ int main(int argc, char **argv)
     sch_set_gc_print_stat(o.heap_stat);
     if (o.init_heap_size_mib > 0.0)
         sch_set_gc_init_size(o.init_heap_size_mib);
+#ifndef SMALL_GC
     if (o.gc_algorithm > 0)
         sch_set_gc_algorithm(o.gc_algorithm);
+#endif
 
     SCH_INIT();
     if (o.interacitve)

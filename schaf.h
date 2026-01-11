@@ -6,11 +6,13 @@
 
 typedef uintptr_t SchValue;
 
+#ifndef SMALL_GC
 typedef enum {
     SCH_GC_ALGORITHM_MARK_SWEEP,
     SCH_GC_ALGORITHM_MARK_SWEEP_BITMAP,
     SCH_GC_ALGORITHM_EPSILON
 } SchGCAlgorithm;
+#endif
 
 extern const SchValue SCH_NULL, SCH_UNDEF, SCH_FALSE, SCH_TRUE;
 
@@ -33,6 +35,8 @@ const char *sch_error_message(void);
 void sch_set_gc_init_size(double mib);
 void sch_set_gc_stress(bool b);
 void sch_set_gc_print_stat(bool b);
+#ifndef SMALL_GC
 void sch_set_gc_algorithm(SchGCAlgorithm s);
+#endif
 
 #endif

@@ -80,7 +80,9 @@ typedef struct {
     uint8_t *low, *high;
     Value **roots;
     MSHeader *free_list;
+#ifndef SMALL_GC
     uint8_t *bitmap;
+#endif
 } MSHeap;
 
 #ifdef __clang__
@@ -122,7 +124,9 @@ static void ms_init(void)
     heap->low = first->body;
     heap->high = heap->low + first->size;
     heap->free_list = MS_HEADER(first->body);
+#ifndef SMALL_GC
     heap->bitmap = NULL;
+#endif
     gc_data = heap;
 }
 
@@ -197,16 +201,21 @@ static void mark_env_each(UNUSED uint64_t key, uint64_t value)
     mark_val(value);
 }
 
+#ifndef SMALL_GC
 static uintptr_t bitmap_index(const void *p);
+#endif
 
 static bool is_living(MSHeader *h, bool do_mark)
 {
-    MSHeap *heap = gc_data;
     bool marked;
+#ifndef SMALL_GC
+    MSHeap *heap = gc_data;
     if (heap->bitmap == NULL) {
+#endif
         marked = h->living;
         if (marked != do_mark)
             h->living = do_mark;
+#ifndef SMALL_GC
     } else {
         uintptr_t index = bitmap_index(h);
         uint8_t offset = index % 8U;
@@ -216,6 +225,7 @@ static bool is_living(MSHeader *h, bool do_mark)
         if (do_mark && !marked) // no need to unflag while sweep() because bitmap
             heap->bitmap[index] |= mask; // is immediately freed after that
     }
+#endif
     return marked;
 }
 
@@ -407,8 +417,10 @@ static void sweep(MSHeap *heap)
 {
     for (size_t i = 0; i < heap->size; i++)
         sweep_slot(heap, heap->slot[i]);
+#ifndef SMALL_GC
     free(heap->bitmap);
     heap->bitmap = NULL;
+#endif
 }
 
 static void ms_add_slot(MSHeap *heap)
@@ -543,6 +555,7 @@ static const GCFunctions GC_FUNCS_MARK_SWEEP = {
 };
 static const GCFunctions GC_FUNCS_DEFAULT = GC_FUNCS_MARK_SWEEP;
 
+#ifndef SMALL_GC
 //
 // Algorithm: Mark-and-sweep + Bitmap Marking
 //
@@ -690,6 +703,8 @@ static const GCFunctions GC_FUNCS_EPSILON = {
     .stat = eps_stat
 };
 
+#endif // SMALL_GC
+
 //
 // General functions
 //
@@ -781,6 +796,7 @@ void sch_set_gc_print_stat(bool b)
     print_stat = b;
 }
 
+#ifndef SMALL_GC
 void sch_set_gc_algorithm(SchGCAlgorithm s)
 {
     error_if_gc_initialized();
@@ -796,6 +812,7 @@ void sch_set_gc_algorithm(SchGCAlgorithm s)
         break;
     }
 }
+#endif
 
 void gc_init(const void *sp)
 {
