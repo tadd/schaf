@@ -1995,19 +1995,14 @@ static Value proc_lcm(UNUSED Value env, Value args)
     return sch_integer_new(ret);
 }
 
-static int64_t expt(int64_t x, int64_t y)
+static Value proc_expt(UNUSED Value env, Value x, Value y)
 {
-    int64_t z = 1;
-    while (y > 0) {
-        if ((y % 2) == 0) {
-            x *= x;
-            y /= 2;
-        } else {
-            z *= x;
-            y--;
-        }
-    }
-    return z;
+    NumType tx = get_num_type(x);
+    NumType ty = get_num_type(y);
+    NumType tret = (tx == NUM_TYPE_INT && ty == tx) ? tx : NUM_TYPE_REAL;
+    double a = get_num_as_double(x, tx), b = get_num_as_double(y, ty);
+    double c = pow(a, b);
+    return num_new(c, tret);
 }
 
 #define get_int(x) ({ \
@@ -2015,25 +2010,6 @@ static int64_t expt(int64_t x, int64_t y)
             EXPECT(type, TYPE_INT, X); \
             INT(X); \
         })
-#define get_non_negative_int(x) ({ \
-            int64_t N = get_int(x); \
-            if (N < 0) \
-                return runtime_error("must be non-negative: %"PRId64, N); \
-            N; \
-        })
-
-static Value proc_expt(UNUSED Value env, Value x, Value y)
-{
-    int64_t a = get_int(x), b = get_non_negative_int(y);
-    int64_t c;
-    if (b == 0)
-        c = 1;
-    else if (a == 0)
-        c = 0;
-    else
-        c = expt(a, b);
-    return sch_integer_new(c);
-}
 
 // 6.2.6. Numerical input and output
 // FIXME: Integrate with parse.c
@@ -2262,6 +2238,13 @@ static Value list_tail(Value list, int64_t k)
         return runtime_error("list is shorter than %"PRId64, k);
     return p;
 }
+
+#define get_non_negative_int(x) ({ \
+            int64_t N = get_int(x); \
+            if (N < 0) \
+                return runtime_error("must be non-negative: %"PRId64, N); \
+            N; \
+        })
 
 static Value proc_list_tail(UNUSED Value env, Value list, Value vk)
 {
