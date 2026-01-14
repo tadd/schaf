@@ -1907,17 +1907,18 @@ static Value proc_div(UNUSED Value env, Value args)
     return num_new(y, ret_type);
 }
 
+static Value proc_abs(UNUSED Value env, Value x)
+{
+    NumType t = get_num_type(x);
+    double d = get_num_as_double(x, t);
+    return num_new(d < 0 ? -d : d, t);
+}
+
 #define get_int(x) ({ \
             Value X = x; \
             EXPECT_TYPE(integer, X); \
             INT(X); \
         })
-
-static Value proc_abs(UNUSED Value env, Value x)
-{
-    int64_t n = get_int(x);
-    return sch_integer_new(n < 0 ? -n : n);
-}
 
 static Value proc_quotient(UNUSED Value env, Value x, Value y)
 {
