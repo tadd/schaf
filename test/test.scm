@@ -960,7 +960,9 @@
   (expect = (expt 0 0) 1)
   (expect = (expt 2 15) 32768)
   (expect = (expt 2 16) 65536)
-  (expect = (expt 2 24) 16777216)))
+  (expect = (expt 2 24) 16777216)
+  (expect = (expt 0.0 0.0) 1.0)
+  (expect = (expt 0.0 1.0) 0.0)))
 
 ;; 6.2.6. Numerical input and output
 (describe "number->string" (lambda ()
