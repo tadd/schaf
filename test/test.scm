@@ -896,7 +896,11 @@
   (expect = (abs 0) 0)
   (expect = (abs 1) 1)
   (expect = (abs -1) 1)
-  (expect = (abs -12345678) 12345678)))
+  (expect = (abs -12345678) 12345678)
+
+  (expect = (abs -1.0) 1.0)
+  (expect = (abs -1.23) 1.23)
+  (expect = (abs (/ -1.0 0.0)) (/ 1.0 0.0))))
 
 (describe "arithmetic" (lambda ()
   (expect = (+ (+ 40 2) 21) 63)
