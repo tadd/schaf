@@ -1625,23 +1625,22 @@ static Value proc_real_p(UNUSED Value env, Value obj)
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wfloat-equal"
-static bool is_integer_like_real(Value x)
+static bool is_integer_like_double(double d)
 {
-    if (!sch_value_is_real(x))
-        return false;
-    double d = REAL(x);
     return isfinite(d) && d == floor(d);
 }
 #pragma GCC diagnostic pop
 
-static bool is_integer_like(Value x)
+static bool is_integer_like_real(Value x)
 {
-    return sch_value_is_integer(x) || is_integer_like_real(x);
+    if (!sch_value_is_real(x))
+        return false;
+    return is_integer_like_double(REAL(x));
 }
 
-static Value proc_integer_p(UNUSED Value env, Value obj)
+static Value proc_integer_p(UNUSED Value env, Value x)
 {
-    return BOOL_VAL(is_integer_like(obj));
+    return BOOL_VAL(sch_value_is_integer(x) || is_integer_like_real(x));
 }
 
 // Represents the tower from the botom: int -> real -> ...
@@ -1891,15 +1890,27 @@ static Value proc_abs(UNUSED Value env, Value x)
     return num_new(d < 0 ? -d : d, t);
 }
 
-#define get_int(x) ({ \
+static Value expect_integer_like_double(double x)
+{
+    if (is_integer_like_double(x))
+        return Qfalse;
+    return runtime_error("expected integer-like double but got %f", x);
+}
+
+#define get_int_like_real(x) ({ \
+            double D = REAL(x); \
+            EXPECT(integer_like_double, D); \
+            (int64_t) D; \
+        })
+#define get_int_like(x) ({ \
             Value X = x; \
-            EXPECT(type, TYPE_INT, X); \
-            INT(X); \
+            NumType NT = get_num_type(X); \
+            NT == NUM_TYPE_INT ? INT(X) : get_int_like_real(X); \
         })
 
 static Value proc_quotient(UNUSED Value env, Value x, Value y)
 {
-    int64_t a = get_int(x), b = get_int(y);
+    int64_t a = get_int_like(x), b = get_int_like(y);
     if (b == 0)
         return divzero_error();
     return sch_integer_new(a / b);
@@ -1907,7 +1918,7 @@ static Value proc_quotient(UNUSED Value env, Value x, Value y)
 
 static Value proc_remainder(UNUSED Value env, Value x, Value y)
 {
-    int64_t a = get_int(x), b = get_int(y);
+    int64_t a = get_int_like(x), b = get_int_like(y);
     if (b == 0)
         return divzero_error();
     int64_t c = a % b;
@@ -1916,7 +1927,7 @@ static Value proc_remainder(UNUSED Value env, Value x, Value y)
 
 static Value proc_modulo(UNUSED Value env, Value x, Value y)
 {
-    int64_t a = get_int(x), b = get_int(y);
+    int64_t a = get_int_like(x), b = get_int_like(y);
     if (b == 0)
         return divzero_error();
     int64_t c = a % b;
@@ -1999,6 +2010,11 @@ static int64_t expt(int64_t x, int64_t y)
     return z;
 }
 
+#define get_int(x) ({ \
+            Value X = x; \
+            EXPECT(type, TYPE_INT, X); \
+            INT(X); \
+        })
 #define get_non_negative_int(x) ({ \
             int64_t N = get_int(x); \
             if (N < 0) \
