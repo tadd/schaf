@@ -2033,7 +2033,8 @@ static Value proc_number_to_string(UNUSED Value env, Value args)
 {
     EXPECT_ARITY_RANGE(1, 2, args);
     int64_t n = get_int(car(args));
-    int64_t radix = (cdr(args) != Qnil) ? get_int(cadr(args)) : 10;
+    Value opt = cdr(args);
+    int64_t radix = (opt != Qnil) ? get_int(car(opt)) : 10;
     char buf[66]; // in case of radix == 2 (64-bit integer) + sign + \0
     if (radix == 10) {
         snprintf(buf, sizeof(buf), "%"PRId64, n);
@@ -2060,6 +2061,7 @@ static Value proc_number_to_string(UNUSED Value env, Value args)
     return sch_string_new(buf);
 }
 
+// FIXME: Integrate with parse.c
 static Value proc_string_to_number(UNUSED Value env, Value args)
 {
     EXPECT_ARITY_RANGE(1, 2, args);
@@ -2067,7 +2069,8 @@ static Value proc_string_to_number(UNUSED Value env, Value args)
     EXPECT_TYPE(string, s);
     if (STRING(s)[0] == '\0')
         return Qfalse;
-    int64_t radix = (cdr(args) != Qnil) ? get_int(cadr(args)) : 10;
+    Value opt = cdr(args);
+    int64_t radix = (opt != Qnil) ? get_int(car(opt)) : 10;
     char *ep;
     errno = 0;
     int64_t i = strtoll(STRING(s), &ep, radix);
