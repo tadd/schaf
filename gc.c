@@ -1,4 +1,5 @@
 #include <math.h>
+#include <stdalign.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
