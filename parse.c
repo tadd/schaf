@@ -317,11 +317,17 @@ static Token lex_int(Parser *p, int coeff)
     return token_int(coeff * i);
 }
 
+static int fpeekc(FILE *in)
+{
+    int c = fgetc(in);
+    ungetc(c, in);
+    return c;
+}
+
 static Token lex_after_sign(Parser *p, int csign)
 {
-    int c = fgetc(p->in);
+    int c = fpeekc(p->in);
     int dig = isdigit(c);
-    ungetc(c, p->in);
     bool minus = csign == '-';
     if (dig)
         return lex_int(p, minus * -2 + 1);
