@@ -78,10 +78,10 @@ static void usage(FILE *out)
     usage_opt(out, "-e <source>", "Evaluate <source> string directly instead of <file>.");
     usage_opt(out, "-H <MiB>", "Specify initial heap size.");
     usage_opt(out, "-M", "Print memory usage (VmHWM) at exit.");
-    usage_opt(out, "-p", "Print last expression before exit.");
+    usage_opt(out, "-p", "Print the last expression before exit.");
     usage_opt(out, "-P", "Only parse and print syntax list without evaluation.");
     usage_opt(out, "-s", "Print heap statistics before/after GC.");
-    usage_opt(out, "--gc=<algorithm>", "Specify GC algorithm from: mark-sweep, epsilon.");
+    usage_opt(out, "--gc=<algorithm>", "Specify GC algorithm: mark-sweep, mark-sweep+bitmap, epsilon.");
     usage_opt(out, "-S, --gc-stress", "Put stress on GC.");
     usage_opt(out, "-T", "Print consumed CPU time at exit.");
     usage_opt(out, "-h, --help", "Print this help.");
