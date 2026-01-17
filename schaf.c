@@ -2044,20 +2044,31 @@ static Value proc_number_to_string(UNUSED Value env, Value args)
     return sch_string_new(buf);
 }
 
+static Value parse_number_string(const char *s)
+{
+    FILE *fp = mopen(s);
+    Value ret = parse_number(fp);
+    fclose(fp);
+    return ret;
+}
+
 // FIXME: Integrate with parse.c
 static Value proc_string_to_number(UNUSED Value env, Value args)
 {
     EXPECT(arity_range, 1, 2, args);
-    Value s = car(args);
-    EXPECT(type, TYPE_STRING, s);
-    if (STRING(s)[0] == '\0')
+    Value vstr = car(args);
+    EXPECT(type, TYPE_STRING, vstr);
+    const char *s = STRING(vstr);
+    if (s[0] == '\0')
         return Qfalse;
     Value opt = cdr(args);
     int64_t radix = (opt != Qnil) ? get_int(car(opt)) : 10;
+    if (radix == 10)
+        return parse_number_string(s);
     char *ep;
     errno = 0;
-    int64_t i = strtoll(STRING(s), &ep, radix);
-    if (errno != 0 || (i == 0 && STRING(s) == ep))
+    int64_t i = strtoll(s, &ep, radix);
+    if (errno != 0 || (i == 0 && s == ep))
         return Qfalse;
     return sch_integer_new(i);
 }

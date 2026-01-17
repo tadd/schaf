@@ -201,6 +201,7 @@ extern Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
 
 Source *iparse(FILE *in, const char *filename);
 Value parse_datum(FILE *in, const char *filename);
+Value parse_number(FILE *in);
 void pos_to_line_col(int64_t pos, const int64_t *newline_pos, int64_t *line, int64_t *col);
 [[noreturn, gnu::format(printf, 2, 3)]]
 void raise_error(jmp_buf buf, const char *fmt, ...);
