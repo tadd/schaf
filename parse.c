@@ -360,21 +360,31 @@ static Token lex_constant(Parser *p)
     return lex_signed_int_with_radix(p, radix);
 }
 
-static Token lex_num(Parser *p, int coeff)
+Value parse_number(FILE *in)
 {
     int64_t i;
-    int n = fscanf(p->in, "%"PRId64, &i);
+    int n = fscanf(in, "%"PRId64, &i);
     if (n != 1)
-        parse_error(p, "digits", "invalid string");
-    int c = fgetc(p->in);
-    ungetc(c, p->in);
+        return Qfalse;
+    int c = fgetc(in);
+    ungetc(c, in);
     if (c != '.')
-        return token_int(coeff * i);
+        return sch_integer_new(i);
     double d;
-    n = fscanf(p->in, "%lf", &d);
+    n = fscanf(in, "%lf", &d);
     if (n != 1)
+        return Qfalse;
+    return sch_real_new(i + d);
+}
+
+static Token lex_num(Parser *p, int coeff)
+{
+    Value num = parse_number(p->in);
+    if (num == Qfalse)
         parse_error(p, "digits", "invalid string");
-    return token_real(coeff * (i + d));
+    if (sch_value_is_integer(num))
+        return token_int(coeff * INT(num));
+    return token_real(coeff * REAL(num));
 }
 
 static int fpeekc(FILE *in)
