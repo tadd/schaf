@@ -1035,6 +1035,36 @@
   (expect = (string->number "1000000" 16) 16777216)
   (expect = (string->number "-1000000" 16) -16777216)))
 
+(describe "roundtrip-ness of number->string/string->number" (lambda ()
+  (define (roundtrip? n)
+    (eqv? n (string->number (number->string n))))
+  (expect roundtrip? 0)
+  (expect roundtrip? 1)
+  (expect roundtrip? -1)
+  (expect roundtrip? 16777216)
+  (expect roundtrip? -16777216)))
+
+(describe "roundtrip-ness of number->string/string->number with radix" (lambda ()
+  (define (roundtrip? n r)
+    (eqv? n (string->number (number->string n r) r)))
+  (expect roundtrip? 0 2)
+  (expect roundtrip? 1 2)
+  (expect roundtrip? -1 2)
+  (expect roundtrip? 16777216 2)
+  (expect roundtrip? -16777216 2)
+
+  (expect roundtrip? 0 8)
+  (expect roundtrip? 1 8)
+  (expect roundtrip? -1 8)
+  (expect roundtrip? 16777216 8)
+  (expect roundtrip? -16777216 8)
+
+  (expect roundtrip? 0 16)
+  (expect roundtrip? 1 16)
+  (expect roundtrip? -1 16)
+  (expect roundtrip? 16777216 16)
+  (expect roundtrip? -16777216 16)))
+
 ;; 6.3. Other data types
 ;; 6.3.1. Booleans
 (describe "true/false" (lambda ()
