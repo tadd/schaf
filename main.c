@@ -97,7 +97,7 @@ typedef struct {
     const char *path;
     const char *script;
     double init_heap_size_mib;
-    SchGCAlgorithm gc_algorithm;
+    int gc_algorithm;
     bool print;
     bool parse_only;
     bool cputime;
@@ -106,6 +106,10 @@ typedef struct {
     bool stress_gc;
     bool interacitve;
 } SchOption;
+
+enum {
+    SCH_GC_ALGORITHM_INVALID = 0xFF,
+};
 
 static int get_gc_algorithm(const char *s)
 {
@@ -121,14 +125,14 @@ static int get_gc_algorithm(const char *s)
         if (strcmp(s, algos[i].name) == 0)
             return algos[i].algorithm;
     }
-    return 0xFF;
+    return SCH_GC_ALGORITHM_INVALID;
 }
 
 static void parse_opt_longer(SchOption *o, const char *name, const char *value)
 {
     if (strcmp(name, "gc") == 0) {
-        SchGCAlgorithm s = get_gc_algorithm(value);
-        if (s == 0xFF)
+        int s = get_gc_algorithm(value);
+        if (s == SCH_GC_ALGORITHM_INVALID)
             opt_error("invalid value for --gc: %s", value);
         o->gc_algorithm = s;
     }
@@ -153,7 +157,7 @@ static SchOption parse_opt(int argc, char *const *argv)
     };
     SchOption o = {
         .init_heap_size_mib = 0.0,
-        .gc_algorithm = 0,
+        .gc_algorithm = SCH_GC_ALGORITHM_INVALID,
     };
     OptLongerData data = { 0 };
     int opt;
@@ -286,7 +290,7 @@ int main(int argc, char **argv)
     sch_set_gc_print_stat(o.heap_stat);
     if (o.init_heap_size_mib > 0.0)
         sch_set_gc_init_size(o.init_heap_size_mib);
-    if (o.gc_algorithm > 0)
+    if (o.gc_algorithm != SCH_GC_ALGORITHM_INVALID)
         sch_set_gc_algorithm(o.gc_algorithm);
 
     SCH_INIT();
