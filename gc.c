@@ -82,6 +82,7 @@ typedef struct {
     MSHeader *free_list;
     uint8_t *bitmap;
 } MSHeap;
+#define MS_HEAP(h) ((MSHeap *) (h))
 
 #ifdef __clang__
 #pragma clang diagnostic ignored "-Wcast-align"
@@ -175,91 +176,79 @@ static bool is_heap_value(MSHeap *heap, Value v)
     return is_valid_pointer(v) && in_heap_range(heap, v) && is_valid_header(v);
 }
 
-static void mark_val(MSHeap *heap, Value v);
+typedef void (*MarkFunc)(MSHeap *heap, Value v);
 
-static void mark_array(MSHeap *heap, const void *beg, size_t n)
+static void mark_array(MSHeap *heap, const void *beg, size_t n, MarkFunc marker)
 {
     UNPOISON(beg, n * sizeof(uintptr_t));
     const Value *p = beg;
     for (size_t i = 0; i < n; i++, p++)
-        mark_val(heap, *p);
+        marker(heap, *p);
 }
 
-static void mark_jmpbuf(MSHeap *heap, const jmp_buf *jmp)
+static void mark_jmpbuf(MSHeap *heap, const jmp_buf *jmp, MarkFunc marker)
 {
-    mark_array(heap, jmp, idivceil(sizeof(jmp_buf), sizeof(uintptr_t)));
+    mark_array(heap, jmp, idivceil(sizeof(jmp_buf), sizeof(uintptr_t)), marker);
 }
 
 static void mark_env_each(UNUSED uint64_t key, uint64_t value, void *data)
 {
     // key is always a Symbol
-    mark_val(data, value);
+    MarkFunc marker = (MarkFunc) data;
+    marker(NULL, value); // FIXME!
 }
 
-static uintptr_t bitmap_index(MSHeap *heap, const void *p);
-
-static bool is_living(MSHeap *heap, MSHeader *h, bool do_mark)
+static bool ms_is_living(UNUSED MSHeap *heap, MSHeader *h, bool do_mark)
 {
-    bool marked;
-    if (heap->bitmap == NULL) {
-        marked = h->living;
-        if (marked != do_mark)
-            h->living = do_mark;
-    } else {
-        uintptr_t index = bitmap_index(heap, h);
-        uint8_t offset = index % 8U;
-        index /= 8U;
-        uint8_t mask = 1UL << offset;
-        marked = heap->bitmap[index] & mask;
-        if (do_mark && !marked) // no need to unflag while sweep() because bitmap
-            heap->bitmap[index] |= mask; // is immediately freed after that
-    }
+    bool marked = h->living;
+    if (marked != do_mark)
+        h->living = do_mark;
     return marked;
 }
 
-static void mark_val_children(MSHeap *heap, Value v)
+static void mark_val_children(MSHeap *heap, Value v, MarkFunc marker)
 {
     switch (VALUE_TAG(v)) {
     case TAG_PAIR: {
         Pair *p = PAIR(v);
-        mark_val(heap, p->car);
-        mark_val(heap, p->cdr);
+        marker(heap, p->car);
+        marker(heap, p->cdr);
         break;
     }
     case TAG_CLOSURE: {
         Closure *p = CLOSURE(v);
-        mark_val(heap, p->env);
-        mark_val(heap, p->params);
-        mark_val(heap, p->body);
+        marker(heap, p->env);
+        marker(heap, p->params);
+        marker(heap, p->body);
         break;
     }
     case TAG_CONTINUATION: {
         Continuation *p = CONTINUATION(v);
-        mark_val(heap, p->retval);
-        mark_jmpbuf(heap, &p->state);
-        mark_array(heap, p->stack, idivceil(p->stack_len, sizeof(uintptr_t)));
+        marker(heap, p->retval);
+        mark_jmpbuf(heap, &p->state, marker);
+        mark_array(heap, p->stack, idivceil(p->stack_len, sizeof(uintptr_t)), marker);
         break;
     }
     case TAG_CFUNC_CLOSURE:
-        mark_val(heap, CFUNC_CLOSURE(v)->data);
+        marker(heap, CFUNC_CLOSURE(v)->data);
         break;
     case TAG_ENV: {
         Env *p = ENV(v);
         if (p->table != NULL)
             table_foreach(p->table, mark_env_each, heap);
-        mark_val(heap, p->parent);
+        marker(heap, p->parent);
         break;
     }
     case TAG_VECTOR: {
         Value *p = VECTOR(v);
         for (int64_t i = 0, len = scary_length(p); i < len; i++)
-            mark_val(heap, p[i]);
+            marker(heap, p[i]);
         break;
     }
     case TAG_PROMISE: {
         Promise *p = PROMISE(v);
-        mark_val(heap, p->env);
-        mark_val(heap, p->val);
+        marker(heap, p->env);
+        marker(heap, p->val);
         break;
     }
     case TAG_STRING:
@@ -272,14 +261,14 @@ static void mark_val_children(MSHeap *heap, Value v)
     }
 }
 
-static void mark_val(MSHeap *heap, Value v)
+static void ms_mark_val(MSHeap *heap, Value v)
 {
     if (!is_heap_value(heap, v))
         return;
     MSHeader *h = MS_HEADER_FROM_VAL(v);
-    if (is_living(heap, h, true)) // mark it!
+    if (ms_is_living(heap, h, true)) // mark it!
         return;
-    mark_val_children(heap, v);
+    mark_val_children(heap, v, ms_mark_val);
 }
 
 static void *allocate_from_chunk(MSHeap *heap, MSHeader *prev, MSHeader *curr, size_t size)
@@ -401,17 +390,15 @@ static void sweep_slot(MSHeap *heap, MSHeapSlot *slot)
     for (MSHeader *h; p < endp; p += offset) {
         h = MS_HEADER(p);
         offset = HSIZE(h->size);
-        if (h->used && !is_living(heap, h, false))
+        if (h->used && !ms_is_living(heap, h, false))
             free_chunk(heap, h);
     }
 }
 
-static void sweep(MSHeap *heap)
+static void ms_sweep(MSHeap *heap)
 {
     for (size_t i = 0; i < heap->size; i++)
         sweep_slot(heap, heap->slot[i]);
-    free(heap->bitmap);
-    heap->bitmap = NULL;
 }
 
 static void ms_add_slot(MSHeap *heap)
@@ -437,27 +424,27 @@ static void *ms_allocate(MSHeap *heap, size_t size)
     return NULL;
 }
 
-static void mark_roots(MSHeap *heap, Value **roots)
+static void mark_roots(MSHeap *heap, Value **roots, MarkFunc marker)
 {
     for (size_t i = 0, len = scary_length(roots); i < len; i++)
-        mark_val(heap, *roots[i]);
+        marker(heap, *roots[i]);
 }
 
 [[gnu::noinline]]
-static void mark_stack(MSHeap *heap)
+static void mark_stack(MSHeap *heap, MarkFunc marker)
 {
     GET_SP(sp);
     const uintptr_t *beg = stack_base, *end = sp;
-    mark_array(heap, end, beg - end);
+    mark_array(heap, end, beg - end, marker);
 }
 
-static void mark(MSHeap *heap)
+static void ms_mark(MSHeap *heap)
 {
-    mark_roots(heap, heap->roots);
-    mark_stack(heap);
+    mark_roots(heap, heap->roots, ms_mark_val);
+    mark_stack(heap, ms_mark_val);
     jmp_buf jmp;
     setjmp(jmp);
-    mark_jmpbuf(heap, &jmp);
+    mark_jmpbuf(heap, &jmp, ms_mark_val);
 }
 
 static void ms_gc(MSHeap *heap)
@@ -468,8 +455,8 @@ static void ms_gc(MSHeap *heap)
     in_gc = true;
     if (print_stat)
         heap_print_stat("GC begin");
-    mark(heap);
-    sweep(heap);
+    ms_mark(heap);
+    ms_sweep(heap);
     if (print_stat)
         heap_print_stat("GC end");
     in_gc = false;
@@ -530,7 +517,7 @@ static void ms_stat(void *data, HeapStat *stat)
 static void ms_fin(void *data)
 {
     MSHeap *heap = data;
-    sweep(heap); // nothing marked, all values are freed
+    ms_sweep(heap); // nothing marked, all values are freed
     free_slots(heap->slot, heap->size);
     scary_free(heap->roots);
     free(heap);
@@ -560,10 +547,59 @@ static void bmp_init_bitmap(MSHeap *heap)
     heap->bitmap = xcalloc(1, idivceil(rawsize, 8U));
 }
 
+static bool bmp_is_living(MSHeap *heap, MSHeader *h, bool do_mark)
+{
+    bool marked;
+    uintptr_t index = bitmap_index(heap, h);
+    uint8_t offset = index % 8U;
+    index /= 8U;
+    uint8_t mask = 1UL << offset;
+    marked = heap->bitmap[index] & mask;
+    if (do_mark && !marked) // no need to unflag while sweep() because bitmap
+        heap->bitmap[index] |= mask; // is immediately freed after that
+    return marked;
+}
+
+static void bmp_mark_val(MSHeap *heap, Value v)
+{
+    if (!is_heap_value(heap, v))
+        return;
+    MSHeader *h = MS_HEADER_FROM_VAL(v);
+    if (bmp_is_living(heap, h, true)) // mark it!
+        return;
+    mark_val_children(heap, v, bmp_mark_val);
+}
+
+static void bmp_mark(MSHeap *heap)
+{
+    mark_roots(heap, heap->roots, bmp_mark_val);
+    mark_stack(heap, bmp_mark_val);
+    jmp_buf jmp;
+    setjmp(jmp);
+    mark_jmpbuf(heap, &jmp, bmp_mark_val);
+}
+
+static void bmp_sweep(MSHeap *heap)
+{
+    ms_sweep(heap);
+    free(heap->bitmap);
+    heap->bitmap = NULL;
+}
+
 static void bmp_gc(MSHeap *heap)
 {
     bmp_init_bitmap(heap);
-    ms_gc(heap);
+    static bool in_gc = false;
+    if (in_gc)
+        bug("nested GC detected");
+    in_gc = true;
+    if (print_stat)
+        heap_print_stat("GC begin");
+    bmp_mark(heap);
+    bmp_sweep(heap);
+    if (print_stat)
+        heap_print_stat("GC end");
+    in_gc = false;
 }
 
 static void *bmp_malloc(void *heap, size_t size)
