@@ -63,7 +63,9 @@ jobs:
     - name: Clang - Test with Sanitizers
       run: make sanitize CC=clang
     - name: Clang - Test SEGV
-      run: ./schaf-san -S test/segv-parsing.scm
+      run: |
+        ./schaf-san -S test/segv-parsing.scm
+        ./schaf-san test/segv.scm 2>&1 | grep -q improper
     - name: Clang - Test with stress
       run: make test-stress CC=clang
     - name: Clang - Test optimized

@@ -713,6 +713,8 @@ static Value map_eval(Value env, Value l)
 {
     Value mapped = DUMMY_PAIR();
     for (Value last = mapped, p = l, v; p != Qnil; p = cdr(p)) {
+        if (!sch_value_is_pair(p))
+            return runtime_error("improper list for apply: %s", sch_inspect(l));
         v = eval(env, car(p));
         CHECK_ERROR(v);
         last = PAIR(last)->cdr = list1(v);
@@ -748,15 +750,27 @@ static const char *get_func_name(Value proc)
     return NULL;
 }
 
+
+static Value expect_proper_list(Value l)
+{
+    for (Value p = l; p != Qnil; p = cdr(p)) {
+        if (!sch_value_is_pair(p))
+            return runtime_error("improper list for apply: %s", sch_inspect(l));
+    }
+    return Qfalse;
+}
+
 static Value eval_apply(Value env, Value l)
 {
     Value symproc = car(l), args = cdr(l);
     Value proc = eval(env, symproc);
     CHECK_ERROR_LOCATED(proc, l);
-    if (!value_tag_is(proc, TAG_SYNTAX)) {
-        args = map_eval(env, args);
-        CHECK_ERROR_LOCATED(args, l);
-    }
+    Value e;
+    if (value_tag_is(proc, TAG_SYNTAX))
+        e = expect_proper_list(args);
+    else
+        e = args = map_eval(env, args);
+    CHECK_ERROR_LOCATED(e, l);
     EXPECT(type, TYPE_PROC, proc);
     Value ret = apply(env, proc, args);
     if (is_error(ret)) {
