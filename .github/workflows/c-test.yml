@@ -19,6 +19,8 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v6
+    - name: Show compilers version
+      run: gcc -v && echo -- && clang -v
     - if: runner.os == 'Linux'
       name: Install native packages in Linux
       run: |
