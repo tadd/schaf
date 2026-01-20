@@ -490,12 +490,11 @@ static Value parse_list(Parser *p)
         ungetc(c, p->in);
         Value e = parse_expr(p);
         bool first = (ret == last);
-        vValue l;// workaround for clang -Og
         if (first && sch_value_is_symbol(e))
-            l = located_list1(e, pos);
+            PAIR(last)->cdr = located_list1(e, pos);
         else
-            l = list1_const(e);
-        last = PAIR(last)->cdr = l;
+            PAIR(last)->cdr = list1_const(e);
+        last = PAIR(last)->cdr;
     }
     return cdr(ret);
 }
