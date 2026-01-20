@@ -52,6 +52,32 @@ static const void *stack_base;
 static bool stress, print_stat, initialized;
 
 //
+// Generic functions
+//
+
+typedef void (*ConsumeFunc)(void *data);
+typedef void *(*AllocateFunc)(void *data, size_t size);
+
+static void *gen_malloc(void *heap, size_t size,
+                        ConsumeFunc collect, AllocateFunc allocate, ConsumeFunc extend)
+{
+    if (stress)
+        collect(heap);
+    void *p = allocate(heap, size);
+    if (!stress && p == NULL) {
+        collect(heap);
+        p = allocate(heap, size);
+    }
+    if (p == NULL) {
+        extend(heap);
+        p = allocate(heap, size);
+    }
+    if (p == NULL)
+        error_out_of_memory();
+    return p;
+}
+
+//
 // Algorithm: Mark-and-sweep
 //
 
@@ -409,8 +435,9 @@ static void sweep(MSHeap *heap)
     heap->bitmap = NULL;
 }
 
-static void ms_add_slot(MSHeap *heap)
+static void ms_add_slot(void *data)
 {
+    MSHeap *heap = data;
     MSHeapSlot *last = heap->slot[heap->size - 1];
     size_t new_size = last->size * HEAP_RATIO;
     MSHeapSlot *next = heap->slot[heap->size++] = ms_heap_slot_new(new_size);
@@ -422,8 +449,9 @@ static void ms_add_slot(MSHeap *heap)
     add_to_free_list(heap, MS_HEADER(beg));
 }
 
-static void *ms_allocate(MSHeap *heap, size_t size)
+static void *ms_allocate(void *data, size_t size)
 {
+    MSHeap *heap = data;
     MSHeader *free_list = heap->free_list;
     for (MSHeader *prev = NULL, *curr = free_list; curr != NULL; prev = curr, curr = curr->next) {
         if (curr->size >= size) // First-fit
@@ -455,8 +483,9 @@ static void mark(MSHeap *heap)
     mark_jmpbuf(heap, &jmp);
 }
 
-static void ms_gc(MSHeap *heap)
+static void ms_gc(void *data)
 {
+    MSHeap *heap = data;
     static bool in_gc = false;
     if (in_gc)
         bug("nested GC detected");
@@ -472,20 +501,7 @@ static void ms_gc(MSHeap *heap)
 
 static void *ms_malloc(void *heap, size_t size)
 {
-    if (stress)
-        ms_gc(heap);
-    void *p = ms_allocate(heap, size);
-    if (!stress && p == NULL) {
-        ms_gc(heap);
-        p = ms_allocate(heap, size);
-    }
-    if (p == NULL) {
-        ms_add_slot(heap);
-        p = ms_allocate(heap, size);
-    }
-    if (p == NULL)
-        error_out_of_memory();
-    return p;
+    return gen_malloc(heap, size, ms_gc, ms_allocate, ms_add_slot);
 }
 
 static void ms_stat_slot(HeapStat *stat, const MSHeapSlot *slot)
@@ -555,28 +571,15 @@ static void bmp_init_bitmap(MSHeap *heap)
     heap->bitmap = xcalloc(1, idivceil(rawsize, 8U));
 }
 
-static void bmp_gc(MSHeap *heap)
+static void bmp_gc(void *data)
 {
-    bmp_init_bitmap(heap);
-    ms_gc(heap);
+    bmp_init_bitmap(data);
+    ms_gc(data);
 }
 
 static void *bmp_malloc(void *heap, size_t size)
 {
-    if (stress)
-        bmp_gc(heap);
-    void *p = ms_allocate(heap, size);
-    if (!stress && p == NULL) {
-        bmp_gc(heap);
-        p = ms_allocate(heap, size);
-    }
-    if (p == NULL) {
-        ms_add_slot(heap);
-        p = ms_allocate(heap, size);
-    }
-    if (p == NULL)
-        error_out_of_memory();
-    return p;
+    return gen_malloc(heap, size, bmp_gc, ms_allocate, ms_add_slot);
 }
 
 // We use ms_fin() **as is** even in the bitmap-marking mode.
@@ -634,8 +637,9 @@ static inline EpsHeapSlot *last_slot(const EpsHeap *heap)
     return heap->slot[heap->size - 1];
 }
 
-static void *eps_allocate(EpsHeap *heap, size_t size)
+static void *eps_allocate(void *data, size_t size)
 {
+    EpsHeap *heap = data;
     EpsHeapSlot *last = last_slot(heap); // use the last slot only
     if (last->used + size > last->size)
         return NULL;
@@ -644,22 +648,18 @@ static void *eps_allocate(EpsHeap *heap, size_t size)
     return ret;
 }
 
-static void eps_add_slot(EpsHeap *heap)
+static void eps_add_slot(void *data)
 {
+    EpsHeap *heap = data;
     EpsHeapSlot *last = last_slot(heap);
     heap->slot[heap->size++] = eps_heap_slot_new(last->size * HEAP_RATIO);
 }
 
+static void eps_gc(UNUSED void *heap) {} // dummy
+
 static void *eps_malloc(void *heap, size_t size)
 {
-    void *p = eps_allocate(heap, size);
-    if (p == NULL) {
-        eps_add_slot(heap);
-        p = eps_allocate(heap, size);
-    }
-    if (p == NULL)
-        error_out_of_memory();
-    return p;
+    return gen_malloc(heap, size, eps_gc, eps_allocate, eps_add_slot);
 }
 
 static void eps_add_root(UNUSED void *data, UNUSED const Value *p) {} // dummy
