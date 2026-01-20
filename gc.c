@@ -32,19 +32,19 @@ typedef struct {
 } HeapStat;
 
 typedef struct {
-    void (*init)(void);
-    void (*fin)(void);
-    void *(*malloc)(size_t size);
-    void (*add_root)(const Value *r);
-    void (*stat)(HeapStat *stat);
-} GCFunctions;
+    void *heap;
+    void *(*init)(void); // returns heap
+    void (*fin)(void *heap);
+    void *(*malloc)(void *heap, size_t size);
+    void (*add_root)(void *heap, const Value *r);
+    void (*stat)(void *heap, HeapStat *stat);
+} GCAlgorithmData;
 
 static void heap_print_stat(const char *header);
 [[noreturn]] static void error_out_of_memory(void);
 
 // Static data
-static void *gc_data; // singleton; maybe a heap or some context
-static GCFunctions funcs;
+static GCAlgorithmData algo;
 static size_t init_size = 1 * MiB;
 
 static const void *stack_base;
@@ -112,7 +112,7 @@ static MSHeapSlot *ms_heap_slot_new(size_t size)
     return s;
 }
 
-static void ms_init(void)
+static void *ms_init(void)
 {
     MSHeap *heap = xmalloc(sizeof(MSHeap));
     heap->roots = scary_new(sizeof(Value *));
@@ -123,18 +123,17 @@ static void ms_init(void)
     heap->high = heap->low + first->size;
     heap->free_list = MS_HEADER(first->body);
     heap->bitmap = NULL;
-    gc_data = heap;
+    return heap;
 }
 
-static void ms_add_root(const Value *r)
+static void ms_add_root(void *data, const Value *r)
 {
-    MSHeap *heap = gc_data;
+    MSHeap *heap = data;
     scary_push((void ***) &heap->roots, (const void *) r);
 }
 
-static bool in_heap_range(Value v)
+static bool in_heap_range(MSHeap *heap, Value v)
 {
-    MSHeap *heap = gc_data;
     const uint8_t *p = (uint8_t *) v;
     for (size_t i = 0; i < heap->size; i++) {
         const MSHeapSlot *slot = heap->slot[i];
@@ -171,44 +170,43 @@ static bool is_valid_header(Value v)
         size <= sizeof(Continuation) + MS_HEADER_OFFSET;
 }
 
-static bool is_heap_value(Value v)
+static bool is_heap_value(MSHeap *heap, Value v)
 {
-    return is_valid_pointer(v) && in_heap_range(v) && is_valid_header(v);
+    return is_valid_pointer(v) && in_heap_range(heap, v) && is_valid_header(v);
 }
 
-static void mark_val(Value v);
+static void mark_val(MSHeap *heap, Value v);
 
-static void mark_array(const void *beg, size_t n)
+static void mark_array(MSHeap *heap, const void *beg, size_t n)
 {
     UNPOISON(beg, n * sizeof(uintptr_t));
     const Value *p = beg;
     for (size_t i = 0; i < n; i++, p++)
-        mark_val(*p);
+        mark_val(heap, *p);
 }
 
-static void mark_jmpbuf(const jmp_buf *jmp)
+static void mark_jmpbuf(MSHeap *heap, const jmp_buf *jmp)
 {
-    mark_array(jmp, idivceil(sizeof(jmp_buf), sizeof(uintptr_t)));
+    mark_array(heap, jmp, idivceil(sizeof(jmp_buf), sizeof(uintptr_t)));
 }
 
-static void mark_env_each(UNUSED uint64_t key, uint64_t value, UNUSED void *data)
+static void mark_env_each(UNUSED uint64_t key, uint64_t value, void *data)
 {
     // key is always a Symbol
-    mark_val(value);
+    mark_val(data, value);
 }
 
-static uintptr_t bitmap_index(const void *p);
+static uintptr_t bitmap_index(MSHeap *heap, const void *p);
 
-static bool is_living(MSHeader *h, bool do_mark)
+static bool is_living(MSHeap *heap, MSHeader *h, bool do_mark)
 {
-    MSHeap *heap = gc_data;
     bool marked;
     if (heap->bitmap == NULL) {
         marked = h->living;
         if (marked != do_mark)
             h->living = do_mark;
     } else {
-        uintptr_t index = bitmap_index(h);
+        uintptr_t index = bitmap_index(heap, h);
         uint8_t offset = index % 8U;
         index /= 8U;
         uint8_t mask = 1UL << offset;
@@ -219,54 +217,54 @@ static bool is_living(MSHeader *h, bool do_mark)
     return marked;
 }
 
-static void mark_val(Value v)
+static void mark_val(MSHeap *heap, Value v)
 {
-    if (!is_heap_value(v))
+    if (!is_heap_value(heap, v))
         return;
     MSHeader *h = MS_HEADER_FROM_VAL(v);
-    if (is_living(h, true)) // mark it!
+    if (is_living(heap, h, true)) // mark it!
         return;
     switch (VALUE_TAG(v)) {
     case TAG_PAIR: {
         Pair *p = PAIR(v);
-        mark_val(p->car);
-        mark_val(p->cdr);
+        mark_val(heap, p->car);
+        mark_val(heap, p->cdr);
         break;
     }
     case TAG_CLOSURE: {
         Closure *p = CLOSURE(v);
-        mark_val(p->env);
-        mark_val(p->params);
-        mark_val(p->body);
+        mark_val(heap, p->env);
+        mark_val(heap, p->params);
+        mark_val(heap, p->body);
         break;
     }
     case TAG_CONTINUATION: {
         Continuation *p = CONTINUATION(v);
-        mark_val(p->retval);
-        mark_jmpbuf(&p->state);
-        mark_array(p->stack, idivceil(p->stack_len, sizeof(uintptr_t)));
+        mark_val(heap, p->retval);
+        mark_jmpbuf(heap, &p->state);
+        mark_array(heap, p->stack, idivceil(p->stack_len, sizeof(uintptr_t)));
         break;
     }
     case TAG_CFUNC_CLOSURE:
-        mark_val(CFUNC_CLOSURE(v)->data);
+        mark_val(heap, CFUNC_CLOSURE(v)->data);
         break;
     case TAG_ENV: {
         Env *p = ENV(v);
         if (p->table != NULL)
-            table_foreach(p->table, mark_env_each, NULL);
-        mark_val(p->parent);
+            table_foreach(p->table, mark_env_each, heap);
+        mark_val(heap, p->parent);
         break;
     }
     case TAG_VECTOR: {
         Value *p = VECTOR(v);
         for (int64_t i = 0, len = scary_length(p); i < len; i++)
-            mark_val(p[i]);
+            mark_val(heap, p[i]);
         break;
     }
     case TAG_PROMISE: {
         Promise *p = PROMISE(v);
-        mark_val(p->env);
-        mark_val(p->val);
+        mark_val(heap, p->env);
+        mark_val(heap, p->val);
         break;
     }
     case TAG_STRING:
@@ -398,7 +396,7 @@ static void sweep_slot(MSHeap *heap, MSHeapSlot *slot)
     for (MSHeader *h; p < endp; p += offset) {
         h = MS_HEADER(p);
         offset = HSIZE(h->size);
-        if (h->used && !is_living(h, false))
+        if (h->used && !is_living(heap, h, false))
             free_chunk(heap, h);
     }
 }
@@ -434,27 +432,27 @@ static void *ms_allocate(MSHeap *heap, size_t size)
     return NULL;
 }
 
-static void mark_roots(Value **roots)
+static void mark_roots(MSHeap *heap, Value **roots)
 {
     for (size_t i = 0, len = scary_length(roots); i < len; i++)
-        mark_val(*roots[i]);
+        mark_val(heap, *roots[i]);
 }
 
 [[gnu::noinline]]
-static void mark_stack(void)
+static void mark_stack(MSHeap *heap)
 {
     GET_SP(sp);
     const uintptr_t *beg = stack_base, *end = sp;
-    mark_array(end, beg - end);
+    mark_array(heap, end, beg - end);
 }
 
 static void mark(MSHeap *heap)
 {
-    mark_roots(heap->roots);
-    mark_stack();
+    mark_roots(heap, heap->roots);
+    mark_stack(heap);
     jmp_buf jmp;
     setjmp(jmp);
-    mark_jmpbuf(&jmp);
+    mark_jmpbuf(heap, &jmp);
 }
 
 static void ms_gc(MSHeap *heap)
@@ -472,9 +470,8 @@ static void ms_gc(MSHeap *heap)
     in_gc = false;
 }
 
-static void *ms_malloc(size_t size)
+static void *ms_malloc(void *heap, size_t size)
 {
-    MSHeap *heap = gc_data;
     if (stress)
         ms_gc(heap);
     void *p = ms_allocate(heap, size);
@@ -511,9 +508,9 @@ static void ms_stat_slot(HeapStat *stat, const MSHeapSlot *slot)
     }
 }
 
-static void ms_stat(HeapStat *stat)
+static void ms_stat(void *data, HeapStat *stat)
 {
-    MSHeap *heap = gc_data;
+    MSHeap *heap = data;
     for (size_t i = 0; i < heap->size; i++)
         ms_stat_slot(stat, heap->slot[i]);
 }
@@ -525,50 +522,47 @@ static void ms_stat(HeapStat *stat)
         } \
     } while (0)
 
-static void ms_fin(void)
+static void ms_fin(void *data)
 {
-    MSHeap *heap = gc_data;
+    MSHeap *heap = data;
     sweep(heap); // nothing marked, all values are freed
     free_slots(heap->slot, heap->size);
     scary_free(heap->roots);
     free(heap);
 }
 
-static const GCFunctions GC_FUNCS_MARK_SWEEP = {
+static const GCAlgorithmData GC_FUNCS_MARK_SWEEP = {
     .init = ms_init,
     .fin = ms_fin,
     .malloc = ms_malloc,
     .add_root = ms_add_root,
     .stat = ms_stat
 };
-static const GCFunctions GC_FUNCS_DEFAULT = GC_FUNCS_MARK_SWEEP;
+static const GCAlgorithmData GC_FUNCS_DEFAULT = GC_FUNCS_MARK_SWEEP;
 
 //
 // Algorithm: Mark-and-sweep + Bitmap Marking
 //
 
-static uintptr_t bitmap_index(const void *p)
+static uintptr_t bitmap_index(MSHeap *heap, const void *p)
 {
-    MSHeap *heap = gc_data;
     return ptrdiff_abs(p, heap->low) / PTR_ALIGN;
 }
 
-static void bmp_init_bitmap(void)
+static void bmp_init_bitmap(MSHeap *heap)
 {
-    MSHeap *heap = gc_data;
-    size_t rawsize = bitmap_index(heap->high);
+    size_t rawsize = bitmap_index(heap, heap->high);
     heap->bitmap = xcalloc(1, idivceil(rawsize, 8U));
 }
 
 static void bmp_gc(MSHeap *heap)
 {
-    bmp_init_bitmap();
+    bmp_init_bitmap(heap);
     ms_gc(heap);
 }
 
-static void *bmp_malloc(size_t size)
+static void *bmp_malloc(void *heap, size_t size)
 {
-    MSHeap *heap = gc_data;
     if (stress)
         bmp_gc(heap);
     void *p = ms_allocate(heap, size);
@@ -589,7 +583,7 @@ static void *bmp_malloc(size_t size)
 // It seems dangerous because we don't provide heap->bitmap for the last
 // sweep() in fin(), but we can do it safely in fact. It depends on the
 // behavior of init_header() which sets every header->living = false.
-static const GCFunctions GC_FUNCS_MARK_SWEEP_BITMAP = {
+static const GCAlgorithmData GC_FUNCS_MARK_SWEEP_BITMAP = {
     .init = ms_init,
     .fin = ms_fin,
     .malloc = bmp_malloc,
@@ -620,17 +614,17 @@ static EpsHeapSlot *eps_heap_slot_new(size_t size)
     return h;
 }
 
-static void eps_init(void)
+static void *eps_init(void)
 {
     EpsHeap *heap = xmalloc(sizeof(EpsHeap));
     heap->slot[0] = eps_heap_slot_new(init_size);
     heap->size = 1;
-    gc_data = heap;
+    return heap;
 }
 
-static void eps_fin(void)
+static void eps_fin(void *data)
 {
-    EpsHeap *heap = gc_data;
+    EpsHeap *heap = data;
     free_slots(heap->slot, heap->size);
     free(heap);
 }
@@ -656,9 +650,8 @@ static void eps_add_slot(EpsHeap *heap)
     heap->slot[heap->size++] = eps_heap_slot_new(last->size * HEAP_RATIO);
 }
 
-static void *eps_malloc(size_t size)
+static void *eps_malloc(void *heap, size_t size)
 {
-    EpsHeap *heap = gc_data;
     void *p = eps_allocate(heap, size);
     if (p == NULL) {
         eps_add_slot(heap);
@@ -669,11 +662,11 @@ static void *eps_malloc(size_t size)
     return p;
 }
 
-static void eps_add_root(UNUSED const Value *p) {} // dummy
+static void eps_add_root(UNUSED void *data, UNUSED const Value *p) {} // dummy
 
-static void eps_stat(HeapStat *stat)
+static void eps_stat(void *data, HeapStat *stat)
 {
-    EpsHeap *heap = gc_data;
+    EpsHeap *heap = data;
     stat->size = stat->used = 0;
     for (size_t i = 0; i < heap->size; i++) {
         EpsHeapSlot *slot = heap->slot[i];
@@ -682,7 +675,7 @@ static void eps_stat(HeapStat *stat)
     }
 }
 
-static const GCFunctions GC_FUNCS_EPSILON = {
+static const GCAlgorithmData GC_FUNCS_EPSILON = {
     .init = eps_init,
     .fin = eps_fin,
     .malloc = eps_malloc,
@@ -696,7 +689,7 @@ static const GCFunctions GC_FUNCS_EPSILON = {
 
 void gc_add_root(const Value *r)
 {
-    funcs.add_root(r);
+    algo.add_root(algo.heap, r);
 }
 
 static void heap_print_stat_table(const char *subheader, size_t tab[], const size_t *large)
@@ -722,7 +715,7 @@ static void heap_stat(HeapStat *stat)
     memset(stat, 0, sizeof(HeapStat));
     stat->tab_free_larger = scary_new(sizeof(size_t));
     stat->tab_used_larger = scary_new(sizeof(size_t));
-    funcs.stat(stat);
+    algo.stat(algo.heap, stat);
 }
 
 static void heap_stat_fin(HeapStat *stat)
@@ -786,13 +779,13 @@ void sch_set_gc_algorithm(SchGCAlgorithm s)
     error_if_gc_initialized();
     switch (s) {
     case SCH_GC_ALGORITHM_EPSILON:
-        funcs = GC_FUNCS_EPSILON;
+        algo = GC_FUNCS_EPSILON;
         break;
     case SCH_GC_ALGORITHM_MARK_SWEEP:
-        funcs = GC_FUNCS_MARK_SWEEP;
+        algo = GC_FUNCS_MARK_SWEEP;
         break;
     case SCH_GC_ALGORITHM_MARK_SWEEP_BITMAP:
-        funcs = GC_FUNCS_MARK_SWEEP_BITMAP;
+        algo = GC_FUNCS_MARK_SWEEP_BITMAP;
         break;
     }
 }
@@ -800,21 +793,21 @@ void sch_set_gc_algorithm(SchGCAlgorithm s)
 void gc_init(const void *sp)
 {
     stack_base = sp;
-    if (funcs.init == NULL)
-        funcs = GC_FUNCS_DEFAULT;
-    funcs.init();
+    if (algo.init == NULL)
+        algo = GC_FUNCS_DEFAULT;
+    algo.heap = algo.init();
     initialized = true;
 }
 
 void gc_fin(void)
 {
-    funcs.fin();
+    algo.fin(algo.heap);
 }
 
 void *gc_malloc(size_t size)
 {
     size_t asize = align(size);
-    void *p = funcs.malloc(asize);
+    void *p = algo.malloc(algo.heap, asize);
 #ifdef DEBUG
     memset(p, 0, size);
 #endif
