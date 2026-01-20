@@ -237,6 +237,15 @@ static inline bool table_too_many_elements(const Table *t)
     return t->size > t->body_size * TABLE_TOO_MANY_FACTOR;
 }
 
+static List *find_from(const Table *t, uint64_t i, uint64_t key)
+{
+    for (List *p = t->body[i]; p != NULL; p = p->next) {
+        if (p->key == key) // direct
+            return p;
+    }
+    return NULL;
+}
+
 // `value` can't be TABLE_NOT_FOUND
 Table *table_put(Table *t, uint64_t key, uint64_t value)
 {
@@ -245,19 +254,19 @@ Table *table_put(Table *t, uint64_t key, uint64_t value)
     if (table_too_many_elements(t))
         table_resize(t);
     uint64_t i = body_index(t, key);
-    t->body[i] = list_new(key, value, t->body[i]); // prepend even if the same key exists
-    t->size++;
+    List *p = find_from(t, i, key);
+    if (p == NULL) {
+        t->body[i] = list_new(key, value, t->body[i]); // prepend to add
+        t->size++;
+    } else
+        p->value = value; // set!
     return t;
 }
 
 static List *find(const Table *t, uint64_t key)
 {
     uint64_t i = body_index(t, key);
-    for (List *p = t->body[i]; p != NULL; p = p->next) {
-        if (p->key == key) // direct
-            return p;
-    }
-    return NULL;
+    return find_from(t, i, key);
 }
 
 uint64_t table_get(const Table *t, uint64_t key)

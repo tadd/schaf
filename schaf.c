@@ -1465,11 +1465,7 @@ static Value define_variable(Value env, Value ident, Value expr)
 
     Value val = eval(env, expr);
     EXPECT_ERROR(val);
-    bool found = false;
-    if (ENV(env)->parent == Qfalse)
-        found = env_set(env, ident, val);
-    if (!found)
-        env_put(env, ident, val); // prepend new
+    env_put(env, ident, val);
     return Qfalse;
 }
 
