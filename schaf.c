@@ -2744,7 +2744,7 @@ static void print_vector(FILE *f, Value val, Value record, ValuePrinter printer)
     fprintf(f, "#(");
     record = cons(val, record);
     const Value *v = VECTOR(val);
-    for (int64_t i = 0, len = scary_length(v); i < len; i++) {
+    for (size_t i = 0, len = scary_length(v); i < len; i++) {
         Value e = v[i];
         if (!check_circular(f, e, record))
             print_object(f, e, record, printer);

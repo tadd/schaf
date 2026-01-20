@@ -187,7 +187,8 @@ static void mark_array(MSHeap *heap, const void *beg, size_t n)
 
 static void mark_jmpbuf(MSHeap *heap, const jmp_buf *jmp)
 {
-    mark_array(heap, jmp, idivceil(sizeof(jmp_buf), sizeof(uintptr_t)));
+    size_t n = idivceil(sizeof(jmp_buf), sizeof(uintptr_t));
+    mark_array(heap, jmp, n);
 }
 
 static void mark_env_each(UNUSED uint64_t key, uint64_t value, void *data)
@@ -242,7 +243,8 @@ static void mark_val(MSHeap *heap, Value v)
         Continuation *p = CONTINUATION(v);
         mark_val(heap, p->retval);
         mark_jmpbuf(heap, &p->state);
-        mark_array(heap, p->stack, idivceil(p->stack_len, sizeof(uintptr_t)));
+        size_t n = idivceil(p->stack_len, sizeof(uintptr_t));
+        mark_array(heap, p->stack, n);
         break;
     }
     case TAG_CFUNC_CLOSURE:
@@ -257,7 +259,7 @@ static void mark_val(MSHeap *heap, Value v)
     }
     case TAG_VECTOR: {
         Value *p = VECTOR(v);
-        for (int64_t i = 0, len = scary_length(p); i < len; i++)
+        for (size_t i = 0, len = scary_length(p); i < len; i++)
             mark_val(heap, p[i]);
         break;
     }
