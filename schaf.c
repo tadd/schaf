@@ -460,15 +460,15 @@ static Value apply_closure(UNUSED Value env, Value proc, Value args)
     EXPECT(arity, PROCEDURE(proc)->arity, args);
     Closure *cl = CLOSURE(proc);
     int64_t arity = cl->proc.arity;
-    Value clenv = env_inherit(cl->env);
+    Value localenv = env_inherit(cl->env);
     Value params = cl->params;
     if (arity == -1)
-        env_put(clenv, params, args);
+        env_put(localenv, params, args);
     else {
         for (Value pa = args, pp = params; pa != Qnil; pa = cdr(pa), pp = cdr(pp))
-            env_put(clenv, car(pp), car(pa));
+            env_put(localenv, car(pp), car(pa));
     }
-    return eval_body(clenv, cl->body);
+    return eval_body(localenv, cl->body);
 }
 
 static Value closure_new(Value env, Value params, Value body)
@@ -632,7 +632,8 @@ static Value env_dup(const char *name, const Value orig)
         bug("duplication of chained environment not permitted");
     Env *e = obj_new(TAG_ENV, sizeof(Env));
     e->name = name != NULL ? name : ENV(orig)->name;
-    e->table = ENV(orig)->table != NULL ? table_dup(ENV(orig)->table) : NULL;
+    const Table *t = ENV(orig)->table;
+    e->table = t != NULL ? table_dup(t) : NULL;
     e->parent = Qfalse;
     return (Value) e;
 }
@@ -1177,7 +1178,7 @@ static Value let(Value env, Value var, Value bindings, Value body)
 {
     EXPECT(list_head, bindings);
     bool named = var != Qfalse;
-    Value letenv = env_inherit(env);
+    Value localenv = env_inherit(env);
     Value params = DUMMY_PAIR(), lparams = params;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
@@ -1190,13 +1191,13 @@ static Value let(Value env, Value var, Value bindings, Value body)
             lparams = PAIR(lparams)->cdr = list1(ident);
         Value val = eval(env, expr);
         CHECK_ERROR(val);
-        env_put(letenv, ident, val);
+        env_put(localenv, ident, val);
     }
     if (named) {
-        Value proc = closure_new(letenv, cdr(params), body);
-        env_put(letenv, var, proc); // letenv affects as proc->env
+        Value proc = closure_new(localenv, cdr(params), body);
+        env_put(localenv, var, proc); // letenv affects as proc->env
     }
-    return eval_body(letenv, body);
+    return eval_body(localenv, body);
 }
 
 //PTR
@@ -1216,7 +1217,7 @@ static Value syn_let(Value env, Value args)
 static Value let_star(Value env, Value bindings, Value body)
 {
     EXPECT(list_head, bindings);
-    Value letenv = env;
+    Value localenv = env;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
         EXPECT(type, TYPE_PAIR, b);
@@ -1224,12 +1225,12 @@ static Value let_star(Value env, Value bindings, Value body)
             return runtime_error("malformed binding: %s", sch_stringify(b));
         Value ident = car(b), expr = cadr(b);
         EXPECT(type, TYPE_SYMBOL, ident);
-        letenv = env_inherit(letenv);
-        Value val = eval(letenv, expr);
+        localenv = env_inherit(localenv);
+        Value val = eval(localenv, expr);
         CHECK_ERROR(val);
-        env_put(letenv, ident, val);
+        env_put(localenv, ident, val);
     }
-    return eval_body(letenv, body);
+    return eval_body(localenv, body);
 }
 
 //PTR
@@ -1239,26 +1240,28 @@ static Value syn_let_star(Value env, Value args)
     return let_star(env, car(args), cdr(args));
 }
 
-//PTR
-static Value syn_letrec(Value env, Value args)
+static Value letrec(Value env, Value bindings, Value body)
 {
-    EXPECT(arity_min_2, args);
-    Value bindings = car(args);
-    Value body = cdr(args);
     EXPECT(list_head, bindings);
     EXPECT(type, TYPE_PAIR, body);
-
-    Value letenv = env_inherit(env);
+    Value localenv = env_inherit(env);
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
         EXPECT(type, TYPE_PAIR, b);
         Value ident = car(b);
         EXPECT(type, TYPE_SYMBOL, ident);
-        Value val = eval(letenv, cadr(b));
+        Value val = eval(localenv, cadr(b));
         CHECK_ERROR(val);
-        env_put(letenv, ident, val);
+        env_put(localenv, ident, val);
     }
-    return eval_body(letenv, body);
+    return eval_body(localenv, body);
+}
+
+//PTR
+static Value syn_letrec(Value env, Value args)
+{
+    EXPECT(arity_min_2, args);
+    return letrec(env, car(args), cdr(args));
 }
 
 // 4.2.3. Sequencing
@@ -1278,7 +1281,7 @@ static Value syn_do(Value env, Value args)
     EXPECT(list_head, bindings);
     EXPECT(type, TYPE_PAIR, tests);
 
-    Value doenv = env_inherit(env);
+    Value localenv = env_inherit(env);
     Value steps = Qnil, vars = Qnil, v;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
@@ -1297,26 +1300,26 @@ static Value syn_do(Value env, Value args)
         }
         v = eval(env, init); // in the original env
         CHECK_ERROR(v);
-        env_put(doenv, var, v);
+        env_put(localenv, var, v);
     }
     Value test = car(tests), exprs = cdr(tests);
-    while ((v = eval(doenv, test)) == Qfalse) {
+    while ((v = eval(localenv, test)) == Qfalse) {
         if (body != Qnil) {
-            v = eval_body(doenv, body);
+            v = eval_body(localenv, body);
             CHECK_ERROR(v);
         }
         for (Value p = steps; p != Qnil; p = cdr(p)) {
             Value pstep = car(p);
             Value var = car(pstep), step = cdr(pstep);
-            Value val = eval(doenv, step);
+            Value val = eval(localenv, step);
             CHECK_ERROR(val);
-            iset(doenv, var, val);
+            iset(localenv, var, val);
         }
     }
     CHECK_ERROR(v);
     if (exprs == Qnil)
         return Qfalse;
-    return eval_body(doenv, exprs);
+    return eval_body(localenv, exprs);
 }
 
 // 4.2.5. Delayed evaluation
