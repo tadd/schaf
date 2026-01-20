@@ -1437,7 +1437,7 @@ static Value define_variable(Value env, Value ident, Value expr)
     Value val = eval(env, expr);
     CHECK_ERROR(val);
     bool found = false;
-    if (env == env_toplevel)
+    if (ENV(env)->parent == Qfalse)
         found = env_set(env, ident, val);
     if (!found)
         env_put(env, ident, val); // prepend new
