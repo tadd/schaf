@@ -751,7 +751,7 @@ static const char *get_func_name(Value proc)
 static Value eval_apply(Value env, Value l)
 {
     Value symproc = car(l), args = cdr(l);
-    vValue proc = eval(env, symproc); // workaround for clang -O2
+    Value proc = eval(env, symproc);
     CHECK_ERROR_LOCATED(proc, l);
     if (!value_tag_is(proc, TAG_SYNTAX)) {
         args = map_eval(env, args);
@@ -1295,7 +1295,7 @@ static Value syn_do(Value env, Value args)
             return runtime_error("duplicated variable: %s", sch_symbol_to_cstr(var));
         vars = cons(var, vars);
         if (step != Qnil) {
-            vValue datum = cons(var, car(step)); // workaround for clang -O2
+            Value datum = cons(var, car(step));
             steps = cons(datum, steps);
         }
         v = eval(env, init); // in the original env
