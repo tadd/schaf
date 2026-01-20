@@ -3,7 +3,7 @@ name: Custom container image
 on:
   workflow_dispatch:
   schedule:
-    - cron: "58 18 * * tue"
+    - cron: "42 15 * * sun"
 
 env:
   REGISTRY: ghcr.io
