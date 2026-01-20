@@ -755,8 +755,11 @@ static void error_out_of_memory(void)
           (size_t) round((double) heap_size() / MiB));
 }
 
-#define error_if_gc_initialized() \
-    if (initialized) error("%s called after GC initialization", __func__)
+static void error_if_gc_initialized(void)
+{
+    if (initialized)
+        error("%s called after GC initialization", __func__);
+}
 
 void sch_set_gc_init_size(double init_mib)
 {
