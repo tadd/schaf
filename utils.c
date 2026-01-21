@@ -194,12 +194,12 @@ void table_dump(const Table *t)
     }
 }
 
-static inline uint64_t table_hash(uint64_t x)
+static uint64_t table_hash(uint64_t x)
 {
     return x * UINT64_C(0x517cc1b727220a95); // fxhash
 }
 
-static inline uint64_t body_index(const Table *t, uint64_t key)
+static uint64_t body_index(const Table *t, uint64_t key)
 {
     return table_hash(key) & (t->body_size - 1U);
 }
@@ -232,7 +232,7 @@ static void table_resize(Table *t)
     free(dummies);
 }
 
-static inline bool table_too_many_elements(const Table *t)
+static bool table_too_many_elements(const Table *t)
 {
     return t->size > t->body_size * TABLE_TOO_MANY_FACTOR;
 }

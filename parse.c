@@ -51,7 +51,7 @@ static Token TOK_DOT3_v = TOKEN_C(IDENT);
 static Token TOK_PLUS_v = TOKEN_C(IDENT);
 static Token TOK_MINUS_v = TOKEN_C(IDENT);
 #define DEF_CONST_TOKEN_FUNC(name, str) \
-    static inline Token TOK_##name(void) \
+    static Token TOK_##name(void) \
     { \
         if (TOK_##name##_v.value == 0) \
             TOK_##name##_v.value = sch_symbol_new(str); \
@@ -63,15 +63,15 @@ DEF_CONST_TOKEN_FUNC(PLUS, "+")
 DEF_CONST_TOKEN_FUNC(MINUS, "-")
 
 // and ctor-s
-static inline Token token_int(int64_t i)
+static Token token_int(int64_t i)
 {
     return TOKEN_VAL(INT, sch_integer_new(i));
 }
-static inline Token token_string(const char *s)
+static Token token_string(const char *s)
 {
     return TOKEN_VAL(STRING, sch_string_new(s));
 }
-static inline Token token_ident(const char *s)
+static Token token_ident(const char *s)
 {
     return TOKEN_VAL(IDENT, sch_symbol_new(s));
 }
@@ -116,7 +116,7 @@ static void parse_error(Parser *p, const char *expected, const char *fmt, ...)
     longjmp(p->jmp_error, 1);
 }
 
-static inline void put_newline_pos(Parser *p)
+static void put_newline_pos(Parser *p)
 {
     int64_t pos = ftell(p->in);
     scary_push(&p->newline_pos, pos);
@@ -339,7 +339,7 @@ static Token lex_after_sign(Parser *p, int csign)
     return minus ? TOK_MINUS() : TOK_PLUS();
 }
 
-static inline bool is_special_initial(int c)
+static bool is_special_initial(int c)
 {
     switch (c) {
     case '!': case '$': case '%': case '&': case '*': case '/': case ':':
@@ -350,17 +350,17 @@ static inline bool is_special_initial(int c)
     }
 }
 
-static inline bool is_initial(int c)
+static bool is_initial(int c)
 {
     return isalpha(c) || is_special_initial(c);
 }
 
-static inline bool is_special_subsequent(int c)
+static bool is_special_subsequent(int c)
 {
     return c == '+' || c == '-' || c == '.' || c == '@';
 }
 
-static inline bool is_subsequent(int c)
+static bool is_subsequent(int c)
 {
     return is_initial(c) || isdigit(c) || is_special_subsequent(c);
 }

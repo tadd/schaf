@@ -87,7 +87,7 @@ typedef struct {
 #pragma clang diagnostic ignored "-Wcast-align"
 #endif
 
-static inline size_t align(size_t size)
+static size_t align(size_t size)
 {
     return iceil(size, PTR_ALIGN);
 }
@@ -633,7 +633,7 @@ static void eps_fin(void *data)
     free(heap);
 }
 
-static inline EpsHeapSlot *last_slot(const EpsHeap *heap)
+static EpsHeapSlot *last_slot(const EpsHeap *heap)
 {
     return heap->slot[heap->size - 1];
 }

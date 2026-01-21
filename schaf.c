@@ -73,27 +73,27 @@ static Value current_input_port = Qfalse, current_output_port = Qfalse;
 // value_is_*: Type Checks
 //
 
-inline bool sch_value_is_integer(Value v)
+bool sch_value_is_integer(Value v)
 {
     return v & FLAG_MASK_INT;
 }
 
-inline bool sch_value_is_symbol(Value v)
+bool sch_value_is_symbol(Value v)
 {
     return (v & FLAG_MASK_SYM) == FLAG_SYM;
 }
 
-static inline bool value_is_immediate(Value v)
+static bool value_is_immediate(Value v)
 {
     return v & FLAG_MASK_IMM;
 }
 
-static inline bool value_tag_is(Value v, ValueTag expected)
+static bool value_tag_is(Value v, ValueTag expected)
 {
     return !value_is_immediate(v) && VALUE_TAG(v) == expected;
 }
 
-inline bool sch_value_is_string(Value v)
+bool sch_value_is_string(Value v)
 {
     return value_tag_is(v, TAG_STRING);
 }
@@ -125,37 +125,37 @@ static bool sch_value_is_procedure(Value v)
     bug_invalid_tag(VALUE_TAG(v));
 }
 
-inline static bool sch_value_is_vector(Value v)
+static bool sch_value_is_vector(Value v)
 {
     return value_tag_is(v, TAG_VECTOR);
 }
 
-inline static bool sch_value_is_env(Value v)
+static bool sch_value_is_env(Value v)
 {
     return value_tag_is(v, TAG_ENV);
 }
 
-inline static bool sch_value_is_port(Value v)
+static bool sch_value_is_port(Value v)
 {
     return value_tag_is(v, TAG_PORT);
 }
 
-inline bool sch_value_is_pair(Value v)
+bool sch_value_is_pair(Value v)
 {
     return value_tag_is(v, TAG_PAIR);
 }
 
-inline static bool sch_value_is_promise(Value v)
+static bool sch_value_is_promise(Value v)
 {
     return value_tag_is(v, TAG_PROMISE);
 }
 
-inline static bool is_error(Value v)
+static bool is_error(Value v)
 {
     return value_tag_is(v, TAG_ERROR);
 }
 
-inline static bool is_boolean(Value v)
+static bool is_boolean(Value v)
 {
     return v == Qtrue || v == Qfalse;
 }
@@ -247,7 +247,7 @@ const char *sch_value_to_type_name(Value v)
 
 // *_to_<cdata>: Convert internal data to external plain C
 
-inline int64_t sch_integer_to_cint(Value x)
+int64_t sch_integer_to_cint(Value x)
 {
 #ifdef __x86_64__
     return ((int64_t) x) >> FLAG_NBIT_INT;
@@ -257,7 +257,7 @@ inline int64_t sch_integer_to_cint(Value x)
 #endif
 }
 
-inline Symbol sch_symbol_to_csymbol(Value v)
+Symbol sch_symbol_to_csymbol(Value v)
 {
     return (Symbol) (v >> FLAG_NBIT_SYM);
 }
@@ -271,12 +271,12 @@ static const char *unintern(Symbol sym)
     return symbol_names[sym];
 }
 
-inline const char *sch_string_to_cstr(Value v)
+const char *sch_string_to_cstr(Value v)
 {
     return STRING(v);
 }
 
-inline const char *sch_symbol_to_cstr(Value v)
+const char *sch_symbol_to_cstr(Value v)
 {
     return unintern(sch_symbol_to_csymbol(v));
 }
@@ -294,7 +294,7 @@ CXRS(DEF_CXR)
 
 // *_new: Convert external plain C data to internal
 
-inline Value sch_integer_new(int64_t i)
+Value sch_integer_new(int64_t i)
 {
     Value v = i;
     return v << FLAG_NBIT_INT | FLAG_INT;
@@ -315,7 +315,7 @@ static Symbol intern(const char *name)
     return i;
 }
 
-inline Value sch_symbol_new(const char *s)
+Value sch_symbol_new(const char *s)
 {
     Symbol sym = intern(s);
     return (((Value) sym) << FLAG_NBIT_SYM) | FLAG_SYM;
@@ -352,17 +352,17 @@ static Value push_stack_frame(Value ve, const char *name, Value loc);
             (v); \
         }))
 
-static inline bool is_length_min_2(Value args)
+static bool is_length_min_2(Value args)
 {
     return args != Qnil && cdr(args) != Qnil;
 }
 
-static inline bool is_length_2(Value args)
+static bool is_length_2(Value args)
 {
     return is_length_min_2(args) && cddr(args) == Qnil;
 }
 
-static inline bool is_length_3(Value args)
+static bool is_length_3(Value args)
 {
     return is_length_min_2(args) && cddr(args) != Qnil && cdddr(args) == Qnil;
 }
@@ -585,13 +585,13 @@ const char *sch_error_message(void)
     return errmsg;
 }
 
-static inline Value arity_error(const char *op, int64_t expected, int64_t actual)
+static Value arity_error(const char *op, int64_t expected, int64_t actual)
 {
     return runtime_error("wrong number of arguments: expected %s%"PRId64" but got %"PRId64,
                          op, expected, actual);
 }
 
-static inline Value type_error(const char *expected, Value v)
+static Value type_error(const char *expected, Value v)
 {
     return runtime_error("expected %s but got %s",
                          expected, sch_value_to_type_name(v));
@@ -1586,11 +1586,11 @@ static Value relop(RelOpFunc func, Value args)
     return Qtrue;
 }
 
-static inline bool relop_eq(int64_t x, int64_t y) { return x == y; }
-static inline bool relop_lt(int64_t x, int64_t y) { return x <  y; }
-static inline bool relop_le(int64_t x, int64_t y) { return x <= y; }
-static inline bool relop_gt(int64_t x, int64_t y) { return x >  y; }
-static inline bool relop_ge(int64_t x, int64_t y) { return x >= y; }
+static bool relop_eq(int64_t x, int64_t y) { return x == y; }
+static bool relop_lt(int64_t x, int64_t y) { return x <  y; }
+static bool relop_le(int64_t x, int64_t y) { return x <= y; }
+static bool relop_gt(int64_t x, int64_t y) { return x >  y; }
+static bool relop_ge(int64_t x, int64_t y) { return x >= y; }
 
 static Value proc_numeq(UNUSED Value env, Value args)
 {
@@ -1695,7 +1695,7 @@ static Value proc_mul(UNUSED Value env, Value args)
     return sch_integer_new(y);
 }
 
-static inline Value divzero_error(void)
+static Value divzero_error(void)
 {
     return runtime_error("divided by zero");
 }
@@ -1831,27 +1831,27 @@ static Value cons_const(Value car, Value cdr)
     return v;
 }
 
-inline Value list1(Value x)
+Value list1(Value x)
 {
     return cons(x, Qnil);
 }
 
-inline Value list1_const(Value x)
+Value list1_const(Value x)
 {
     return cons_const(x, Qnil);
 }
 
-inline Value list2_const(Value x, Value y)
+Value list2_const(Value x, Value y)
 {
     return cons_const(x, list1_const(y));
 }
 
-inline Value car(Value v)
+Value car(Value v)
 {
     return PAIR(v)->car;
 }
 
-inline Value cdr(Value v)
+Value cdr(Value v)
 {
     return PAIR(v)->cdr;
 }
@@ -2643,7 +2643,7 @@ static const char *port_type_string(PortType type)
     return type == PORT_INPUT ? "input" : "output";
 }
 
-static inline Value invalid_port_type_error(PortType expected, Value port)
+static Value invalid_port_type_error(PortType expected, Value port)
 {
     return runtime_error("expected %s port but got %s port",
                          port_type_string(expected),
