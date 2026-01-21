@@ -1810,6 +1810,28 @@ Value cons(Value car, Value cdr)
     return (Value) p;
 }
 
+static Value cons_const(Value car, Value cdr)
+{
+    Value v = cons(car, cdr);
+    HEADER(v)->immutable = true;
+    return v;
+}
+
+inline Value list1(Value x)
+{
+    return cons(x, Qnil);
+}
+
+inline Value list1_const(Value x)
+{
+    return cons_const(x, Qnil);
+}
+
+inline Value list2_const(Value x, Value y)
+{
+    return cons_const(x, list1_const(y));
+}
+
 inline Value car(Value v)
 {
     return PAIR(v)->car;

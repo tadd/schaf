@@ -219,35 +219,14 @@ Value cons(Value car, Value cdr);
 Value car(Value v);
 Value cdr(Value v);
 int64_t length(Value list);
+Value list1(Value x);
+Value list1_const(Value x);
+Value list2_const(Value x, Value y);
 
 Value vector_new(void);
 Value vector_push(Value v, Value e);
 
 #pragma GCC visibility pop
-
-static inline Value list1(Value x)
-{
-    return cons(x, Qnil);
-}
-
-static inline Value cons_const(Value car, Value cdr)
-{
-    Pair *p = obj_new(TAG_PAIR, sizeof(Pair));
-    HEADER(p)->immutable = true;
-    p->car = car;
-    p->cdr = cdr;
-    return (Value) p;
-}
-
-static inline Value list1_const(Value x)
-{
-    return cons_const(x, Qnil);
-}
-
-static inline Value list2_const(Value x, Value y)
-{
-    return cons_const(x, list1_const(y));
-}
 
 #define DUMMY_PAIR() ((Value) &(Pair) { \
             .header = { .tag = TAG_PAIR, .immutable = false }, \
