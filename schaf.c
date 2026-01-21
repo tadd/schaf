@@ -1188,6 +1188,17 @@ static Value syn_or(Value env, Value args)
 }
 
 // 4.2.2. Binding constructs
+
+static Value expect_let_binding_form(Value b)
+{
+    if (sch_value_is_pair(b) &&
+        sch_value_is_symbol(car(b)) &&
+        sch_value_is_pair(cdr(b)) &&
+        cddr(b) == Qnil)
+        return Qfalse;
+    return runtime_error("malformed binding: %s", sch_stringify(b));
+}
+
 static Value let(Value env, Value var, Value bindings, Value body)
 {
     EXPECT(list_head, bindings);
@@ -1196,11 +1207,8 @@ static Value let(Value env, Value var, Value bindings, Value body)
     Value params = DUMMY_PAIR(), lparams = params;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
-        EXPECT(type, TYPE_PAIR, b);
-        if (length(b) != 2)
-            return runtime_error("malformed binding: %s", sch_stringify(b));
+        EXPECT(let_binding_form, b);
         Value ident = car(b), expr = cadr(b);
-        EXPECT(type, TYPE_SYMBOL, ident);
         if (named)
             lparams = PAIR(lparams)->cdr = list1(ident);
         Value val = eval(env, expr);
@@ -1234,11 +1242,8 @@ static Value let_star(Value env, Value bindings, Value body)
     Value localenv = env;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
-        EXPECT(type, TYPE_PAIR, b);
-        if (length(b) != 2)
-            return runtime_error("malformed binding: %s", sch_stringify(b));
+        EXPECT(let_binding_form, b);
         Value ident = car(b), expr = cadr(b);
-        EXPECT(type, TYPE_SYMBOL, ident);
         localenv = env_inherit(localenv);
         Value val = eval(localenv, expr);
         CHECK_ERROR(val);
@@ -1261,9 +1266,8 @@ static Value letrec(Value env, Value bindings, Value body)
     Value localenv = env_inherit(env);
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
-        EXPECT(type, TYPE_PAIR, b);
+        EXPECT(let_binding_form, b);
         Value ident = car(b);
-        EXPECT(type, TYPE_SYMBOL, ident);
         Value val = eval(localenv, cadr(b));
         CHECK_ERROR(val);
         env_put(localenv, ident, val);
@@ -1286,6 +1290,25 @@ static Value syn_begin(Value env, Value body)
 }
 
 // 4.2.4. Iteration
+
+static Value expect_do_binding_form(Value b)
+{
+    if (sch_value_is_pair(b) &&
+        sch_value_is_symbol(car(b)) &&
+        sch_value_is_pair(cdr(b)) &&
+        (cddr(b) == Qnil || // length is 2
+         (sch_value_is_pair(cddr(b)) && cdddr(b) == Qnil))) // or 3
+        return Qfalse;
+    return runtime_error("malformed binding: %s", sch_stringify(b));
+}
+
+static Value expect_unique_variable(Value vars, Value v)
+{
+    if (memq(v, vars) == Qfalse)
+        return Qfalse;
+    return runtime_error("duplicated variable: %s", sch_symbol_to_cstr(v));
+}
+
 //PTR
 static Value syn_do(Value env, Value args)
 {
@@ -1299,14 +1322,9 @@ static Value syn_do(Value env, Value args)
     Value steps = Qnil, vars = Qnil, v;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
-        EXPECT(type, TYPE_PAIR, b);
-        int64_t l = length(b);
-        if (l < 2 || l > 3)
-            return runtime_error("malformed binding: %s", sch_stringify(b));
+        EXPECT(do_binding_form, b);
         Value var = car(b), init = cadr(b), step = cddr(b);
-        EXPECT(type, TYPE_SYMBOL, var);
-        if (memq(var, vars) != Qfalse)
-            return runtime_error("duplicated variable: %s", sch_symbol_to_cstr(var));
+        EXPECT(unique_variable, vars, var);
         vars = cons(var, vars);
         if (step != Qnil) {
             Value datum = cons(var, car(step));
