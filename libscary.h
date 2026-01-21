@@ -8,9 +8,9 @@ void *scary_new(size_t size);
 void *scary_new_sized(size_t nmemb, size_t size);
 void scary_free(void *ary);
 size_t scary_length(const void *ary);
-void scary_pop(void *ary);
 #if 0
 <T> void scary_push(T **ary, const T elem);
+<T> T scary_pop(T *ary);
 <T> T *scary_dup(const T *src);
 #endif
 
@@ -32,11 +32,16 @@ void scary_pop(void *ary);
 #define xDECL_PUSH(type, ident) void scary_push_##ident(type **, const type);
 xTYPES(xDECL_PUSH);
 #define xPAT_PUSH(type, ident) , type: scary_push_##ident
-#define scary_push(pary, elem) _Generic(elem xTYPES_CPTR(xPAT_PUSH))(pary, elem)
+#define scary_push(pary, elem) _Generic((elem) xTYPES_CPTR(xPAT_PUSH))(pary, elem)
+
+#define xDECL_POP(type, ident) type scary_pop_##ident(type *);
+xTYPES(xDECL_POP);
+#define xPAT_POP(type, ident) , type: scary_pop_##ident
+#define scary_pop(p) _Generic(*(p) xTYPES(xPAT_POP))(p)
 
 #define xDECL_DUP(type, ident) type *scary_dup_##ident(const type *);
 xTYPES(xDECL_DUP);
 #define xPAT_DUP(type, ident) , type *: scary_dup_##ident, const type *: scary_dup_##ident
-#define scary_dup(p) _Generic(p xTYPES(xPAT_DUP))(p)
+#define scary_dup(p) _Generic((p) xTYPES(xPAT_DUP))(p)
 
 #endif

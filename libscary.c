@@ -126,10 +126,12 @@ void scary_push_##suffix(type **p, const type elem)      \
 }
 xPTRS(DEFINE_PUSH_PTR)
 
-void scary_pop(void *p)
-{
-    get(p)->length--; // do not shrink for speed
+#define DEFINE_POP_DATA(type, suffix) \
+type scary_pop_##suffix(type *p)      \
+{   /* do not shrink for speed */     \
+    return p[--get(p)->length];       \
 }
+xTYPES(DEFINE_POP_DATA)
 
 static void *scary_dup_any(const void *p)
 {
