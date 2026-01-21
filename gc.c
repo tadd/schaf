@@ -204,8 +204,7 @@ static bool is_living(MSHeap *heap, MSHeader *h, bool do_mark)
     bool marked;
     if (heap->bitmap == NULL) {
         marked = h->living;
-        if (marked != do_mark)
-            h->living = do_mark;
+        h->living = do_mark;
     } else {
         uintptr_t index = bitmap_index(heap, h);
         uint8_t offset = index % 8U;
