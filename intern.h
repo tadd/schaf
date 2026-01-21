@@ -230,7 +230,7 @@ static inline Value list1(Value x)
     return cons(x, Qnil);
 }
 
-static Value cons_const(Value car, Value cdr)
+static inline Value cons_const(Value car, Value cdr)
 {
     Pair *p = obj_new(TAG_PAIR, sizeof(Pair));
     HEADER(p)->immutable = true;
