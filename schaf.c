@@ -289,7 +289,7 @@ inline const char *sch_symbol_to_cstr(Value v)
 #define CXRS(f) CXR2(f,) CXR3(f,) CXR4(f,)
 
 #define DEF_CXR(x, y) \
-    static Value c##x##y##r(Value v) { return c##x##r(c##y##r(v)); }
+    UNUSED static Value c##x##y##r(Value v) { return c##x##r(c##y##r(v)); }
 CXRS(DEF_CXR)
 
 // *_new: Convert external plain C data to internal
@@ -1892,11 +1892,28 @@ static Value proc_set_cdr(UNUSED Value env, Value pair, Value obj)
     return pair;
 }
 
+static Value safe_car(Value v)
+{
+    EXPECT_ERROR(v);
+    EXPECT_TYPE(pair, v);
+    return car(v);
+}
+
+static Value safe_cdr(Value v)
+{
+    EXPECT_ERROR(v);
+    EXPECT_TYPE(pair, v);
+    return cdr(v);
+}
+
+#define DEF_SAFE_CXR(x, y) \
+    static Value safe_c##x##y##r(Value v) { return safe_c##x##r(safe_c##y##r(v)); }
+CXRS(DEF_SAFE_CXR)
+
 #define DEF_CXR_BUILTIN(x, y) \
     static Value proc_c##x##y##r(UNUSED Value env, Value v) \
     { \
-        EXPECT_TYPE(pair, v); \
-        return c##x##y##r(v); \
+        return safe_c##x##y##r(v); \
     }
 CXRS(DEF_CXR_BUILTIN)
 
