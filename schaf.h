@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 
 typedef uintptr_t SchValue;
 
@@ -25,8 +26,10 @@ char *sch_inspect(SchValue v);
 void sch_display(SchValue v);
 SchValue sch_parse(const char *path);
 SchValue sch_parse_string(const char *in);
+SchValue sch_parse_file(FILE *in, const char *name);
 SchValue sch_load(const char *path);
 SchValue sch_eval_string(const char *s);
+SchValue sch_load_file(FILE *in, const char *name);
 
 const char *sch_error_message(void);
 

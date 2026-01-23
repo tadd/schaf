@@ -75,6 +75,7 @@ static void usage_opt(FILE *out, const char *opt, const char *desc)
 static void usage(FILE *out)
 {
     fprintf(out, "Usage: schaf [-HMpPsSTh] [-e <source>] <file>\n");
+    usage_opt(out, "<file>", "Path or - (stdin).");
     usage_opt(out, "-e <source>", "Evaluate <source> string directly instead of <file>.");
     usage_opt(out, "-H <MiB>", "Specify initial heap size.");
     usage_opt(out, "-M", "Print memory usage (VmHWM) at exit.");
@@ -297,10 +298,15 @@ int main(int argc, char **argv)
     if (o.interacitve)
         return repl();
     SchValue v;
-    if (o.parse_only)
-        v = o.script ? sch_parse_string(o.script) : sch_parse(o.path);
-    else
-        v = o.script ? sch_eval_string(o.script) : sch_load(o.path);
+    if (o.script)
+        v = o.parse_only ? sch_parse_string(o.script) : sch_eval_string(o.script);
+    else {
+        if (strcmp(o.path, "-") == 0)
+            v = o.parse_only ?
+                sch_parse_file(stdin, "<stdin>") : sch_load_file(stdin, "<stdin>");
+        else
+            v = o.parse_only ? sch_parse(o.path) : sch_load(o.path);
+    }
     if (v == SCH_UNDEF)
         error("%s", sch_error_message()); // runtime error occurred
     if (o.print) {

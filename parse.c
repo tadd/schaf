@@ -613,7 +613,7 @@ Source *iparse(FILE *in, const char *filename)
     return src;
 }
 
-static Value iparse_ast(FILE *in, const char *filename)
+Value sch_parse_file(FILE *in, const char *filename)
 {
     Source *src = iparse(in, filename);
     if (src == NULL)
@@ -638,7 +638,7 @@ Value sch_parse(const char *path)
     FILE *in = fopen(path, "r");
     if (in == NULL)
         error("parse: can't open file: %s", path);
-    Value ast = iparse_ast(in, path);
+    Value ast = sch_parse_file(in, path);
     fclose(in);
     return ast;
 }
@@ -646,7 +646,7 @@ Value sch_parse(const char *path)
 Value sch_parse_string(const char *in)
 {
     FILE *f = mopen(in);
-    Value ast = iparse_ast(f, "<inline>");
+    Value ast = sch_parse_file(f, "<inline>");
     fclose(f);
     return ast;
 }

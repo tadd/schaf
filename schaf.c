@@ -965,7 +965,7 @@ static void add_source(const Source *newsrc)
     gc_add_root(&source_data[len-1]->ast);
 }
 
-static Value iload(FILE *in, const char *filename)
+Value sch_load_file(FILE *in, const char *filename)
 {
     Source *src = iparse(in, filename);
     if (src == NULL)
@@ -993,7 +993,7 @@ static Value iload_inner(FILE *in, const char *path)
 Value sch_eval_string(const char *in)
 {
     FILE *f = mopen(in);
-    Value v = iload(f, "<inline>");
+    Value v = sch_load_file(f, "<inline>");
     fclose(f);
     return v;
 }
@@ -1022,7 +1022,7 @@ Value sch_load(const char *path)
     FILE *in = open_loadable(path);
     if (in == NULL)
         error("can't open file: %s", path);
-    Value retval = iload(in, path);
+    Value retval = sch_load_file(in, path);
     fclose(in);
     return retval;
 }
