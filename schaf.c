@@ -714,7 +714,7 @@ static Value map_eval(Value env, Value l)
     Value mapped = DUMMY_PAIR();
     for (Value last = mapped, p = l, v; p != Qnil; p = cdr(p)) {
         if (!sch_value_is_pair(p))
-            return runtime_error("improper list for apply: %s", sch_inspect(l));
+            return runtime_error("improper list for apply: %s", sch_stringify(l));
         v = eval(env, car(p));
         CHECK_ERROR(v);
         last = PAIR(last)->cdr = list1(v);
@@ -755,7 +755,7 @@ static Value expect_proper_list(Value l)
 {
     for (Value p = l; p != Qnil; p = cdr(p)) {
         if (!sch_value_is_pair(p))
-            return runtime_error("improper list for apply: %s", sch_inspect(l));
+            return runtime_error("improper list for apply: %s", sch_stringify(l));
     }
     return Qfalse;
 }
