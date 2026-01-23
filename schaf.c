@@ -760,7 +760,6 @@ static const char *get_func_name(Value proc)
     return NULL;
 }
 
-
 static Value expect_proper_list(Value l)
 {
     for (Value p = l; p != Qnil; p = cdr(p)) {
@@ -1198,7 +1197,6 @@ static Value syn_or(Value env, Value args)
 }
 
 // 4.2.2. Binding constructs
-
 static Value expect_let_binding_form(Value b)
 {
     if (sch_value_is_pair(b) &&
