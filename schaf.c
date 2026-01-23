@@ -511,6 +511,16 @@ static Value runtime_error(const char *fmt, ...)
     return (Value) e;
 }
 
+static Value runtime_error_with_obj(const char *message, Value obj)
+{
+    char *objstr = sch_stringify(obj);
+    snprintf(errmsg, sizeof(errmsg), "%s: %s", message, objstr);
+    free(objstr);
+    Error *e = obj_new(TAG_ERROR, sizeof(Error));
+    ERROR(e) = scary_new(sizeof(StackFrame *));
+    return (Value) e;
+}
+
 const char *sch_error_message(void)
 {
     return errmsg;
@@ -714,7 +724,7 @@ static Value map_eval(Value env, Value l)
     Value mapped = DUMMY_PAIR();
     for (Value last = mapped, p = l, v; p != Qnil; p = cdr(p)) {
         if (!sch_value_is_pair(p))
-            return runtime_error("improper list for apply: %s", sch_stringify(l));
+            return runtime_error_with_obj("improper list for apply", l);
         v = eval(env, car(p));
         CHECK_ERROR(v);
         last = PAIR(last)->cdr = list1(v);
@@ -755,7 +765,7 @@ static Value expect_proper_list(Value l)
 {
     for (Value p = l; p != Qnil; p = cdr(p)) {
         if (!sch_value_is_pair(p))
-            return runtime_error("improper list for apply: %s", sch_stringify(l));
+            return runtime_error_with_obj("improper list for apply", l);
     }
     return Qfalse;
 }
@@ -1196,7 +1206,7 @@ static Value expect_let_binding_form(Value b)
         sch_value_is_pair(cdr(b)) &&
         cddr(b) == Qnil)
         return Qfalse;
-    return runtime_error("malformed binding: %s", sch_stringify(b));
+    return runtime_error_with_obj("malformed binding", b);
 }
 
 static Value let(Value env, Value var, Value bindings, Value body)
@@ -1299,7 +1309,7 @@ static Value expect_do_binding_form(Value b)
         (cddr(b) == Qnil || // length is 2
          (sch_value_is_pair(cddr(b)) && cdddr(b) == Qnil))) // or 3
         return Qfalse;
-    return runtime_error("malformed binding: %s", sch_stringify(b));
+    return runtime_error_with_obj("malformed binding", b);
 }
 
 static Value expect_unique_variable(Value vars, Value v)
