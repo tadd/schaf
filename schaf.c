@@ -1337,7 +1337,7 @@ static Value syn_do(Value env, Value args)
         EXPECT(unique_variable, vars, var);
         vars = cons(var, vars);
         if (step != Qnil) {
-            Value datum = cons(var, car(step));
+            vValue datum = cons(var, car(step)); // workaround for clang -Og
             steps = cons(datum, steps);
         }
         v = eval(env, init); // in the original env
