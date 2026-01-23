@@ -132,12 +132,13 @@ static void ms_add_root(void *data, const Value *r)
     scary_push((void ***) &heap->roots, (const void *) r);
 }
 
-static bool in_heap_range(MSHeap *heap, Value v)
+static bool is_in_heap_range(MSHeap *heap, Value v)
 {
-    const uint8_t *p = (uint8_t *) v;
+    const size_t smallest = sizeof(String);
+    const uint8_t *p = (uint8_t *) MS_HEADER(v);
     for (size_t i = 0; i < heap->size; i++) {
         const MSHeapSlot *slot = heap->slot[i];
-        if (p > slot->body && p < slot->body + slot->size)
+        if (p >= slot->body && p < slot->body + slot->size - smallest)
             return true;
     }
     return false;
@@ -158,6 +159,7 @@ static bool is_valid_flags(const MSHeader *h)
 
 static bool is_valid_header(Value v)
 {
+    const size_t largest = sizeof(Continuation); // maybe
     UNPOISON(&VALUE_TAG(v), sizeof(ValueTag));         // Suspicious but
     UNPOISON(MS_HEADER_FROM_VAL(v), sizeof(MSHeader)); // need to be read
     if (VALUE_TAG(v) > TAG_LAST)
@@ -167,12 +169,13 @@ static bool is_valid_header(Value v)
         return false;
     size_t size = h->size;
     return size > 0 && size % PTR_ALIGN == 0 &&
-        size <= sizeof(Continuation) + MS_HEADER_OFFSET;
+        size <= largest + MS_HEADER_OFFSET;
 }
 
 static bool is_heap_value(MSHeap *heap, Value v)
 {
-    return is_valid_pointer(v) && in_heap_range(heap, v) && is_valid_header(v);
+    return is_valid_pointer(v) &&
+        is_in_heap_range(heap, v) && is_valid_header(v);
 }
 
 static void mark_val(MSHeap *heap, Value v);
