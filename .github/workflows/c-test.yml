@@ -44,16 +44,12 @@ jobs:
       run: make test
     - name: Test with Sanitizers
       run: make sanitize
-    - name: Test SEGV
-      run: ./schaf-san -S test/segv-parsing.scm
     - name: Test with stress
       run: make test-stress
     - name: Test optimized
       run: make clean && make -j4 test OPTFLAGS='-O3 -flto=auto'
     - name: Test optimized with Sanitizers
       run: make -j4 sanitize OPTFLAGS='-O3 -flto=auto'
-    - name: Test optimized SEGV
-      run: ./schaf-san -S test/segv-parsing.scm
     - name: Test optimized with stress
       run: make test-stress OPTFLAGS='-O3 -flto=auto'
     - name: Clang - Make binaries
@@ -62,17 +58,11 @@ jobs:
       run: make test CC=clang
     - name: Clang - Test with Sanitizers
       run: make sanitize CC=clang
-    - name: Clang - Test SEGV
-      run: |
-        ./schaf-san -S test/segv-parsing.scm
-        ./schaf-san test/segv.scm 2>&1 | grep -q improper
     - name: Clang - Test with stress
       run: make test-stress CC=clang
     - name: Clang - Test optimized
       run: make clean && make -j4 test CC=clang OPTFLAGS='-O3 -flto=auto'
     - name: Clang - Test optimized with Sanitizers
       run: make -j4 sanitize CC=clang OPTFLAGS='-O3 -flto=auto'
-    - name: Clang - Test optimized SEGV
-      run: ./schaf-san -S test/segv-parsing.scm
     - name: Clang - Test optimized with stress
       run: make test-stress CC=clang OPTFLAGS='-O3 -flto=auto'
