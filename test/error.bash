@@ -11,7 +11,7 @@ if [[ "${1-x}" = -v ]]; then
 fi
 
 for f in "$testdir"/*.scm; do
-    msg=`head -1 "$f" | sed 's/^"//; s/"$//'`
+    msg=`head -1 "$f" | sed 's/^;* *//; s/ *$//'`
     if [ -z "$msg" ]; then
         tail +2 "$f" | $schaf -S -
     else
