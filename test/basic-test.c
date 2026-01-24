@@ -439,3 +439,15 @@ Test(table, dup) {
 
     table_free(u);
 }
+
+Test(table, string_keys) {
+    Table *t = table_str_new();
+    table_str_put(t, "foo", 12);
+    table_str_put(t, "bar", 34);
+    table_str_put(t, "foo", 56);
+
+    cr_assert(eq(int, 56, table_str_get(t, "foo")));
+    cr_assert(eq(int, 34, table_str_get(t, "bar")));
+
+    table_free(t);
+}

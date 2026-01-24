@@ -138,17 +138,54 @@ enum {
 struct Table {
     size_t size, body_size;
     List **body;
+    TableHashFunc hash;
+    TableEqualFunc eq;
 };
 
 const uint64_t TABLE_NOT_FOUND = UINT64_MAX-1;
 
-Table *table_new(void)
+static Table *table_new_raw(TableHashFunc hash, TableEqualFunc eq)
 {
     Table *t = xmalloc(sizeof(Table));
     t->size = 0;
     t->body_size = TABLE_INIT_SIZE;
     t->body = xcalloc(TABLE_INIT_SIZE, sizeof(List *)); // set NULL
+    t->hash = hash;
+    t->eq = eq;
     return t;
+}
+
+static inline bool eq_direct(uint64_t x, uint64_t y)
+{
+    return x == y;
+}
+
+static inline uint64_t hash_direct(uint64_t x)
+{
+    return x * UINT64_C(0x517cc1b727220a95); // fxhash
+}
+
+Table *table_new(void)
+{
+    return table_new_raw(hash_direct, eq_direct);
+}
+
+static uint64_t hash_str(uint64_t x) // modified djb2
+{
+    uint64_t h = 30011;
+    for (const char *s = (char *) x; *s != '\0'; s++)
+        h = h * 61 + *s;
+    return h;
+}
+
+static inline bool eq_str(uint64_t s, uint64_t t)
+{
+    return strcmp((const char *) s, (const char *) t) == 0;
+}
+
+Table *table_str_new(void)
+{
+    return table_new_raw(hash_str, eq_str);
 }
 
 void table_free(Table *t)
@@ -194,14 +231,9 @@ void table_dump(const Table *t)
     }
 }
 
-static inline uint64_t table_hash(uint64_t x)
-{
-    return x * UINT64_C(0x517cc1b727220a95); // fxhash
-}
-
 static inline uint64_t body_index(const Table *t, uint64_t key)
 {
-    return table_hash(key) & (t->body_size - 1U);
+    return t->hash(key) & (t->body_size - 1U);
 }
 
 static void table_resize(Table *t)
@@ -250,11 +282,17 @@ Table *table_put(Table *t, uint64_t key, uint64_t value)
     return t;
 }
 
+Table *table_str_put(Table *t, const char *key, uint64_t val)
+{
+    return table_put(t, (uint64_t) key, val);
+}
+
 static List *find(const Table *t, uint64_t key)
 {
+    const TableEqualFunc eq = t->eq;
     uint64_t i = body_index(t, key);
     for (List *p = t->body[i]; p != NULL; p = p->next) {
-        if (p->key == key) // direct
+        if (eq(p->key, key))
             return p;
     }
     return NULL;
@@ -264,6 +302,11 @@ uint64_t table_get(const Table *t, uint64_t key)
 {
     const List *p = find(t, key);
     return p == NULL ? TABLE_NOT_FOUND : p->value;
+}
+
+uint64_t table_str_get(const Table *t, const char *key)
+{
+    return table_get(t, (uint64_t) key);
 }
 
 bool table_set(Table *t, uint64_t key, uint64_t value)
