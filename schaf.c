@@ -695,7 +695,7 @@ static void define_procedure(Value env, const char *name, void *cfunc, int64_t a
 //
 // Evaluation
 //
-static Value eval(Value env, Value v);
+[[nodiscard]] static Value eval(Value env, Value v);
 
 static Value eval_body(Value env, Value body)
 {
@@ -734,6 +734,7 @@ static Value push_stack_frame(Value ve, const char *name, Value loc)
     return ve;
 }
 
+[[nodiscard]]
 static Value apply(Value env, Value proc, Value args)
 {
     return PROCEDURE(proc)->apply(env, proc, args);
@@ -2402,20 +2403,24 @@ static Value common_tail(Value x, Value y)
     return px;
 }
 
+#define EXPECT_ERROR_RETURN(v) do { if (is_error(v)) return; } while (0)
+
 static void do_wind(Value new_winders)
 {
-    Value tail = common_tail(new_winders, inner_winders);
+    Value tail = common_tail(new_winders, inner_winders), err;
     for (Value ls = inner_winders; ls != tail; ls = cdr(ls)) {
         inner_winders = cdr(ls);
         Value f = cdar(ls);
-        apply(Qfalse, f, Qnil);
+        err = apply(Qfalse, f, Qnil);
+        EXPECT_ERROR_RETURN(err);
     }
     Value rev = Qnil;
     for (Value p = new_winders; p != tail; p = cdr(p))
         rev = cons(car(p), rev);
     for (Value p = rev; p != Qnil; p = cdr(p)) {
         Value f = caar(p);
-        apply(Qfalse, f, Qnil);
+        err = apply(Qfalse, f, Qnil);
+        EXPECT_ERROR_RETURN(err);
         inner_winders = p;
     }
 }
@@ -2426,11 +2431,14 @@ static Value proc_dynamic_wind(Value env, Value before, Value thunk, Value after
     EXPECT_TYPE(procedure, thunk);
     EXPECT_TYPE(procedure, after);
 
-    apply(env, before, Qnil);
+    Value err = apply(env, before, Qnil);
+    EXPECT_ERROR(err);
     inner_winders = cons(cons(before, after), inner_winders);
     Value ret = apply(env, thunk, Qnil);
+    EXPECT_ERROR(ret);
     inner_winders = cdr(inner_winders);
-    apply(env, after, Qnil);
+    err = apply(env, after, Qnil);
+    EXPECT_ERROR(err);
     return ret;
 }
 
