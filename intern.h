@@ -58,11 +58,15 @@ typedef enum {
 
 typedef struct {
     ValueTag tag;
-    bool immutable;
 } Header;
 
 typedef struct {
     Header header;
+    bool immutable;
+} MutHeader;
+
+typedef struct {
+    MutHeader header;
     Value car, cdr;
 } Pair;
 
@@ -72,7 +76,7 @@ typedef struct {
 } LocatedPair;
 
 typedef struct {
-    Header header;
+    MutHeader header;
     char *body;
 } String;
 
@@ -116,12 +120,12 @@ typedef struct {
 } Continuation;
 
 typedef struct {
-    Header header;
+    MutHeader header;
     Value *body;// use scary
 } Vector;
 
 typedef struct {
-    Header header;
+    MutHeader header;
     Value parent;
     Table *table;
     const char *name;
@@ -157,6 +161,7 @@ typedef struct {
 } Error;
 
 #define HEADER(v) ((Header *) v)
+#define MUT_HEADER(v) ((MutHeader *) v)
 #define VALUE_TAG(v) (HEADER(v)->tag)
 
 #define INT(v) sch_integer_to_cint(v)
@@ -231,7 +236,7 @@ Value vector_push(Value v, Value e);
 #pragma GCC visibility pop
 
 #define DUMMY_PAIR() ((Value) &(Pair) { \
-            .header = { .tag = TAG_PAIR, .immutable = false }, \
+            .header = { .header = { .tag = TAG_PAIR, } , .immutable = false }, \
             .car = Qundef, .cdr = Qnil \
         })
 #define GET_SP(p) uintptr_t v##p = 0; void *volatile p = &v##p; UNPOISON(&p, sizeof(void *))

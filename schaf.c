@@ -325,7 +325,6 @@ void *obj_new(ValueTag t, size_t size)
 {
     Header *h = gc_malloc(size);
     h->tag = t;
-    h->immutable = false;
     return h;
 }
 
@@ -1815,7 +1814,7 @@ Value cons(Value car, Value cdr)
 static Value cons_const(Value car, Value cdr)
 {
     Value v = cons(car, cdr);
-    HEADER(v)->immutable = true;
+    MUT_HEADER(v)->immutable = true;
     return v;
 }
 
@@ -1862,7 +1861,7 @@ static Value proc_cdr(UNUSED Value env, Value pair)
 }
 
 #define EXPECT_MUTABLE(o) \
-    EXPECT(!HEADER(o)->immutable, "cannot modify immutable object")
+    EXPECT(!MUT_HEADER(o)->immutable, "cannot modify immutable object")
 
 static Value proc_set_car(UNUSED Value env, Value pair, Value obj)
 {
