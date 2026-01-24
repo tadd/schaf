@@ -163,7 +163,7 @@ class ValuePrinter(SchafPrinter):
     def is_self_format(self):
         return not self.is_immediate and \
             (self.is_internal_tag or
-             cfuncall('value_is_procedure', self.val))
+             cfuncall('sch_value_is_procedure', self.val))
 
     @property
     def type_name(self):
