@@ -563,7 +563,7 @@ static bool length_in_range(Value l, int64_t min, int64_t max)
     return len >= min;
 }
 
-static Value arity_error(const char *op, int64_t expected, int64_t actual)
+static inline Value arity_error(const char *op, int64_t expected, int64_t actual)
 {
     return runtime_error("wrong number of arguments: expected %s%"PRId64" but got %"PRId64,
                          op, expected, actual);
@@ -1720,7 +1720,7 @@ static Value proc_mul(UNUSED Value env, Value args)
     return sch_integer_new(y);
 }
 
-static Value divzero_error(void)
+static inline Value divzero_error(void)
 {
     return runtime_error("divided by zero");
 }
@@ -2263,7 +2263,7 @@ static Value expect_list_of_lists(Value ls)
     return Qfalse;
 }
 
-static Value different_length_list_error(void)
+static inline Value different_length_list_error(void)
 {
     return runtime_error("different length list in arguments");
 }
