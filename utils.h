@@ -63,14 +63,19 @@ FILE *mopen_w(char **p);
 
 typedef struct Table Table;
 typedef void (*TableForeachFunc)(uint64_t key, uint64_t val, void *data);
+typedef bool (*TableEqualFunc)(uint64_t x, uint64_t y);
+typedef uint64_t (*TableHashFunc)(uint64_t x);
 
 extern const uint64_t TABLE_NOT_FOUND;
 Table *table_new(void);
+Table *table_str_new(void);
 Table *table_dup(const Table *orig);
 void table_free(Table *t);
 Table *table_put(Table *t, uint64_t key, uint64_t val); // `val` can't be TABLE_NOT_FOUND
+Table *table_str_put(Table *t, const char *key, uint64_t val);
 bool table_set(Table *t, uint64_t key, uint64_t val); // set if found
 uint64_t table_get(const Table *t, uint64_t key);
+uint64_t table_str_get(const Table *t, const char *key);
 void table_foreach(const Table *t, TableForeachFunc f, void *data);
 UNUSED void table_dump(const Table *t); // for debug
 
