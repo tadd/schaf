@@ -62,8 +62,8 @@ utils.%.o: utils.h
 # Test
 #
 OBJ_TEST = $(OBJ_COMMON) test/basic-test.o
-TIMEOUT_SEC ?= 20
-TIMEOUT_SEC_LONGER ?= 60
+TIMEOUT_SEC ?= 5
+TIMEOUT_SEC_LONGER ?= 30
 RUNNER = timeout $(TIMEOUT_SEC)
 v0 = $(V:0=)
 VERBOSE = $(v0:1=-v)
