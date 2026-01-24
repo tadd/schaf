@@ -125,12 +125,11 @@ static inline void put_newline_pos(Parser *p)
 static void skip_comment(Parser *p)
 {
     int c;
-    while ((c = fgetc(p->in)) != EOF) {
-        if (c == '\n') {
-            put_newline_pos(p);
+    while ((c = fgetc(p->in)) != '\n') {
+        if (c == EOF)
             return;
-        }
     }
+    put_newline_pos(p);
 }
 
 static void skip_token_atmosphere(Parser *p)
