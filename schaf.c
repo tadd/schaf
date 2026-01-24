@@ -54,6 +54,7 @@ static const int64_t CFUNCARG_MAX = 3;
 // Frame: Table of 'symbol => <value>
 static Value env_toplevel, env_default, env_r5rs, env_null;
 static char **symbol_names; // ("name0" "name1" ...)
+static Table *name_to_symbol;
 Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
 static Value SYM_ELSE, SYM_RARROW;
 static const char *load_basedir;
@@ -266,7 +267,7 @@ inline Symbol sch_symbol_to_csymbol(Value v)
 static const char *unintern(Symbol sym)
 {
     size_t len = scary_length(symbol_names);
-    if (sym >= len) // fatal; every known symbols should have a name
+    if (sym >= len) // fatal; every known symbols should have names
         bug("symbol %lu not found", sym);
     return symbol_names[sym];
 }
@@ -303,16 +304,16 @@ inline Value sch_integer_new(int64_t i)
 // string->symbol
 static Symbol intern(const char *name)
 {
-    uint64_t i;
-    size_t len = scary_length(symbol_names);
     // find
-    for (i = 0; i < len; i++) {
-        if (strcmp(symbol_names[i], name) == 0)
-            return i;
-    }
-    // or put at `i`
-    scary_push(&symbol_names, xstrdup(name));
-    return i;
+    uint64_t i = table_str_get(name_to_symbol, name);
+    if (i != TABLE_NOT_FOUND)
+        return i;
+    // or put the next value
+    Symbol next = scary_length(symbol_names);
+    char *dup = xstrdup(name);
+    scary_push(&symbol_names, dup);
+    table_str_put(name_to_symbol, dup, next);
+    return next;
 }
 
 inline Value sch_symbol_new(const char *s)
@@ -3090,6 +3091,7 @@ int sch_fin(void)
 {
     scary_free_with(source_free, source_data);
     scary_free_with(free, symbol_names);
+    table_free(name_to_symbol);
     gc_fin();
     return exit_status;
 }
@@ -3107,6 +3109,7 @@ void sch_init(const void *sp)
     static char basedir[PATH_MAX];
     load_basedir = getcwd(basedir, sizeof(basedir));
     symbol_names = scary_new(sizeof(char *));
+    name_to_symbol = table_str_new();
 #define DEF_SYMBOL(var, name) SYM_##var = sch_symbol_new(name)
     DEF_SYMBOL(ELSE, "else");
     DEF_SYMBOL(QUOTE, "quote");
