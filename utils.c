@@ -110,6 +110,23 @@ static void list_free(List *l)
     }
 }
 
+static List *list_dup_single(const List *l)
+{
+    if (l == NULL)
+        return NULL;
+    return list_new(l->key, l->value, l->next);
+}
+
+static List *list_dup(const List *l)
+{
+    if (l == NULL)
+        return NULL;
+    List *dup = list_dup_single(l);
+    for (List *p = dup; l != NULL; l = l->next, p = p->next)
+        p->next = list_dup_single(l->next);
+    return dup;
+}
+
 // Table
 
 enum {
@@ -132,23 +149,6 @@ Table *table_new(void)
     t->body_size = TABLE_INIT_SIZE;
     t->body = xcalloc(TABLE_INIT_SIZE, sizeof(List *)); // set NULL
     return t;
-}
-
-static List *list_dup_single(const List *l)
-{
-    if (l == NULL)
-        return NULL;
-    return list_new(l->key, l->value, l->next);
-}
-
-static List *list_dup(const List *l)
-{
-    if (l == NULL)
-        return NULL;
-    List *dup = list_dup_single(l);
-    for (List *p = dup; l != NULL; l = l->next, p = p->next)
-        p->next = list_dup_single(l->next);
-    return dup;
 }
 
 void table_free(Table *t)
