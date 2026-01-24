@@ -188,8 +188,10 @@ extern Value SYM_QUOTE, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING;
 Source *iparse(FILE *in, const char *filename);
 Value parse_datum(FILE *in, const char *filename);
 void pos_to_line_col(int64_t pos, const int64_t *newline_pos, int64_t *line, int64_t *col);
-[[noreturn, gnu::format(printf, 2, 3)]]
-void raise_error(jmp_buf buf, const char *fmt, ...);
+[[gnu::format(printf, 1, 2)]]
+void print_error_message(const char *fmt, ...);
+[[gnu::format(printf, 1, 0)]]
+void append_error_message_v(const char *fmt, va_list ap);
 void *obj_new(ValueTag t, size_t size);
 void source_free(Source *s);
 

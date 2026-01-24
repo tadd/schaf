@@ -102,13 +102,19 @@ static void get_line_and_column(const Parser *p, int64_t *line, int64_t *col)
     pos_to_line_col(pos, p->newline_pos, line, col);
 }
 
-#define parse_error(p, exp, act, ...) do { \
-        int64_t line, col; \
-        get_line_and_column(p, &line, &col); \
-        raise_error(p->jmp_error, \
-                    "%s:%"PRId64":%"PRId64": expected %s but got " act, \
-                    p->filename, line, col, exp __VA_OPT__(,) __VA_ARGS__); \
-    } while (0)
+[[noreturn, gnu::format(printf, 3, 4)]]
+static void parse_error(Parser *p, const char *expected, const char *fmt, ...)
+{
+    int64_t line, col;
+    get_line_and_column(p, &line, &col);
+    print_error_message("%s:%"PRId64":%"PRId64": expected %s but got ",
+                        p->filename, line, col, expected);
+    va_list ap;
+    va_start(ap, fmt);
+    append_error_message_v(fmt, ap);
+    va_end(ap);
+    longjmp(p->jmp_error, 1);
+}
 
 static inline void put_newline_pos(Parser *p)
 {
