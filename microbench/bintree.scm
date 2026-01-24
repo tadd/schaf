@@ -22,7 +22,7 @@
 
 (define (prints . args) args)
 
-(define (main n)
+(define (mainf n)
   (let* ((min-depth 4)
          (max-depth (max (+ min-depth 2) n)))
     (let ((stretch-depth (+ max-depth 1)))
@@ -42,4 +42,4 @@
       (prints "long lived tree of depth " max-depth
               "	 check: " (check long-lived-tree)))))
 
-(main 11)
+(mainf 11)
