@@ -532,13 +532,28 @@ static Value closure_new(Value env, Value params, Value body)
 // Errors
 //
 
-void raise_error(jmp_buf buf, const char *fmt, ...)
+void print_error_message(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(errmsg, sizeof(errmsg), fmt, ap);
     va_end(ap);
-    longjmp(buf, 1);
+}
+
+void append_error_message_v(const char *fmt, va_list ap)
+{
+    size_t len = strlen(errmsg);
+    ssize_t rest = sizeof(errmsg) - len;
+    vsnprintf(errmsg + len, rest, fmt, ap);
+}
+
+[[gnu::format(printf, 1, 2)]]
+static void append_error_message(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    append_error_message_v(fmt, ap);
+    va_end(ap);
 }
 
 [[gnu::format(printf, 1, 2)]]
@@ -773,17 +788,6 @@ static Value eval(Value env, Value v)
     if (!sch_value_is_pair(v))
         return v;
     return eval_apply(env, v);
-}
-
-[[gnu::format(printf, 1, 2)]]
-static int append_error_message(const char *fmt, ...)
-{
-    size_t len = strlen(errmsg);
-    va_list ap;
-    va_start(ap, fmt);
-    int n = vsnprintf(errmsg + len, sizeof(errmsg) - len, fmt, ap);
-    va_end(ap);
-    return n;
 }
 
 static const int64_t *filename_to_newline_pos(const char *filename)
