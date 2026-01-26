@@ -30,6 +30,7 @@ SchValue sch_parse_file(FILE *in, const char *name);
 SchValue sch_load(const char *path);
 SchValue sch_eval_string(const char *s);
 SchValue sch_load_file(FILE *in, const char *name);
+SchValue sch_eval_string_single(const char *s); // always reset loaded sources
 
 const char *sch_error_message(void);
 

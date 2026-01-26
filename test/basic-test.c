@@ -69,7 +69,7 @@
 #define expect_list_eq_parsed(exp, act) expect_x_eq_parsed(list, exp, act)
 #define expect_pair_eq_parsed(ecar, ecdr, act) expect_pair_eq(ecar, ecdr, parse_expr_string(act))
 #define expect_parse_error(exp, act) expect_error(exp, parse_expr_string(act))
-#define expect_runtime_error(exp, act) expect_error(exp, sch_eval_string(act))
+#define expect_runtime_error(exp, act) expect_error(exp, sch_eval_string_single(act))
 
 static void test_sch_init(void)
 {
@@ -247,12 +247,18 @@ Test(schaf, runtime_error_frames2) {
 "(f)");
 }
 
+#define expect_unbound_var_error(col, s) \
+    expect_runtime_error( \
+    "unbound variable: x\n" /* x: fixed variable name */  \
+    "\t<inline>:1:" #col " in <toplevel>", s)
+
 Test(schaf, runtime_error_funcs) {
-    expect_runtime_error(
-"unbound variable: f\n"
-"\t<inline>:1:9 in <toplevel>"
-,
-"(print (f))");
+    expect_unbound_var_error(9, "(print (x))");
+}
+
+Test(schaf, runtime_error_symbol) {
+    expect_unbound_var_error(1, "x");
+    expect_unbound_var_error(2, "(x)");
 }
 
 Test(schaf, div0) {
@@ -305,6 +311,7 @@ Test(schaf, quasiquotes) {
 }
 
 Test(schaf, quasiquotes_knownbugs, .disabled = true) {
+    expect_unbound_var_error(4, "`(,x)");
     expect_runtime_error(
 "unbound variable: x\n"
 "\t<inline>:1:2 in 'quasiquote'\n"

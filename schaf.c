@@ -342,16 +342,15 @@ Value sch_string_new(const char *str)
 }
 
 // generic macros to handle errors and early-returns
+static Value push_stack_frame(Value ve, const char *name, Value loc);
 #define EXPECT_OR_RETURN(expr, err) do { if (!(expr)) return err; } while(0)
-#define EXPECT_ERROR(v) EXPECT_OR_RETURN(!is_error(v), (v))
-#define EXPECT_ERROR_LOCATED(v, l) do { \
-        Value V = (v); \
-        if (is_error(V)) { \
-            if (scary_length(ERROR(V)) == 0) \
-                push_stack_frame(V, NULL, (l)); \
-            return V; \
-        } \
-    } while (0)
+#define EXPECT_ERROR_VAL(v, val) EXPECT_OR_RETURN(!is_error(v), (val))
+#define EXPECT_ERROR(v) EXPECT_ERROR_VAL((v), (v))
+#define EXPECT_ERROR_LOCATED(v, l) EXPECT_ERROR_VAL((v), ({ \
+            if (scary_length(ERROR(v)) == 0) \
+                push_stack_frame((v), NULL, (l)); \
+            (v); \
+        }))
 
 static bool is_length_min_2(Value args)
 {
@@ -696,14 +695,17 @@ static void define_procedure(Value env, const char *name, void *cfunc, int64_t a
 // Evaluation
 //
 [[nodiscard]] static Value eval(Value env, Value v);
+#define eval_loc(env, v, loc) ({ \
+            Value R = eval((env), (v)); \
+            EXPECT_ERROR_LOCATED(R, (loc)); \
+            R; \
+        })
 
 static Value eval_body(Value env, Value body)
 {
     Value last = Qfalse;
-    for (Value p = body; p != Qnil; p = cdr(p)) {
-        last = eval(env, car(p));
-        EXPECT_ERROR(last);
-    }
+    for (Value p = body; p != Qnil; p = cdr(p))
+        last = eval_loc(env, car(p), p);
     return last;
 }
 
@@ -758,8 +760,7 @@ static Value expect_proper_list(Value l)
 static Value eval_apply(Value env, Value l)
 {
     Value symproc = car(l), args = cdr(l);
-    Value proc = eval(env, symproc);
-    EXPECT_ERROR_LOCATED(proc, l);
+    Value proc = eval_loc(env, symproc, l);
     Value e;
     if (value_tag_is(proc, TAG_SYNTAX))
         e = expect_proper_list(args);
@@ -981,6 +982,20 @@ Value sch_eval_string(const char *in)
     return v;
 }
 
+#define scary_free_with(f, a) do { \
+        for (size_t i = 0, len = scary_length(a); i < len; i++) \
+            f(a[i]); \
+        scary_free(a); \
+    } while (0)
+
+Value sch_eval_string_single(const char *in)
+{
+    scary_free_with(source_free, source_data);
+    source_data = scary_new(sizeof(Source *));
+    errmsg[0] = '\0';
+    return sch_eval_string(in);
+}
+
 static FILE *open_loadable(const char *path)
 {
     static char rpath[PATH_MAX];
@@ -1051,8 +1066,7 @@ static Value syn_if(Value env, Value args)
     EXPECT_ARITY_RANGE(2, 3, args);
 
     Value cond = car(args), then = cadr(args);
-    Value v = eval(env, cond);
-    EXPECT_ERROR(v);
+    Value v = eval_loc(env, cond, args);
     if (v != Qfalse)
         return eval(env, then);
     Value els = cddr(args);
@@ -1082,8 +1096,8 @@ static Value syn_set(Value env, Value ident, Value expr)
 static Value cond_eval_recipient(Value env, Value test, Value recipients)
 {
     EXPECT_TYPE(pair, recipients);
-    Value recipient = eval(env, car(recipients)), rest = cdr(recipients);
-    EXPECT_ERROR(recipient);
+    Value recipient = eval_loc(env, car(recipients), recipients);
+    Value rest = cdr(recipients);
     EXPECT_TYPE(procedure, recipient);
     EXPECT(rest == Qnil, "only one expression expected after =>");
     return apply(env, recipient, list1(test));
@@ -1101,8 +1115,7 @@ static Value syn_cond(Value env, Value clauses)
         Value exprs = cdr(clause);
         if (test == SYM_ELSE)
             return eval_body(env, exprs);
-        Value t = eval(env, test);
-        EXPECT_ERROR(t);
+        Value t = eval_loc(env, test, clause);
         if (t != Qfalse) {
             if (exprs == Qnil)
                 return t;
@@ -1123,8 +1136,7 @@ static Value memq(Value key, Value l);
 static Value syn_case(Value env, Value args)
 {
     EXPECT_ARITY_MIN_2(args);
-    Value key = eval(env, car(args)), clauses = cdr(args);
-    EXPECT_ERROR(key);
+    Value key = eval_loc(env, car(args), args), clauses = cdr(args);
     EXPECT_LIST_HEAD(clauses);
 
     for (Value p = clauses; p != Qnil; p = cdr(p)) {
@@ -1146,9 +1158,8 @@ static Value syn_and(Value env, Value args)
 {
     Value last = Qtrue;
     for (Value p = args; p != Qnil; p = cdr(p)) {
-        if ((last = eval(env, car(p))) == Qfalse)
+        if ((last = eval_loc(env, car(p), p)) == Qfalse)
             break;
-        EXPECT_ERROR(last);
     }
     return last;
 }
@@ -1188,8 +1199,7 @@ static Value let(Value env, Value var, Value bindings, Value body)
         Value ident = car(b), expr = cadr(b);
         if (named)
             lparams = PAIR(lparams)->cdr = list1(ident);
-        Value val = eval(env, expr);
-        EXPECT_ERROR(val);
+        Value val = eval_loc(env, expr, cdr(b));
         env_put(localenv, ident, val);
     }
     if (named) {
@@ -1222,8 +1232,7 @@ static Value let_star(Value env, Value bindings, Value body)
         EXPECT_LET_BINDING_FORM(b);
         Value ident = car(b), expr = cadr(b);
         localenv = env_inherit(localenv);
-        Value val = eval(localenv, expr);
-        EXPECT_ERROR(val);
+        Value val = eval_loc(localenv, expr, cdr(b));
         env_put(localenv, ident, val);
     }
     return eval_body(localenv, body);
@@ -1245,8 +1254,7 @@ static Value letrec(Value env, Value bindings, Value body)
         Value b = car(p);
         EXPECT_LET_BINDING_FORM(b);
         Value ident = car(b);
-        Value val = eval(localenv, cadr(b));
-        EXPECT_ERROR(val);
+        Value val = eval_loc(localenv, cadr(b), cdr(b));
         env_put(localenv, ident, val);
     }
     return eval_body(localenv, body);
@@ -1301,12 +1309,11 @@ static Value syn_do(Value env, Value args)
             vValue datum = cons(var, car(step)); // workaround for clang -Og
             steps = cons(datum, steps);
         }
-        v = eval(env, init); // in the original env
-        EXPECT_ERROR(v);
+        v = eval_loc(env, init, cdr(b)); // in the original env
         env_put(localenv, var, v);
     }
     Value test = car(tests), exprs = cdr(tests);
-    while ((v = eval(localenv, test)) == Qfalse) {
+    while ((v = eval_loc(localenv, test, tests)) == Qfalse) {
         if (body != Qnil) {
             v = eval_body(localenv, body);
             EXPECT_ERROR(v);
@@ -1314,12 +1321,10 @@ static Value syn_do(Value env, Value args)
         for (Value p = steps; p != Qnil; p = cdr(p)) {
             Value pstep = car(p);
             Value var = car(pstep), step = cdr(pstep);
-            Value val = eval(localenv, step);
-            EXPECT_ERROR(val);
+            Value val = eval_loc(localenv, step, pstep);
             iset(localenv, var, val);
         }
     }
-    EXPECT_ERROR(v);
     if (exprs == Qnil)
         return Qfalse;
     return eval_body(localenv, exprs);
@@ -1461,14 +1466,16 @@ static Value syn_define(Value env, Value args)
 {
     if (args == Qnil)
         return arity_error(">= ", 1, 0);
-    Value head = car(args);
+    Value head = car(args), v;
     Type t = sch_value_type_of(head);
     switch (t) {
     case TYPE_SYMBOL:
         EXPECT_ARITY_2(args);
         return define_variable(env, head, cadr(args));
     case TYPE_PAIR:
-        return define_proc_internal(env, head, cdr(args));
+        v = define_proc_internal(env, head, cdr(args));
+        EXPECT_ERROR_LOCATED(v, args);
+        return v;
     case TYPE_NULL:
     case TYPE_BOOL:
     case TYPE_INT:
@@ -3043,12 +3050,6 @@ static Value proc_p(UNUSED Value env, Value args)
 //
 // Interpreter things
 //
-
-#define scary_free_with(f, a) do { \
-        for (size_t i = 0, len = scary_length(a); i < len; i++) \
-            f(a[i]); \
-        scary_free(a); \
-    } while (0)
 
 int sch_fin(void)
 {
