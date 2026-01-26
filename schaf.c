@@ -341,12 +341,12 @@ Value sch_string_new(const char *str)
     return string_new_moved(xstrdup(str));
 }
 
-// generic macros to handle errors and early-returns
+// General macros for error handling
 static Value push_stack_frame(Value ve, const char *name, Value loc);
 #define EXPECT_OR_RETURN(expr, err) do { if (!(expr)) return err; } while(0)
-#define EXPECT_ERROR_VAL(v, val) EXPECT_OR_RETURN(!is_error(v), (val))
-#define EXPECT_ERROR(v) EXPECT_ERROR_VAL((v), (v))
-#define EXPECT_ERROR_LOCATED(v, l) EXPECT_ERROR_VAL((v), ({ \
+#define EXPECT_ERROR_WITH_RETVAL(v, val) EXPECT_OR_RETURN(!is_error(v), (val))
+#define EXPECT_ERROR(v) EXPECT_ERROR_WITH_RETVAL((v), (v))
+#define EXPECT_ERROR_LOCATED(v, l) EXPECT_ERROR_WITH_RETVAL((v), ({ \
             if (scary_length(ERROR(v)) == 0) \
                 push_stack_frame((v), NULL, (l)); \
             (v); \
@@ -369,11 +369,16 @@ static bool is_length_3(Value args)
 
 static Value arity_error(const char *op, int64_t expected, int64_t actual);
 
-#define EXPECT_ARITY_N(expr, op, exp, act) EXPECT_OR_RETURN((expr), arity_error((op), (exp), (act)))
-#define EXPECT_ARITY_0(args) EXPECT_ARITY_N(args == Qnil, "", 0, length(args))
-#define EXPECT_ARITY_1(args) EXPECT_ARITY_N(args != Qnil && cdr(args) == Qnil, "", 1, length(args))
-#define EXPECT_ARITY_2(args) EXPECT_ARITY_N(is_length_2(args), "", 2, length(args))
-#define EXPECT_ARITY_3(args) EXPECT_ARITY_N(is_length_3(args), "", 3, length(args))
+#define EXPECT_ARITY_N(expr, op, exp, act) \
+    EXPECT_OR_RETURN((expr), arity_error((op), (exp), (act)))
+#define EXPECT_ARITY_0(args) \
+    EXPECT_ARITY_N(args == Qnil, "", 0, length(args))
+#define EXPECT_ARITY_1(args) \
+    EXPECT_ARITY_N(args != Qnil && cdr(args) == Qnil, "", 1, length(args))
+#define EXPECT_ARITY_2(args) \
+    EXPECT_ARITY_N(is_length_2(args), "", 2, length(args))
+#define EXPECT_ARITY_3(args) \
+    EXPECT_ARITY_N(is_length_3(args), "", 3, length(args))
 
 static Value apply_cfunc_v(Value env, Value f, Value args)
 {
