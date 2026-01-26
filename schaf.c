@@ -344,16 +344,16 @@ Value sch_string_new(const char *str)
 // General macros for error handling
 static Value push_stack_frame(Value ve, const char *name, Value loc);
 #define EXPECT_OR_RETURN(expr, err) do { if (!(expr)) return err; } while (0)
-#define EXPECT_ERROR_WITH_RETVAL(v, val) EXPECT_OR_RETURN(!is_error(v), (val))
-#define EXPECT_ERROR(v) EXPECT_ERROR_WITH_RETVAL((v), (v))
-#define EXPECT_ERROR_LOCATED(v, l) EXPECT_ERROR_WITH_RETVAL((v), ({ \
-            if (scary_length(ERROR(v)) == 0) \
-                push_stack_frame((v), NULL, (l)); \
-            (v); \
-        }))
+#define TRY_WITH_RETVAL(v, val) ({ EXPECT_OR_RETURN(!is_error(v), (val)); (v); })
+#define TRY(v) ({ Value V = (v); TRY_WITH_RETVAL(V, V); })
+#define TRY_LOCATED(v, l) ({ \
+            vValue V = (v); \
+            TRY_WITH_RETVAL(V, ({ \
+                if (scary_length(ERROR(V)) == 0) \
+                    push_stack_frame(V, NULL, (l)); \
+                V; })); })
 // Error happened at the n-th argument in the caller (list)
-#define EXPECT_ERROR_LOCATED_BY_CALLER(v, n) \
-    EXPECT_ERROR_LOCATED(v, sch_integer_new(n))
+#define TRY_LOCATED_BY_CALLER(v, n) TRY_LOCATED(v, sch_integer_new(n))
 
 static inline bool is_length_min_2(Value args)
 {
@@ -702,11 +702,7 @@ static void define_procedure(Value env, const char *name, void *cfunc, int64_t a
 // Evaluation
 //
 [[nodiscard]] static Value eval(Value env, Value v);
-#define eval_loc(env, loc) ({ \
-            vValue R = eval((env), car(loc)); \
-            EXPECT_ERROR_LOCATED(R, (loc)); \
-            R; \
-        })
+#define eval_loc(env, loc) TRY_LOCATED(eval((env), car(loc)), (loc))
 
 static Value eval_body(Value env, Value body)
 {
@@ -788,7 +784,7 @@ static Value eval_apply(Value env, Value l)
         pargs = expect_proper_list(args);
     else
         pargs = map_eval(env, args);
-    EXPECT_ERROR_LOCATED(pargs, l);
+    TRY_LOCATED(pargs, l);
     EXPECT_TYPE(procedure, proc);
     Value ret = apply(env, proc, pargs);
     if (is_error(ret)) {
@@ -1105,9 +1101,9 @@ static Value syn_set(Value env, Value ident, Value expr)
 {
     EXPECT_TYPE(symbol, ident);
     Value v = eval(env, expr);
-    EXPECT_ERROR_LOCATED_BY_CALLER(v, 2);
+    TRY_LOCATED_BY_CALLER(v, 2);
     Value e = iset(env, ident, v);
-    EXPECT_ERROR_LOCATED_BY_CALLER(e, 1);
+    TRY_LOCATED_BY_CALLER(e, 1);
     return Qfalse;
 }
 
@@ -1334,10 +1330,8 @@ static Value syn_do(Value env, Value args)
     }
     Value exprs = cdr(tests);
     while ((v = eval_loc(localenv, tests)) == Qfalse) {
-        if (body != Qnil) {
-            v = eval_body(localenv, body);
-            EXPECT_ERROR(v);
-        }
+        if (body != Qnil)
+            v = TRY(eval_body(localenv, body));
         for (Value p = steps; p != Qnil; p = cdr(p)) {
             Value pstep = car(p);
             Value var = car(pstep), step = cdr(pstep);
@@ -1375,14 +1369,12 @@ static Value qq(Value env, Value datum, int64_t depth)
     Value a = car(datum), d = cdr(datum);
     if (a == SYM_QUASIQUOTE) {
         EXPECT_TYPE(pair, d);
-        Value v = qq(env, car(d), depth + 1);
-        EXPECT_ERROR(v);
+        Value v = TRY(qq(env, car(d), depth + 1));
         return list2_const(a, v);
     }
     if (a == SYM_UNQUOTE || a == SYM_UNQUOTE_SPLICING) {
         EXPECT_TYPE(pair, d);
-        Value v = qq(env, car(d), depth - 1);
-        EXPECT_ERROR(v);
+        Value v = TRY(qq(env, car(d), depth - 1));
         return depth == 1 ? v : list2_const(a, v);
     }
     return qq_list(env, datum, depth);
@@ -1419,17 +1411,14 @@ static Value qq_list(Value env, Value datum, int64_t depth)
         bool is_simple = !sch_value_is_pair(p);
         if (is_simple || is_quoted_terminal(p)) {
             EXPECT_TYPE(pair, cdr(ret));
-            if (!is_simple) {
-                p = qq(env, p, depth);
-                EXPECT_ERROR(p);
-            }
+            if (!is_simple)
+                p = TRY(qq(env, p, depth));
             PAIR(last)->cdr = p;
             break;
         }
         Value elem = car(p);
         bool spliced = (sch_value_is_pair(elem) && car(elem) == SYM_UNQUOTE_SPLICING);
-        vValue v = qq(env, elem, depth); // workaround for clang -Og
-        EXPECT_ERROR(v);
+        Value v = TRY(qq(env, elem, depth));
         if (!spliced)
             last = PAIR(last)->cdr = list1_const(v);
         else if (v != Qnil)
@@ -1463,8 +1452,7 @@ static Value define_variable(Value env, Value ident, Value expr)
 {
     EXPECT_TYPE(symbol, ident);
 
-    Value val = eval(env, expr);
-    EXPECT_ERROR(val);
+    Value val = TRY(eval(env, expr));
     bool found = false;
     if (ENV(env)->parent == Qfalse)
         found = env_set(env, ident, val);
@@ -1490,12 +1478,10 @@ static Value syn_define(Value env, Value args)
     case TYPE_SYMBOL:
         EXPECT_ARITY_2(args);
         v = define_variable(env, head, cadr(args));
-        EXPECT_ERROR_LOCATED(v, cdr(args));
-        return v;
+        return TRY_LOCATED(v, cdr(args));
     case TYPE_PAIR:
         v = define_proc_internal(env, head, cdr(args));
-        EXPECT_ERROR_LOCATED(v, args);
-        return v;
+        return TRY_LOCATED(v, args);
     case TYPE_NULL:
     case TYPE_BOOL:
     case TYPE_INT:
@@ -1909,15 +1895,13 @@ static Value proc_set_cdr(UNUSED Value env, Value pair, Value obj)
 
 static Value safe_car(Value v)
 {
-    EXPECT_ERROR(v);
-    EXPECT_TYPE(pair, v);
+    EXPECT_TYPE(pair, TRY(v));
     return car(v);
 }
 
 static Value safe_cdr(Value v)
 {
-    EXPECT_ERROR(v);
-    EXPECT_TYPE(pair, v);
+    EXPECT_TYPE(pair, TRY(v));
     return cdr(v);
 }
 
@@ -2249,8 +2233,7 @@ static Value proc_apply(Value env, Value args)
 
     Value proc = car(args);
     EXPECT_TYPE(procedure, proc);
-    Value appargs = build_apply_args(cdr(args));
-    EXPECT_ERROR(appargs);
+    Value appargs = TRY(build_apply_args(cdr(args)));
     return apply(env, proc, appargs);
 }
 
@@ -2292,10 +2275,8 @@ static Value proc_map(Value env, Value args)
     Value proc = car(args);
     EXPECT_TYPE(procedure, proc);
     Value ls = cdr(args), ret = DUMMY_PAIR();
-    for (Value last = ret, cars, v; (cars = get_cars(&ls)) != Qnil; ) {
-        EXPECT_ERROR(cars);
-        v = apply(env, proc, cars);
-        EXPECT_ERROR(v);
+    for (Value last = ret, cars, v; (cars = TRY(get_cars(&ls))) != Qnil; ) {
+        v = TRY(apply(env, proc, cars));
         last = PAIR(last)->cdr = list1(v);
     }
     return cdr(ret);
@@ -2307,11 +2288,8 @@ static Value proc_for_each(Value env, Value args)
 
     Value proc = car(args);
     EXPECT_TYPE(procedure, proc);
-    for (Value ls = cdr(args), cars, v; (cars = get_cars(&ls)) != Qnil; ) {
-        EXPECT_ERROR(cars);
-        v = apply(env, proc, cars);
-        EXPECT_ERROR(v);
-    }
+    for (Value ls = cdr(args), cars; (cars = TRY(get_cars(&ls))) != Qnil; )
+        TRY(apply(env, proc, cars));
     return Qfalse;
 }
 
@@ -2321,8 +2299,7 @@ static Value proc_force(UNUSED Value env, Value obj)
         return obj;
     Promise *pr = PROMISE(obj);
     if (!pr->forced) {
-        Value val = eval(pr->env, pr->val);
-        EXPECT_ERROR(val);
+        Value val = TRY(eval(pr->env, pr->val));
         pr->env = Qfalse; // env not needed anymore
         pr->val = val;
         pr->forced = true;
@@ -2392,7 +2369,7 @@ static Value callcc_inner2(Value pair, Value arg)
 {
     Value k = car(pair), saved = cdr(pair);
     if (saved != inner_winders)
-        EXPECT_ERROR(do_wind(saved));
+        TRY(do_wind(saved));
     return apply(Qfalse, k, list1(arg));
 }
 
@@ -2427,8 +2404,7 @@ static Value proc_call_with_values(Value env, Value producer, Value consumer)
         args = CONTINUATION(k)->retval;
     else {
         inner_continuation = k;
-        Value val = apply(env, producer, Qnil);
-        EXPECT_ERROR(val);
+        Value val = TRY(apply(env, producer, Qnil));
         args = list1(val);
     }
     inner_continuation = origk;
@@ -2454,14 +2430,14 @@ static Value do_wind(Value new_winders)
     for (Value ls = inner_winders; ls != tail; ls = cdr(ls)) {
         inner_winders = cdr(ls);
         Value f = cdar(ls);
-        EXPECT_ERROR(apply(Qfalse, f, Qnil));
+        TRY(apply(Qfalse, f, Qnil));
     }
     Value rev = Qnil;
     for (Value p = new_winders; p != tail; p = cdr(p))
         rev = cons(car(p), rev);
     for (Value p = rev; p != Qnil; p = cdr(p)) {
         Value f = caar(p);
-        EXPECT_ERROR(apply(Qfalse, f, Qnil));
+        TRY(apply(Qfalse, f, Qnil));
         inner_winders = p;
     }
     return Qfalse;
@@ -2473,14 +2449,11 @@ static Value proc_dynamic_wind(Value env, Value before, Value thunk, Value after
     EXPECT_TYPE(procedure, thunk);
     EXPECT_TYPE(procedure, after);
 
-    Value err = apply(env, before, Qnil);
-    EXPECT_ERROR(err);
+    TRY(apply(env, before, Qnil));
     inner_winders = cons(cons(before, after), inner_winders);
-    Value ret = apply(env, thunk, Qnil);
-    EXPECT_ERROR(ret);
+    Value ret = TRY(apply(env, thunk, Qnil));
     inner_winders = cdr(inner_winders);
-    err = apply(env, after, Qnil);
-    EXPECT_ERROR(err);
+    TRY(apply(env, after, Qnil));
     return ret;
 }
 
@@ -2519,8 +2492,7 @@ static void close_port(Value port);
 
 static Value call_with_file(Value env, Value path, Value thunk, PortType type)
 {
-    Value file = open_port(STRING(path), type);
-    EXPECT_ERROR(file);
+    Value file = TRY(open_port(STRING(path), type));
     Value ret = apply(env, thunk, list1(file));
     close_port(file);
     return ret;
@@ -2609,8 +2581,7 @@ static Value proc_open_output_file(UNUSED Value env, Value path)
 static Value with_file(Value env, Value path, Value thunk, Value *curr_port, PortType type)
 {
     Value orig = *curr_port;
-    Value newer = open_port(STRING(path), type);
-    EXPECT_ERROR(newer);
+    Value newer = TRY(open_port(STRING(path), type));
     *curr_port = newer;
     Value ret = apply(env, thunk, Qnil);
     close_port(*curr_port);
@@ -2717,8 +2688,7 @@ static Value arg_or_current_port(Value arg, PortType type)
 static Value proc_read(UNUSED Value env, Value args)
 {
     EXPECT_ARITY_RANGE(0, 1, args);
-    Value port = arg_or_current_port(args, PORT_INPUT);
-    EXPECT_ERROR(port);
+    Value port = TRY(arg_or_current_port(args, PORT_INPUT));
     return iread(PORT(port)->fp);
 }
 
@@ -2897,8 +2867,7 @@ static Value proc_display(UNUSED Value env, Value args)
 {
     EXPECT_ARITY_RANGE(1, 2, args);
     Value obj = car(args);
-    Value out = arg_or_current_port(cdr(args), PORT_OUTPUT);
-    EXPECT_ERROR(out);
+    Value out = TRY(arg_or_current_port(cdr(args), PORT_OUTPUT));
     fdisplay(PORT(out)->fp, obj);
     return Qfalse;
 }
@@ -2906,8 +2875,7 @@ static Value proc_display(UNUSED Value env, Value args)
 static Value proc_newline(UNUSED Value env, Value args)
 {
     EXPECT_ARITY_RANGE(0, 1, args);
-    Value out = arg_or_current_port(args, PORT_OUTPUT);
-    EXPECT_ERROR(out);
+    Value out = TRY(arg_or_current_port(args, PORT_OUTPUT));
     fputs("\n", PORT(out)->fp);
     return Qfalse;
 }
@@ -2940,8 +2908,7 @@ static Value proc_read_string(UNUSED Value env, Value args)
 {
     EXPECT_ARITY_RANGE(1, 2, args);
     size_t k = get_non_negative_int(car(args));
-    Value port = arg_or_current_port(cdr(args), PORT_INPUT);
-    EXPECT_ERROR(port);
+    Value port = TRY(arg_or_current_port(cdr(args), PORT_INPUT));
     return read_string(k, PORT(port)->fp);
 }
 
