@@ -809,7 +809,7 @@ static const int64_t *filename_to_newline_pos(const char *filename)
 static void frame_to_line_col(const StackFrame *f, const int64_t *newline_pos,
                               int64_t *line, int64_t *col)
 {
-    pos_to_line_col(LOCATED_PAIR(f->loc)->pos, newline_pos, line, col);
+    pos_to_line_col(SYNTAX_PAIR(f->loc)->pos, newline_pos, line, col);
 }
 
 static void dump_line_column(const char *filename, const StackFrame *f)

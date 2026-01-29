@@ -69,7 +69,8 @@ typedef struct {
 typedef struct {
     Pair pair;   // inherit
     int64_t pos; // value from ftell(3)
-} LocatedPair;
+    // Value cache[2]; // Env -> Procedure at the location
+} SyntaxPair;
 
 typedef struct {
     Header header;
@@ -162,7 +163,7 @@ typedef struct {
 #define INT(v) sch_integer_to_cint(v)
 #define SYMBOL(v) sch_symbol_to_csymbol(v)
 #define PAIR(v) ((Pair *) v)
-#define LOCATED_PAIR(v) ((LocatedPair *) v)
+#define SYNTAX_PAIR(v) ((SyntaxPair *) v)
 #define STRING(v) (((String *) v)->body)
 #define PROCEDURE(v) ((Procedure *) v)
 #define CFUNC(v) ((CFunc *) v)

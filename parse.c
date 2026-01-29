@@ -469,9 +469,9 @@ static Value parse_dotted_pair(Parser *p, Value l, Value last)
     return l;
 }
 
-static Value located_list1(Value sym, int64_t pos)
+static Value syntax_list1(Value sym, int64_t pos)
 {
-    LocatedPair *p = obj_new(TAG_PAIR, sizeof(LocatedPair)); // imitate ordinal pairs
+    SyntaxPair *p = obj_new(TAG_PAIR, sizeof(SyntaxPair)); // imitate ordinal pairs
     HEADER(p)->immutable = true;
     PAIR(p)->car = sym;
     PAIR(p)->cdr = Qnil;
@@ -496,7 +496,7 @@ static Value parse_list(Parser *p)
         Value e = parse_expr(p);
         bool first = (ret == last);
         if (first && sch_value_is_symbol(e))
-            PAIR(last)->cdr = located_list1(e, pos);
+            PAIR(last)->cdr = syntax_list1(e, pos);
         else
             PAIR(last)->cdr = list1_const(e);
         last = PAIR(last)->cdr;
