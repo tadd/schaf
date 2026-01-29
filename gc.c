@@ -232,6 +232,11 @@ static void mark_val(MSHeap *heap, Value v)
         Pair *p = PAIR(v);
         mark_val(heap, p->car);
         mark_val(heap, p->cdr);
+        if (HEADER(p)->syntax_p) {
+            SyntaxPair *sp = SYNTAX_PAIR(v);
+            mark_val(heap, sp->cache[0]);
+            mark_val(heap, sp->cache[1]);
+        }
         break;
     }
     case TAG_CLOSURE: {

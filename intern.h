@@ -70,7 +70,7 @@ typedef struct {
 typedef struct {
     Pair pair;   // inherit
     int64_t pos; // value from ftell(3)
-    // Value cache[2]; // Env -> Procedure at the location
+    Value cache[2]; // Env -> Procedure at the location
 } SyntaxPair;
 
 typedef struct {

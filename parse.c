@@ -477,6 +477,7 @@ static Value syntax_list1(Value sym, int64_t pos)
     PAIR(p)->car = sym;
     PAIR(p)->cdr = Qnil;
     p->pos = pos;
+    p->cache[0] = p->cache[1] = Qfalse;
     return (Value) p;
 }
 

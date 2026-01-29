@@ -763,7 +763,47 @@ static Value expect_proper_list(Value l)
     return Qfalse;
 }
 
-static Value eval_apply(Value env, Value l)
+static inline Value get_proc_cached(Value env, Value l)
+{
+    if (!HEADER(l)->syntax_p)
+        return Qfalse;
+    Value *cache = SYNTAX_PAIR(l)->cache;
+    if (cache[0] != env)
+        return Qfalse;
+    return cache[1];
+}
+
+static inline Value eval_apply_core(Value env, Value l, Value proc, Value args)
+{
+    Value ret = apply(env, proc, args);
+    if (is_error(ret)) {
+        const char *fname = get_func_name(proc);
+        return push_stack_frame(ret, fname, l);
+    }
+    return ret;
+}
+
+static Value eval_apply_cached(Value env, Value l, Value proc)
+{
+    Value args = cdr(l), e;
+    if (value_tag_is(proc, TAG_SYNTAX))
+        e = expect_proper_list(args);
+    else
+        e = args = map_eval(env, args);
+    EXPECT_ERROR_LOCATED(e, l);
+    return eval_apply_core(env, l, proc, args);
+}
+
+static void cache_proc(Value env, Value l, Value proc)
+{
+    if (!HEADER(l)->syntax_p)
+        return;
+    Value *cache = SYNTAX_PAIR(l)->cache;
+    cache[0] = env;
+    cache[1] = proc;
+}
+
+static Value eval_apply_nocached(Value env, Value l)
 {
     Value symproc = car(l), args = cdr(l);
     Value proc = eval_loc(env, symproc, l);
@@ -774,12 +814,18 @@ static Value eval_apply(Value env, Value l)
         e = args = map_eval(env, args);
     EXPECT_ERROR_LOCATED(e, l);
     EXPECT_TYPE(procedure, proc);
-    Value ret = apply(env, proc, args);
-    if (is_error(ret)) {
-        const char *fname = get_func_name(proc);
-        return push_stack_frame(ret, fname, l);
-    }
-    return ret;
+    if (sch_value_is_symbol(symproc))
+        cache_proc(env, l, proc);
+    return eval_apply_core(env, l, proc, args);
+}
+
+static Value eval_apply(Value env, Value l)
+{
+    Value proc = get_proc_cached(env, l);
+    if (proc != Qfalse)
+        return eval_apply_cached(env, l, proc);
+    else
+        return eval_apply_nocached(env, l);
 }
 
 static Value lookup_or_error(Value env, Value v)
