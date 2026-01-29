@@ -10,6 +10,7 @@ if [[ "${1-x}" = -v ]]; then
     echo using $schaf >&2
 fi
 
+nfail=0
 for f in "$testdir"/*.scm; do
     msg=`head -1 "$f" | sed 's/^;* *//; s/ *$//'`
     if [ -z "$msg" ]; then
@@ -20,10 +21,14 @@ for f in "$testdir"/*.scm; do
     ret=$?
     if [ $ret -ne 0 ]; then
         echo failure: "$f" >&2
-        exit $ret
+        : $(( ++nfail ))
     elif (( verbose )); then
         echo success: "$f" >&2
     fi
 done
 
-echo error test succeeded. >&2
+if [ $nfail -eq 0 ]; then
+    echo Error test: Succeeded. >&2
+else
+    echo "Error test: $nfail test(s) failed." >&2
+fi
