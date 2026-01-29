@@ -90,7 +90,7 @@
     (func)))
 
 (define (test-summarize)
-  (display* "Test summary: "
+  (display* "Unit test: "
             n-success " succeeded, "
             n-failure " failed, "
             n-ignored " ignored.")
