@@ -59,6 +59,7 @@ typedef enum {
 typedef struct {
     ValueTag tag;
     bool immutable;
+    bool syntax_p;
 } Header;
 
 typedef struct {

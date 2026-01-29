@@ -326,6 +326,7 @@ void *obj_new(ValueTag t, size_t size)
     Header *h = gc_malloc(size);
     h->tag = t;
     h->immutable = false;
+    h->syntax_p = false;
     return h;
 }
 

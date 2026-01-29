@@ -473,6 +473,7 @@ static Value syntax_list1(Value sym, int64_t pos)
 {
     SyntaxPair *p = obj_new(TAG_PAIR, sizeof(SyntaxPair)); // imitate ordinal pairs
     HEADER(p)->immutable = true;
+    HEADER(p)->syntax_p = true;
     PAIR(p)->car = sym;
     PAIR(p)->cdr = Qnil;
     p->pos = pos;
