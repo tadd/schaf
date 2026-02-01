@@ -90,9 +90,9 @@ test-scheme-stress: schaf
 test-scheme-stress-san: schaf-san
 	$(RUNNER) ./$< -S test/test.scm
 test-error: schaf
-	$(RUNNER) test/error.bash $(VERBOSE)
+	$(RUNNER) test/error/runtest.bash $(VERBOSE)
 test-error-san: schaf-san
-	SCHAF=$< $(RUNNER) test/error.bash $(VERBOSE)
+	SCHAF=$< $(RUNNER) test/error/runtest.bash $(VERBOSE)
 
 test/basic-test: $(OBJ_TEST)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) -lcriterion

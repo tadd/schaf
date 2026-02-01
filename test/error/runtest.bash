@@ -1,7 +1,7 @@
 #!/bin/bash -u
-readonly scriptdir=$(realpath "$0" | xargs dirname)
-readonly srcdir=$(realpath --relative-to=$PWD "$scriptdir/..")
-readonly testdir=$(realpath --relative-to=$PWD "$scriptdir/error")
+readonly scriptabsdir=$(realpath "$0" | xargs dirname)
+readonly scriptdir=$(realpath --relative-to=$PWD "$scriptabsdir")
+readonly srcdir=$(realpath --relative-to=$PWD "$scriptabsdir/../..")
 readonly schaf=$srcdir/${SCHAF:-schaf}
 
 cecho() {
@@ -37,7 +37,7 @@ if [[ "${1-x}" = -v ]]; then
 fi
 
 nfail=0
-for f in "$testdir"/*.scm; do
+for f in "$scriptdir"/*.scm; do
     msg=`head -1 "$f" | sed 's/^;* *//; s/ *$//'`
     out=`tail +2 "$f" | $schaf -S - 2>&1`
     if [ -z "$msg" ]; then
