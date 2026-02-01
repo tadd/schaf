@@ -43,18 +43,12 @@ microbench: schaf
 %.san.o: %.c
 	$(CC) $(CFLAGS) $(SANITIZER) -c $< -o $@
 
-gc.o: intern.h schaf.h utils.h libscary.h
-gc.%.o: intern.h schaf.h utils.h libscary.h
-libscary.o: libscary.h
-libscary.%.o: libscary.h
-main.o: schaf.h utils.h
-main.%.o: schaf.h utils.h
-parse.o: intern.h schaf.h utils.h libscary.h
-parse.%.o: intern.h schaf.h utils.h libscary.h
-schaf.o: intern.h schaf.h utils.h libscary.h
-schaf.%.o: intern.h schaf.h utils.h libscary.h
-utils.o: utils.h
-utils.%.o: utils.h
+gc.o gc.san.o: intern.h schaf.h utils.h libscary.h
+libscary.o libscary.san.o: libscary.h
+main.o main.san.o: schaf.h utils.h
+parse.o parse.san.o: intern.h schaf.h utils.h libscary.h
+schaf.o schaf.san.o: intern.h schaf.h utils.h libscary.h
+utils.o util.san.o: utils.h
 
 .PHONY: all clean analyze sanitize microbench
 
@@ -103,7 +97,7 @@ test/basic-test.o: schaf.h utils.h
 test/basic-test.%.o: schaf.h utils.h
 
 # Keep portability
-gauche-test: # Do not forget to make `local?` #f
+gauche-test: # Do not forget to make (define local? #f)
 	gosh -Itest test.scm
 
 .PHONY: test test-all test-san test-c test-c-san test-scheme test-scheme-san \
