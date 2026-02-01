@@ -352,17 +352,17 @@ static Value push_stack_frame(Value ve, const char *name, Value loc);
             (v); \
         }))
 
-static bool is_length_min_2(Value args)
+static inline bool is_length_min_2(Value args)
 {
     return args != Qnil && cdr(args) != Qnil;
 }
 
-static bool is_length_2(Value args)
+static inline bool is_length_2(Value args)
 {
     return is_length_min_2(args) && cddr(args) == Qnil;
 }
 
-static bool is_length_3(Value args)
+static inline bool is_length_3(Value args)
 {
     return is_length_min_2(args) && cddr(args) != Qnil && cdddr(args) == Qnil;
 }
@@ -372,9 +372,9 @@ static Value arity_error(const char *op, int64_t expected, int64_t actual);
 #define EXPECT_ARITY_N(expr, op, exp, act) \
     EXPECT_OR_RETURN((expr), arity_error((op), (exp), (act)))
 #define EXPECT_ARITY_0(args) \
-    EXPECT_ARITY_N(args == Qnil, "", 0, length(args))
+    EXPECT_ARITY_N((args) == Qnil, "", 0, length(args))
 #define EXPECT_ARITY_1(args) \
-    EXPECT_ARITY_N(args != Qnil && cdr(args) == Qnil, "", 1, length(args))
+    EXPECT_ARITY_N((args) != Qnil && cdr(args) == Qnil, "", 1, length(args))
 #define EXPECT_ARITY_2(args) \
     EXPECT_ARITY_N(is_length_2(args), "", 2, length(args))
 #define EXPECT_ARITY_3(args) \
