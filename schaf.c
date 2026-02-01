@@ -454,12 +454,12 @@ static Value cfunc_new_internal(ValueTag tag, const char *name, void *cfunc, int
     return (Value) f;
 }
 
-static Value cfunc_new(const char *name, void *cfunc, int64_t arity)
+static inline Value cfunc_new(const char *name, void *cfunc, int64_t arity)
 {
     return cfunc_new_internal(TAG_CFUNC, name, cfunc, arity);
 }
 
-static Value syntax_new(const char *name, void *cfunc, int64_t arity)
+static inline Value syntax_new(const char *name, void *cfunc, int64_t arity)
 {
     return cfunc_new_internal(TAG_SYNTAX, name, cfunc, arity);
 }
@@ -742,7 +742,7 @@ static Value push_stack_frame(Value ve, const char *name, Value loc)
 }
 
 [[nodiscard]]
-static Value apply(Value env, Value proc, Value args)
+static inline Value apply(Value env, Value proc, Value args)
 {
     return PROCEDURE(proc)->apply(env, proc, args);
 }
@@ -806,8 +806,8 @@ static const int64_t *filename_to_newline_pos(const char *filename)
     return NULL;
 }
 
-static void frame_to_line_col(const StackFrame *f, const int64_t *newline_pos,
-                              int64_t *line, int64_t *col)
+static inline void frame_to_line_col(const StackFrame *f, const int64_t *newline_pos,
+                                     int64_t *line, int64_t *col)
 {
     pos_to_line_col(LOCATED_PAIR(f->loc)->pos, newline_pos, line, col);
 }
@@ -2638,7 +2638,7 @@ static Value proc_close_port(UNUSED Value env, Value port)
     return Qfalse;
 }
 
-static const char *port_type_string(PortType type)
+static inline const char *port_type_string(PortType type)
 {
     return type == PORT_INPUT ? "input" : "output";
 }
