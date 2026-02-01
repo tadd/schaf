@@ -343,7 +343,7 @@ Value sch_string_new(const char *str)
 
 // General macros for error handling
 static Value push_stack_frame(Value ve, const char *name, Value loc);
-#define EXPECT_OR_RETURN(expr, err) do { if (!(expr)) return err; } while(0)
+#define EXPECT_OR_RETURN(expr, err) do { if (!(expr)) return err; } while (0)
 #define EXPECT_ERROR_WITH_RETVAL(v, val) EXPECT_OR_RETURN(!is_error(v), (val))
 #define EXPECT_ERROR(v) EXPECT_ERROR_WITH_RETVAL((v), (v))
 #define EXPECT_ERROR_LOCATED(v, l) EXPECT_ERROR_WITH_RETVAL((v), ({ \
