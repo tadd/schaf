@@ -759,21 +759,20 @@ static Value expect_proper_list(Value l)
 {
     for (Value p = l; p != Qnil; p = cdr(p))
         EXPECT_WITH_OBJ(sch_value_is_pair(p), "improper list for apply", l);
-    return Qfalse;
+    return l;
 }
 
 static Value eval_apply(Value env, Value l)
 {
     Value symproc = car(l), args = cdr(l);
-    Value proc = eval_loc(env, symproc, l);
-    Value e;
+    Value proc = eval_loc(env, symproc, l), pargs;
     if (value_tag_is(proc, TAG_SYNTAX))
-        e = expect_proper_list(args);
+        pargs = expect_proper_list(args);
     else
-        e = args = map_eval(env, args);
-    EXPECT_ERROR_LOCATED(e, l);
+        pargs = map_eval(env, args);
+    EXPECT_ERROR_LOCATED(pargs, l);
     EXPECT_TYPE(procedure, proc);
-    Value ret = apply(env, proc, args);
+    Value ret = apply(env, proc, pargs);
     if (is_error(ret)) {
         const char *fname = get_func_name(proc);
         return push_stack_frame(ret, fname, l);
