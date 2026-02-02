@@ -1,7 +1,6 @@
 #!/bin/bash -eu
 set -o pipefail
 
-nloop=10
 benchflags=-TM
 
 run() {
@@ -19,11 +18,14 @@ puts "%.3f ms\t%6d kb" % [cpu, mem]'
 }
 
 main() {
-    local bin=schaf
+    local bin=schaf nloop=10
+    if (( $# >= 2 )); then
+        nloop="$2"
+    fi
     if (( $# >= 1 )); then
         bin="$1"
     fi
-    run "$bin"
+    run "$bin" $nloop
 }
 
 main "$@"
