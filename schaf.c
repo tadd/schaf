@@ -855,12 +855,10 @@ static void dump_callee_name(const StackFrame *next)
         return;
     }
     Value sym = car(next->loc);
-    if (!sch_value_is_symbol(sym)) {
+    if (sch_value_is_symbol(sym))
+        append_error_message("'%s'", sch_symbol_to_cstr(sym));
+    else
         append_error_message("<unknown>");
-        return;
-    }
-    const char *name = sch_symbol_to_cstr(sym);
-    append_error_message("'%s'", name);
 }
 
 static void dump_frame(const StackFrame *f, const StackFrame *next)
