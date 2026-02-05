@@ -502,7 +502,7 @@ static bool length_in_range(Value l, int64_t min, int64_t max)
 
 static Value eval_body(Value env, Value body);
 static Value env_inherit(Value parent);
-static Value env_put(Value env, Value key, Value value);
+static void env_put(Value env, Value key, Value value);
 
 //PTR
 static Value apply_closure(UNUSED Value env, Value proc, Value args)
@@ -650,13 +650,12 @@ static Value env_inherit(Value parent)
     return e;
 }
 
-static Value env_put(Value env, Value key, Value value)
+static void env_put(Value env, Value key, Value value)
 {
     Table *t = ENV(env)->table;
     if (t == NULL)
         t = ENV(env)->table = table_new();
     table_put(t, SYMBOL(key), value);
-    return env;
 }
 
 // chained!
