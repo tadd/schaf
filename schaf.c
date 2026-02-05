@@ -2330,6 +2330,7 @@ static Value proc_force(UNUSED Value env, Value obj)
     }
     return pr->val;
 }
+
 [[noreturn, gnu::noinline]]
 static void jump(Continuation *cont)
 {
