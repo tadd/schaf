@@ -2377,7 +2377,6 @@ static bool continuation_set(Value c)
     return setjmp(cont->state) != 0;
 }
 
-// shared with dynamic-wind
 static Value callcc(Value env, Value proc)
 {
     Value c = continuation_new(1);
@@ -2386,8 +2385,25 @@ static Value callcc(Value env, Value proc)
     return apply(env, proc, list1(c));
 }
 
+// Note: Co-operation between (call/cc) and (dynamic-wind)
+//
+// This implementation of (call/cc) with inner1/inner2 is (tbh) not intuitive and too
+// complicated, but is needed to realize the (dynamic-wind) in R5RS.
+//
+// (call/cc)'s "exit" proc ordinary behaves like a "goto" statement, so a naive
+// implementation of call/cc seems be able to drop the caller's context. But in R5RS, it
+// is actually required to cooperate with (dynamic-wind) as in the sample code of
+// "(connect talk1 disconnect ..)." Then we always need to regard its before/after thunk
+// when call/cc is called.
+//
+// Although the "naive" implementation is achieved by the simple callcc() function above,
+// we wrap it with some others to realize the spec: proc_callcc, callcc_inner1, and
+// callc_inner2.
 static Value do_wind(Value new_winders);
 
+// Wrapper 2: Called by the "k" call
+// `pair`: (k . saved-inner-winders) created in callcc_inner1
+// `arg`: an argument in (k arg)
 static Value callcc_inner2(Value pair, Value arg)
 {
     Value k = car(pair), saved = cdr(pair);
@@ -2396,6 +2412,9 @@ static Value callcc_inner2(Value pair, Value arg)
     return apply(Qfalse, k, list1(arg));
 }
 
+// Wrapper 1: Immediately called by the first (call/cc) call
+// * `proc`: user-level closure object from (call/cc) argument
+// * `k`: an "exit" proc (or "K"ontiuation / "K"eizoku)
 static Value callcc_inner1(Value proc, Value k)
 {
     Value saved = inner_winders, pair = cons(k, saved);
@@ -2403,6 +2422,12 @@ static Value callcc_inner1(Value proc, Value k)
     return apply(Qfalse, proc, list1(arg));
 }
 
+// User-level (call/cc) implementation
+// * Create an instance of CFuncClosure with two arguments as a real argument of
+//   internal and naive callcc() function
+//   1. callcc_inner1(), a wrapping C function
+//   2. `proc` of the argument as is
+// * Then call (apply) the naive callcc() immediately with it
 static Value proc_callcc(Value env, Value proc)
 {
     EXPECT_TYPE(procedure, proc);
