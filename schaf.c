@@ -2387,13 +2387,13 @@ static Value callcc(Value env, Value proc)
     return apply(env, proc, list1(c));
 }
 
-static void do_wind(Value new_winders);
+static Value do_wind(Value new_winders);
 
 static Value callcc_inner2(Value pair, Value arg)
 {
     Value k = car(pair), saved = cdr(pair);
     if (saved != inner_winders)
-        do_wind(saved);
+        EXPECT_ERROR(do_wind(saved));
     return apply(Qfalse, k, list1(arg));
 }
 
@@ -2451,24 +2451,23 @@ static Value common_tail(Value x, Value y)
 
 #define EXPECT_ERROR_RETURN_VOID(v) EXPECT_ERROR_WITH_RETVAL(v, (void) 0)
 
-static void do_wind(Value new_winders)
+static Value do_wind(Value new_winders)
 {
-    Value tail = common_tail(new_winders, inner_winders), err;
+    Value tail = common_tail(new_winders, inner_winders);
     for (Value ls = inner_winders; ls != tail; ls = cdr(ls)) {
         inner_winders = cdr(ls);
         Value f = cdar(ls);
-        err = apply(Qfalse, f, Qnil);
-        EXPECT_ERROR_RETURN_VOID(err);
+        EXPECT_ERROR(apply(Qfalse, f, Qnil));
     }
     Value rev = Qnil;
     for (Value p = new_winders; p != tail; p = cdr(p))
         rev = cons(car(p), rev);
     for (Value p = rev; p != Qnil; p = cdr(p)) {
         Value f = caar(p);
-        err = apply(Qfalse, f, Qnil);
-        EXPECT_ERROR_RETURN_VOID(err);
+        EXPECT_ERROR(apply(Qfalse, f, Qnil));
         inner_winders = p;
     }
+    return Qfalse;
 }
 
 static Value proc_dynamic_wind(Value env, Value before, Value thunk, Value after)

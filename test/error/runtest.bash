@@ -40,8 +40,9 @@ nfail=0
 for f in "$scriptdir"/*.scm; do
     msg=`head -1 "$f" | sed 's/^;* *//; s/ *$//'`
     out=`tail +2 "$f" | $schaf -S - 2>&1`
+    pret=$PIPESTATUS
     if [ -z "$msg" ]; then
-        [ -z "$out" ]
+        [ -z "$out" ] && [ $pret -eq 0 ]
     else
         echo "$out" | grep -q "$msg"
     fi
