@@ -2448,8 +2448,6 @@ static Value common_tail(Value x, Value y)
     return px;
 }
 
-#define EXPECT_ERROR_RETURN_VOID(v) EXPECT_ERROR_WITH_RETVAL(v, (void) 0)
-
 static Value do_wind(Value new_winders)
 {
     Value tail = common_tail(new_winders, inner_winders);
