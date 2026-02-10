@@ -15,7 +15,9 @@
   (expect eq? '+ '+)
   (expect eq? '- '-)
   (expect eq? '.. '..)
-  (expect eq? '... '...)))
+  (expect eq? '... '...)
+  (let ((... eq?))
+    (expect ... 1 1))))
 
 ;; 4. Expressions
 ;; 4.1. Primitive expression types
