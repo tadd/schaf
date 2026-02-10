@@ -325,7 +325,7 @@ void *obj_new(ValueTag t, size_t size)
 {
     Header *h = gc_malloc(size);
     h->tag = t;
-    h->immutable = false;
+    OBJ_IMMUTABLE_SET(h, false);
     return h;
 }
 
@@ -1352,7 +1352,7 @@ static Value syn_do(Value env, Value args)
 static Value promise_new(Value env, Value val)
 {
     Promise *pr = obj_new(TAG_PROMISE, sizeof(Promise));
-    pr->forced = false;
+    PROMISE_FORCED_SET(pr, false);
     pr->env = env;
     pr->val = val;
     return (Value) pr;
@@ -1842,7 +1842,7 @@ Value cons(Value car, Value cdr)
 static Value cons_const(Value car, Value cdr)
 {
     Value v = cons(car, cdr);
-    HEADER(v)->immutable = true;
+    OBJ_IMMUTABLE_SET(v, true);
     return v;
 }
 
@@ -1889,7 +1889,7 @@ static Value proc_cdr(UNUSED Value env, Value pair)
 }
 
 #define EXPECT_MUTABLE(o) \
-    EXPECT(!HEADER(o)->immutable, "cannot modify immutable object")
+    EXPECT(!OBJ_IMMUTABLE_P(o), "cannot modify immutable object")
 
 static Value proc_set_car(UNUSED Value env, Value pair, Value obj)
 {
@@ -2320,12 +2320,12 @@ static Value proc_force(UNUSED Value env, Value obj)
     if (!sch_value_is_promise(obj))
         return obj;
     Promise *pr = PROMISE(obj);
-    if (!pr->forced) {
+    if (!PROMISE_FORCED_P(pr)) {
         Value val = eval(pr->env, pr->val);
         EXPECT_ERROR(val);
         pr->env = Qfalse; // env not needed anymore
         pr->val = val;
-        pr->forced = true;
+        PROMISE_FORCED_SET(pr, true);
     }
     return pr->val;
 }

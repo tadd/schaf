@@ -472,7 +472,7 @@ static Value parse_dotted_pair(Parser *p, Value l, Value last)
 static Value located_list1(Value sym, int64_t pos)
 {
     LocatedPair *p = obj_new(TAG_PAIR, sizeof(LocatedPair)); // imitate ordinal pairs
-    HEADER(p)->immutable = true;
+    OBJ_IMMUTABLE_SET(p, true);
     PAIR(p)->car = sym;
     PAIR(p)->cdr = Qnil;
     p->pos = pos;

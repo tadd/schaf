@@ -56,9 +56,14 @@ typedef enum {
     TAG_LAST = TAG_ERROR
 } ValueTag;
 
+typedef enum {
+    OBJ_FLAG_IMMUTABLE = 1U,
+    OBJ_FLAG_PROMISE_FORCED = 1U << 1,
+} ObjectFlag;
+
 typedef struct {
     ValueTag tag;
-    bool immutable;
+    uint8_t flags;
 } Header;
 
 typedef struct {
@@ -141,7 +146,6 @@ typedef struct {
 
 typedef struct {
     Header header;
-    bool forced;
     Value env;
     Value val;
 } Promise;
@@ -158,6 +162,15 @@ typedef struct {
 
 #define HEADER(v) ((Header *) v)
 #define VALUE_TAG(v) (HEADER(v)->tag)
+#define FLAG_SET(v, b, f) do { \
+        if (b) \
+            HEADER(v)->flags |= f; \
+        else \
+            HEADER(v)->flags &= ~f; \
+    } while (0)
+#define FLAGGED_P(v, f) (HEADER(v)->flags & f)
+#define OBJ_IMMUTABLE_P(v) FLAGGED_P(v, OBJ_FLAG_IMMUTABLE)
+#define OBJ_IMMUTABLE_SET(v, b) FLAG_SET(v, b, OBJ_FLAG_IMMUTABLE)
 
 #define INT(v) sch_integer_to_cint(v)
 #define SYMBOL(v) sch_symbol_to_csymbol(v)
@@ -173,6 +186,8 @@ typedef struct {
 #define ENV(v) ((Env *) v)
 #define PORT(v) ((Port *) v)
 #define PROMISE(v) ((Promise *) v)
+#define PROMISE_FORCED_P(v) FLAGGED_P(v, OBJ_FLAG_PROMISE_FORCED)
+#define PROMISE_FORCED_SET(v, b) FLAG_SET(v, b, OBJ_FLAG_PROMISE_FORCED)
 #define ERROR(v) (((Error *) v)->call_stack)
 
 typedef struct {
@@ -231,7 +246,7 @@ Value vector_push(Value v, Value e);
 #pragma GCC visibility pop
 
 #define DUMMY_PAIR() ((Value) &(Pair) { \
-            .header = { .tag = TAG_PAIR, .immutable = false }, \
+            .header = { .tag = TAG_PAIR, .flags = 0 },  \
             .car = Qundef, .cdr = Qnil \
         })
 #define GET_SP(p) uintptr_t v##p = 0; void *volatile p = &v##p; UNPOISON(&p, sizeof(void *))
