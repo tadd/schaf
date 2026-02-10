@@ -479,21 +479,22 @@ static Value located_list1(Value sym, int64_t pos)
     return (Value) p;
 }
 
+static Value parse_expr_token(Parser *p, Token t);
+
 static Value parse_list(Parser *p)
 {
     Value ret = DUMMY_PAIR(), last = ret;
     for (;;) {
         skip_token_atmosphere(p);
         int64_t pos = ftell(p->in);
-        int c = fgetc(p->in);
-        if (c == ')')
+        Token t = lex(p);
+        if (t.type == TOK_TYPE_RPAREN)
             break;
-        if (c == EOF)
+        if (t.type == TOK_TYPE_EOF)
             parse_error(p, "')'", "EOF");
-        if (c == '.')
+        if (t.type == TOK_TYPE_DOT)
             return parse_dotted_pair(p, cdr(ret), last);
-        ungetc(c, p->in);
-        Value e = parse_expr(p);
+        Value e = parse_expr_token(p, t);
         if (sch_value_is_symbol(e))
             PAIR(last)->cdr = located_list1(e, pos);
         else
@@ -527,9 +528,8 @@ static Value parse_vector(Parser *p)
     return v;
 }
 
-static Value parse_expr(Parser *p)
+static Value parse_expr_token(Parser *p, Token t)
 {
-    Token t = lex(p);
     switch (t.type) {
     case TOK_TYPE_LPAREN:
         return parse_list(p); // parse til ')'
@@ -559,6 +559,12 @@ static Value parse_expr(Parser *p)
         break;
     }
     return Qundef;
+}
+
+static Value parse_expr(Parser *p)
+{
+    Token t = lex(p);
+    return parse_expr_token(p, t);
 }
 
 static Value parse_expr_top(Parser *p, int64_t *ppos)
