@@ -517,13 +517,12 @@ static Value parse_vector(Parser *p)
     Value v = vector_new();
     for (;;) {
         skip_token_atmosphere(p);
-        int c = fgetc(p->in);
-        if (c == ')')
+        Token t = lex(p);
+        if (t.type == TOK_TYPE_RPAREN)
             break;
-        if (c == EOF)
+        if (t.type == TOK_TYPE_EOF)
             parse_error(p, "')'", "EOF");
-        ungetc(c, p->in);
-        vector_push(v, parse_expr(p));
+        vector_push(v, parse_expr_token(p, t));
     }
     return v;
 }
@@ -556,11 +555,12 @@ static Value parse_expr_token(Parser *p, Token t)
     case TOK_TYPE_IDENT:
         return t.value;
     case TOK_TYPE_EOF:
-        break;
+        return Qundef;
     }
-    return Qundef;
+    UNREACHABLE();
 }
 
+// Returns Qundef if got EOF
 static Value parse_expr(Parser *p)
 {
     Token t = lex(p);
