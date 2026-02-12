@@ -1543,6 +1543,10 @@
        (display obj p)
        (get-output-string p))))
 
+  (describe "display a list with dots" (lambda ()
+    (define l '(a ...))
+    (expect equal? (stringify l) "(a ...)")))
+
   (describe "display circular list car" (lambda ()
     (define l (list 42))
     (set-car! l l);; make it circular!
