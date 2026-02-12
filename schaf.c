@@ -1849,25 +1849,19 @@ static Value matcher_literals_and_arity_min(Value data, Value args)
     return body; // FIXME!
 }
 
-static Value matching_closure_with_precond(Value literals, int64_t arity, int64_t arity_min,
+static Value matching_closure_with_precond(Value lpos, int64_t arity, int64_t arity_min,
                                            Value params, Value body)
 {
-    Value lpos = literal_param_positions(literals, params);
-    Value data = body;
     Value closure = closure_new(env_macro, params, body);
-    if (arity >= 0) {
-        if (lpos == Qnil)
-            return closure;
+    Value data = cons(closure, body);
+    data = cons(params, data);
+    if (arity > 0) {
         Value varity = sch_integer_new(arity);
-        data = cons(closure, data);
-        data = cons(params, data);
         data = cons(varity, data);
         data = cons(lpos, data);
         return cfunc_closure_new("matching-closure-0", matcher_literals, -1, data);
     }
     Value varity_min = sch_integer_new(arity_min);
-    data = cons(closure, data);
-    data = cons(params, data);
     data = cons(varity_min, data);
     if (lpos == Qnil)
         return cfunc_closure_new("matching-closure-v", matcher_arity_min, -1, data);
@@ -1879,9 +1873,14 @@ static Value matching_closure_with_precond(Value literals, int64_t arity, int64_
 static Value matching_closure_new(Value literals, int64_t arity, int64_t arity_min,
                                   Value params, Value body)
 {
-    if (arity == 0 || (arity > 0 && literals == Qnil))
+    if (arity == 0 || (arity > 0 && literals == Qnil)) {
+    simple:
         return closure_new(env_macro, params, body);
-    return matching_closure_with_precond(literals, arity, arity_min, params, body);
+    }
+    Value lpos = literal_param_positions(literals, params);
+    if (arity > 0 && lpos == Qnil)
+        goto simple;
+    return matching_closure_with_precond(lpos, arity, arity_min, params, body);
 }
 
 static Value syntax_rule_new(Value literals, Value params, Value template)
@@ -1892,7 +1891,6 @@ static Value syntax_rule_new(Value literals, Value params, Value template)
     EXPECT_ERROR_LOCATED(e, params);
     r->arity_min = arity_min;
     r->closure = matching_closure_new(literals, arity, arity_min, params, template);
-    // PROCEDURE(c)->arity = arity;
     return (Value) r;
 }
 
