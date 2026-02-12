@@ -1899,8 +1899,7 @@ static Value syntax_rule_new(Value literals, Value params, Value template)
 static Value transformer_new(Value literals, Value rules)
 {
     Transformer *tr = obj_new(TAG_TRANSFORMER, sizeof(Transformer));
-    Value v = vector_new();
-    tr->syntax_rules = v;
+    tr->syntax_rules = vector_new();
     for (Value p = rules; p != Qnil; p = cdr(p)) {
         Value rule = car(p);
         EXPECT_ARITY_2(rule);
