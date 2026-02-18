@@ -670,6 +670,7 @@
   (expect = 509 #o775)
   (expect = 51966 #xCAFE)
   (expect = 123 123e0)
+  (expect = -4560 -45.6e2)
 
   (noexpect = 42 0)
   (noexpect = 0 0 0 0 42)
@@ -1047,6 +1048,47 @@
   (expect = (string->number "-1" 16) -1)
   (expect = (string->number "1000000" 16) 16777216)
   (expect = (string->number "-1000000" 16) -16777216)))
+
+(describe "string->number with prefix" (lambda ()
+  (expect = (string->number "#d0") 0)
+  (expect = (string->number "#d1") 1)
+  (expect = (string->number "#d10") 10)
+  (expect = (string->number "#d-2") -2)
+
+  (expect = (string->number "#b0") 0)
+  (expect = (string->number "#b1") 1)
+  (expect = (string->number "#b10") 2)
+  (expect = (string->number "#b-1") -1)
+  (expect = (string->number "#b-11") -3)
+
+  (expect = (string->number "#o0") 0)
+  (expect = (string->number "#o1") 1)
+  (expect = (string->number "#o10") 8)
+  (expect = (string->number "#o-7") -7)
+  (expect = (string->number "#o-11") -9)
+
+  (expect = (string->number "#x0") 0)
+  (expect = (string->number "#x1") 1)
+  (expect = (string->number "#x10") 16)
+  (expect = (string->number "#x-F") -15)
+  (expect = (string->number "#x-11") -17)))
+
+(describe "string->number with inconsistent prefix and radix" (lambda ()
+  (expect-f (string->number "#b10" 8))
+  (expect-f (string->number "#b10" 10))
+  (expect-f (string->number "#b10" 16))
+
+  (expect-f (string->number "#d10" 2))
+  (expect-f (string->number "#d10" 8))
+  (expect-f (string->number "#d10" 16))
+
+  (expect-f (string->number "#o10" 2))
+  (expect-f (string->number "#o10" 10))
+  (expect-f (string->number "#o10" 16))
+
+  (expect-f (string->number "#x10" 2))
+  (expect-f (string->number "#x10" 8))
+  (expect-f (string->number "#x10" 10))))
 
 (describe "roundtrip-ness of number->string/string->number" (lambda ()
   (define (roundtrip? n)

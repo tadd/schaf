@@ -65,14 +65,6 @@ DEF_CONST_TOKEN_FUNC(PLUS, "+")
 DEF_CONST_TOKEN_FUNC(MINUS, "-")
 
 // and ctor-s
-static inline Token token_int(int64_t i)
-{
-    return TOKEN_VAL(INT, sch_integer_new(i));
-}
-static inline Token token_real(double d)
-{
-    return TOKEN_VAL(REAL, sch_real_new(d));
-}
 static inline Token token_char(uint8_t ch)
 {
     return TOKEN_VAL(CHAR, sch_character_new(ch));
@@ -244,12 +236,15 @@ static int fpeekc(FILE *in)
     return c;
 }
 
-static unsigned parse_num_prefix(Parser *p)
+#define parse_error_safe(p, ...) do { \
+        if (p->newline_pos) parse_error(p, __VA_ARGS__); } while (0)
+// return -1 if invalid
+static int parse_number_prefix(Parser *p)
 {
     int c = fgetc(p->in);
     if (c != '#') {
         ungetc(c, p->in);
-        return 10; // no prefix
+        return 0; // prefix unspecified
     }
     c = fgetc(p->in);
     switch (c) {
@@ -262,7 +257,8 @@ static unsigned parse_num_prefix(Parser *p)
     case 'x':
         return 16;
     default:
-        parse_error(p, "number prefix", "#%c", c);
+        parse_error_safe(p, "number prefix", "#%c", c);
+        return -1;
     }
 }
 
@@ -278,24 +274,30 @@ static int parse_sign(Parser *p)
     return 1;
 }
 
-static Token lex_decimal(Parser *p, const char *s, int coeff, unsigned radix)
+static Value parse_decimal(Parser *p, const char *s, int coeff, unsigned radix)
 {
-    if (radix != 10)
-        parse_error(p, "decimal digits", "got non-decimal radix: %u", radix);
+    if (radix != 10) {
+        parse_error_safe(p, "decimal digits", "got non-decimal radix: %u", radix);
+        return Qfalse;
+    }
     char *endp = NULL;
     double d = strtod(s, &endp);
-    if (endp != NULL && *endp != '\0')
-        parse_error(p, "decimal digits", "'%s'", endp);
-    return token_real(coeff * d);
+    if (endp != NULL && *endp != '\0') {
+        parse_error_safe(p, "decimal digits", "'%s'", endp);
+        return Qfalse;
+    }
+    return sch_real_new(coeff * d);
 }
 
-static Token lex_integer(Parser *p, const char *s, int coeff, unsigned radix)
+static Value parse_integer(Parser *p, const char *s, int coeff, unsigned radix)
 {
     char *endp = NULL;
     int64_t i = strtol(s, &endp, radix);
-    if (endp != NULL && *endp != '\0')
-        parse_error(p, "integer digits", "'%s'", endp);
-    return token_int(coeff * i);
+    if (endp != NULL && *endp != '\0') {
+        parse_error_safe(p, "integer digits", "'%s'", endp);
+        return Qfalse;
+    }
+    return sch_integer_new(coeff * i);
 }
 
 static bool sign_p(int c)
@@ -314,31 +316,65 @@ static bool decimal_p(const char *s)
         (isdigit(p[1]) || (sign_p(p[1]) && isdigit(p[2])));
 }
 
-// coeff: '-' => -1, '+' => +1, undefined (parsed) => 0
-// radix: 2, 8, 10, 16, or 0 if prefix parsed
-static Token lex_number(Parser *p, int coeff, unsigned radix)
+// p: Parser (could be a dummy, i.e. p->newline_pos == NULL)
+// coeff: '-' => -1, '+' => +1, undefined (sign parsed) => 0
+// radix: 2, 8, 10, 16, or 0 if not specified (prefix parsed)
+static Value parse_number_internal(Parser *p, int coeff, unsigned radix)
 {
-    if (radix == 0)
-        radix = parse_num_prefix(p);
+    if (radix == 0) {
+        int r = parse_number_prefix(p);
+        if (r < 0)
+            return Qfalse;
+        radix = r > 0 ? r : 10;
+    }
     if (coeff == 0)
         coeff = parse_sign(p);
     switch (radix) {
     case 2: case 8: case 10: case 16:
         break;
     default:
-        bug("invalid radix: %u", radix);
+        parse_error_safe(p, "valid radix", "%u", radix);
+        return Qfalse;
     }
     char *s;
-    int n = fscanf(p->in, "%m[0-9a-zA-Z.-+]", &s);
-    if (n != 1)
-        parse_error(p, "digits", "nothing");
-    Token t;
+    int n = fscanf(p->in, "%m[0-9a-zA-Z.-+]", &s); // XXX: number or identifier?
+    if (n != 1) {
+        parse_error_safe(p, "digits", "nothing valid");
+        return Qfalse;
+    }
+    Value v;
     if (decimal_p(s))
-        t = lex_decimal(p, s, coeff, radix);
+        v = parse_decimal(p, s, coeff, radix);
     else
-        t = lex_integer(p, s, coeff, radix);
+        v = parse_integer(p, s, coeff, radix);
     free(s);
-    return t;
+    return v;
+}
+
+static void parser_init_dummy(Parser *p, FILE *in)
+{
+    p->in = in;
+    p->newline_pos = NULL;
+}
+
+static Value parse_number(FILE *in, unsigned radix)
+{
+    Parser p[1];
+    parser_init_dummy(p, in);
+    return parse_number_internal(p, 0, radix);
+}
+
+// p: Parser (could be a dummy, i.e. p->newline_pos == NULL)
+// coeff: '-' => -1, '+' => +1, undefined (parsed) => 0
+// radix: 2, 8, 10, 16, or 0 if prefix parsed
+static Token lex_number(Parser *p, int coeff, unsigned radix)
+{
+    Value n = parse_number_internal(p, coeff, radix);
+    if (sch_value_is_integer(n))
+        return TOKEN_VAL(INT, n);
+    if (sch_value_is_real(n))
+        return TOKEN_VAL(REAL, n);
+    bug("got a non-number");
 }
 
 static Token lex_character_name_rest(Parser *p, const char *expected, int ret)
@@ -405,6 +441,15 @@ static Token lex_constant(Parser *p)
         parse_error(p, "constants", "#%c", c);
     }
     return lex_number(p, 0, radix);
+}
+
+// radix == 0 if not specified
+Value parse_number_string(const char *s, unsigned radix)
+{
+    FILE *fp = mopen(s);
+    Value ret = parse_number(fp, radix);
+    fclose(fp);
+    return ret;
 }
 
 static Token lex_after_sign(Parser *p, int csign)
