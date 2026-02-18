@@ -298,6 +298,22 @@ static Token lex_integer(Parser *p, const char *s, int coeff, unsigned radix)
     return token_int(coeff * i);
 }
 
+static bool sign_p(int c)
+{
+    return c == '-' || c == '+';
+}
+
+static bool decimal_p(const char *s)
+{
+    if (strchr(s, '.') != NULL)
+        return true;
+    const char *p = strpbrk(s, "eE");
+    if (p == NULL)
+        return false;
+    return s < p && isdigit(p[-1]) &&
+        (isdigit(p[1]) || (sign_p(p[1]) && isdigit(p[2])));
+}
+
 // coeff: '-' => -1, '+' => +1, undefined (parsed) => 0
 // radix: 2, 8, 10, 16, or 0 if prefix parsed
 static Token lex_number(Parser *p, int coeff, unsigned radix)
@@ -313,11 +329,11 @@ static Token lex_number(Parser *p, int coeff, unsigned radix)
         bug("invalid radix: %u", radix);
     }
     char *s;
-    int n = fscanf(p->in, "%m[0-9a-zA-Z.]", &s);
+    int n = fscanf(p->in, "%m[0-9a-zA-Z.-+]", &s);
     if (n != 1)
         parse_error(p, "digits", "nothing");
     Token t;
-    if (strchr(s, '.') != NULL)
+    if (decimal_p(s))
         t = lex_decimal(p, s, coeff, radix);
     else
         t = lex_integer(p, s, coeff, radix);

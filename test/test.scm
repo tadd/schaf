@@ -610,6 +610,7 @@
   (expect number? #b10)
   (expect number? #o775)
   (expect number? #xCAFE)
+  (expect number? 1e10)
   ;; (expect number? #e1e10)
   ;; (expect number? 3+0i)
   ;; (expect number? 3+4i)
@@ -668,6 +669,7 @@
   (expect = 2 #b10)
   (expect = 509 #o775)
   (expect = 51966 #xCAFE)
+  (expect = 123 123e0)
 
   (noexpect = 42 0)
   (noexpect = 0 0 0 0 42)
