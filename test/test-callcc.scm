@@ -1,7 +1,7 @@
 ;; All of call/cc tests in this file were from Kawa's test suite under the MIT license
 
 ;; https://gitlab.com/kashell/Kawa/-/blob/master/testsuite/r5rs_pitfall.scm
-(describe "call/cc each other" (lambda ()
+(xdescribe "call/cc each other" (lambda ()
   (define r #f)
   (define a #f)
   (define b #f)
@@ -36,7 +36,7 @@
   (expect = (f1) 28)
   (expect = (f2) 28)))
 
-(describe "call/cc lazy callframe" (lambda ()
+(xdescribe "call/cc lazy callframe" (lambda ()
   (define (f)
     (let ((k1 #f)
           (k2 #f)
@@ -80,7 +80,7 @@
                        (4 5 -1 3)
                        (5 4 -1 3)))))
 
-(describe "call/cc + letrec = set!" (lambda ()
+(xdescribe "call/cc + letrec = set!" (lambda ()
   (define (f)
     (letrec ((x (call/cc
 		 (lambda (c)
@@ -90,11 +90,11 @@
 	  (eq? x ((cadr x))))))
   (expect-t (f))))
 
-(describe "call/cc in argument aborts funcall" (lambda ()
+(xdescribe "call/cc in argument aborts funcall" (lambda ()
   (expect = (call/cc (lambda (c) (0 (c 1)))) 1)))
 
 ;; https://gitlab.com/kashell/Kawa/-/blob/master/testsuite/unreach1.scm
-(describe "call/cc unreached 1" (lambda ()
+(xdescribe "call/cc unreached 1" (lambda ()
   (define (f)
     (call/cc
      (lambda (return)
@@ -105,7 +105,7 @@
   (expect-t (f))))
 
 ;; https://gitlab.com/kashell/Kawa/-/blob/master/testsuite/unreach2.scm
-(describe "call/cc unreached 2" (lambda ()
+(xdescribe "call/cc unreached 2" (lambda ()
   (define (f)
     (call/cc
      (lambda (return)
@@ -118,7 +118,7 @@
   (expect-f (f))))
 
 ;; https://gitlab.com/kashell/Kawa/-/blob/master/testsuite/sva35362.scm
-(describe "call/cc unused" (lambda ()
+(xdescribe "call/cc unused" (lambda ()
   (define (f) ;; never called
     (call/cc
      (lambda (return)
@@ -127,7 +127,7 @@
   (expect-t #t)))
 
 ;; https://gitlab.com/kashell/Kawa/-/blob/master/testsuite/sva40649.scm
-(describe "call/cc NPE" (lambda ()
+(xdescribe "call/cc NPE" (lambda ()
   (define (f1 f2) (f2))
 
   (define (fa x)

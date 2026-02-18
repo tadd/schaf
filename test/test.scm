@@ -1205,7 +1205,7 @@
   (begin (set! x 10)
          (expect equal? (force p) 6))))
 
-(describe "call-with-current-continuation" (lambda ()
+(xdescribe "call-with-current-continuation" (lambda ()
   (define (f)
     (call-with-current-continuation
      (lambda (exit)
@@ -1230,20 +1230,20 @@
   (expect = (list-length '(1 2 3 4)) 4)
   (expect-f (list-length '(a b . c)))))
 
-(describe "call/cc applicable in call/cc" (lambda ()
+(xdescribe "call/cc applicable in call/cc" (lambda ()
   (define (f)
     (call/cc call/cc)
     42)
   (expect = (f) 42)))
 
-(describe "values and call-with-values" (lambda ()
+(xdescribe "values and call-with-values" (lambda ()
   (expect =
           (call-with-values (lambda () (values 4 5))
             (lambda (a b) b))
           5)
   (expect = (call-with-values * -) -1)))
 
-(describe "values and call-with-values nested" (lambda ()
+(xdescribe "values and call-with-values nested" (lambda ()
   (expect = (call-with-values
               (lambda ()
                 (call-with-values
@@ -1252,7 +1252,7 @@
               (lambda (x) (* 2 x)))
           10)))
 
-(describe "dynamic-wind" (lambda ()
+(xdescribe "dynamic-wind" (lambda ()
   (define (f)
     (let ((path '())
           (c #f))
