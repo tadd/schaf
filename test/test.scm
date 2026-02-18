@@ -605,6 +605,11 @@
 
   ;; FIXME
   (expect number? 3.0)
+  (expect number? #d1)
+  (expect number? #d1.2)
+  (expect number? #b10)
+  (expect number? #o775)
+  (expect number? #xCAFE)
   ;; (expect number? #e1e10)
   ;; (expect number? 3+0i)
   ;; (expect number? 3+4i)
@@ -658,6 +663,12 @@
   (expect = 0 0.0 0)
   (expect = -42 -42.0)
   (expect = -1 -1.0)
+  (expect = 1 #d1)
+  (expect = 1.2 #d1.2)
+  (expect = 2 #b10)
+  (expect = 509 #o775)
+  (expect = 51966 #xCAFE)
+
   (noexpect = 42 0)
   (noexpect = 0 0 0 0 42)
   (noexpect = 42.0 0)
