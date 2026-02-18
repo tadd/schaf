@@ -2061,22 +2061,15 @@ static Value proc_number_to_string(UNUSED Value env, Value args)
     return sch_string_new(buf);
 }
 
-// FIXME: Integrate with parse.c
 static Value proc_string_to_number(UNUSED Value env, Value args)
 {
     EXPECT_ARITY_RANGE(1, 2, args);
-    Value s = car(args);
-    EXPECT_TYPE(string, s);
-    if (STRING(s)[0] == '\0')
-        return Qfalse;
+    Value vstr = car(args);
+    EXPECT_TYPE(string, vstr);
+    const char *s = STRING(vstr);
     Value opt = cdr(args);
-    int64_t radix = (opt != Qnil) ? get_int(car(opt)) : 10;
-    char *ep;
-    errno = 0;
-    int64_t i = strtoll(STRING(s), &ep, radix);
-    if (errno != 0 || (i == 0 && STRING(s) == ep))
-        return Qfalse;
-    return sch_integer_new(i);
+    int64_t radix = (opt != Qnil) ? get_int(car(opt)) : 0;
+    return parse_number_string(s, radix);
 }
 
 // 6.3. Other data types
