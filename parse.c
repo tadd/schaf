@@ -237,37 +237,92 @@ static Token lex_string(Parser *p)
     return token_string(buf);
 }
 
-static Token lex_int_with_radix(Parser *p, int coeff, unsigned radix)
+static int fpeekc(FILE *in)
 {
+    int c = fgetc(in);
+    ungetc(c, in);
+    return c;
+}
+
+static unsigned parse_num_prefix(Parser *p)
+{
+    int c = fgetc(p->in);
+    if (c != '#') {
+        ungetc(c, p->in);
+        return 10; // no prefix
+    }
+    c = fgetc(p->in);
+    switch (c) {
+    case 'b':
+        return 2;
+    case 'd':
+        return 10;
+    case 'o':
+        return 8;
+    case 'x':
+        return 16;
+    default:
+        parse_error(p, "number prefix", "#%c", c);
+    }
+}
+
+// return -1 for '-' / +1 for '+' or nothing
+static int parse_sign(Parser *p)
+{
+    int c = fgetc(p->in);
+    if (c == '+')
+        return 1;
+    else if (c == '-')
+        return -1;
+    ungetc(c, p->in);
+    return 1;
+}
+
+static Token lex_decimal(Parser *p, const char *s, int coeff, unsigned radix)
+{
+    if (radix != 10)
+        parse_error(p, "decimal digits", "got non-decimal radix: %u", radix);
+    char *endp = NULL;
+    double d = strtod(s, &endp);
+    if (endp != NULL && *endp != '\0')
+        parse_error(p, "decimal digits", "'%s'", endp);
+    return token_real(coeff * d);
+}
+
+static Token lex_integer(Parser *p, const char *s, int coeff, unsigned radix)
+{
+    char *endp = NULL;
+    int64_t i = strtol(s, &endp, radix);
+    if (endp != NULL && *endp != '\0')
+        parse_error(p, "integer digits", "'%s'", endp);
+    return token_int(coeff * i);
+}
+
+// coeff: '-' => -1, '+' => +1, undefined (parsed) => 0
+// radix: 2, 8, 10, 16, or 0 if prefix parsed
+static Token lex_number(Parser *p, int coeff, unsigned radix)
+{
+    if (radix == 0)
+        radix = parse_num_prefix(p);
+    if (coeff == 0)
+        coeff = parse_sign(p);
     switch (radix) {
     case 2: case 8: case 10: case 16:
         break;
     default:
-        bug("invalid radix");
+        bug("invalid radix: %u", radix);
     }
     char *s;
-    int n = fscanf(p->in, "%m[0-9a-zA-Z]", &s);
+    int n = fscanf(p->in, "%m[0-9a-zA-Z.]", &s);
     if (n != 1)
-        parse_error(p, "integer digits", "nothing");
-    char *endp;
-    int64_t i = strtol(s, &endp, radix);
-    if (endp[0] != '\0')
-        parse_error(p, "integer digits", "'%s'", endp); // XXX
-    free(s);
-    return token_int(coeff * i);
-}
-
-static Token lex_signed_int_with_radix(Parser *p, unsigned radix)
-{
-    int coeff = 1;
-    int c = fgetc(p->in);
-    if (c == '+')
-        ; // just ignore
-    else if (c == '-')
-        coeff = -1;
+        parse_error(p, "digits", "nothing");
+    Token t;
+    if (strchr(s, '.') != NULL)
+        t = lex_decimal(p, s, coeff, radix);
     else
-        ungetc(c, p->in);
-    return lex_int_with_radix(p, coeff, radix);
+        t = lex_integer(p, s, coeff, radix);
+    free(s);
+    return t;
 }
 
 static Token lex_character_name_rest(Parser *p, const char *expected, int ret)
@@ -333,31 +388,7 @@ static Token lex_constant(Parser *p)
     default:
         parse_error(p, "constants", "#%c", c);
     }
-    return lex_signed_int_with_radix(p, radix);
-}
-
-static Token lex_num(Parser *p, int coeff)
-{
-    int64_t i;
-    int n = fscanf(p->in, "%"PRId64, &i);
-    if (n != 1)
-        parse_error(p, "digits", "invalid string");
-    int c = fgetc(p->in);
-    ungetc(c, p->in);
-    if (c != '.')
-        return token_int(coeff * i);
-    double d;
-    n = fscanf(p->in, "%lf", &d);
-    if (n != 1)
-        parse_error(p, "digits", "invalid string");
-    return token_real(coeff * (i + d));
-}
-
-static int fpeekc(FILE *in)
-{
-    int c = fgetc(in);
-    ungetc(c, in);
-    return c;
+    return lex_number(p, 0, radix);
 }
 
 static Token lex_after_sign(Parser *p, int csign)
@@ -366,7 +397,7 @@ static Token lex_after_sign(Parser *p, int csign)
     int dig = isdigit(c);
     bool minus = csign == '-';
     if (dig)
-        return lex_num(p, minus * -2 + 1);
+        return lex_number(p, minus * -2 + 1, 10);
     return minus ? TOK_MINUS() : TOK_PLUS();
 }
 
@@ -440,7 +471,7 @@ static Token lex(Parser *p)
     }
     if (isdigit(c)) {
         ungetc(c, p->in);
-        return lex_num(p, 1);
+        return lex_number(p, 1, 10);
     }
     if (is_initial(c))
         return lex_ident(p, c);
