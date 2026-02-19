@@ -1953,21 +1953,6 @@ static Value proc_modulo(UNUSED Value env, Value x, Value y)
     return sch_integer_new(c);
 }
 
-static int64_t *list_to_int_abs_array(Value l, Value *err)
-{
-    int64_t *a = scary_new(sizeof(int64_t));
-    for (Value p = l; p != Qnil; p = cdr(p)) {
-        Value x = car(p);
-        if (!sch_value_is_integer(x)) {
-            *err = type_error("integer", x);
-            return NULL;
-        }
-        int64_t i = INT(x);
-        scary_push(&a, i < 0 ? -i : i);
-    }
-    return a;
-}
-
 static int64_t gcd(int64_t x, int64_t y)
 {
     while (y != 0) {
@@ -1978,17 +1963,18 @@ static int64_t gcd(int64_t x, int64_t y)
     return x;
 }
 
+#define get_int_like_abs(x) ({ \
+            int64_t I = get_int_like(x); \
+            I < 0 ? -I : I; \
+        })
+
 static Value proc_gcd(UNUSED Value env, Value args)
 {
-    if (args == Qnil)
-        return sch_integer_new(0);
-    Value err = Qfalse;
-    int64_t *a = list_to_int_abs_array(args, &err);
-    EXPECT_ERROR(err);
-    int64_t ret = a[0];
-    for (size_t i = 1, len = scary_length(a); i < len; i++)
-        ret = gcd(ret, a[i]);
-    scary_free(a);
+    int64_t ret = 0, x;
+    for (Value p = args; p != Qnil; p = cdr(p)) {
+        x = get_int_like_abs(car(p));
+        ret = gcd(ret, x);
+    }
     return sch_integer_new(ret);
 }
 
@@ -1999,15 +1985,11 @@ static int64_t lcm(int64_t x, int64_t y)
 
 static Value proc_lcm(UNUSED Value env, Value args)
 {
-    if (args == Qnil)
-        return sch_integer_new(1);
-    Value err = Qfalse;
-    int64_t *a = list_to_int_abs_array(args, &err);
-    EXPECT_ERROR(err);
-    int64_t ret = a[0];
-    for (size_t i = 1, len = scary_length(a); i < len; i++)
-        ret = lcm(ret, a[i]);
-    scary_free(a);
+    int64_t ret = 1, x;
+    for (Value p = args; p != Qnil; p = cdr(p)) {
+        x = get_int_like_abs(car(p));
+        ret = lcm(ret, x);
+    }
     return sch_integer_new(ret);
 }
 
