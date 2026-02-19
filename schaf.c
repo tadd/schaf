@@ -1923,44 +1923,51 @@ static Value proc_abs(UNUSED Value env, Value x)
     return num_new(d < 0 ? -d : d, t);
 }
 
-#define get_int_like_real(x) ({ \
+#define get_int_like_real(x, b) ({ \
             double D = REAL(x); \
             EXPECT(is_integer_like_double(D), \
                    "expected integer-like double but got %f", D); \
+            b = true; \
             (int64_t) D; \
         })
-#define get_int_like(x) ({ \
+#define get_int_like(x, b) ({ \
             Value X = x; \
             NumType NT = get_num_type(X); \
-            NT == NUM_TYPE_INT ? INT(X) : get_int_like_real(X); \
+            NT == NUM_TYPE_INT ? INT(X) : get_int_like_real(X, b); \
+        })
+#define int_or_real(b, v) ({ \
+            int64_t I = v; \
+            b ? sch_real_new(I) : sch_integer_new(I); \
         })
 
 static Value proc_quotient(UNUSED Value env, Value x, Value y)
 {
-    int64_t a = get_int_like(x), b = get_int_like(y);
+    bool inexact = false;
+    int64_t a = get_int_like(x, inexact), b = get_int_like(y, inexact);
     if (b == 0)
         return divzero_error();
-    return sch_integer_new(a / b);
+    return int_or_real(inexact, a / b);
 }
 
 static Value proc_remainder(UNUSED Value env, Value x, Value y)
 {
-    int64_t a = get_int_like(x), b = get_int_like(y);
+    bool inexact = false;
+    int64_t a = get_int_like(x, inexact), b = get_int_like(y, inexact);
     if (b == 0)
         return divzero_error();
-    int64_t c = a % b;
-    return sch_integer_new(c);
+    return int_or_real(inexact, a % b);
 }
 
 static Value proc_modulo(UNUSED Value env, Value x, Value y)
 {
-    int64_t a = get_int_like(x), b = get_int_like(y);
+    bool inexact = false;
+    int64_t a = get_int_like(x, inexact), b = get_int_like(y, inexact);
     if (b == 0)
         return divzero_error();
     int64_t c = a % b;
     if ((a < 0 && b > 0) || (a > 0 && b < 0))
         c += b;
-    return sch_integer_new(c);
+    return int_or_real(inexact, c);
 }
 
 static int64_t gcd(int64_t x, int64_t y)
@@ -1973,19 +1980,20 @@ static int64_t gcd(int64_t x, int64_t y)
     return x;
 }
 
-#define get_int_like_abs(x) ({ \
-            int64_t I = get_int_like(x); \
+#define get_int_like_abs(x, b) ({ \
+            int64_t I = get_int_like(x, b); \
             I < 0 ? -I : I; \
         })
 
 static Value proc_gcd(UNUSED Value env, Value args)
 {
+    bool inexact = false;
     int64_t ret = 0, x;
     for (Value p = args; p != Qnil; p = cdr(p)) {
-        x = get_int_like_abs(car(p));
+        x = get_int_like_abs(car(p), inexact);
         ret = gcd(ret, x);
     }
-    return sch_integer_new(ret);
+    return int_or_real(inexact, ret);
 }
 
 static int64_t lcm(int64_t x, int64_t y)
@@ -1995,12 +2003,13 @@ static int64_t lcm(int64_t x, int64_t y)
 
 static Value proc_lcm(UNUSED Value env, Value args)
 {
+    bool inexact = false;
     int64_t ret = 1, x;
     for (Value p = args; p != Qnil; p = cdr(p)) {
-        x = get_int_like_abs(car(p));
+        x = get_int_like_abs(car(p), inexact);
         ret = lcm(ret, x);
     }
-    return sch_integer_new(ret);
+    return int_or_real(inexact, ret);
 }
 
 static Value proc_expt(UNUSED Value env, Value x, Value y)

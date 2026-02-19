@@ -937,38 +937,53 @@
   (expect = (quotient -12 4) -3)
   (expect = (quotient 12 -4) -3)
   (expect = (quotient -12 -4) 3)
+  (expect exact? (quotient -12 -4))
 
   (expect = (quotient 12.0 4.0) 3)
-  (expect = (quotient -12.0 4.0) -3)))
+  (expect = (quotient -12.0 4.0) -3)
+  (expect inexact? (quotient -12.0 4.0))))
 
 (describe "remainder" (lambda ()
   (expect = (remainder 13 4) 1)
   (expect = (remainder -13 4) -1)
   (expect = (remainder 13 -4) 1)
   (expect = (remainder -13 -4) -1)
+  (expect exact? (remainder -13 -4))
+
   (expect = (remainder 13.0 -4.0) 1)
-  (expect = (remainder -13.0 -4.0) -1)))
+  (expect = (remainder -13.0 -4.0) -1)
+  (expect inexact? (remainder -13.0 -4.0))))
 
 (describe "modulo" (lambda ()
   (expect = (modulo 13 4) 1)
   (expect = (modulo -13 4) 3)
   (expect = (modulo 13 -4) -3)
   (expect = (modulo -13 -4) -1)
+  (expect exact? (modulo -13 -4))
+
   (expect = (modulo 13.0 -4.0) -3)
-  (expect = (modulo -13.0 -4.0) -1)))
+  (expect = (modulo -13.0 -4.0) -1)
+  (expect inexact? (modulo -13.0 -4.0))))
 
 (describe "gcd" (lambda ()
   (expect = (gcd) 0)
   (expect = (gcd 32) 32)
   (expect = (gcd 32 -36) 4)
   (expect = (gcd 3333 9 3) 3)
-  (expect = (gcd 16 -1024 8 -256) 8)))
+  (expect = (gcd 16 -1024 8 -256) 8)
+
+  (expect inexact? (gcd 1.0))
+  (expect inexact? (gcd 1 2 3.0))))
 
 (describe "lcm" (lambda ()
   (expect = (lcm) 1)
   (expect = (lcm 32) 32)
   (expect = (lcm 32 -36) 288)
-  (expect = (lcm 2 -16 256 -1024) 1024)))
+  (expect = (lcm 2 -16 256 -1024) 1024)
+
+  (expect inexact? (lcm 1.0))
+  (expect inexact? (lcm 1 2 3.0))))
+
 
 (describe "expt" (lambda ()
   (expect = (expt 1 1) 1)
