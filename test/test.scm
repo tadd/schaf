@@ -835,11 +835,11 @@
 
 ;; 6.2.6. Numerical input and output
 (describe "number->string" (lambda ()
-  (expect equal? (number->string 0) "0")
-  (expect equal? (number->string 1) "1")
-  (expect equal? (number->string -1) "-1")
-  (expect equal? (number->string 16777216) "16777216")
-  (expect equal? (number->string -16777216) "-16777216")))
+  (expect string=? (number->string 0) "0")
+  (expect string=? (number->string 1) "1")
+  (expect string=? (number->string -1) "-1")
+  (expect string=? (number->string 16777216) "16777216")
+  (expect string=? (number->string -16777216) "-16777216")))
 
 ;; 6.3. Other data types
 ;; 6.3.1. Booleans
