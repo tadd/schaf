@@ -2538,11 +2538,6 @@ static Value proc_call_with_output_file(Value env, Value path, Value thunk)
     return call_with_file(env, path, thunk, PORT_OUTPUT);
 }
 
-static Value proc_port_p(UNUSED Value env, Value port)
-{
-    return BOOL_VAL(value_tag_is(port, TAG_PORT));
-}
-
 static Value proc_input_port_p(UNUSED Value env, Value port)
 {
     return BOOL_VAL(value_tag_is(port, TAG_PORT) && PORT(port)->type == PORT_INPUT);
@@ -3260,7 +3255,6 @@ void sch_init(const void *sp)
     // 6.6.1. Ports
     define_procedure(e, "call-with-input-file", proc_call_with_input_file, 2);
     define_procedure(e, "call-with-output-file", proc_call_with_output_file, 2);
-    define_procedure(e, "port?", proc_port_p, 1); // R5RS missing the definition!!
     define_procedure(e, "input-port?", proc_input_port_p, 1);
     define_procedure(e, "output-port?", proc_output_port_p, 1);
     define_procedure(e, "current-input-port", proc_current_input_port, 0);

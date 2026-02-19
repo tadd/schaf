@@ -1290,17 +1290,13 @@
 
 ;; 6.6. Input and output
 ;; 6.6.1. Ports
-(describe "port?" (lambda ()
-  (noexpect port? 'port)
-  (noexpect port? #f)))
-
 (describe "current-input-port" (lambda ()
-  (expect port? (current-input-port)) ; test for twice
-  (expect port? (current-input-port))))
+  (expect input-port? (current-input-port)) ; test for twice
+  (expect input-port? (current-input-port))))
 
 (describe "current-output-port" (lambda ()
-  (expect port? (current-output-port)) ; test for twice
-  (expect port? (current-output-port))))
+  (expect output-port? (current-output-port)) ; test for twice
+  (expect output-port? (current-output-port))))
 
 (describe "input-port?" (lambda ()
   (expect input-port? (current-input-port))
@@ -1489,7 +1485,7 @@
   (describe "open/get-output-string" (lambda ()
     (call-with-output-string
      (lambda (p)
-       (expect port? p)
+       (expect output-port? p)
        (expect string=? (get-output-string p) "")
        (display "hello!" p)
        (expect string=? (get-output-string p) "hello!")))))))
