@@ -2017,6 +2017,94 @@ static Value proc_lcm(UNUSED Value env, Value args)
     return int_to_integer_or_real(inexact, ret);
 }
 
+static inline Value rounding_func(double (*func)(double), Value x)
+{
+    bool inexact = false;
+    double dx = get_double_and_inexactness(x, inexact);
+    double y = func(dx);
+    return double_to_integer_or_real(inexact, y);
+}
+
+static Value proc_floor(UNUSED Value env, Value x)
+{
+    return rounding_func(floor, x);
+}
+
+static Value proc_ceiling(UNUSED Value env, Value x)
+{
+    return rounding_func(ceil, x);
+}
+
+static Value proc_truncate(UNUSED Value env, Value x)
+{
+    return rounding_func(trunc, x);
+}
+
+static Value proc_round(UNUSED Value env, Value x)
+{
+    return rounding_func(round, x);
+}
+
+static inline Value math_func(double (*func)(double), Value x)
+{
+    return sch_real_new(func(get_double(x)));
+}
+
+static Value proc_exp(UNUSED Value env, Value x)
+{
+    return math_func(exp, x);
+}
+
+static Value proc_log(UNUSED Value env, Value x)
+{
+    return math_func(log, x);
+}
+
+static Value proc_sin(UNUSED Value env, Value x)
+{
+    return math_func(sin, x);
+}
+
+static Value proc_cos(UNUSED Value env, Value x)
+{
+    return math_func(cos, x);
+}
+
+static Value proc_tan(UNUSED Value env, Value x)
+{
+    return math_func(tan, x);
+}
+
+static Value proc_asin(UNUSED Value env, Value x)
+{
+    return math_func(asin, x);
+}
+
+static Value proc_acos(UNUSED Value env, Value x)
+{
+    return math_func(acos, x);
+}
+
+static inline Value math_func2(double (*func)(double, double), Value x, Value y)
+{
+    double dx = get_double(x), dy = get_double(y);
+    return sch_real_new(func(dx, dy));
+}
+
+static Value proc_atan(UNUSED Value env, Value args)
+{
+    EXPECT_ARITY_RANGE(1, 2, args);
+    Value d = cdr(args);
+    if (d == Qnil)
+        return math_func(atan, car(args));
+    return math_func2(atan2, car(args), car(d));
+}
+
+static Value proc_sqrt(UNUSED Value env, Value x)
+{
+    return math_func(sqrt, x);
+}
+
 static Value proc_expt(UNUSED Value env, Value x, Value y)
 {
     NumType tx = get_num_type(x);
@@ -3911,20 +3999,20 @@ void sch_init(const void *sp)
     define_procedure(e, "lcm", proc_lcm, -1);
     //- numerator
     //- denominator
-    //- floor
-    //- ceiling
-    //- truncate
-    //- round
+    define_procedure(e, "floor", proc_floor, 1);
+    define_procedure(e, "ceiling", proc_ceiling, 1);
+    define_procedure(e, "truncate", proc_truncate, 1);
+    define_procedure(e, "round", proc_round, 1);
     //- rationalize
-    //- exp
-    //- log
-    //- sin
-    //- cos
-    //- tan
-    //- asin
-    //- acos
-    //- atan
-    //- sqrt
+    define_procedure(e, "exp", proc_exp, 1);
+    define_procedure(e, "log", proc_log, 1);
+    define_procedure(e, "sin", proc_sin, 1);
+    define_procedure(e, "cos", proc_cos, 1);
+    define_procedure(e, "tan", proc_tan, 1);
+    define_procedure(e, "asin", proc_asin, 1);
+    define_procedure(e, "acos", proc_acos, 1);
+    define_procedure(e, "atan", proc_atan, -1);
+    define_procedure(e, "sqrt", proc_sqrt, 1);
     define_procedure(e, "expt", proc_expt, 2);
     //- make-rectangular
     //- make-polar
