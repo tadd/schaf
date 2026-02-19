@@ -174,9 +174,9 @@ static Token lex_dots(Parser *p)
 
 static int unescape_hex(Parser *p)
 {
+    const char *const exp = "hex escape in string literal";
     unsigned u;
     int n = fscanf(p->in, "%x;", &u);
-    const char *exp = "hex escape in string literal";
     if (n == EOF)
         parse_error(p, exp, "EOF");
     if (n != 1)
