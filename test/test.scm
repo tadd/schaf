@@ -988,6 +988,61 @@
   (expect inexact? (lcm 1.0))
   (expect inexact? (lcm 1 2 3.0))))
 
+(describe "floor" (lambda ()
+  (expect = (floor -4.3) -5.0)
+  (expect = (floor 3.5) 3.0)
+  (expect inexact? (floor 3.0))
+  (expect exact? (floor 3))))
+
+(describe "ceiling" (lambda ()
+  (expect = (ceiling -4.3) -4.0)
+  (expect = (ceiling 3.5) 4.0)))
+
+(describe "truncate" (lambda ()
+  (expect = (truncate -4.3) -4.0)
+  (expect = (truncate 3.5) 3.0)))
+
+(describe "round" (lambda ()
+  (expect = (round -4.3) -4.0)
+  (expect = (round 3.5) 4.0)))
+
+(describe "exp" (lambda ()
+  (expect = (exp 0.0) 1.0)))
+
+(describe "log" (lambda ()
+  (expt (log 1.0) 0.0)))
+
+(define (=~ x y); # nearly equal
+   (< (abs (- x y)) 1e-14))
+
+(describe "exp and log" (lambda ()
+  (expect = (exp (log 1.0)) 1.0)
+  (expect = (exp (log 0.0)) 0.0)
+  (expect =~ (exp (log 10.0)) 10.0)))
+
+(describe "sin" (lambda ()
+  (expect = (sin 0.0) 0.0)))
+
+(describe "cos" (lambda ()
+  (expect = (cos 0.0) 1.0)))
+
+(describe "tan" (lambda ()
+  (expect = (tan 0.0) 0.0)))
+
+(describe "asin" (lambda ()
+  (expect = (asin 0.0) 0.0)))
+
+(describe "acos" (lambda ()
+  (expect = (acos 1.0) 0.0)))
+
+(describe "atan" (lambda ()
+  (expect = (atan 0.0) 0.0)
+  (expect = (atan 0.0 0.0) 0.0)))
+
+(describe "sqrt" (lambda ()
+  (expect = (sqrt 0.0) 0.0)
+  (expect = (sqrt 1.0) 1.0)
+  (expect = (sqrt 4.0) 2.0)))
 
 (describe "expt" (lambda ()
   (expect = (expt 1 1) 1)
