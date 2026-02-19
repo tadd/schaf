@@ -828,11 +828,13 @@
   (expect = (max -10) -10)
   (expect = (max -10 -20 -30) -10)
   (expect = (max -1 -1 -1) -1)
+  (expect exact? (max -1 -1 -1))
 
   (expect = (max 0.0) 0.0)
   (expect = (max 0 0.1) 0.1)
   (expect = (max -0.1 0) 0)
-  (expect = (max -0.1 2 10.1) 10.1)))
+  (expect = (max -0.1 2 10.1) 10.1)
+  (expect inexact? (max 1.0 2))))
 
 (describe "min" (lambda ()
   (expect = (min 0) 0)
@@ -841,12 +843,14 @@
   (expect = (min -10) -10)
   (expect = (min -10 -20 -30) -30)
   (expect = (min -1 -1 -1) -1)
+  (expect exact? (min -1 -1 -1))
 
   (expect = (min 0.0) 0.0)
   (expect = (min 0 2.0 1.0) 0)
   (expect = (min 2.0 2 2) 2)
   (expect = (min -1.0) -1.0)
-  (expect = (min -1 -2.1 -3.1) -3.1)))
+  (expect = (min -1 -2.1 -3.1) -3.1)
+  (expect inexact? (min 1.0 0))))
 
 (describe "+" (lambda ()
   (expect = (+ 42 21) 63)
