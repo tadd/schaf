@@ -1670,6 +1670,16 @@ static Value proc_integer_p(UNUSED Value env, Value x)
     return BOOL_VAL(sch_value_is_integer(x) || is_integer_like_real(x));
 }
 
+static Value proc_exact_p(UNUSED Value env, Value x)
+{
+    return BOOL_VAL(sch_value_is_integer(x));
+}
+
+static Value proc_inexact_p(UNUSED Value env, Value x)
+{
+    return BOOL_VAL(sch_value_is_real(x));
+}
+
 // Represents the tower from the botom: int -> real -> ...
 typedef enum {
     NUM_TYPE_INT,
@@ -3861,8 +3871,8 @@ void sch_init(const void *sp)
     //- rational?
     define_procedure(e, "real?", proc_real_p, 1);
     define_procedure(e, "integer?", proc_integer_p, 1);
-    //- exact?
-    //- inexact?
+    define_procedure(e, "exact?", proc_exact_p, 1);
+    define_procedure(e, "inexact?", proc_inexact_p, 1);
     define_procedure(e, "=", proc_numeq, -1);
     define_procedure(e, "<", proc_lt, -1);
     define_procedure(e, ">", proc_gt, -1);
