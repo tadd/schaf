@@ -655,6 +655,14 @@
   (noexpect integer? #f)
   (noexpect integer? integer?)))
 
+(describe "exact?" (lambda ()
+  (expect exact? 1)
+  (noexpect exact? 1.0)))
+
+(describe "inexact?" (lambda ()
+  (expect inexact? 1.0)
+  (noexpect inexact? 1)))
+
 (describe "=" (lambda ()
   (expect = 42 42)
   (expect = 0 0 0 0 0)
