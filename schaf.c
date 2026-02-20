@@ -28,7 +28,7 @@
 // Value (uintptr_t):
 //   0b............000 Pointer (Unchangeable pattern!)
 //   0b..............1 Integer
-//   0b.............10 Symbol
+//   0b............010 Symbol
 //   0b0-0{8bits!}0100 Character
 //   0b0--------001100 #f
 //   0b0--------011100 #t
@@ -36,14 +36,14 @@
 //   0b0-------0111100 EOF
 //   0b0------01111100 <undef>
 static const uintptr_t FLAG_NBIT_INT  = 1;
-static const uintptr_t FLAG_NBIT_SYM  = 2;
+static const uintptr_t FLAG_NBIT_SYM  = 3;
 static const uintptr_t FLAG_NBIT_CHAR = 4;
 static const uintptr_t FLAG_MASK_INT  =    0b1;
-static const uintptr_t FLAG_MASK_SYM  =   0b11;
+static const uintptr_t FLAG_MASK_SYM  =  0b111;
 static const uintptr_t FLAG_MASK_IMM  =  0b111; // for 64 bit machine
 static const uintptr_t FLAG_MASK_CHAR = 0b1111;
 static const uintptr_t FLAG_INT       =    0b1;
-static const uintptr_t FLAG_SYM       =   0b10;
+static const uintptr_t FLAG_SYM       =  0b110;
 static const uintptr_t FLAG_CHAR      = 0b0100;
 const Value SCH_FALSE = 0b000'1100U; //  12
 const Value SCH_TRUE  = 0b001'1100U; //  28
