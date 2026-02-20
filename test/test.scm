@@ -626,6 +626,12 @@
   (noexpect number? #f)
   (noexpect number? number?)))
 
+(describe "complex?" (lambda ()
+  (expect complex? 0)))
+
+(describe "rational?" (lambda ()
+  (expect rational? 1.0)))
+
 (describe "real?" (lambda ()
   (expect real? 0.0)
   (expect real? -0.0)
