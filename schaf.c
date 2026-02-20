@@ -1752,13 +1752,18 @@ static Value proc_ge(UNUSED Value env, Value args)
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wfloat-equal"
-static Value proc_zero_p(UNUSED Value env, Value obj)
+static bool zero_p(Value x)
 {
-    if (sch_value_is_integer(obj))
-        return BOOL_VAL(INT(obj) == 0);
-    return BOOL_VAL(sch_value_is_real(obj) && REAL(obj) == 0.0);
+    if (sch_value_is_integer(x))
+        return INT(x) == 0;
+    return sch_value_is_real(x) && REAL(x) == 0.0;
 }
 #pragma GCC diagnostic pop
+
+static Value proc_zero_p(UNUSED Value env, Value obj)
+{
+    return BOOL_VAL(zero_p(obj));
+}
 
 static Value proc_positive_p(UNUSED Value env, Value obj)
 {
@@ -2126,6 +2131,54 @@ static Value proc_expt(UNUSED Value env, Value x, Value y)
     double a = get_num_as_double(x, tx), b = get_num_as_double(y, ty);
     double c = pow(a, b);
     return num_new(c, tret);
+}
+
+static Value proc_make_rectangular(UNUSED Value env, Value x, Value y)
+{
+    EXPECT_TYPE_TWIN(number, x, y);
+    EXPECT(zero_p(y), "complex number not supported yet");
+    return x; // FIXME: support complex
+}
+
+static Value proc_make_polar(UNUSED Value env, Value x, Value y)
+{
+    EXPECT_TYPE_TWIN(number, x, y);
+    EXPECT(zero_p(y), "complex number not supported yet");
+    return x; // FIXME: support complex
+}
+
+static Value proc_real_part(UNUSED Value env, Value x)
+{
+    EXPECT_TYPE(number, x);
+    return x; // FIXME: support complex
+}
+
+static Value proc_imag_part(UNUSED Value env, Value x)
+{
+    EXPECT_TYPE(number, x);
+    return sch_integer_new(0); // FIXME: support complex
+}
+
+static Value proc_magnitude(UNUSED Value env, Value x)
+{
+    NumType t = get_num_type(x);
+    double d = get_num_as_double(x, t);
+    return num_new(d < 0 ? -d : d, t); // FIXME: support complex
+}
+
+static Value proc_angle(UNUSED Value env, UNUSED Value x)
+{
+    return sch_real_new(0.0); // FIXME: support complex
+}
+
+static Value proc_exact_to_inexact(UNUSED Value env, Value x)
+{
+    return sch_real_new(get_double(x)); // FIXME: support complex
+}
+
+static Value proc_inexact_to_exact(UNUSED Value env, Value x)
+{
+    return sch_integer_new(lround(get_double(x))); // FIXME: support complex
 }
 
 // 6.2.6. Numerical input and output
@@ -4027,14 +4080,14 @@ void sch_init(const void *sp)
     define_procedure(e, "atan", proc_atan, -1);
     define_procedure(e, "sqrt", proc_sqrt, 1);
     define_procedure(e, "expt", proc_expt, 2);
-    //- make-rectangular
-    //- make-polar
-    //- real-part
-    //- imag-part
-    //- magnitude
-    //- angle
-    //- exact->inexact
-    //- inexact->exact
+    define_procedure(e, "make-rectangular", proc_make_rectangular, 2);
+    define_procedure(e, "make-polar", proc_make_polar, 2);
+    define_procedure(e, "real-part", proc_real_part, 1);
+    define_procedure(e, "imag-part", proc_imag_part, 1);
+    define_procedure(e, "magnitude", proc_magnitude, 1);
+    define_procedure(e, "angle", proc_angle, 1);
+    define_procedure(e, "exact->inexact", proc_exact_to_inexact, 1);
+    define_procedure(e, "inexact->exact", proc_inexact_to_exact, 1);
     // 6.2.6. Numerical input and output
     define_procedure(e, "number->string", proc_number_to_string, -1);
     define_procedure(e, "string->number", proc_string_to_number, -1);

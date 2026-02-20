@@ -1074,6 +1074,44 @@
   (expect = (expt 0.0 0.0) 1.0)
   (expect = (expt 0.0 1.0) 0.0)))
 
+(describe "make-rectangular" (lambda ()
+  (expect = (make-rectangular 1 0) 1)
+  (expect = (make-rectangular -1.0 0) -1.0)))
+
+(describe "make-polar" (lambda ()
+  (expect = (make-polar 1 0) 1)
+  (expect = (make-polar -1.0 0) -1.0)))
+
+(describe "real-part" (lambda ()
+  (expect = (real-part 1) 1)
+  (expect = (real-part 1.2) 1.2)))
+
+(describe "imag-part" (lambda ()
+  (expect = (imag-part 1) 0.0)
+  (expect = (imag-part 1.2) 0.0)))
+
+(describe "magnitude" (lambda ()
+  (expect = (magnitude 0) 0)
+  (expect = (magnitude 1) 1)
+  (expect = (magnitude -1.2) 1.2)))
+
+(describe "angle" (lambda ()
+  (expect = (angle 1) 0.0)
+  (expect = (angle 0) 0.0)))
+
+(describe "exact->inexact" (lambda ()
+  (expect = (exact->inexact 1) 1)
+  (expect = (exact->inexact 1.1) 1.1)
+  (expect inexact? (exact->inexact 1))
+  (expect inexact? (exact->inexact 1.1))))
+
+(describe "inexact->exact" (lambda ()
+  (expect = (inexact->exact 1) 1)
+  (expect = (inexact->exact 1.1) 1)
+  (expect = (inexact->exact -1.1) -1)
+  (expect exact? (inexact->exact 1))
+  (expect exact? (inexact->exact 1.1))))
+
 ;; 6.2.6. Numerical input and output
 (describe "number->string" (lambda ()
   (expect string=? (number->string 0) "0")
