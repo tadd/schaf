@@ -40,10 +40,12 @@ static const uintptr_t FLAG_NBIT_SYM  = 3;
 static const uintptr_t FLAG_NBIT_CHAR = 4;
 static const uintptr_t FLAG_MASK_INT  =    0b1;
 static const uintptr_t FLAG_MASK_SYM  =  0b111;
+static const uintptr_t FLAG_MASK_REAL =  0b111;
 static const uintptr_t FLAG_MASK_IMM  =  0b111; // for 64 bit machine
 static const uintptr_t FLAG_MASK_CHAR = 0b1111;
 static const uintptr_t FLAG_INT       =    0b1;
 static const uintptr_t FLAG_SYM       =  0b110;
+static const uintptr_t FLAG_REAL      =  0b010;
 static const uintptr_t FLAG_CHAR      = 0b0100;
 const Value SCH_FALSE = 0b001100U;
 const Value SCH_TRUE  = 0b011100U;
@@ -105,9 +107,14 @@ inline bool sch_value_is_character(Value v)
     return (v & FLAG_MASK_CHAR) == FLAG_CHAR;
 }
 
+inline static bool is_tagged_real(Value v)
+{
+    return (v & FLAG_MASK_REAL) == FLAG_REAL;
+}
+
 inline bool sch_value_is_real(Value v)
 {
-    return value_tag_is(v, TAG_REAL);
+    return is_tagged_real(v) || value_tag_is(v, TAG_REAL);
 }
 
 inline bool sch_value_is_string(Value v)
@@ -186,6 +193,8 @@ static Type immediate_type_of(Value v)
         return TYPE_SYMBOL;
     if (sch_value_is_character(v))
         return TYPE_CHAR;
+    if (is_tagged_real(v))
+        return TYPE_REAL;
     if (is_boolean(v))
         return TYPE_BOOL;
     if (v == Qnil)
@@ -283,9 +292,44 @@ inline int64_t sch_integer_to_cint(Value x)
 #endif
 }
 
+static inline uint64_t rotl(uint64_t x, unsigned n)
+{
+    return (x << n) | (x >> (64U - n)); // will be `rol` on x64 hopefully
+}
+
+static inline uint64_t rotr(uint64_t x, unsigned n)
+{
+    return (x << (64U - n)) | (x >> n); // ditto for `ror`
+}
+
+typedef union {
+    double d;
+    uint64_t i;
+} DoubleData; // A hack to read the bit pattern of `double`
+
+static Value tag_double(double d)
+{
+    DoubleData data = { .d = d };
+    uint64_t x = rotl(data.i, 6);        // 6 == Sign bit + 5 MSBs of exponent
+    uint64_t exp_msb5 = (x + 1) & 0x1FU; // Add 1 to the exponent bits
+    if ((exp_msb5 & 0b01110U) != 0)      // Condition for 1-tag
+        return Qfalse; // Not applicable; allocate heap
+    uint64_t y = (x & ~UINT64_C(0x1F)) | exp_msb5; // Replace 5 LSBs
+    return rotr(y, 1) | FLAG_REAL;       // Use 3 LSBs as tagging space
+}
+
+static double untag_real(Value r)
+{
+    uint64_t x = rotl(r & ~FLAG_MASK_REAL, 1); // Clear our tag then rotate
+    uint64_t exp_msb5 = (x - 1) & 0x1FU;       // Subtract 1 to restore the original bit pattern
+    uint64_t y = (x & ~UINT64_C(0x1F)) | exp_msb5; // Replace 5 LSBs
+    DoubleData data = { .i = rotr(y, 6) };     // Restore the original place with a sign bit
+    return data.d;
+}
+
 inline double sch_real_to_double(Value v)
 {
-    return REAL(v);
+    return is_tagged_real(v) ? untag_real(v) : ((Real *) v)->value;
 }
 
 inline Symbol sch_symbol_to_csymbol(Value v)
@@ -367,8 +411,11 @@ void *obj_new(ValueTag t, size_t size)
 
 Value sch_real_new(double d)
 {
+    Value t = tag_double(d);
+    if (t != Qfalse)
+        return t;
     Real *r = obj_new(TAG_REAL, sizeof(Real));
-    REAL(r) = d;
+    r->value = d;
     return (Value) r;
 }
 
