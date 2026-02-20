@@ -1633,7 +1633,7 @@ static Value proc_equal(UNUSED Value env, Value x, Value y)
 
 // 6.2. Numbers
 // 6.2.5. Numerical operations
-static bool is_number(Value x)
+static bool sch_value_is_number(Value x)
 {
     Type t = sch_value_type_of(x);
     return t == TYPE_INT || t == TYPE_REAL;
@@ -1641,13 +1641,13 @@ static bool is_number(Value x)
 
 static Value proc_number_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(is_number(obj));
+    return BOOL_VAL(sch_value_is_number(obj));
 }
 
 static Value proc_real_p(UNUSED Value env, Value obj)
 {
     // FIXME: cope with other than integer and real
-    return BOOL_VAL(is_number(obj));
+    return BOOL_VAL(sch_value_is_number(obj));
 }
 
 #pragma GCC diagnostic push
@@ -2015,6 +2015,19 @@ static Value proc_lcm(UNUSED Value env, Value args)
         ret = lcm(ret, x);
     }
     return int_to_integer_or_real(inexact, ret);
+}
+
+static Value proc_numerator(UNUSED Value env, Value x)
+{
+    EXPECT_TYPE(number, x);
+    return x; // FIXME: support rational
+}
+
+static Value proc_denominator(UNUSED Value env, UNUSED Value x)
+{
+    EXPECT_TYPE(number, x);
+    return sch_value_is_integer(x) ?
+        sch_integer_new(1) : sch_real_new(1); // FIXME: support rational
 }
 
 static inline Value rounding_func(double (*func)(double), Value x)
@@ -3997,8 +4010,8 @@ void sch_init(const void *sp)
     define_procedure(e, "modulo", proc_modulo, 2);
     define_procedure(e, "gcd", proc_gcd, -1);
     define_procedure(e, "lcm", proc_lcm, -1);
-    //- numerator
-    //- denominator
+    define_procedure(e, "numerator", proc_numerator, 1);
+    define_procedure(e, "denominator", proc_denominator, 1);
     define_procedure(e, "floor", proc_floor, 1);
     define_procedure(e, "ceiling", proc_ceiling, 1);
     define_procedure(e, "truncate", proc_truncate, 1);
