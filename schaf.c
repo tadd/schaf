@@ -2000,10 +2000,10 @@ static Value proc_gcd(UNUSED Value env, Value args)
     bool inexact = false;
     int64_t ret = 0, x;
     for (Value p = args; p != Qnil; p = cdr(p)) {
-        x = get_int_like_abs(car(p), inexact);
+        x = get_int_like(car(p), inexact);
         ret = gcd(ret, x);
     }
-    return int_to_integer_or_real(inexact, ret);
+    return int_to_integer_or_real(inexact, labs(ret));
 }
 
 static int64_t lcm(int64_t x, int64_t y)
@@ -2016,10 +2016,10 @@ static Value proc_lcm(UNUSED Value env, Value args)
     bool inexact = false;
     int64_t ret = 1, x;
     for (Value p = args; p != Qnil; p = cdr(p)) {
-        x = get_int_like_abs(car(p), inexact);
+        x = get_int_like(car(p), inexact);
         ret = lcm(ret, x);
     }
-    return int_to_integer_or_real(inexact, ret);
+    return int_to_integer_or_real(inexact, labs(ret));
 }
 
 static Value proc_numerator(UNUSED Value env, Value x)
