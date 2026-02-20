@@ -988,6 +988,20 @@
   (expect inexact? (lcm 1.0))
   (expect inexact? (lcm 1 2 3.0))))
 
+(describe "numerator" (lambda ()
+  (expect = (numerator 0) 0)
+  (expect = (numerator 42) 42)
+  (expect = (numerator -3.5) -3.5)
+  (expect inexact? (numerator 1.0))
+  (expect exact? (numerator 1))))
+
+(describe "denominator" (lambda ()
+  (expect = (denominator 0) 1)
+  (expect = (denominator 42) 1)
+  (expect = (denominator -3.5) 1.0)
+  (expect inexact? (denominator 1.0))
+  (expect exact? (denominator 1))))
+
 (describe "floor" (lambda ()
   (expect = (floor -4.3) -5.0)
   (expect = (floor 3.5) 3.0)
