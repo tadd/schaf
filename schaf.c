@@ -4035,8 +4035,8 @@ void sch_init(const void *sp)
     // 6.2. Numbers
     // 6.2.5. Numerical operations
     define_procedure(e, "number?", proc_number_p, 1);
-    //- complex?
-    //- rational?
+    define_procedure(e, "complex?", proc_number_p, 1); // alias
+    define_procedure(e, "rational?", proc_real_p, 1); // alias
     define_procedure(e, "real?", proc_real_p, 1);
     define_procedure(e, "integer?", proc_integer_p, 1);
     define_procedure(e, "exact?", proc_exact_p, 1);
