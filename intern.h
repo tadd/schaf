@@ -174,7 +174,7 @@ typedef struct {
 #define SYMBOL(v) sch_symbol_to_csymbol(v)
 #define PAIR(v) ((Pair *) v)
 #define LOCATED_PAIR(v) ((LocatedPair *) v)
-#define REAL(v) (((Real *) v)->value)
+#define REAL(v) sch_real_to_double(v)
 #define CHAR(v) sch_character_to_uint8(v)
 #define STRING(v) (((String *) v)->body)
 #define PROCEDURE(v) ((Procedure *) v)
