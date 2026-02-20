@@ -21,6 +21,8 @@
 #include "schaf.h"
 #include "utils.h"
 
+#define REAL_SELF_TAGGING
+
 //
 // Types
 //
@@ -40,12 +42,16 @@ static const uintptr_t FLAG_NBIT_SYM  = 3;
 static const uintptr_t FLAG_NBIT_CHAR = 4;
 static const uintptr_t FLAG_MASK_INT  =    0b1;
 static const uintptr_t FLAG_MASK_SYM  =  0b111;
+#ifdef REAL_SELF_TAGGING
 static const uintptr_t FLAG_MASK_REAL =  0b111;
+#endif
 static const uintptr_t FLAG_MASK_IMM  =  0b111; // for 64 bit machine
 static const uintptr_t FLAG_MASK_CHAR = 0b1111;
 static const uintptr_t FLAG_INT       =    0b1;
 static const uintptr_t FLAG_SYM       =  0b110;
+#ifdef REAL_SELF_TAGGING
 static const uintptr_t FLAG_REAL      =  0b010;
+#endif
 static const uintptr_t FLAG_CHAR      = 0b0100;
 const Value SCH_FALSE = 0b001100U;
 const Value SCH_TRUE  = 0b011100U;
@@ -107,14 +113,20 @@ inline bool sch_value_is_character(Value v)
     return (v & FLAG_MASK_CHAR) == FLAG_CHAR;
 }
 
+#ifdef REAL_SELF_TAGGING
 inline static bool is_tagged_real(Value v)
 {
     return (v & FLAG_MASK_REAL) == FLAG_REAL;
 }
+#endif
 
 inline bool sch_value_is_real(Value v)
 {
+#ifdef REAL_SELF_TAGGING
     return is_tagged_real(v) || value_tag_is(v, TAG_REAL);
+#else
+    return value_tag_is(v, TAG_REAL);
+#endif
 }
 
 inline bool sch_value_is_string(Value v)
@@ -193,8 +205,10 @@ static Type immediate_type_of(Value v)
         return TYPE_SYMBOL;
     if (sch_value_is_character(v))
         return TYPE_CHAR;
+#ifdef REAL_SELF_TAGGING
     if (is_tagged_real(v))
         return TYPE_REAL;
+#endif
     if (is_boolean(v))
         return TYPE_BOOL;
     if (v == Qnil)
@@ -292,6 +306,7 @@ inline int64_t sch_integer_to_cint(Value x)
 #endif
 }
 
+#ifdef REAL_SELF_TAGGING
 static inline uint64_t rotl(uint64_t x, unsigned n)
 {
     return (x << n) | (x >> (64U - n)); // will be `rol` on x64 hopefully
@@ -326,10 +341,15 @@ static double untag_real(Value r)
     DoubleData data = { .i = rotr(y, 6) };     // Restore the original place with a sign bit
     return data.d;
 }
+#endif
 
 inline double sch_real_to_double(Value v)
 {
+#ifdef REAL_SELF_TAGGING
     return is_tagged_real(v) ? untag_real(v) : ((Real *) v)->value;
+#else
+    return ((Real *) v)->value;
+#endif
 }
 
 inline Symbol sch_symbol_to_csymbol(Value v)
@@ -411,9 +431,11 @@ void *obj_new(ValueTag t, size_t size)
 
 Value sch_real_new(double d)
 {
+#ifdef REAL_SELF_TAGGING
     Value t = tag_double(d);
     if (t != Qfalse)
         return t;
+#endif
     Real *r = obj_new(TAG_REAL, sizeof(Real));
     r->value = d;
     return (Value) r;
