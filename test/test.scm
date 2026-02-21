@@ -526,7 +526,12 @@
   (noexpect eqv? '() '(1))
   (noexpect eqv? "a" "a")
   (noexpect eqv? #f 'nil)
-  (noexpect eqv? #f '())))
+  (noexpect eqv? #f '())
+
+  (expect eqv? 0.0 0.0)
+  (expect eqv? 1.0 1.0)
+  (expect eqv? 1e24 1e24)
+  (expect eqv? 9.1e192 9.1e192)))
 
 (describe "eqv? complicated" (lambda ()
   (let ()
