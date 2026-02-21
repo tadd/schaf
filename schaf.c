@@ -2051,9 +2051,10 @@ static Value proc_min(UNUSED Value env, Value args)
 
 #define get_num_as_double(x, t) ({ \
             Value X = x; \
-            t == NUM_TYPE_INT ? (double) INT(X) : REAL(X); \
+            t == NUM_TYPE_INT ? (double) INT(X) : \
+            t == NUM_TYPE_RATIONAL ? ((double) RATIONAL(X)->num) / RATIONAL(X)->denom : \
+            REAL(X); \
         })
-
 static inline Value num_new(double x, NumType t)
 {
     return t == NUM_TYPE_INT ? sch_integer_new(x) : sch_real_new(x);
@@ -2394,15 +2395,16 @@ static Value proc_exact_to_inexact(UNUSED Value env, Value x)
     NumType t = get_num_type(x);
     if (t == NUM_TYPE_REAL)
         return x;
-    return sch_real_new((double) INT(x)); // FIXME: support complex
+    double d = t == NUM_TYPE_INT ? (double) INT(x) : (double) RATIONAL(x)->num / RATIONAL(x)->denom;
+    return sch_real_new(d); // FIXME: support complex
 }
 
 static Value proc_inexact_to_exact(UNUSED Value env, Value x)
 {
     NumType t = get_num_type(x);
-    if (t == NUM_TYPE_INT)
-        return x;
-    return sch_integer_new(lround(REAL(x))); // FIXME: support complex
+    if (t == NUM_TYPE_REAL)
+        return sch_integer_new(lround(REAL(x)));
+    return x; // FIXME: support complex
 }
 
 // 6.2.6. Numerical input and output
