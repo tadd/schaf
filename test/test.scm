@@ -615,7 +615,6 @@
   (expect number? -1)
   (expect number? -1000000)
 
-  ;; FIXME
   (expect number? 3.0)
   (expect number? #d1)
   (expect number? #d1.2)
@@ -625,6 +624,7 @@
   (expect number? 1e10)
   (expect number? 6/10)
   (expect number? 8/4)
+  ;; FIXME
   ;; (expect number? #e1e10)
   ;; (expect number? 3+0i)
   ;; (expect number? 3+4i)
@@ -665,7 +665,10 @@
 
   (expect real? 0)
   (expect real? 1)
-  (expect real? -1)))
+  (expect real? -1)
+  (expect real? 0/2)
+  (expect real? 1/2)
+  (expect real? -2/4)))
 
 (describe "integer?" (lambda ()
   (expect integer? 0)
@@ -691,10 +694,14 @@
 
 (describe "exact?" (lambda ()
   (expect exact? 1)
+  (expect exact? 1/2)
+  (expect exact? 0/2)
   (noexpect exact? 1.0)))
 
 (describe "inexact?" (lambda ()
   (expect inexact? 1.0)
+  (noexpect inexact? 1/2)
+  (noexpect inexact? 0/2)
   (noexpect inexact? 1)))
 
 (describe "=" (lambda ()
