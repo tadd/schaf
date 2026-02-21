@@ -50,7 +50,6 @@ typedef enum {
     TAG_ENV,
     TAG_PORT,
     TAG_PROMISE,
-    TAG_EOF,
     // internal use only
     TAG_ERROR,
     TAG_LAST = TAG_ERROR

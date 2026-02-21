@@ -275,7 +275,6 @@ static void mark_val(MSHeap *heap, Value v)
     case TAG_CFUNC:
     case TAG_SYNTAX:
     case TAG_PORT:
-    case TAG_EOF:
     case TAG_ERROR:
         break;
     }
@@ -355,7 +354,6 @@ static void free_val(Value v)
     case TAG_CLOSURE:
     case TAG_PAIR:
     case TAG_PROMISE:
-    case TAG_EOF:
         break;
     }
 }

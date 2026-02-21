@@ -24,13 +24,14 @@
 //
 
 // Value (uintptr_t):
-//   0b.....000 Pointer (Unchangeable pattern!)
-//   0b.......1 Integer
-//   0b......10 Symbol
-//   0b0--00100 #f
-//   0b0--01100 #t
-//   0b0-010100 null
-//   0b0-011100 <undef>
+//   0b......000 Pointer (Unchangeable pattern!)
+//   0b........1 Integer
+//   0b.......10 Symbol
+//   0b0---00100 #f
+//   0b0---01100 #t
+//   0b0--010100 null
+//   0b0--011100 EOF
+//   0b0-0111100 <undef>
 static const uintptr_t FLAG_NBIT_INT = 1;
 static const uintptr_t FLAG_NBIT_SYM = 2;
 static const uintptr_t FLAG_MASK_INT =   0b1;
@@ -38,10 +39,12 @@ static const uintptr_t FLAG_MASK_SYM =  0b11;
 static const uintptr_t FLAG_MASK_IMM = 0b111; // for 64 bit machine
 static const uintptr_t FLAG_INT      =   0b1;
 static const uintptr_t FLAG_SYM      =  0b10;
-const Value SCH_FALSE = 0b00100U;
-const Value SCH_TRUE  = 0b01100U;
-const Value SCH_NULL  = 0b10100U; // emtpy list
-const Value SCH_UNDEF = 0b11100U; // may be an error or something internal
+const Value SCH_FALSE = 0b000100U; //  4
+const Value SCH_TRUE  = 0b001100U; // 12
+const Value SCH_NULL  = 0b010100U; // 20; the empty list
+static
+const Value EOF_OBJ   = 0b011100U; // 28
+const Value SCH_UNDEF = 0b111100U; // 60; may be an error or something internal
 #define BOOL_VAL(v) ((!!(v) << 3U) | 0b100U)
 
 static const int64_t CFUNCARG_MAX = 3;
@@ -65,7 +68,6 @@ static Value inner_winders = Qnil; // both inner_* are used in (dynamic-wind)
 static Value inner_continuation = Qfalse;
 
 // Singletons
-static Value eof_object = Qfalse;
 static Value current_input_port = Qfalse, current_output_port = Qfalse;
 #define INIT_SINGLETON(var, val) do { if ((var) == Qfalse) (var) = val; } while (0)
 
@@ -117,7 +119,6 @@ static bool sch_value_is_procedure(Value v)
     case TAG_ENV:
     case TAG_PORT:
     case TAG_PROMISE:
-    case TAG_EOF:
         return false;
     case TAG_ERROR:
         break; // internal objects
@@ -170,6 +171,8 @@ static Type immediate_type_of(Value v)
         return TYPE_BOOL;
     if (v == Qnil)
         return TYPE_NULL;
+    if (v == EOF_OBJ)
+        return TYPE_EOF;
     if (v == Qundef)
         return TYPE_UNDEF;
     bug("unexpected immediate: %zu", v);
@@ -198,8 +201,6 @@ Type sch_value_type_of(Value v)
         return TYPE_PORT;
     case TAG_PROMISE:
         return TYPE_PROMISE;
-    case TAG_EOF:
-        return TYPE_EOF;
     case TAG_ERROR:
         break; // internal objects
     }
@@ -2680,23 +2681,11 @@ static Value proc_close_output_port(UNUSED Value env, Value port)
 }
 
 // 6.6.2. Input
-static Value eof_new(void)
-{
-    // an empty object
-    return (Value) obj_new(TAG_EOF, sizeof(uintptr_t));
-}
-
-static Value get_eof_object(void)
-{
-    INIT_SINGLETON(eof_object, eof_new());
-    return eof_object;
-}
-
 static Value iread(FILE *in)
 {
     Value datum = parse_datum(in, "<read>");
     if (datum == Qundef)
-        return get_eof_object();
+        return EOF_OBJ;
     return datum;
 }
 
@@ -2719,7 +2708,7 @@ static Value proc_read(UNUSED Value env, Value args)
 
 static Value proc_eof_object_p(UNUSED Value env, Value obj)
 {
-    return BOOL_VAL(value_tag_is(obj, TAG_EOF));
+    return BOOL_VAL(obj == EOF_OBJ);
 }
 
 // 6.6.3. Output
@@ -2927,7 +2916,7 @@ static Value read_string(size_t k, FILE *fp)
     char buf[k + 1];
     char *p = fgets(buf, sizeof(buf), fp);
     if (p == NULL)
-        return get_eof_object();
+        return EOF_OBJ;
     return sch_string_new(buf);
 }
 
@@ -3093,7 +3082,6 @@ void sch_init(const void *sp)
 {
     gc_init(sp);
 
-    gc_add_root(&eof_object);
     gc_add_root(&current_input_port);
     gc_add_root(&current_output_port);
     gc_add_root(&inner_winders);
