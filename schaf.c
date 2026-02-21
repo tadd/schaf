@@ -1,5 +1,6 @@
 #include <ctype.h>
 #include <errno.h>
+#include <float.h>
 #include <inttypes.h>
 #include <math.h>
 #include <setjmp.h>
@@ -2028,7 +2029,7 @@ static Value proc_abs(UNUSED Value env, Value x)
 #define get_int_like_real(x, inexact) ({ \
             double D = REAL(x); \
             EXPECT(is_integer_like_double(D), \
-                   "expected integer-like double but got %f", D); \
+                   "expected integer-like double but got %g", D); \
             inexact = true; \
             (int64_t) D; \
         })
@@ -2286,12 +2287,9 @@ static Value proc_inexact_to_exact(UNUSED Value env, Value x)
             INT(X); \
         })
 
-static Value proc_number_to_string(UNUSED Value env, Value args)
+static Value integer_to_string(Value x, int64_t radix)
 {
-    EXPECT_ARITY_RANGE(1, 2, args);
-    int64_t n = get_int(car(args));
-    Value opt = cdr(args);
-    int64_t radix = (opt != Qnil) ? get_int(car(opt)) : 10;
+    int64_t n = INT(x);
     char buf[66]; // in case of radix == 2 (64-bit integer) + sign + \0
     if (radix == 10) {
         snprintf(buf, sizeof(buf), "%"PRId64, n);
@@ -2316,6 +2314,44 @@ static Value proc_number_to_string(UNUSED Value env, Value args)
         return runtime_error("invalid radix: %"PRId64, radix);
     }
     return sch_string_new(buf);
+}
+
+static const char *double_suffix(double d)
+{
+    bool frac = fabs(d - floor(d)) > 0;
+    bool exp = fabs(d) > 0 && (d >= 1e6 || d < 1e-4);
+    bool needs_suffix = !frac && !exp;
+    return needs_suffix ? ".0" : "";
+}
+
+static int snprintf_double(char *s, size_t size, double d)
+{
+    return snprintf(s, size, "%g%s", d, double_suffix(d));
+}
+
+static Value real_to_string(Value x)
+{
+    char buf[DBL_DIG + 8]; // 8 == strlen("-.e-") + 3 + '\0'
+    snprintf_double(buf, sizeof(buf), REAL(x));
+    return sch_string_new(buf);
+}
+
+static Value proc_number_to_string(UNUSED Value env, Value args)
+{
+    EXPECT_ARITY_RANGE(1, 2, args);
+    Value x = car(args);
+    NumType t = get_num_type(x);
+    Value opt = cdr(args);
+    int64_t radix = (opt != Qnil) ? get_int(car(opt)) : 10;
+    switch (t) {
+    case NUM_TYPE_INT:
+        return integer_to_string(x, radix);
+    case NUM_TYPE_REAL:
+        if (radix != 10)
+            runtime_error("radix for real was not 10: %zd", radix);
+        return real_to_string(x);
+    }
+    UNREACHABLE();
 }
 
 static Value proc_string_to_number(UNUSED Value env, Value args)
@@ -3736,6 +3772,11 @@ static void print_object(FILE *f, Value v, Value record, ValuePrinter printer)
     }
 }
 
+static int fprintf_double(FILE *f, double d)
+{
+    return fprintf(f, "%g%s", d, double_suffix(d));
+}
+
 static void fdisplay_single(FILE *f, Value v)
 {
     switch (sch_value_type_of(v)) {
@@ -3752,7 +3793,7 @@ static void fdisplay_single(FILE *f, Value v)
         fprintf(f, "%s", sch_symbol_to_cstr(v));
         break;
     case TYPE_REAL:
-        fprintf(f, "%f", REAL(v));
+        fprintf_double(f, REAL(v));
         break;
     case TYPE_CHAR:
         fprintf(f, "%c", CHAR(v));
