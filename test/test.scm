@@ -1200,7 +1200,10 @@
   (expect string=? (number->string -1) "-1")
   (expect string=? (number->string 16777216) "16777216")
   (expect string=? (number->string -16777216) "-16777216")
-  (expect string=? (number->string 1.2) "1.2")))
+  (expect string=? (number->string 1.2) "1.2")
+  (expect string=? (number->string 1/2) "1/2")
+  (expect string=? (number->string -1/2) "-1/2")
+  (expect string=? (number->string 0/2) "0/1")))
 
 (describe "number->string with radix" (lambda ()
   (expect string=? (number->string 0 10) "0")
@@ -1225,7 +1228,22 @@
   (expect string=? (number->string 1 16) "1")
   (expect string=? (number->string -1 16) "-1")
   (expect string=? (number->string 16777216 16) "1000000")
-  (expect string=? (number->string -16777216 16) "-1000000")))
+  (expect string=? (number->string -16777216 16) "-1000000")
+
+  (expect string=? (number->string 0/1 10) "0/1")
+  (expect string=? (number->string 0/2 2) "0/1")
+  (expect string=? (number->string 0/8 8) "0/1")
+  (expect string=? (number->string 0/16 16) "0/1")
+
+  (expect string=? (number->string 1/2 2) "1/10")
+  (expect string=? (number->string 7/8 8) "7/10")
+  (expect string=? (number->string 9/10 10) "9/10")
+  (expect string=? (number->string 15/16 16) "F/10")
+
+  (expect string=? (number->string -1/2 2) "-1/10")
+  (expect string=? (number->string -7/8 8) "-7/10")
+  (expect string=? (number->string -9/10 10) "-9/10")
+  (expect string=? (number->string -15/16 16) "-F/10")))
 
 (describe "string->number" (lambda ()
   (expect = (string->number "0") 0)
@@ -1238,6 +1256,10 @@
   (expect = (string->number "0.0") 0.0)
   (expect = (string->number "+0.1") 0.1)
   (expect = (string->number "-0.1") -0.1)
+
+  (expect = (string->number "0/2") 0/2)
+  (expect = (string->number "1/2") 1/2)
+  (expect = (string->number "-1/2") -1/2)
 
   (expect-f (string->number ""))
   (expect-f (string->number " "))
@@ -1277,7 +1299,12 @@
   (expect = (string->number "10" 2) 2)
   (expect = (string->number "10" 8) 8)
   (expect = (string->number "10" 10) 10)
-  (expect = (string->number "10" 16) 16)))
+  (expect = (string->number "10" 16) 16)
+
+  (expect = (string->number "1/10" 2) 1/2)
+  (expect = (string->number "1/10" 8) 1/8)
+  (expect = (string->number "1/10" 10) 1/10)
+  (expect = (string->number "1/10" 16) 1/16)))
 
 (describe "string->number with prefix" (lambda ()
   (expect = (string->number "#d0") 0)
@@ -1301,7 +1328,12 @@
   (expect = (string->number "#x1") 1)
   (expect = (string->number "#x10") 16)
   (expect = (string->number "#x-F") -15)
-  (expect = (string->number "#x-11") -17)))
+  (expect = (string->number "#x-11") -17)
+
+  (expect = (string->number "#b1/10") 1/2)
+  (expect = (string->number "#o1/10") 1/8)
+  (expect = (string->number "#d1/10") 1/10)
+  (expect = (string->number "#x1/10") 1/16)))
 
 (describe "string->number with inconsistent prefix and radix" (lambda ()
   (expect-f (string->number "#b10" 8))
@@ -1331,7 +1363,13 @@
 
   (expect roundtrip? 0.0)
   (expect roundtrip? +1.1)
-  (expect roundtrip? -1.1)))
+  (expect roundtrip? -1.1)
+
+  (expect roundtrip? 0/1)
+  (expect roundtrip? 0/10)
+  (expect roundtrip? 1/2)
+  (expect roundtrip? 8/16)
+  (expect roundtrip? -2/3)))
 
 (describe "roundtrip-ness of number->string/string->number with radix" (lambda ()
   (define (roundtrip? n r)
@@ -1356,7 +1394,23 @@
 
   (expect roundtrip? 0.0 10)
   (expect roundtrip? +1.1 10)
-  (expect roundtrip? -1.1 10)))
+  (expect roundtrip? -1.1 10)
+
+  (expect roundtrip? 0/10 2)
+  (expect roundtrip? 1/2 2)
+  (expect roundtrip? -2/3 2)
+
+  (expect roundtrip? 0/10 8)
+  (expect roundtrip? 1/2 8)
+  (expect roundtrip? -2/3 8)
+
+  (expect roundtrip? 0/10 10)
+  (expect roundtrip? 1/2 10)
+  (expect roundtrip? -2/3 10)
+
+  (expect roundtrip? 0/10 16)
+  (expect roundtrip? 1/2 16)
+  (expect roundtrip? -2/3 16)))
 
 ;; 6.3. Other data types
 ;; 6.3.1. Booleans

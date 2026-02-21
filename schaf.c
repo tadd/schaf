@@ -2438,7 +2438,7 @@ static Value integer_to_string(Value x, int64_t radix)
         snprintf(buf, sizeof(buf), "%s%"PRIX64, sign, n);
         break;
     default:
-        return runtime_error("invalid radix: %"PRId64, radix);
+        return runtime_error("invalid radix: %zd", radix);
     }
     return sch_string_new(buf);
 }
@@ -2454,6 +2454,19 @@ static const char *double_suffix(double d)
 static int snprintf_double(char *s, size_t size, double d)
 {
     return snprintf(s, size, "%g%s", d, double_suffix(d));
+}
+
+static Value rational_to_string(Value x, int64_t radix)
+{
+    const Rational *const r = RATIONAL(x);
+    Value num = sch_integer_new(r->num);
+    Value denom = sch_integer_new(r->denom);
+    Value snum = integer_to_string(num, radix);
+    Value sdenom = integer_to_string(denom, radix);
+    const char *const pnum = STRING(snum), *const pdenom = STRING(sdenom);
+    char buf[strlen(pnum) + strlen(pdenom) + 2]; // 2 == '/' | '\0'
+    snprintf(buf, sizeof(buf), "%s/%s", pnum, pdenom);
+    return sch_string_new(buf);
 }
 
 static Value real_to_string(Value x)
@@ -2473,6 +2486,8 @@ static Value proc_number_to_string(UNUSED Value env, Value args)
     switch (t) {
     case NUM_TYPE_INT:
         return integer_to_string(x, radix);
+    case NUM_TYPE_RATIONAL:
+        return rational_to_string(x, radix);
     case NUM_TYPE_REAL:
         if (radix != 10)
             runtime_error("radix for real was not 10: %zd", radix);
