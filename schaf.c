@@ -1647,6 +1647,27 @@ static Value proc_eq(UNUSED Value env, Value x, Value y)
     return BOOL_VAL(x == y);
 }
 
+static bool eqv(Value x, Value y)
+{
+    Type tx = sch_value_type_of(x);
+    if (x == y)
+        return !(tx == TYPE_REAL && isnan(REAL(x)));
+    Type ty = sch_value_type_of(y);
+    if (tx != ty)
+        return false;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
+    if (tx == TYPE_REAL)
+        return REAL(x) == REAL(y);
+#pragma GCC diagnostic pop
+    return false;
+}
+
+static Value proc_eqv(UNUSED Value env, Value x, Value y)
+{
+    return BOOL_VAL(eqv(x, y));
+}
+
 static bool equal(Value x, Value y);
 
 static bool vector_equal(const Value *x, const Value *y)
@@ -1664,9 +1685,8 @@ static bool vector_equal(const Value *x, const Value *y)
 static bool equal(Value x, Value y)
 {
     Type tx = sch_value_type_of(x);
-    if (x == y) {
-        return tx != TYPE_REAL || !isnan(REAL(x));
-    }
+    if (x == y)
+        return !(tx == TYPE_REAL && isnan(REAL(x)));
     Type ty = sch_value_type_of(y);
     if (tx != ty)
         return false;
@@ -1677,10 +1697,8 @@ static bool equal(Value x, Value y)
     case TYPE_REAL:
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wfloat-equal"
-        return REAL(x) == REAL(y) && !isnan(REAL(x));
+        return REAL(x) == REAL(y);
 #pragma GCC diagnostic pop
-    case TYPE_CHAR:
-        return CHAR(x) == CHAR(y);
     case TYPE_STRING:
         return strcmp(STRING(x), STRING(y)) == 0;
     case TYPE_VECTOR:
@@ -1690,6 +1708,7 @@ static bool equal(Value x, Value y)
     case TYPE_EOF:
     case TYPE_BOOL:
     case TYPE_INT:
+    case TYPE_CHAR:
     case TYPE_SYMBOL:
     case TYPE_PORT:
     case TYPE_PROC:
@@ -4108,7 +4127,7 @@ void sch_init(const void *sp)
     // 6. Standard procedures
 
     // 6.1. Equivalence predicates
-    define_procedure(e, "eqv?", proc_eq, 2); // alias
+    define_procedure(e, "eqv?", proc_eqv, 2);
     define_procedure(e, "eq?", proc_eq, 2);
     define_procedure(e, "equal?", proc_equal, 2);
     // 6.2. Numbers
