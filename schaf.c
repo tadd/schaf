@@ -2007,10 +2007,9 @@ static Value proc_even_p(UNUSED Value env, Value obj)
             Value X = x; \
             NumType NT = get_num_type(X); \
             NT == NUM_TYPE_INT ? (double) INT(X) : \
-            NT == NUM_TYPE_RATIONAL ? (b = true, ((double) RATIONAL(X)->num) / RATIONAL(X)->denom) : \
+            NT == NUM_TYPE_RATIONAL ? ((double) RATIONAL(X)->num) / RATIONAL(X)->denom : \
             (b = true, REAL(X)); \
         })
-#define double_to_integer_or_real(inexact, d) (inexact ? sch_real_new(d) : sch_integer_new((int64_t) d))
 
 static Value proc_max(UNUSED Value env, Value args)
 {
@@ -2021,10 +2020,14 @@ static Value proc_max(UNUSED Value env, Value args)
     while ((p = cdr(p)) != Qnil) {
         Value v = car(p);
         double x = get_double_and_inexactness(v, inexact);
-        if (max < x)
+        if (max < x) {
             max = x;
+            vmax = v;
+        }
     }
-    return double_to_integer_or_real(inexact, max);
+    if (inexact && !sch_value_is_real(vmax))
+        return sch_real_new(max);
+    return vmax;
 }
 
 static Value proc_min(UNUSED Value env, Value args)
@@ -2036,10 +2039,14 @@ static Value proc_min(UNUSED Value env, Value args)
     while ((p = cdr(p)) != Qnil) {
         Value v = car(p);
         double x = get_double_and_inexactness(v, inexact);
-        if (min > x)
+        if (min > x) {
             min = x;
+            vmin = v;
+        }
     }
-    return double_to_integer_or_real(inexact, min);
+    if (inexact && !sch_value_is_real(vmin))
+        return sch_real_new(min);
+    return vmin;
 }
 
 #define get_num_as_double(x, t) ({ \
@@ -2242,6 +2249,9 @@ static Value proc_denominator(UNUSED Value env, UNUSED Value x)
     }
     return sch_integer_new(RATIONAL(x)->denom);
 }
+
+#define double_to_integer_or_real(inexact, d) \
+    (inexact ? sch_real_new(d) : sch_integer_new((int64_t) d))
 
 static inline Value rounding_func(double (*func)(double), Value x)
 {
