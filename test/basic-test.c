@@ -59,13 +59,13 @@
     } while (0)
 #define expect_x_eq_parsed(x, exp, act) expect_##x##_eq(exp, parse_expr_string(act))
 
-#define expect_vint_eq(exp, act) expect_vx_eq(TYPE_INT, integer, int, exp, act)
+#define expect_vint_eq(exp, act) expect_vx_eq(TYPE_NUMBER, integer, int, exp, act)
 #define expect_vstr_eq(exp, act) expect_vx_eq(TYPE_STRING, string, str, exp, act)
 #define expect_vsym_eq(exp, act) expect_vx_eq(TYPE_SYMBOL, symbol, str, exp, act)
 #define expect_vreal_eq(exp, act) do { \
         Value a = act; \
         expect_no_error(a); \
-        expect_int_eq(TYPE_REAL, sch_value_type_of(a)); \
+        expect_int_eq(NUM_TYPE_REAL, sch_value_num_type_of(a)); \
         cr_expect(eq(dbl, exp, REAL(a))); \
     } while (0)
 
@@ -382,8 +382,8 @@ Test(schaf, apply_invalid) {
 }
 
 Test(schaf, map) {
-    expect_runtime_error("expected null or pair but got integer", "(map + 1)");
-    expect_runtime_error("expected null or pair but got integer", "(for-each + 1)");
+    expect_runtime_error("expected null or pair but got number", "(map + 1)");
+    expect_runtime_error("expected null or pair but got number", "(for-each + 1)");
 }
 
 Test(schaf, quasiquotes) {
@@ -391,7 +391,7 @@ Test(schaf, quasiquotes) {
 }
 
 Test(schaf, case) {
-    expect_runtime_error("expected pair but got integer", "(case 1 (2 3))");
+    expect_runtime_error("expected pair but got number", "(case 1 (2 3))");
 }
 
 Test(table, get_put) {

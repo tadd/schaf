@@ -23,16 +23,13 @@ typedef uintptr_t Symbol;
 typedef enum {
 // immediate
     TYPE_BOOL,
-    TYPE_INT,
     TYPE_CHAR,
     TYPE_SYMBOL,
     TYPE_NULL,
     TYPE_UNDEF,
 // boxed (tagged)
+    TYPE_NUMBER,
     TYPE_PAIR,
-    TYPE_REAL,
-    // TYPE_RATIONAL,
-    // TYPE_COMPLEX,
     TYPE_STRING,
     TYPE_PROC,
     TYPE_VECTOR,
@@ -41,6 +38,15 @@ typedef enum {
     TYPE_PROMISE,
     TYPE_EOF,
 } Type;
+
+// Represent the tower from the bottom: larger set is greater
+typedef enum {
+    NUM_TYPE_NONE, // not a number (but not about NaN)
+    NUM_TYPE_INT,
+    // NUM_TYPE_RATIONAL
+    NUM_TYPE_REAL,
+    // NUM_TYPE_COMPLEX,
+} NumericalType;
 
 typedef enum {
     TAG_PAIR,
@@ -222,6 +228,7 @@ bool sch_value_is_character(Value v);
 bool sch_value_is_string(Value v);
 bool sch_value_is_pair(Value v);
 Type sch_value_type_of(Value v);
+NumericalType sch_value_num_type_of(Value v);
 
 int64_t sch_integer_to_cint(Value v);
 double sch_real_to_double(Value v);
