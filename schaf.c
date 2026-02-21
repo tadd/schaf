@@ -1703,10 +1703,15 @@ static Value proc_equal(UNUSED Value env, Value x, Value y)
 
 // 6.2. Numbers
 // 6.2.5. Numerical operations
+static inline bool is_number_type(Type t)
+{
+    // FIXME: cope with rational and complex
+    return t == TYPE_INT || t == TYPE_REAL;
+}
+
 static bool sch_value_is_number(Value x)
 {
-    Type t = sch_value_type_of(x);
-    return t == TYPE_INT || t == TYPE_REAL;
+    return is_number_type(sch_value_type_of(x));
 }
 
 static Value proc_number_p(UNUSED Value env, Value obj)
@@ -1716,7 +1721,6 @@ static Value proc_number_p(UNUSED Value env, Value obj)
 
 static Value proc_real_p(UNUSED Value env, Value obj)
 {
-    // FIXME: cope with other than integer and real
     return BOOL_VAL(sch_value_is_number(obj));
 }
 
@@ -1757,8 +1761,7 @@ typedef enum {
 } NumType;
 
 #define EXPECT_NUMBER_TYPE(t) \
-    EXPECT(t == TYPE_INT || t == TYPE_REAL, \
-           "expected number but got %s", value_type_to_string(t))
+        EXPECT(is_number_type(t), "expected number but got %s", value_type_to_string(t))
 #define get_num_type(x) ({ \
             Type T = sch_value_type_of(x); \
             EXPECT_NUMBER_TYPE(T); \

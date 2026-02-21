@@ -291,7 +291,7 @@ static Value parse_decimal(Parser *p, const char *s, int coeff, unsigned radix)
     return sch_real_new(coeff * d);
 }
 
-static Value parse_integer(Parser *p, const char *s, int coeff, unsigned radix)
+static Value parse_uinteger(Parser *p, const char *s, int coeff, unsigned radix)
 {
     char *endp = NULL;
     int64_t i = strtol(s, &endp, radix);
@@ -305,15 +305,28 @@ static bool sign_p(int c)
     return c == '-' || c == '+';
 }
 
-static bool decimal_p(const char *s)
+static bool maybe_decimal_p(const char *s)
 {
-    if (strchr(s, '.') != NULL)
-        return true;
     const char *p = strpbrk(s, "eE");
     if (p == NULL)
         return false;
     return s < p && isdigit(p[-1]) &&
         (isdigit(p[1]) || (sign_p(p[1]) && isdigit(p[2])));
+}
+
+static Value parse_ureal(Parser *p, int coeff, unsigned radix)
+{
+    char *s;
+    int n = fscanf(p->in, "%m[0-9a-zA-Z.-+]", &s);
+    if (n != 1)
+        parse_error_or_return_false(p, "digits", "nothing valid");
+    Value v;
+    if (strchr(s, '.') != NULL || (maybe_decimal_p(s) && radix == 10))
+        v = parse_decimal(p, s, coeff, radix);
+    else
+        v = parse_uinteger(p, s, coeff, radix);
+    free(s);
+    return v;
 }
 
 // p: Parser (could be a dummy, i.e. p->newline_pos == NULL)
@@ -335,17 +348,7 @@ static Value parse_number_internal(Parser *p, int coeff, unsigned radix)
     default:
         parse_error_or_return_false(p, "valid radix", "%u", radix);
     }
-    char *s;
-    int n = fscanf(p->in, "%m[0-9a-zA-Z.-+]", &s); // XXX: number or identifier?
-    if (n != 1)
-        parse_error_or_return_false(p, "digits", "nothing valid");
-    Value v;
-    if (decimal_p(s))
-        v = parse_decimal(p, s, coeff, radix);
-    else
-        v = parse_integer(p, s, coeff, radix);
-    free(s);
-    return v;
+    return parse_ureal(p, coeff, radix);
 }
 
 static void parser_init_dummy(Parser *p, FILE *in)
