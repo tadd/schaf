@@ -2246,12 +2246,18 @@ static Value proc_angle(UNUSED Value env, UNUSED Value x)
 
 static Value proc_exact_to_inexact(UNUSED Value env, Value x)
 {
-    return sch_real_new(get_double(x)); // FIXME: support complex
+    NumType t = get_num_type(x);
+    if (t == NUM_TYPE_REAL)
+        return x;
+    return sch_real_new((double) INT(x)); // FIXME: support complex
 }
 
 static Value proc_inexact_to_exact(UNUSED Value env, Value x)
 {
-    return sch_integer_new(lround(get_double(x))); // FIXME: support complex
+    NumType t = get_num_type(x);
+    if (t == NUM_TYPE_INT)
+        return x;
+    return sch_integer_new(lround(REAL(x))); // FIXME: support complex
 }
 
 // 6.2.6. Numerical input and output
