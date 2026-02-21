@@ -616,12 +616,12 @@
   (expect number? #o775)
   (expect number? #xCAFE)
   (expect number? 1e10)
+  (expect number? 6/10)
+  (expect number? 8/4)
   ;; (expect number? #e1e10)
   ;; (expect number? 3+0i)
   ;; (expect number? 3+4i)
   ;; (expect number? -2.5+0.0i)
-  ;; (expect number? 6/10)
-  ;; (expect number? 8/4)
 
   (noexpect number? 'a)
   (noexpect number? '())
@@ -1000,6 +1000,11 @@
   (expect inexact? (lcm 1 2 3.0))))
 
 (describe "numerator" (lambda ()
+  (expect = (numerator 1/2) 1)
+  (expect = (numerator -1/2) -1)
+  (expect = (numerator 0/2) 0)
+  (expect exact? (numerator 1/2))
+
   (expect = (numerator 0) 0)
   (expect = (numerator 42) 42)
   (expect = (numerator -3.5) -3.5)
@@ -1007,6 +1012,11 @@
   (expect exact? (numerator 1))))
 
 (describe "denominator" (lambda ()
+  (expect = (denominator 1/2) 2)
+  (expect = (denominator -1/2) 2)
+  (expect = (denominator 0/2) 1)
+  (expect exact? (denominator 1/2))
+
   (expect = (denominator 0) 1)
   (expect = (denominator 42) 1)
   (expect = (denominator -3.5) 1.0)
