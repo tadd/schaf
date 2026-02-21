@@ -1795,6 +1795,7 @@ static Value proc_number_p(UNUSED Value env, Value obj)
 
 static Value proc_real_p(UNUSED Value env, Value obj)
 {
+    // FIXME: cope with complex
     return BOOL_VAL(sch_value_is_number(obj));
 }
 
@@ -1875,7 +1876,7 @@ static Value proc_integer_p(UNUSED Value env, Value x)
 
 static Value proc_exact_p(UNUSED Value env, Value x)
 {
-    return BOOL_VAL(sch_value_is_integer(x));
+    return BOOL_VAL(sch_value_is_integer(x) || sch_value_is_rational(x));
 }
 
 static Value proc_inexact_p(UNUSED Value env, Value x)
