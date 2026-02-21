@@ -635,7 +635,17 @@
   (expect complex? 0)))
 
 (describe "rational?" (lambda ()
-  (expect rational? 1.0)))
+  (expect rational? 0)
+  (expect rational? 1)
+  (expect rational? -10)
+  (expect rational? 1/2)
+  (expect rational? 0/2)
+  (expect rational? -1/2)
+  (expect rational? -128/256)
+  (expect rational? 1.0)
+
+  (noexpect rational? 1.1)
+  (noexpect rational? -0.1)))
 
 (describe "real?" (lambda ()
   (expect real? 0.0)
@@ -658,6 +668,12 @@
   (expect integer? -1)
   (expect integer? -1000000)
 
+  (expect integer? 1.0)
+  (expect integer? 2/1)
+  (expect integer? -128/64)
+
+  (noexpect integer? -128/63)
+  (noexpect integer? 1.2)
   (noexpect integer? 'a)
   (noexpect integer? '())
   (noexpect integer? '(1))

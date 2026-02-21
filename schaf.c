@@ -1798,6 +1798,12 @@ static Value proc_real_p(UNUSED Value env, Value obj)
     return BOOL_VAL(sch_value_is_number(obj));
 }
 
+static bool integer_p(Value x);
+static Value proc_rational_p(UNUSED Value env, Value obj)
+{
+    return BOOL_VAL(sch_value_is_rational(obj) || integer_p(obj));
+}
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wfloat-equal"
 static bool is_integer_like_double(double d)
@@ -1808,14 +1814,63 @@ static bool is_integer_like_double(double d)
 
 static bool is_integer_like_real(Value x)
 {
-    if (!sch_value_is_real(x))
+    return sch_value_is_real(x) && is_integer_like_double(REAL(x));
+}
+
+// Represents the tower from the botom: int -> real -> ...
+typedef enum {
+    NUM_TYPE_INT,
+    NUM_TYPE_RATIONAL,
+    NUM_TYPE_REAL,
+} NumType;
+
+static NumType type_to_num_type(Type t)
+{
+    switch (t) {
+    case TYPE_INT:
+        return NUM_TYPE_INT;
+    case TYPE_RATIONAL:
+        return NUM_TYPE_RATIONAL;
+    case TYPE_REAL:
+        return NUM_TYPE_REAL;
+    case TYPE_BOOL:
+    case TYPE_CHAR:
+    case TYPE_SYMBOL:
+    case TYPE_NULL:
+    case TYPE_UNDEF:
+    case TYPE_PAIR:
+    case TYPE_STRING:
+    case TYPE_PROC:
+    case TYPE_VECTOR:
+    case TYPE_ENV:
+    case TYPE_PORT:
+    case TYPE_PROMISE:
+    case TYPE_EOF:
+        bug("non-numeric type given: %u", t);
+    }
+    UNREACHABLE();
+}
+
+static bool integer_p(Value x)
+{
+    Type t = sch_value_type_of(x);
+    if (!is_number_type(t))
         return false;
-    return is_integer_like_double(REAL(x));
+    NumType nt = type_to_num_type(t);
+    switch (nt) {
+    case NUM_TYPE_INT:
+        return true;
+    case NUM_TYPE_RATIONAL:
+        return RATIONAL(x)->denom == 1;
+    case NUM_TYPE_REAL:
+        return is_integer_like_double(REAL(x));
+    }
+    UNREACHABLE();
 }
 
 static Value proc_integer_p(UNUSED Value env, Value x)
 {
-    return BOOL_VAL(sch_value_is_integer(x) || is_integer_like_real(x));
+    return BOOL_VAL(integer_p(x));
 }
 
 static Value proc_exact_p(UNUSED Value env, Value x)
@@ -1827,13 +1882,6 @@ static Value proc_inexact_p(UNUSED Value env, Value x)
 {
     return BOOL_VAL(sch_value_is_real(x));
 }
-
-// Represents the tower from the botom: int -> real -> ...
-typedef enum {
-    NUM_TYPE_INT,
-    NUM_TYPE_RATIONAL,
-    NUM_TYPE_REAL,
-} NumType;
 
 #define EXPECT_NUMBER_TYPE(t) \
         EXPECT(is_number_type(t), "expected number but got %s", value_type_to_string(t))
@@ -4245,7 +4293,7 @@ void sch_init(const void *sp)
     // 6.2.5. Numerical operations
     define_procedure(e, "number?", proc_number_p, 1);
     define_procedure(e, "complex?", proc_number_p, 1); // alias
-    define_procedure(e, "rational?", proc_real_p, 1); // alias
+    define_procedure(e, "rational?", proc_rational_p, 1); // alias
     define_procedure(e, "real?", proc_real_p, 1);
     define_procedure(e, "integer?", proc_integer_p, 1);
     define_procedure(e, "exact?", proc_exact_p, 1);
