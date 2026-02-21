@@ -1136,7 +1136,8 @@
   (expect string=? (number->string 1) "1")
   (expect string=? (number->string -1) "-1")
   (expect string=? (number->string 16777216) "16777216")
-  (expect string=? (number->string -16777216) "-16777216")))
+  (expect string=? (number->string -16777216) "-16777216")
+  (expect string=? (number->string 1.2) "1.2")))
 
 (describe "number->string with radix" (lambda ()
   (expect string=? (number->string 0 10) "0")
@@ -1171,6 +1172,10 @@
   (expect = (string->number "+16777216") 16777216)
   (expect = (string->number "-16777216") -16777216)
 
+  (expect = (string->number "0.0") 0.0)
+  (expect = (string->number "+0.1") 0.1)
+  (expect = (string->number "-0.1") -0.1)
+
   (expect-f (string->number ""))
   (expect-f (string->number " "))
   (expect-f (string->number "abc"))))
@@ -1182,6 +1187,7 @@
   (expect = (string->number "16777216" 10) 16777216)
   (expect = (string->number "+16777216" 10) 16777216)
   (expect = (string->number "-16777216" 10) -16777216)
+  (expect = (string->number "-1.0" 10) -1.0)
 
   (expect = (string->number "0" 2) 0)
   (expect = (string->number "1" 2) 1)
@@ -1199,7 +1205,16 @@
   (expect = (string->number "1" 16) 1)
   (expect = (string->number "-1" 16) -1)
   (expect = (string->number "1000000" 16) 16777216)
-  (expect = (string->number "-1000000" 16) -16777216)))
+  (expect = (string->number "-1000000" 16) -16777216)
+
+  (expect = (string->number "0" 16) 0)
+  (expect = (string->number "1" 16) 1)
+  (expect = (string->number "-1" 16) -1)
+
+  (expect = (string->number "10" 2) 2)
+  (expect = (string->number "10" 8) 8)
+  (expect = (string->number "10" 10) 10)
+  (expect = (string->number "10" 16) 16)))
 
 (describe "string->number with prefix" (lambda ()
   (expect = (string->number "#d0") 0)
@@ -1249,7 +1264,11 @@
   (expect roundtrip? 1)
   (expect roundtrip? -1)
   (expect roundtrip? 16777216)
-  (expect roundtrip? -16777216)))
+  (expect roundtrip? -16777216)
+
+  (expect roundtrip? 0.0)
+  (expect roundtrip? +1.1)
+  (expect roundtrip? -1.1)))
 
 (describe "roundtrip-ness of number->string/string->number with radix" (lambda ()
   (define (roundtrip? n r)
@@ -1270,7 +1289,11 @@
   (expect roundtrip? 1 16)
   (expect roundtrip? -1 16)
   (expect roundtrip? 16777216 16)
-  (expect roundtrip? -16777216 16)))
+  (expect roundtrip? -16777216 16)
+
+  (expect roundtrip? 0.0 10)
+  (expect roundtrip? +1.1 10)
+  (expect roundtrip? -1.1 10)))
 
 ;; 6.3. Other data types
 ;; 6.3.1. Booleans
