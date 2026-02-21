@@ -237,7 +237,8 @@ static int fpeekc(FILE *in)
 }
 
 #define parse_error_safe(p, ...) do { \
-        if (p->newline_pos) parse_error(p, __VA_ARGS__); } while (0)
+        if (p->newline_pos) parse_error(p, __VA_ARGS__); \
+    } while (0)
 // return -1 if invalid
 static int parse_number_prefix(Parser *p)
 {
@@ -274,18 +275,19 @@ static int parse_sign(Parser *p)
     return 1;
 }
 
+#define parse_error_or_return_false(p, ...) do { \
+        parse_error_safe(p, __VA_ARGS__); \
+        return Qfalse; \
+    } while (0)
+
 static Value parse_decimal(Parser *p, const char *s, int coeff, unsigned radix)
 {
-    if (radix != 10) {
-        parse_error_safe(p, "decimal digits", "got non-decimal radix: %u", radix);
-        return Qfalse;
-    }
+    if (radix != 10)
+        parse_error_or_return_false(p, "decimal digits", "got non-decimal radix: %u", radix);
     char *endp = NULL;
     double d = strtod(s, &endp);
-    if (endp != NULL && *endp != '\0') {
-        parse_error_safe(p, "decimal digits", "'%s'", endp);
-        return Qfalse;
-    }
+    if (endp != NULL && *endp != '\0')
+        parse_error_or_return_false(p, "decimal digits", "'%s'", endp);
     return sch_real_new(coeff * d);
 }
 
@@ -293,10 +295,8 @@ static Value parse_integer(Parser *p, const char *s, int coeff, unsigned radix)
 {
     char *endp = NULL;
     int64_t i = strtol(s, &endp, radix);
-    if (endp != NULL && *endp != '\0') {
-        parse_error_safe(p, "integer digits", "'%s'", endp);
-        return Qfalse;
-    }
+    if (endp != NULL && *endp != '\0')
+        parse_error_or_return_false(p, "integer digits", "'%s'", endp);
     return sch_integer_new(coeff * i);
 }
 
@@ -333,15 +333,12 @@ static Value parse_number_internal(Parser *p, int coeff, unsigned radix)
     case 2: case 8: case 10: case 16:
         break;
     default:
-        parse_error_safe(p, "valid radix", "%u", radix);
-        return Qfalse;
+        parse_error_or_return_false(p, "valid radix", "%u", radix);
     }
     char *s;
     int n = fscanf(p->in, "%m[0-9a-zA-Z.-+]", &s); // XXX: number or identifier?
-    if (n != 1) {
-        parse_error_safe(p, "digits", "nothing valid");
-        return Qfalse;
-    }
+    if (n != 1)
+        parse_error_or_return_false(p, "digits", "nothing valid");
     Value v;
     if (decimal_p(s))
         v = parse_decimal(p, s, coeff, radix);

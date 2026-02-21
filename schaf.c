@@ -2258,7 +2258,6 @@ static Value proc_inexact_to_exact(UNUSED Value env, Value x)
             INT(X); \
         })
 
-// FIXME: Integrate with parse.c
 static Value proc_number_to_string(UNUSED Value env, Value args)
 {
     EXPECT_ARITY_RANGE(1, 2, args);
