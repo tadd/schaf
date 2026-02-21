@@ -123,6 +123,11 @@ inline static bool is_tagged_real(Value v)
 }
 #endif
 
+inline bool sch_value_is_rational(Value v)
+{
+    return value_tag_is(v, TAG_RATIONAL);
+}
+
 inline bool sch_value_is_real(Value v)
 {
 #ifdef REAL_SELF_TAGGING
@@ -150,6 +155,7 @@ static bool sch_value_is_procedure(Value v)
     case TAG_CONTINUATION:
     case TAG_CFUNC_CLOSURE:
         return true;
+    case TAG_RATIONAL:
     case TAG_REAL:
     case TAG_PAIR:
     case TAG_STRING:
@@ -227,6 +233,8 @@ Type sch_value_type_of(Value v)
     if (value_is_immediate(v))
         return immediate_type_of(v);
     switch (VALUE_TAG(v)) {
+    case TAG_RATIONAL:
+        return TYPE_RATIONAL;
     case TAG_REAL:
         return TYPE_REAL;
     case TAG_PAIR:
@@ -268,6 +276,8 @@ static const char *value_type_to_string(Type t)
         return "integer";
     case TYPE_SYMBOL:
         return "symbol";
+    case TYPE_RATIONAL:
+        return "rational";
     case TYPE_REAL:
         return "real";
     case TYPE_PAIR:
@@ -441,6 +451,39 @@ Value sch_real_new(double d)
     Real *r = obj_new(TAG_REAL, sizeof(Real));
     r->value = d;
     return (Value) r;
+}
+
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+bool reduce_fraction(int64_t *num, uint64_t *denom)
+{
+    if (*denom == 0)
+        return false;
+    if (*num == 0) {
+        *denom = 1;
+        return true;
+    }
+    int coeff = *num < 0 ? -1 : 1;
+    uint64_t x = llabs(*num), y = *denom;
+    uint64_t min = (uint64_t) MIN(x, y);
+    while (x % 2 == 0 && y % 2 == 0)
+        x /= 2, y /= 2, min /= 2;
+    for (uint64_t i = 3; i <= min; i += 2) {
+        while (x % i == 0 && y % i == 0)
+            x /= i, y /= i, min /= i;
+    }
+    if (*denom != y)
+        *num = coeff * x, *denom = y;
+    return true;
+}
+
+Value sch_rational_new(int64_t num, uint64_t denom)
+{
+    if (!reduce_fraction(&num, &denom))
+        bug("Invalid integers specified for Rational: (%zd / %zu)", num, denom);
+    Rational *rat = obj_new(TAG_RATIONAL, sizeof(Rational));
+    rat->num = num;
+    rat->denom = denom;
+    return (Value) rat;
 }
 
 Value sch_character_new(uint8_t ch)
@@ -1680,6 +1723,7 @@ static Value syn_define(Value env, Value args)
     case TYPE_EOF:
     case TYPE_BOOL:
     case TYPE_INT:
+    case TYPE_RATIONAL:
     case TYPE_REAL:
     case TYPE_CHAR:
     case TYPE_STRING:
@@ -1704,6 +1748,12 @@ static Value proc_eq(UNUSED Value env, Value x, Value y)
     return BOOL_VAL(x == y);
 }
 
+static bool rational_equal(Value x, Value y)
+{
+    const Rational *a = RATIONAL(x), *b = RATIONAL(y);
+    return a->num == b->num && a->denom == b->denom;
+}
+
 static bool eqv(Value x, Value y)
 {
     Type tx = sch_value_type_of(x);
@@ -1716,6 +1766,8 @@ static bool eqv(Value x, Value y)
 #pragma GCC diagnostic ignored "-Wfloat-equal"
     if (tx == TYPE_REAL)
         return REAL(x) == REAL(y);
+    if (tx == TYPE_RATIONAL)
+        return rational_equal(x, y);
 #pragma GCC diagnostic pop
     return false;
 }
@@ -1748,14 +1800,16 @@ static bool equal(Value x, Value y)
     if (tx != ty)
         return false;
     switch (tx) {
-    case TYPE_PAIR:
-        return equal(car(x), car(y)) &&
-               equal(cdr(x), cdr(y));
+    case TYPE_RATIONAL:
+        return rational_equal(x, y);
     case TYPE_REAL:
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wfloat-equal"
         return REAL(x) == REAL(y);
 #pragma GCC diagnostic pop
+    case TYPE_PAIR:
+        return equal(car(x), car(y)) &&
+               equal(cdr(x), cdr(y));
     case TYPE_STRING:
         return strcmp(STRING(x), STRING(y)) == 0;
     case TYPE_VECTOR:
@@ -1783,10 +1837,10 @@ static Value proc_equal(UNUSED Value env, Value x, Value y)
 
 // 6.2. Numbers
 // 6.2.5. Numerical operations
-static inline bool is_number_type(Type t)
+static bool is_number_type(Type t)
 {
-    // FIXME: cope with rational and complex
-    return t == TYPE_INT || t == TYPE_REAL;
+    // FIXME: cope with complex
+    return t == TYPE_INT || t == TYPE_RATIONAL || t == TYPE_REAL;
 }
 
 static bool sch_value_is_number(Value x)
@@ -1837,6 +1891,7 @@ static Value proc_inexact_p(UNUSED Value env, Value x)
 // Represents the tower from the botom: int -> real -> ...
 typedef enum {
     NUM_TYPE_INT,
+    NUM_TYPE_RATIONAL,
     NUM_TYPE_REAL,
 } NumType;
 
@@ -1845,12 +1900,16 @@ typedef enum {
 #define get_num_type(x) ({ \
             Type T = sch_value_type_of(x); \
             EXPECT_NUMBER_TYPE(T); \
-            T == TYPE_INT ? NUM_TYPE_INT : NUM_TYPE_REAL; \
+            T == TYPE_INT ? NUM_TYPE_INT : \
+            T == TYPE_RATIONAL ? NUM_TYPE_RATIONAL : \
+            NUM_TYPE_REAL; \
         });
 #define get_double(x) ({ \
             Value X = x; \
             NumType NT = get_num_type(X); \
-            NT == NUM_TYPE_INT ? (double) INT(X) : REAL(X); \
+            NT == NUM_TYPE_INT ? (double) INT(X) : \
+            NT == NUM_TYPE_RATIONAL ? ((double) RATIONAL(X)->num) / RATIONAL(X)->denom : \
+            REAL(X); \
         })
 
 typedef bool (*RelOpFunc)(double x, double y);
@@ -1958,7 +2017,9 @@ static Value proc_even_p(UNUSED Value env, Value obj)
 #define get_double_and_inexactness(x, b) ({ \
             Value X = x; \
             NumType NT = get_num_type(X); \
-            NT == NUM_TYPE_INT ? (double) INT(X) : (b = true, REAL(X)); \
+            NT == NUM_TYPE_INT ? (double) INT(X) : \
+            NT == NUM_TYPE_RATIONAL ? (b = true, ((double) RATIONAL(X)->num) / RATIONAL(X)->denom) : \
+            (b = true, REAL(X)); \
         })
 #define double_to_integer_or_real(inexact, d) (inexact ? sch_real_new(d) : sch_integer_new((int64_t) d))
 
@@ -2177,15 +2238,20 @@ static Value proc_lcm(UNUSED Value env, Value args)
 
 static Value proc_numerator(UNUSED Value env, Value x)
 {
-    EXPECT_TYPE(number, x);
-    return x; // FIXME: support rational
+    NumType t = get_num_type(x);
+    if (t != NUM_TYPE_RATIONAL)
+        return x;
+    return sch_integer_new(RATIONAL(x)->num);
 }
 
 static Value proc_denominator(UNUSED Value env, UNUSED Value x)
 {
-    EXPECT_TYPE(number, x);
-    return sch_value_is_integer(x) ?
-        sch_integer_new(1) : sch_real_new(1); // FIXME: support rational
+    NumType t = get_num_type(x);
+    if (t != NUM_TYPE_RATIONAL) {
+        return sch_value_is_integer(x) ?
+            sch_integer_new(1) : sch_real_new(1.0);
+    }
+    return sch_integer_new(RATIONAL(x)->denom);
 }
 
 static inline Value rounding_func(double (*func)(double), Value x)
@@ -2406,6 +2472,8 @@ static Value proc_number_to_string(UNUSED Value env, Value args)
     switch (t) {
     case NUM_TYPE_INT:
         return integer_to_string(x, radix);
+    case NUM_TYPE_RATIONAL:
+        bug("rational not implemented yet");
     case NUM_TYPE_REAL:
         if (radix != 10)
             runtime_error("radix for real was not 10: %zd", radix);
@@ -3818,6 +3886,7 @@ static void print_object(FILE *f, Value v, Value record, ValuePrinter printer)
     case TYPE_INT:
     case TYPE_CHAR:
     case TYPE_SYMBOL:
+    case TYPE_RATIONAL:
     case TYPE_REAL:
     case TYPE_STRING:
     case TYPE_PORT:
@@ -3857,6 +3926,9 @@ static void fdisplay_single(FILE *f, Value v)
         break;
     case TYPE_REAL:
         fprintf_double(f, REAL(v));
+        break;
+    case TYPE_RATIONAL:
+        fprintf(f, "%"PRId64"/%"PRIu64, RATIONAL(v)->num, RATIONAL(v)->denom);
         break;
     case TYPE_CHAR:
         fprintf(f, "%c", CHAR(v));
@@ -3941,6 +4013,7 @@ static void inspect_single(FILE *f, Value v)
     case TYPE_BOOL:
     case TYPE_INT:
     case TYPE_REAL:
+    case TYPE_RATIONAL:
     case TYPE_PROC:
     case TYPE_UNDEF:
     case TYPE_ENV:

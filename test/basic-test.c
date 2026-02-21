@@ -62,6 +62,12 @@
 #define expect_vint_eq(exp, act) expect_vx_eq(TYPE_INT, integer, int, exp, act)
 #define expect_vstr_eq(exp, act) expect_vx_eq(TYPE_STRING, string, str, exp, act)
 #define expect_vsym_eq(exp, act) expect_vx_eq(TYPE_SYMBOL, symbol, str, exp, act)
+#define expect_vrational_eq(exp, act) do { \
+        Value a = act; \
+        expect_no_error(a); \
+        cr_expect(eq(int, RATIONAL(exp)->num, RATIONAL(act)->num)); \
+        cr_expect(eq(int, RATIONAL(exp)->denom, RATIONAL(act)->denom)); \
+    } while (0)
 #define expect_vreal_eq(exp, act) do { \
         Value a = act; \
         expect_no_error(a); \
@@ -70,6 +76,7 @@
     } while (0)
 
 #define expect_vint_eq_parsed(exp, act) expect_x_eq_parsed(vint, exp, act)
+#define expect_vrational_eq_parsed(exp, act) expect_x_eq_parsed(vrational, exp, act)
 #define expect_vreal_eq_parsed(exp, act) expect_x_eq_parsed(vreal, exp, act)
 #define expect_vstr_eq_parsed(exp, act) expect_x_eq_parsed(vstr, exp, act)
 #define expect_vsym_eq_parsed(exp, act) expect_x_eq_parsed(vsym, exp, act)
@@ -148,6 +155,20 @@ Test(schaf, parse_prefixed_int) {
     expect_vint_eq_parsed(42, "#x2a");
     expect_vint_eq_parsed(42, "#x+2a");
     expect_vint_eq_parsed(-42, "#x-2a");
+}
+
+#define rat(x, y) sch_rational_new(x, y)
+Test(schaf, parse_rational) {
+    expect_vrational_eq_parsed(rat(0, 1), "0/2");
+    expect_vrational_eq_parsed(rat(1, 2), "1/2");
+    expect_vrational_eq_parsed(rat(-1, 2), "-1/2");
+    expect_vrational_eq_parsed(rat(1, 2), "+4/8");
+
+    expect_vrational_eq_parsed(rat(-1, 2), "#b-1/10");
+    expect_vrational_eq_parsed(rat(-1, 2), "#d-1/2");
+    expect_vrational_eq_parsed(rat(-1, 2), "#o-4/10");
+    expect_vrational_eq_parsed(rat(-1, 2), "#x-7/e");
+    expect_vrational_eq_parsed(rat(-1, 2), "#x-2E7AB3BDDAFC0E/5CF5677BB5F81C");
 }
 
 Test(schaf, parse_real) {

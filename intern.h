@@ -33,8 +33,8 @@ typedef enum {
     TYPE_CHAR,
     TYPE_SYMBOL,
 // boxed (tagged)
+    TYPE_RATIONAL,
     TYPE_REAL,
-    // TYPE_RATIONAL,
     // TYPE_COMPLEX,
     TYPE_PAIR,
     TYPE_STRING,
@@ -46,8 +46,8 @@ typedef enum {
 } Type;
 
 typedef enum {
+    TAG_RATIONAL,
     TAG_REAL,
-    // TAG_RATIONAL,
     // TAG_COMPLEX,
     TAG_PAIR,
     TAG_STRING,
@@ -84,6 +84,12 @@ typedef struct {
     Header header;
     double value;
 } Real;
+
+typedef struct {
+    Header header;
+    int64_t num;
+    uint64_t denom;
+} Rational;
 
 typedef struct {
     Header header;
@@ -180,6 +186,7 @@ typedef struct {
 #define PAIR(v) ((Pair *) v)
 #define LOCATED_PAIR(v) ((LocatedPair *) v)
 #define REAL(v) sch_real_to_double(v)
+#define RATIONAL(v) ((Rational *) v)
 #define CHAR(v) sch_character_to_uint8(v)
 #define STRING(v) (((String *) v)->body)
 #define VECTOR(v) (((Vector *) v)->body)
@@ -223,6 +230,7 @@ ATTR_XMALLOC void *gc_malloc(size_t size);
 bool sch_value_is_integer(Value v);
 bool sch_value_is_symbol(Value v);
 bool sch_value_is_real(Value v);
+bool sch_value_is_rational(Value v);
 bool sch_value_is_character(Value v);
 bool sch_value_is_string(Value v);
 bool sch_value_is_pair(Value v);
@@ -238,6 +246,7 @@ const char *sch_value_to_type_name(Value v);
 
 Value sch_integer_new(int64_t i);
 Value sch_real_new(double d);
+Value sch_rational_new(int64_t num, uint64_t denom);
 Value sch_symbol_new(const char *s);
 Value sch_character_new(uint8_t ch);
 Value sch_string_new(const char *s);

@@ -19,6 +19,7 @@ typedef enum {
     TOK_TYPE_SPLICE,
     TOK_TYPE_INT,
     TOK_TYPE_REAL,
+    TOK_TYPE_RATIONAL,
     TOK_TYPE_DOT,
     TOK_TYPE_CHAR,
     TOK_TYPE_STRING,
@@ -314,6 +315,30 @@ static bool maybe_decimal_p(const char *s)
         (isdigit(p[1]) || (sign_p(p[1]) && isdigit(p[2])));
 }
 
+static Value parse_rational_denominator(Parser *p, unsigned radix, Value num)
+{
+    if (!sch_value_is_integer(num)) {
+        parse_error_safe(p, "integer in numerator", "not an integer");
+        return Qfalse;
+    }
+    char *s;
+    int n = fscanf(p->in, "%m[0-9a-zA-Z]", &s);
+    if (n != 1) {
+        parse_error_safe(p, "digits in denominator", "invalid: %s", s);
+        return Qfalse;
+    }
+    Value denom = parse_uinteger(p, s, 1/*always positive*/, radix/* the same as numerator*/);
+    free(s);
+    if (denom == Qfalse)
+        return Qfalse;
+    int64_t idenom = INT(denom);
+    if (idenom == 0) {
+        parse_error_safe(p, "positive in denominator", "0");
+        return Qfalse;
+    }
+    return sch_rational_new(INT(num), idenom);
+}
+
 static Value parse_ureal(Parser *p, int coeff, unsigned radix)
 {
     char *s;
@@ -326,6 +351,10 @@ static Value parse_ureal(Parser *p, int coeff, unsigned radix)
     else
         v = parse_uinteger(p, s, coeff, radix);
     free(s);
+    int ch = fgetc(p->in);
+    if (ch == '/')
+        return parse_rational_denominator(p, radix, v);
+    ungetc(ch, p->in);
     return v;
 }
 
@@ -374,6 +403,8 @@ static Token lex_number(Parser *p, int coeff, unsigned radix)
         return TOKEN_VAL(INT, n);
     if (sch_value_is_real(n))
         return TOKEN_VAL(REAL, n);
+    if (sch_value_is_rational(n))
+        return TOKEN_VAL(RATIONAL, n);
     bug("got a non-number");
 }
 
@@ -566,6 +597,9 @@ static const char *token_stringify(Token t)
     case TOK_TYPE_REAL:
         snprintf(buf, sizeof(buf), "%g", REAL(t.value));
         break;
+    case TOK_TYPE_RATIONAL:
+        snprintf(buf, sizeof(buf), "%zd/%zu", RATIONAL(t.value)->num, RATIONAL(t.value)->denom);
+        break;
     case TOK_TYPE_IDENT:
         return sch_symbol_to_cstr(t.value);
     case TOK_TYPE_CHAR:
@@ -683,6 +717,7 @@ static Value parse_expr_token(Parser *p, Token t)
     case TOK_TYPE_STRING:
     case TOK_TYPE_INT:
     case TOK_TYPE_REAL:
+    case TOK_TYPE_RATIONAL:
     case TOK_TYPE_IDENT:
         return t.value;
     case TOK_TYPE_EOF:
