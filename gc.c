@@ -633,36 +633,63 @@ static void gt_init_bitmaps(GTHeap *heap)
     heap->scanned = heap->gt_bitmap + size;
 }
 
-static bool check_bit(GTHeap *heap, uint8_t *field, MSHeader *h, bool do_mark)
+static void get_index_and_mask(GTHeap *heap, MSHeader *h, uintptr_t *pindex, uint8_t *pmask)
 {
     uintptr_t index = bitmap_index(MS_HEAP(heap), h);
     uint8_t offset = index % 8U;
     index /= 8U;
     uint8_t mask = 1UL << offset;
+    *pindex = index;
+    *pmask = mask;
+}
+
+static bool check_bit(GTHeap *heap, MSHeader *h, uint8_t *field, bool do_mark)
+{
+    uintptr_t index;
+    uint8_t mask;
+    get_index_and_mask(heap, h, &index, &mask);
     bool marked = field[index] & mask;
     if (do_mark && !marked)
         field[index] |= mask;
     return marked;
 }
 
+// true if checkbit(..f1..) && !checkbit(..f2..)
+static bool check_bit2(GTHeap *heap, MSHeader *h, uint8_t *f1, uint8_t *f2)
+{
+    uintptr_t index;
+    uint8_t mask;
+    get_index_and_mask(heap, h, &index, &mask);
+    bool m1 = f1[index] & mask;
+    bool m2 = f2[index] & mask;
+    return m1 && !m2;
+}
+
+static bool gt_is_seen_and_not_scanned(GTHeap *heap, MSHeader *h)
+{
+    return check_bit2(heap, h, heap->seen, heap->scanned);
+}
+
+#if 0
 static bool gt_is_seen(GTHeap *heap, MSHeader *h)
 {
-    return check_bit(heap, heap->seen, h, false);
+    return check_bit(heap, h, heap->seen, false);
 }
+#endif
 
 static bool gt_is_scanned(GTHeap *heap, MSHeader *h)
 {
-    return check_bit(heap, heap->scanned, h, false);
+    return check_bit(heap, h, heap->scanned, false);
 }
 
 static void gt_mark_seen(GTHeap *heap, MSHeader *h)
 {
-    check_bit(heap, heap->seen, h, true);
+    check_bit(heap, h, heap->seen, true);
 }
 
 static void gt_mark_scanned(GTHeap *heap, MSHeader *h)
 {
-    check_bit(heap, heap->scanned, h, true);
+    check_bit(heap, h, heap->scanned, true);
 }
 
 static bool gt_work_list_included(const MSHeapSlot *l)
@@ -786,7 +813,7 @@ static void gt_scan_slot(GTHeap *heap, MSHeapSlot *slot)
     for (uint8_t *p = slot->body, *endp = p + slot->size; p < endp; p += offset) {
         MSHeader *h = MS_HEADER(p);
         offset = HSIZE(h->size);
-        if (gt_is_seen(heap, h) && !gt_is_scanned(heap, h))
+        if (gt_is_seen_and_not_scanned(heap, h))
             gt_scan_val(heap, (Value) &h->next);
     }
 }
