@@ -201,6 +201,8 @@ static inline uint64_t table_hash(uint64_t x)
 
 static inline uint64_t body_index(const Table *t, uint64_t key)
 {
+    // `hash & (body_size - 1)` == `hash % body_size`
+    // because the `body_size` is always power of two
     return table_hash(key) & (t->body_size - 1U);
 }
 
