@@ -107,14 +107,14 @@ static bool sch_value_is_procedure(Value v)
     if (value_is_immediate(v))
         return false;
     switch (VALUE_TAG(v)) {
-    case TAG_SYNTAX:
     case TAG_CFUNC:
+    case TAG_SYNTAX:
     case TAG_CLOSURE:
     case TAG_CONTINUATION:
     case TAG_CFUNC_CLOSURE:
         return true;
-    case TAG_STRING:
     case TAG_PAIR:
+    case TAG_STRING:
     case TAG_VECTOR:
     case TAG_PORT:
     case TAG_PROMISE:
@@ -183,20 +183,20 @@ Type sch_value_type_of(Value v)
     if (value_is_immediate(v))
         return immediate_type_of(v);
     switch (VALUE_TAG(v)) {
-    case TAG_STRING:
-        return TYPE_STRING;
     case TAG_PAIR:
         return TYPE_PAIR;
+    case TAG_STRING:
+        return TYPE_STRING;
+    case TAG_VECTOR:
+        return TYPE_VECTOR;
+    case TAG_PORT:
+        return TYPE_PORT;
     case TAG_CFUNC:
     case TAG_SYNTAX:
     case TAG_CLOSURE:
     case TAG_CONTINUATION:
     case TAG_CFUNC_CLOSURE:
         return TYPE_PROC;
-    case TAG_VECTOR:
-        return TYPE_VECTOR;
-    case TAG_PORT:
-        return TYPE_PORT;
     case TAG_PROMISE:
         return TYPE_PROMISE;
     case TAG_ENV:
@@ -210,32 +210,32 @@ Type sch_value_type_of(Value v)
 static const char *value_type_to_string(Type t)
 {
     switch (t) {
+    case TYPE_UNDEF:
+        return "undef";
+    case TYPE_NULL:
+        return "null";
+    case TYPE_EOF:
+        return "eof";
     case TYPE_BOOL:
         return "boolean";
     case TYPE_INT:
         return "integer";
     case TYPE_SYMBOL:
         return "symbol";
-    case TYPE_NULL:
-        return "null";
-    case TYPE_UNDEF:
-        return "undef";
     case TYPE_PAIR:
         return "pair";
     case TYPE_STRING:
         return "string";
-    case TYPE_PROC:
-        return "procedure";
     case TYPE_VECTOR:
         return "vector";
     case TYPE_PORT:
         return "port";
+    case TYPE_PROC:
+        return "procedure";
     case TYPE_PROMISE:
         return "promise";
     case TYPE_ENV:
         return "environment";
-    case TYPE_EOF:
-        return "eof";
     }
     UNREACHABLE();
 }

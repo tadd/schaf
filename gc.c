@@ -258,17 +258,17 @@ static void mark_val(MSHeap *heap, Value v)
     case TAG_CFUNC_CLOSURE:
         mark_val(heap, CFUNC_CLOSURE(v)->data);
         break;
+    case TAG_PROMISE: {
+        Promise *p = PROMISE(v);
+        mark_val(heap, p->env);
+        mark_val(heap, p->val);
+        break;
+    }
     case TAG_ENV: {
         Env *p = ENV(v);
         if (p->table != NULL)
             table_foreach(p->table, mark_env_each, heap);
         mark_val(heap, p->parent);
-        break;
-    }
-    case TAG_PROMISE: {
-        Promise *p = PROMISE(v);
-        mark_val(heap, p->env);
-        mark_val(heap, p->val);
         break;
     }
     case TAG_STRING:
@@ -324,9 +324,6 @@ static void free_val(Value v)
     case TAG_STRING:
         free(STRING(v));
         break;
-    case TAG_CONTINUATION:
-        free(CONTINUATION(v)->stack);
-        break;
     case TAG_VECTOR:
         scary_free(VECTOR(v));
         break;
@@ -338,6 +335,9 @@ static void free_val(Value v)
             free(p->string);
         break;
     }
+    case TAG_CONTINUATION:
+        free(CONTINUATION(v)->stack);
+        break;
     case TAG_ENV:
         table_free(ENV(v)->table);
         break;
