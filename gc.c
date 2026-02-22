@@ -533,14 +533,14 @@ static void ms_fin(void *data)
     free(heap);
 }
 
-static const GCAlgorithmData GC_FUNCS_MARK_SWEEP = {
+static const GCAlgorithmData GC_ALGO_DATA_MARK_SWEEP = {
     .init = ms_init,
     .fin = ms_fin,
     .malloc = ms_malloc,
     .add_root = ms_add_root,
     .stat = ms_stat
 };
-static const GCAlgorithmData GC_FUNCS_DEFAULT = GC_FUNCS_MARK_SWEEP;
+static const GCAlgorithmData GC_ALGO_DATA_DEFAULT = GC_ALGO_DATA_MARK_SWEEP;
 
 //
 // Algorithm: Mark-and-sweep + Bitmap Marking
@@ -585,7 +585,7 @@ static void *bmp_malloc(void *heap, size_t size)
 // It seems dangerous because we don't provide heap->bitmap for the last
 // sweep() in fin(), but we can do it safely in fact. It depends on the
 // behavior of init_header() which sets every header->living = false.
-static const GCAlgorithmData GC_FUNCS_MARK_SWEEP_BITMAP = {
+static const GCAlgorithmData GC_ALGO_DATA_MARK_SWEEP_BITMAP = {
     .init = ms_init,
     .fin = ms_fin,
     .malloc = bmp_malloc,
@@ -677,7 +677,7 @@ static void eps_stat(void *data, HeapStat *stat)
     }
 }
 
-static const GCAlgorithmData GC_FUNCS_EPSILON = {
+static const GCAlgorithmData GC_ALGO_DATA_EPSILON = {
     .init = eps_init,
     .fin = eps_fin,
     .malloc = eps_malloc,
@@ -784,13 +784,13 @@ void sch_set_gc_algorithm(SchGCAlgorithm s)
     error_if_gc_initialized();
     switch (s) {
     case SCH_GC_ALGORITHM_EPSILON:
-        algo = GC_FUNCS_EPSILON;
+        algo = GC_ALGO_DATA_EPSILON;
         break;
     case SCH_GC_ALGORITHM_MARK_SWEEP:
-        algo = GC_FUNCS_MARK_SWEEP;
+        algo = GC_ALGO_DATA_MARK_SWEEP;
         break;
     case SCH_GC_ALGORITHM_MARK_SWEEP_BITMAP:
-        algo = GC_FUNCS_MARK_SWEEP_BITMAP;
+        algo = GC_ALGO_DATA_MARK_SWEEP_BITMAP;
         break;
     }
 }
@@ -799,7 +799,7 @@ void gc_init(const void *sp)
 {
     stack_base = sp;
     if (algo.init == NULL)
-        algo = GC_FUNCS_DEFAULT;
+        algo = GC_ALGO_DATA_DEFAULT;
     algo.heap = algo.init();
     initialized = true;
 }
