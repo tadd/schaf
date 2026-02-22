@@ -234,6 +234,12 @@ static void mark_val(MSHeap *heap, Value v)
         mark_val(heap, p->cdr);
         break;
     }
+    case TAG_VECTOR: {
+        Value *p = VECTOR(v);
+        for (size_t i = 0, len = scary_length(p); i < len; i++)
+            mark_val(heap, p[i]);
+        break;
+    }
     case TAG_CLOSURE: {
         Closure *p = CLOSURE(v);
         mark_val(heap, p->env);
@@ -259,12 +265,6 @@ static void mark_val(MSHeap *heap, Value v)
         mark_val(heap, p->parent);
         break;
     }
-    case TAG_VECTOR: {
-        Value *p = VECTOR(v);
-        for (size_t i = 0, len = scary_length(p); i < len; i++)
-            mark_val(heap, p[i]);
-        break;
-    }
     case TAG_PROMISE: {
         Promise *p = PROMISE(v);
         mark_val(heap, p->env);
@@ -272,9 +272,9 @@ static void mark_val(MSHeap *heap, Value v)
         break;
     }
     case TAG_STRING:
+    case TAG_PORT:
     case TAG_CFUNC:
     case TAG_SYNTAX:
-    case TAG_PORT:
     case TAG_ERROR:
         break;
     }
@@ -321,14 +321,14 @@ static bool is_user_opened_file(FILE *fp)
 static void free_val(Value v)
 {
     switch (VALUE_TAG(v)) {
-    case TAG_CONTINUATION:
-        free(CONTINUATION(v)->stack);
-        break;
     case TAG_STRING:
         free(STRING(v));
         break;
-    case TAG_ENV:
-        table_free(ENV(v)->table);
+    case TAG_CONTINUATION:
+        free(CONTINUATION(v)->stack);
+        break;
+    case TAG_VECTOR:
+        scary_free(VECTOR(v));
         break;
     case TAG_PORT: {
         Port *p = PORT(v);
@@ -338,8 +338,8 @@ static void free_val(Value v)
             free(p->string);
         break;
     }
-    case TAG_VECTOR:
-        scary_free(VECTOR(v));
+    case TAG_ENV:
+        table_free(ENV(v)->table);
         break;
     case TAG_ERROR: {
         StackFrame **e = ERROR(v);
@@ -348,11 +348,11 @@ static void free_val(Value v)
         scary_free(e);
         break;
     }
+    case TAG_PAIR:
     case TAG_CFUNC:
     case TAG_SYNTAX:
-    case TAG_CFUNC_CLOSURE:
     case TAG_CLOSURE:
-    case TAG_PAIR:
+    case TAG_CFUNC_CLOSURE:
     case TAG_PROMISE:
         break;
     }

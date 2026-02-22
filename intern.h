@@ -21,36 +21,38 @@ typedef
 
 typedef uintptr_t Symbol;
 
+// Internal type of objects:
+// It may not have 1-to-1 correspondence to Scheme-level objects
 typedef enum {
 // immediate
-    TYPE_BOOL,
-    TYPE_INT,
-    TYPE_SYMBOL,
+    TYPE_UNDEF, // internal use only
     TYPE_NULL,
-    TYPE_UNDEF,
+    TYPE_EOF,
+    TYPE_BOOL,
+    TYPE_INT,   // as a number
+    TYPE_SYMBOL,
 // boxed (tagged)
     TYPE_PAIR,
     TYPE_STRING,
-    TYPE_PROC,
     TYPE_VECTOR,
-    TYPE_ENV,
     TYPE_PORT,
+    TYPE_PROC,
     TYPE_PROMISE,
-    TYPE_EOF,
+    TYPE_ENV,
 } Type;
 
 typedef enum {
     TAG_PAIR,
     TAG_STRING,
+    TAG_VECTOR,
+    TAG_PORT,
     TAG_CFUNC,
     TAG_SYNTAX, // almost a C Function
     TAG_CLOSURE,
     TAG_CONTINUATION,
     TAG_CFUNC_CLOSURE,
-    TAG_VECTOR,
-    TAG_ENV,
-    TAG_PORT,
     TAG_PROMISE,
+    TAG_ENV,
     // internal use only
     TAG_ERROR,
     TAG_LAST = TAG_ERROR
@@ -78,6 +80,24 @@ typedef struct {
 
 typedef struct {
     Header header;
+    Value *body;// use scary
+} Vector;
+
+
+typedef enum {
+    PORT_INPUT,
+    PORT_OUTPUT
+} PortType;
+
+typedef struct {
+    Header header;
+    FILE *fp;
+    PortType type;
+    char *string;
+} Port;
+
+typedef struct {
+    Header header;
     int64_t arity;
     Value (*apply)(Value env, Value proc, Value args);
 } Procedure;
@@ -93,11 +113,6 @@ typedef struct {
         Value (*f3)(Value, Value, Value, Value);
     };
 } CFunc;
-
-typedef struct {
-    CFunc cfunc;
-    Value data;
-} CFuncClosure;
 
 typedef struct {
     Procedure proc;
@@ -116,28 +131,9 @@ typedef struct {
 } Continuation;
 
 typedef struct {
-    Header header;
-    Value *body;// use scary
-} Vector;
-
-typedef struct {
-    Header header;
-    Value parent;
-    Table *table;
-    const char *name;
-} Env;
-
-typedef enum {
-    PORT_INPUT,
-    PORT_OUTPUT
-} PortType;
-
-typedef struct {
-    Header header;
-    FILE *fp;
-    PortType type;
-    char *string;
-} Port;
+    CFunc cfunc;
+    Value data;
+} CFuncClosure;
 
 typedef struct {
     Header header;
@@ -145,6 +141,13 @@ typedef struct {
     Value env;
     Value val;
 } Promise;
+
+typedef struct {
+    Header header;
+    Value parent;
+    Table *table;
+    const char *name;
+} Env;
 
 typedef struct {
     const char *func_name;
@@ -164,15 +167,15 @@ typedef struct {
 #define PAIR(v) ((Pair *) v)
 #define LOCATED_PAIR(v) ((LocatedPair *) v)
 #define STRING(v) (((String *) v)->body)
+#define VECTOR(v) (((Vector *) v)->body)
+#define PORT(v) ((Port *) v)
 #define PROCEDURE(v) ((Procedure *) v)
 #define CFUNC(v) ((CFunc *) v)
 #define CLOSURE(v) ((Closure *) v)
 #define CONTINUATION(v) ((Continuation *) v)
 #define CFUNC_CLOSURE(v) ((CFuncClosure *) v)
-#define VECTOR(v) (((Vector *) v)->body)
-#define ENV(v) ((Env *) v)
-#define PORT(v) ((Port *) v)
 #define PROMISE(v) ((Promise *) v)
+#define ENV(v) ((Env *) v)
 #define ERROR(v) (((Error *) v)->call_stack)
 
 typedef struct {

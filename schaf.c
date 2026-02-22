@@ -116,9 +116,9 @@ static bool sch_value_is_procedure(Value v)
     case TAG_STRING:
     case TAG_PAIR:
     case TAG_VECTOR:
-    case TAG_ENV:
     case TAG_PORT:
     case TAG_PROMISE:
+    case TAG_ENV:
         return false;
     case TAG_ERROR:
         break; // internal objects
@@ -195,12 +195,12 @@ Type sch_value_type_of(Value v)
         return TYPE_PROC;
     case TAG_VECTOR:
         return TYPE_VECTOR;
-    case TAG_ENV:
-        return TYPE_ENV;
     case TAG_PORT:
         return TYPE_PORT;
     case TAG_PROMISE:
         return TYPE_PROMISE;
+    case TAG_ENV:
+        return TYPE_ENV;
     case TAG_ERROR:
         break; // internal objects
     }
@@ -228,12 +228,12 @@ static const char *value_type_to_string(Type t)
         return "procedure";
     case TYPE_VECTOR:
         return "vector";
-    case TYPE_ENV:
-        return "environment";
     case TYPE_PORT:
         return "port";
     case TYPE_PROMISE:
         return "promise";
+    case TYPE_ENV:
+        return "environment";
     case TYPE_EOF:
         return "eof";
     }
@@ -1497,17 +1497,17 @@ static Value syn_define(Value env, Value args)
         v = define_proc_internal(env, head, cdr(args));
         EXPECT_ERROR_LOCATED(v, args);
         return v;
+    case TYPE_UNDEF:
     case TYPE_NULL:
+    case TYPE_EOF:
     case TYPE_BOOL:
     case TYPE_INT:
     case TYPE_STRING:
-    case TYPE_PROC:
     case TYPE_VECTOR:
-    case TYPE_ENV:
     case TYPE_PORT:
+    case TYPE_PROC:
     case TYPE_PROMISE:
-    case TYPE_EOF:
-    case TYPE_UNDEF:
+    case TYPE_ENV:
         return runtime_error("the first argument expected symbol or pair but got %s",
                              value_type_to_string(t));
     }
@@ -1553,16 +1553,16 @@ static bool equal(Value x, Value y)
         return strcmp(STRING(x), STRING(y)) == 0;
     case TYPE_VECTOR:
         return vector_equal(VECTOR(x), VECTOR(y));
-    case TYPE_SYMBOL:
+    case TYPE_UNDEF:
     case TYPE_NULL:
+    case TYPE_EOF:
     case TYPE_BOOL:
     case TYPE_INT:
-    case TYPE_PROC:
-    case TYPE_ENV:
+    case TYPE_SYMBOL:
     case TYPE_PORT:
+    case TYPE_PROC:
     case TYPE_PROMISE:
-    case TYPE_EOF:
-    case TYPE_UNDEF:
+    case TYPE_ENV:
         return false;
     }
     UNREACHABLE();
@@ -2793,24 +2793,24 @@ static void print_vector(FILE *f, Value val, Value record, ValuePrinter printer)
 static void print_object(FILE *f, Value v, Value record, ValuePrinter printer)
 {
     switch (sch_value_type_of(v)) {
-    case TYPE_SYMBOL:
-    case TYPE_STRING:
-    case TYPE_NULL:
-    case TYPE_BOOL:
-    case TYPE_INT:
-    case TYPE_PROC:
-    case TYPE_UNDEF:
-    case TYPE_ENV:
-    case TYPE_PORT:
-    case TYPE_PROMISE:
-    case TYPE_EOF:
-        printer(f, v);
-        break;
     case TYPE_PAIR:
         print_pair(f, v, record, printer);
         break;
     case TYPE_VECTOR:
         print_vector(f, v, record, printer);
+        break;
+    case TYPE_UNDEF:
+    case TYPE_NULL:
+    case TYPE_EOF:
+    case TYPE_BOOL:
+    case TYPE_INT:
+    case TYPE_SYMBOL:
+    case TYPE_STRING:
+    case TYPE_PORT:
+    case TYPE_PROC:
+    case TYPE_PROMISE:
+    case TYPE_ENV:
+        printer(f, v);
         break;
     }
 }
@@ -2818,8 +2818,14 @@ static void print_object(FILE *f, Value v, Value record, ValuePrinter printer)
 static void fdisplay_single(FILE *f, Value v)
 {
     switch (sch_value_type_of(v)) {
+    case TYPE_UNDEF:
+        fprintf(f, "<undef>");
+        break;
     case TYPE_NULL:
         fprintf(f, "()");
+        break;
+    case TYPE_EOF:
+        fprintf(f, "<eof>");
         break;
     case TYPE_BOOL:
         fprintf(f, "%s", v == Qtrue ? "#t" : "#f");
@@ -2833,23 +2839,17 @@ static void fdisplay_single(FILE *f, Value v)
     case TYPE_STRING:
         fprintf(f, "%s", STRING(v));
         break;
-    case TYPE_PROC:
-        display_procedure(f, v);
-        break;
-    case TYPE_ENV:
-        fprintf(f, "<environment: %s>", ENV(v)->name);
-        break;
     case TYPE_PORT:
         display_port(f, PORT(v)->fp);
+        break;
+    case TYPE_PROC:
+        display_procedure(f, v);
         break;
     case TYPE_PROMISE:
         fprintf(f, "<promise: %p>", (void *) v);
         break;
-    case TYPE_EOF:
-        fprintf(f, "<eof>");
-        break;
-    case TYPE_UNDEF:
-        fprintf(f, "<undef>");
+    case TYPE_ENV:
+        fprintf(f, "<environment: %s>", ENV(v)->name);
         break;
     case TYPE_PAIR:
     case TYPE_VECTOR:
@@ -3030,15 +3030,15 @@ static void inspect_single(FILE *f, Value v)
     case TYPE_SYMBOL:
         fprintf(f, "'");
         // fall through
+    case TYPE_UNDEF:
     case TYPE_NULL:
+    case TYPE_EOF:
     case TYPE_BOOL:
     case TYPE_INT:
-    case TYPE_PROC:
-    case TYPE_UNDEF:
-    case TYPE_ENV:
     case TYPE_PORT:
+    case TYPE_PROC:
     case TYPE_PROMISE:
-    case TYPE_EOF:
+    case TYPE_ENV:
         fdisplay_single(f, v);
         break;
     case TYPE_PAIR:
