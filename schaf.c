@@ -359,6 +359,28 @@ static inline bool is_length_3(Value args)
     return is_length_min_2(args) && cddr(args) != Qnil && cdddr(args) == Qnil;
 }
 
+static inline bool is_length_min_n(Value l, int64_t min)
+{
+    int64_t len = 0;
+    for (Value p = l; p != Qnil; p = cdr(p)) {
+        len++;
+        if (len >= min)
+            return true;
+    }
+    return false;
+}
+
+static bool length_in_range(Value l, int64_t min, int64_t max)
+{
+    int64_t len = 0;
+    for (Value p = l; p != Qnil; p = cdr(p)) {
+        len++;
+        if (len > max)
+            return false;
+    }
+    return len >= min;
+}
+
 // Trigger runtime errors
 #define EXPECT_OR_RETURN(expr, err) do { if (!(expr)) return err; } while (0)
 #define EXPECT(expr, ...) EXPECT_OR_RETURN((expr), runtime_error(__VA_ARGS__))
@@ -400,6 +422,7 @@ static Value arity_error(const char *op, int64_t expected, int64_t actual);
            min, max, length(args))
 #define EXPECT_ARITY_MIN_1(args) EXPECT_ARITY_N(args != Qnil, ">= ", 1, 0)
 #define EXPECT_ARITY_MIN_2(args) EXPECT_ARITY_N(is_length_min_2(args), ">= ", 2, length(args))
+#define EXPECT_ARITY_MIN_N(n, args) EXPECT_ARITY_N(is_length_min_n(args, n), ">= ", n, length(args))
 
 // Trigger errors about types
 static inline Value type_error(const char *expected, Value v);
@@ -512,16 +535,13 @@ static Value cfunc_closure_new(const char *name, void *cfunc, Value data)
     return (Value) cc;
 }
 
-static bool length_in_range(Value l, int64_t min, int64_t max)
-{
-    int64_t len = 0;
-    for (Value p = l; p != Qnil; p = cdr(p)) {
-        len++;
-        if (len > max)
-            return false;
-    }
-    return len >= min;
-}
+#define EXPECT_CLOSURE_ARITY(closure, args) do { \
+        int64_t arity = PROCEDURE(closure)->arity, amin = CLOSURE(proc)->arity_min; \
+        if (arity >= 0) \
+            EXPECT_ARITY(arity, args); \
+        else if (amin > 0) \
+            EXPECT_ARITY_MIN_N(amin, args); \
+    } while (0)
 
 static Value eval_body(Value env, Value body);
 static Value env_inherit(Value parent);
@@ -530,25 +550,30 @@ static void env_put(Value env, Value key, Value value);
 //PTR
 static Value apply_closure(UNUSED Value env, Value proc, Value args)
 {
-    EXPECT_ARITY(PROCEDURE(proc)->arity, args);
+    EXPECT_CLOSURE_ARITY(proc, args);
     Closure *cl = CLOSURE(proc);
     int64_t arity = cl->proc.arity;
     Value localenv = env_inherit(cl->env);
     Value params = cl->params;
+    size_t max = arity == -1 ? cl->arity_min : (size_t) arity;
+    Value pargs = args, pparams = params;
+    for (size_t i = 0; i < max; i++, pargs = cdr(pargs), pparams = cdr(pparams))
+        env_put(localenv, car(pparams), car(pargs));
     if (arity == -1)
-        env_put(localenv, params, args);
-    else {
-        for (Value pa = args, pp = params; pa != Qnil; pa = cdr(pa), pp = cdr(pp))
-            env_put(localenv, car(pp), car(pa));
-    }
+        env_put(localenv, pparams, pargs);
     return eval_body(localenv, cl->body);
 }
 
-static Value closure_new(Value env, Value params, Value body)
+static Value closure_new(Value env, Value params, uint64_t arity, Value rest, Value body)
 {
     Closure *f = obj_new(TAG_CLOSURE, sizeof(Closure));
-    bool headp = params == Qnil || sch_value_is_pair(params);
-    f->proc.arity = headp ? length(params) : -1;
+    if (rest == Qnil) {
+        f->proc.arity = arity;
+        f->arity_min = 0;
+    } else {
+        f->proc.arity = -1;
+        f->arity_min = arity;
+    }
     f->proc.apply = apply_closure;
     f->env = env;
     f->params = params;
@@ -1075,14 +1100,33 @@ static Value syn_quote(UNUSED Value env, Value datum)
 }
 
 // 4.1.4. Procedures
+static Value parse_params(Value params, uint64_t *len, Value *rest)
+{
+    uint64_t n = 0;
+    for (Value p = params; p != Qnil; p = cdr(p)) {
+        if (!sch_value_is_pair(p)) {
+            EXPECT_TYPE(symbol, p);
+            *rest = p;
+            break;
+        }
+        EXPECT_TYPE(symbol, car(p));
+        n++;
+    }
+    *len = n;
+    return Qfalse;
+}
+
 //PTR -- proper tail recursion needed
 static Value syn_lambda(Value env, Value args)
 {
-    Value params = car(args), body = cdr(args);
-    if (params != Qnil)
-        EXPECT_TYPE_OR(pair, symbol, params);
+    Value params = car(args), body = cdr(args), rest = Qnil;
+    uint64_t len = 0;
+    if (params != Qnil) {
+        Value e = parse_params(params, &len, &rest);
+        EXPECT_ERROR(e);
+    }
     EXPECT_TYPE(pair, body);
-    return closure_new(env, params, body);
+    return closure_new(env, params, len, rest, body);
 }
 
 // 4.1.5. Conditionals
@@ -1229,7 +1273,9 @@ static Value let(Value env, Value var, Value bindings, Value body)
         env_put(localenv, ident, val);
     }
     if (named) {
-        Value proc = closure_new(localenv, cdr(params), body);
+        Value rparams = cdr(params);
+        int64_t len = length(rparams);
+        Value proc = closure_new(localenv, rparams, len, Qnil, body);
         env_put(localenv, var, proc); // letenv affects as proc->env
     }
     return eval_body(localenv, body);
@@ -1480,8 +1526,11 @@ static Value define_variable(Value env, Value ident, Value expr)
 
 static Value define_proc_closure(Value env, Value heads, Value body)
 {
-    Value ident = car(heads), params = cdr(heads);
-    Value val = closure_new(env, params, body);
+    Value ident = car(heads), params = cdr(heads), rest = Qnil;
+    uint64_t len = 0;
+    Value e = parse_params(params, &len, &rest);
+    EXPECT_ERROR(e);
+    Value val = closure_new(env, params, len, rest, body);
     return define_variable(env, ident, val);
 }
 
