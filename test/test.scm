@@ -134,6 +134,13 @@
               ((lambda a (car a)) 10)
               a) 42)))
 
+(describe "lambda variadic with required" (lambda ()
+  (define (f a b . rest)
+    (* a b (length rest)))
+  (expect = (f 1 2 3 4 5) 6)
+  (expect = ((lambda (a b . rest)
+               (+ a b (length rest))) 1 2 3 4 5) 6)))
+
 (describe "lambda and envs" (lambda ()
   (define f #f)
   (let ((x 42))
