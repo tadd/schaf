@@ -428,12 +428,15 @@ static void expect_cfunc_arity(int64_t actual)
         CFUNCARG_MAX, actual);
 }
 
-static Value cfunc_new_internal(ValueTag tag, const char *name, void *cfunc, int64_t arity)
+static Value cfunc_new_internal(ValueTag tag, const char *name, void *cfunc,
+                                int64_t arity, uint64_t amin, uint64_t amax)
 {
     expect_cfunc_tag(tag);
     expect_cfunc_arity(arity);
     CFunc *f = obj_new(tag, sizeof(CFunc));
     f->proc.arity = arity;
+    f->proc.arity_min = amin;
+    f->proc.arity_max = amax;
     f->name = name;
     f->cfunc = cfunc;
     switch (arity) {
@@ -458,14 +461,39 @@ static Value cfunc_new_internal(ValueTag tag, const char *name, void *cfunc, int
     return (Value) f;
 }
 
-static Value cfunc_new(const char *name, void *cfunc, int64_t arity)
+static Value cfunc_new_internal_n(ValueTag tag, const char *name, void *cfunc, int64_t arity)
 {
-    return cfunc_new_internal(TAG_CFUNC, name, cfunc, arity);
+    if (arity < 0)
+        bug("Got a negative arity: %"PRId64". Use cfunc_new_v inestad", arity);
+    return cfunc_new_internal(tag, name, cfunc, arity, 0, 0);
+}
+
+static Value cfunc_new_internal_v(ValueTag tag, const char *name, void *cfunc, uint64_t amin, uint64_t amax)
+{
+    if (amax > 0 && amin >= amax)
+        bug("Got an invalid arity pair: (%"PRId64"..%"PRId64")", amin, amax);
+    return cfunc_new_internal(tag, name, cfunc, -1, amin, amax);
+}
+
+
+static Value cfunc_new(const char *name, void *cfunc, int64_t arity)
+{ 
+    return cfunc_new_internal_n(TAG_CFUNC, name, cfunc, arity);
+}
+
+static Value cfunc_new_v(const char *name, void *cfunc, uint64_t amin, uint64_t amax)
+{
+    return cfunc_new_internal_v(TAG_CFUNC, name, cfunc, amin, amax);
 }
 
 static Value syntax_new(const char *name, void *cfunc, int64_t arity)
 {
-    return cfunc_new_internal(TAG_SYNTAX, name, cfunc, arity);
+    return cfunc_new_internal_n(TAG_SYNTAX, name, cfunc, arity);
+}
+
+static Value syntax_new_v(const char *name, void *cfunc, uint64_t amin, uint64_t amax)
+{
+    return cfunc_new_internal_v(TAG_SYNTAX, name, cfunc, amin, amax);
 }
 
 static Value apply_cfunc_closure_1(UNUSED Value env, Value f, Value args)
@@ -694,9 +722,19 @@ static void define_syntax(Value env, const char *name, void *cfunc, int64_t arit
     env_put(env, sch_symbol_new(name), syntax_new(name, cfunc, arity));
 }
 
+static void define_syntax_v(Value env, const char *name, void *cfunc, int64_t amin, int64_t amax)
+{
+    env_put(env, sch_symbol_new(name), syntax_new_v(name, cfunc, amin, amax));
+}
+
 static void define_procedure(Value env, const char *name, void *cfunc, int64_t arity)
 {
     env_put(env, sch_symbol_new(name), cfunc_new(name, cfunc, arity));
+}
+
+static void define_procedure_v(Value env, const char *name, void *cfunc, int64_t amin, int64_t amax)
+{
+    env_put(env, sch_symbol_new(name), cfunc_new_v(name, cfunc, amin, amax));
 }
 
 //
@@ -3109,25 +3147,25 @@ void sch_init(const void *sp)
     // 4.1.2. Literal expressions
     define_syntax(e, "quote", syn_quote, 1);
     // 4.1.4. Procedures
-    define_syntax(e, "lambda", syn_lambda, -1);
+    define_syntax_v(e, "lambda", syn_lambda, 2, 0);
     // 4.1.5. Conditionals
-    define_syntax(e, "if", syn_if, -1);
+    define_syntax_v(e, "if", syn_if, 2, 3);
     // 4.1.6. Assignments
     define_syntax(e, "set!", syn_set, 2);
     // 4.2. Derived expression types
     // 4.2.1. Conditionals
-    define_syntax(e, "cond", syn_cond, -1);
-    define_syntax(e, "case", syn_case, -1);
-    define_syntax(e, "and", syn_and, -1);
-    define_syntax(e, "or", syn_or, -1);
+    define_syntax_v(e, "cond", syn_cond, 1, 0);
+    define_syntax_v(e, "case", syn_case, 2, 0);
+    define_syntax_v(e, "and", syn_and, 0, 0);
+    define_syntax_v(e, "or", syn_or, 0, 0);
     // 4.2.2. Binding constructs
-    define_syntax(e, "let", syn_let, -1); // with named let in 4.2.4.
-    define_syntax(e, "let*", syn_let_star, -1);
-    define_syntax(e, "letrec", syn_letrec, -1);
+    define_syntax_v(e, "let", syn_let, 2, 0); // with named let in 4.2.4.
+    define_syntax_v(e, "let*", syn_let_star, 2, 0);
+    define_syntax_v(e, "letrec", syn_letrec, 2, 0);
     // 4.2.3. Sequencing
-    define_syntax(e, "begin", syn_begin, -1);
+    define_syntax_v(e, "begin", syn_begin, 1, 0);
     // 4.2.4. Iteration
-    define_syntax(e, "do", syn_do, -1);
+    define_syntax_v(e, "do", syn_do, 2, 0);
     // 4.2.5. Delayed evaluation
     define_syntax(e, "delay", syn_delay, 1);
     // 4.2.6. Quasiquotation
@@ -3141,7 +3179,7 @@ void sch_init(const void *sp)
     // 5. Program structure
 
     // 5.2. Definitions
-    define_syntax(e, "define", syn_define, -1);
+    define_syntax_v(e, "define", syn_define, 2, 0);
     // 5.3. Syntax definitions
     //- define-syntax
     env_null = env_dup("null", e);
@@ -3157,22 +3195,22 @@ void sch_init(const void *sp)
     // 6.2.5. Numerical operations
     define_procedure(e, "number?", proc_integer_p, 1); // alias
     define_procedure(e, "integer?", proc_integer_p, 1);
-    define_procedure(e, "=", proc_numeq, -1);
-    define_procedure(e, "<", proc_lt, -1);
-    define_procedure(e, ">", proc_gt, -1);
-    define_procedure(e, "<=", proc_le, -1);
-    define_procedure(e, ">=", proc_ge, -1);
+    define_procedure_v(e, "=", proc_numeq, 2, 0);
+    define_procedure_v(e, "<", proc_lt, 2, 0);
+    define_procedure_v(e, ">", proc_gt, 2, 0);
+    define_procedure_v(e, "<=", proc_le, 2, 0);
+    define_procedure_v(e, ">=", proc_ge, 2, 0);
     define_procedure(e, "zero?", proc_zero_p, 1);
     define_procedure(e, "positive?", proc_positive_p, 1);
     define_procedure(e, "negative?", proc_negative_p, 1);
     define_procedure(e, "odd?", proc_odd_p, 1);
     define_procedure(e, "even?", proc_even_p, 1);
-    define_procedure(e, "max", proc_max, -1);
-    define_procedure(e, "min", proc_min, -1);
-    define_procedure(e, "+", proc_add, -1);
-    define_procedure(e, "*", proc_mul, -1);
-    define_procedure(e, "-", proc_sub, -1);
-    define_procedure(e, "/", proc_div, -1);
+    define_procedure_v(e, "max", proc_max, 1, 0);
+    define_procedure_v(e, "min", proc_min, 1, 0);
+    define_procedure_v(e, "+", proc_add, 0, 0);
+    define_procedure_v(e, "*", proc_mul, 0, 0);
+    define_procedure_v(e, "-", proc_sub, 1, 0);
+    define_procedure_v(e, "/", proc_div, 1, 0);
     define_procedure(e, "abs", proc_abs, 1);
     define_procedure(e, "quotient", proc_quotient, 2);
     define_procedure(e, "remainder", proc_remainder, 2);
@@ -3195,9 +3233,9 @@ void sch_init(const void *sp)
     CXRS(DEFUN_CXR); // registers 28 procedures
     define_procedure(e, "null?", proc_null_p, 1);
     define_procedure(e, "list?", proc_list_p, 1);
-    define_procedure(e, "list", proc_list, -1);
+    define_procedure_v(e, "list", proc_list, 0, 0);
     define_procedure(e, "length", proc_length, 1);
-    define_procedure(e, "append", proc_append, -1);
+    define_procedure_v(e, "append", proc_append, 0, 0);
     define_procedure(e, "reverse", proc_reverse, 1);
     define_procedure(e, "list-tail", proc_list_tail, 2);
     define_procedure(e, "list-ref", proc_list_ref, 2);
@@ -3214,24 +3252,24 @@ void sch_init(const void *sp)
     define_procedure(e, "string-length", proc_string_length, 1);
     define_procedure(e, "string=?", proc_string_eq, 2);
     define_procedure(e, "substring", proc_substring, 3);
-    define_procedure(e, "string-append", proc_string_append, -1);
+    define_procedure_v(e, "string-append", proc_string_append, 0, 0);
     // 6.3.6. Vectors
     define_procedure(e, "vector?", proc_vector_p, 1);
-    define_procedure(e, "make-vector", proc_make_vector, -1);
-    define_procedure(e, "vector", proc_vector, -1);
+    define_procedure_v(e, "make-vector", proc_make_vector, 1, 2);
+    define_procedure_v(e, "vector", proc_vector, 0, 0);
     define_procedure(e, "vector-length", proc_vector_length, 1);
     define_procedure(e, "vector-ref", proc_vector_ref, 2);
     define_procedure(e, "vector-set!", proc_vector_set, 3);
 
     // 6.4. Control features
     define_procedure(e, "procedure?", proc_procedure_p, 1);
-    define_procedure(e, "apply", proc_apply, -1);
-    define_procedure(e, "map", proc_map, -1);
-    define_procedure(e, "for-each", proc_for_each, -1);
+    define_procedure_v(e, "apply", proc_apply, 2, 0);
+    define_procedure_v(e, "map", proc_map, 2, 0);
+    define_procedure_v(e, "for-each", proc_for_each, 2, 0);
     define_procedure(e, "force", proc_force, 1);
     define_procedure(e, "call/cc", proc_callcc, 1); // alias
     define_procedure(e, "call-with-current-continuation", proc_callcc, 1);
-    define_procedure(e, "values", proc_values, -1);
+    define_procedure_v(e, "values", proc_values, 0, 0);
     define_procedure(e, "call-with-values", proc_call_with_values, 2);
     define_procedure(e, "dynamic-wind", proc_dynamic_wind, 3);
     // 6.5. Eval
@@ -3254,11 +3292,11 @@ void sch_init(const void *sp)
     define_procedure(e, "close-input-port", proc_close_input_port, 1);
     define_procedure(e, "close-output-port", proc_close_output_port, 1);
     // 6.6.2. Input
-    define_procedure(e, "read", proc_read, -1);
+    define_procedure_v(e, "read", proc_read, 1, 2);
     define_procedure(e, "eof-object?", proc_eof_object_p, 1);
     // 6.6.3. Output
-    define_procedure(e, "display", proc_display, -1);
-    define_procedure(e, "newline", proc_newline, -1);
+    define_procedure_v(e, "display", proc_display, 1, 2);
+    define_procedure_v(e, "newline", proc_newline, 0, 1);
     // 6.6.4. System interface
     define_procedure(e, "load", proc_load, 1);
 
@@ -3268,19 +3306,19 @@ void sch_init(const void *sp)
     // Extensions from R7RS
     // (scheme base)
     define_procedure(e, "close-port", proc_close_port, 1);
-    define_procedure(e, "read-string", proc_read_string, -1);
+    define_procedure_v(e, "read-string", proc_read_string, 1, 2);
     define_procedure(e, "open-output-string", proc_open_output_string, 0);
     define_procedure(e, "get-output-string", proc_get_output_string, 1);
     // (scheme process-context)
-    define_procedure(e, "exit", proc_exit, -1);
+    define_procedure_v(e, "exit", proc_exit, 0, 1);
     // (scheme lazy)
     define_procedure(e, "promise?", proc_promise_p, 1);
 
     // Local Extensions
     define_syntax(e, "_defined?", syn_defined_p, 1);
     define_procedure(e, "_cputime", proc_cputime, 0);
-    define_procedure(e, "p", proc_p, -1);
-    define_procedure(e, "print", proc_print, -1); // like Gauche
+    define_procedure_v(e, "p", proc_p, 0, 0);
+    define_procedure_v(e, "print", proc_print, 0, 0); // like Gauche
     define_procedure(e, "schaf-environment", proc_schaf_environment, 0);
 
     env_default = env_dup("default", e);

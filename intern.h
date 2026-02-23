@@ -99,6 +99,8 @@ typedef struct {
 typedef struct {
     Header header;
     int64_t arity;
+    // arity_min/max are effective if arity == -1
+    uint64_t arity_min, arity_max; // no limit when max == 0
     Value (*apply)(Value env, Value proc, Value args);
 } Procedure;
 
