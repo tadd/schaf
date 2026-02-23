@@ -512,11 +512,25 @@ static inline bool is_length_min_n(Value l, int64_t min)
     EXPECT_ARITY_N(expected < 0 || length_in_range(args, expected, expected), \
                    "", expected, length(args))
 
-static Value eval_body(Value env, Value body);
-static Value env_inherit(Value parent);
-static void env_put(Value env, Value key, Value value);
+static inline Value type_error(const char *expected, Value v);
 
-#define EXPECT_ARITY_MIN_N(n, args) EXPECT_ARITY_N(is_length_min__n(args, n), ">= ", n, length(args))
+#define EXPECT(expr, ...) EXPECT_OR_RETURN((expr), runtime_error(__VA_ARGS__))
+#define EXPECT_WITH_OBJ(expr, ...) EXPECT_OR_RETURN((expr), runtime_error_with_obj(__VA_ARGS__))
+
+#define EXPECT_TYPE(type, v) \
+    EXPECT_OR_RETURN(sch_value_is_ ## type(v), type_error(#type, v))
+#define EXPECT_TYPE_TWIN(type, x, y) EXPECT_TYPE(type, x); EXPECT_TYPE(type, y)
+#define EXPECT_TYPE_OR(t1, t2, v) \
+    EXPECT(sch_value_is_ ## t1(v) || sch_value_is_ ## t2(v), \
+           "expected " #t1 " or " #t2 " but got %s", sch_value_to_type_name(v))
+
+#define EXPECT_ARITY_RANGE(min, max, args) \
+    EXPECT(length_in_range(args, min, max), \
+           "wrong number of arguments: expected %d..%d but got %"PRId64, \
+           min, max, length(args))
+#define EXPECT_ARITY_MIN_1(args) EXPECT_ARITY_N(args != Qnil, ">= ", 1, 0)
+#define EXPECT_ARITY_MIN_2(args) EXPECT_ARITY_N(is_length_min_2(args), ">= ", 2, length(args))
+#define EXPECT_ARITY_MIN_N(n, args) EXPECT_ARITY_N(is_length_min_n(args, n), ">= ", n, length(args))
 
 #define EXPECT_CLOSURE_ARITY(closure, args) do { \
         int64_t arity = PROCEDURE(closure)->arity, amin = CLOSURE(proc)->arity_min; \
@@ -526,17 +540,27 @@ static void env_put(Value env, Value key, Value value);
             EXPECT_ARITY_MIN_N(amin, args); \
     } while (0)
 
+static Value eval_body(Value env, Value body);
+static Value env_inherit(Value parent);
+static void env_put(Value env, Value key, Value value);
+
 //PTR
 static Value apply_closure(UNUSED Value env, Value proc, Value args)
 {
-    EXPECT_ARITY(PROCEDURE(proc)->arity, args);
+    EXPECT_CLOSURE_ARITY(proc, args);
     Closure *cl = CLOSURE(proc);
     int64_t arity = cl->proc.arity;
     Value localenv = env_inherit(cl->env);
     Value params = cl->params;
-    if (arity == -1)
-        env_put(localenv, params, args);
-    else {
+    if (arity == -1) {
+        Value pa = args, pp = params;
+        for (size_t i = 0; i < cl->arity_min; i++) {
+            env_put(localenv, car(pp), car(pa));
+            pa = cdr(pa), pp = cdr(pp);
+        }
+        EXPECT_TYPE(symbol, pp);
+        env_put(localenv, pp, pa);
+    } else {
         for (Value pa = args, pp = params; pa != Qnil; pa = cdr(pa), pp = cdr(pp))
             env_put(localenv, car(pp), car(pa));
     }
@@ -647,23 +671,6 @@ static inline Value type_error(const char *expected, Value v)
     return runtime_error("expected %s but got %s",
                          expected, sch_value_to_type_name(v));
 }
-
-#define EXPECT(expr, ...) EXPECT_OR_RETURN((expr), runtime_error(__VA_ARGS__))
-#define EXPECT_WITH_OBJ(expr, ...) EXPECT_OR_RETURN((expr), runtime_error_with_obj(__VA_ARGS__))
-
-#define EXPECT_TYPE(type, v) \
-    EXPECT_OR_RETURN(sch_value_is_ ## type(v), type_error(#type, v))
-#define EXPECT_TYPE_TWIN(type, x, y) EXPECT_TYPE(type, x); EXPECT_TYPE(type, y)
-#define EXPECT_TYPE_OR(t1, t2, v) \
-    EXPECT(sch_value_is_ ## t1(v) || sch_value_is_ ## t2(v), \
-           "expected " #t1 " or " #t2 " but got %s", sch_value_to_type_name(v))
-
-#define EXPECT_ARITY_RANGE(min, max, args) \
-    EXPECT(length_in_range(args, min, max), \
-           "wrong number of arguments: expected %d..%d but got %"PRId64, \
-           min, max, length(args))
-#define EXPECT_ARITY_MIN_1(args) EXPECT_ARITY_N(args != Qnil, ">= ", 1, 0)
-#define EXPECT_ARITY_MIN_2(args) EXPECT_ARITY_N(is_length_min_2(args), ">= ", 2, length(args))
 
 //
 // Environments
