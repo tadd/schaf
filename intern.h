@@ -116,6 +116,7 @@ typedef struct {
 
 typedef struct {
     Procedure proc;
+    uint64_t arity_min;
     Value env;
     Value params;
     Value body;

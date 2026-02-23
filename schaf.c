@@ -544,11 +544,37 @@ static Value apply_closure(UNUSED Value env, Value proc, Value args)
     return eval_body(localenv, cl->body);
 }
 
+int64_t length_with_improper_list(Value l, bool *improper)
+{
+    int64_t len = 0;
+    for (Value p = l; p != Qnil; p = cdr(p)) {
+        if (!sch_value_is_pair(p)) {
+            *improper = true;
+            break;
+        }
+        len++;
+    }
+    return len;
+}
+
 static Value closure_new(Value env, Value params, Value body)
 {
     Closure *f = obj_new(TAG_CLOSURE, sizeof(Closure));
     bool headp = params == Qnil || sch_value_is_pair(params);
-    f->proc.arity = headp ? length(params) : -1;
+    bool improper = false;
+    if (headp) {
+        int64_t len = length_with_improper_list(params, &improper);
+        if (improper) {
+            f->proc.arity = -1;
+            f->arity_min = len;
+        } else {
+            f->proc.arity = len;
+            f->arity_min = 0;
+        }
+    } else {
+        f->proc.arity = -1;
+        f->arity_min = 0;
+    }
     f->proc.apply = apply_closure;
     f->env = env;
     f->params = params;
