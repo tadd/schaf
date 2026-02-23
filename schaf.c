@@ -497,6 +497,17 @@ static bool length_in_range(Value l, int64_t min, int64_t max)
     return len >= min;
 }
 
+static inline bool is_length_min_n(Value l, int64_t min)
+{
+    int64_t len = 0;
+    for (Value p = l; p != Qnil; p = cdr(p)) {
+        len++;
+        if (len >= min)
+            return true;
+    }
+    return false;
+}
+
 #define EXPECT_ARITY(expected, args) \
     EXPECT_ARITY_N(expected < 0 || length_in_range(args, expected, expected), \
                    "", expected, length(args))
@@ -504,6 +515,16 @@ static bool length_in_range(Value l, int64_t min, int64_t max)
 static Value eval_body(Value env, Value body);
 static Value env_inherit(Value parent);
 static void env_put(Value env, Value key, Value value);
+
+#define EXPECT_ARITY_MIN_N(n, args) EXPECT_ARITY_N(is_length_min__n(args, n), ">= ", n, length(args))
+
+#define EXPECT_CLOSURE_ARITY(closure, args) do { \
+        int64_t arity = PROCEDURE(closure)->arity, amin = CLOSURE(proc)->arity_min; \
+        if (arity >= 0) \
+            EXPECT_ARITY(arity, args); \
+        else if (amin > 0) \
+            EXPECT_ARITY_MIN_N(amin, args); \
+    } while (0)
 
 //PTR
 static Value apply_closure(UNUSED Value env, Value proc, Value args)
@@ -522,11 +543,37 @@ static Value apply_closure(UNUSED Value env, Value proc, Value args)
     return eval_body(localenv, cl->body);
 }
 
+int64_t length_with_improper_list(Value l, bool *improper)
+{
+    int64_t len = 0;
+    for (Value p = l; p != Qnil; p = cdr(p)) {
+        if (!sch_value_is_pair(p)) {
+            *improper = true;
+            break;
+        }
+        len++;
+    }
+    return len;
+}
+
 static Value closure_new(Value env, Value params, Value body)
 {
     Closure *f = obj_new(TAG_CLOSURE, sizeof(Closure));
     bool headp = params == Qnil || sch_value_is_pair(params);
-    f->proc.arity = headp ? length(params) : -1;
+    bool improper = false;
+    if (headp) {
+        int64_t len = length_with_improper_list(params, &improper);
+        if (improper) {
+            f->proc.arity = -1;
+            f->arity_min = len;
+        } else {
+            f->proc.arity = len;
+            f->arity_min = 0;
+        }
+    } else {
+        f->proc.arity = -1;
+        f->arity_min = 0;
+    }
     f->proc.apply = apply_closure;
     f->env = env;
     f->params = params;
