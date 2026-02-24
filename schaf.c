@@ -1474,7 +1474,7 @@ static Value define_variable(Value env, Value ident, Value expr)
     return Qfalse;
 }
 
-static Value define_proc_internal(Value env, Value heads, Value body)
+static Value define_proc_closure(Value env, Value heads, Value body)
 {
     Value ident = car(heads), params = cdr(heads);
     Value val = closure_new(env, params, body);
@@ -1494,7 +1494,7 @@ static Value syn_define(Value env, Value args)
         EXPECT_ERROR_LOCATED(v, cdr(args));
         return v;
     case TYPE_PAIR:
-        v = define_proc_internal(env, head, cdr(args));
+        v = define_proc_closure(env, head, cdr(args));
         EXPECT_ERROR_LOCATED(v, args);
         return v;
     case TYPE_UNDEF:
