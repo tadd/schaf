@@ -1100,16 +1100,26 @@ static Value syn_quote(UNUSED Value env, Value datum)
 }
 
 // 4.1.4. Procedures
+static Value memq(Value key, Value l);
+#define EXPECT_UNIQUE_VARNAME(vars, v)  do { \
+        EXPECT(memq(v, vars) == Qfalse, "duplicated variable: %s", sch_symbol_to_cstr(v)); \
+        vars = cons(v, vars); \
+    } while (0)
+
 static Value parse_params(Value params, uint64_t *len, Value *rest)
 {
     uint64_t n = 0;
-    for (Value p = params; p != Qnil; p = cdr(p)) {
+    Value vars = Qnil;
+    for (Value p = params, var = Qfalse; p != Qnil; p = cdr(p)) {
         if (!sch_value_is_pair(p)) {
             EXPECT_TYPE(symbol, p);
+            EXPECT_UNIQUE_VARNAME(vars, p);
             *rest = p;
             break;
         }
-        EXPECT_TYPE(symbol, car(p));
+        var = car(p);
+        EXPECT_TYPE(symbol, var);
+        EXPECT_UNIQUE_VARNAME(vars, var);
         n++;
     }
     *len = n;
@@ -1200,7 +1210,6 @@ static Value syn_cond(Value env, Value clauses)
 #define EXPECT_LIST_HEAD(v) \
     EXPECT(v == Qnil || sch_value_is_pair(v), \
            "expected null or pair but got %s", sch_value_to_type_name(v))
-static Value memq(Value key, Value l);
 
 //PTR
 static Value syn_case(Value env, Value args)
@@ -1254,18 +1263,20 @@ static bool is_let_binding_form(Value b)
         cddr(b) == Qnil;
 }
 
-#define EXPECT_LET_BINDING_FORM(b) \
-    EXPECT_WITH_OBJ(is_let_binding_form(b), "malformed binding", b)
+#define EXPECT_LET_BINDING_FORM(b, vars) do { \
+        EXPECT_WITH_OBJ(is_let_binding_form(b), "malformed binding", b); \
+        EXPECT_UNIQUE_VARNAME(vars, car(b)); \
+    } while (0)
 
 static Value let(Value env, Value var, Value bindings, Value body)
 {
     EXPECT_LIST_HEAD(bindings);
     bool named = var != Qfalse;
-    Value localenv = env_inherit(env);
+    Value localenv = env_inherit(env), vars = Qnil;
     Value params = DUMMY_PAIR(), lparams = params;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
-        EXPECT_LET_BINDING_FORM(b);
+        EXPECT_LET_BINDING_FORM(b, vars);
         Value ident = car(b), exprs = cdr(b);
         if (named)
             lparams = PAIR(lparams)->cdr = list1(ident);
@@ -1298,10 +1309,10 @@ static Value syn_let(Value env, Value args)
 static Value let_star(Value env, Value bindings, Value body)
 {
     EXPECT_LIST_HEAD(bindings);
-    Value localenv = env;
+    Value localenv = env, vars = Qnil;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         vValue b = car(p); // workaround for clang -O2
-        EXPECT_LET_BINDING_FORM(b);
+        EXPECT_LET_BINDING_FORM(b, vars);
         Value ident = car(b), exprs = cdr(b);
         localenv = env_inherit(localenv);
         Value val = eval_loc(localenv, exprs);
@@ -1321,10 +1332,10 @@ static Value letrec(Value env, Value bindings, Value body)
 {
     EXPECT_LIST_HEAD(bindings);
     EXPECT_TYPE(pair, body);
-    Value localenv = env_inherit(env);
+    Value localenv = env_inherit(env), vars = Qnil;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
-        EXPECT_LET_BINDING_FORM(b);
+        EXPECT_LET_BINDING_FORM(b, vars);
         Value ident = car(b), exprs = cdr(b);
         Value val = eval_loc(localenv, exprs);
         env_put(localenv, ident, val);
@@ -1356,9 +1367,6 @@ static bool is_do_binding_form(Value b)
          (sch_value_is_pair(cddr(b)) && cdddr(b) == Qnil)); // or 3
 }
 
-#define EXPECT_UNIQUE_VARNAME(vars, v) \
-    EXPECT(memq(v, vars) == Qfalse, "duplicated variable: %s", sch_symbol_to_cstr(v))
-
 //PTR
 static Value syn_do(Value env, Value args)
 {
@@ -1375,7 +1383,6 @@ static Value syn_do(Value env, Value args)
         EXPECT_WITH_OBJ(is_do_binding_form(b), "malformed binding", b);
         Value var = car(b), inits = cdr(b), step = cddr(b);
         EXPECT_UNIQUE_VARNAME(vars, var);
-        vars = cons(var, vars);
         if (step != Qnil) {
             vValue datum = cons(var, step); // workaround for clang -Og
             steps = cons(datum, steps);
