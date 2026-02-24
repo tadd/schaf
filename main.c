@@ -255,9 +255,9 @@ static bool is_empty(const char *line)
 static int repl(void)
 {
     char buf[BUFSIZ] = { '\0' }, line[BUFSIZ];
-    for (;;) {
+    for (;;) { // Loop of..
         printf(buf[0] ? ".....> " : "schaf$ ");
-        if (fgets(line, sizeof(line), stdin) == NULL) // read,
+        if (fgets(line, sizeof(line), stdin) == NULL) // Read,
             break;
         if (is_empty(line))
             continue;// ignore
@@ -268,7 +268,7 @@ static int repl(void)
             continue;
         }
         strcat(buf, line);
-        SchValue v = sch_eval_string(buf); // eval,
+        SchValue v = sch_eval_string(buf); // Eval,
         if (to_be_continued(v))
             continue;
         buf[0] = '\0';
@@ -276,7 +276,7 @@ static int repl(void)
             printf("error: %s\n", sch_error_message());
             continue;
         }
-        sch_display(v); // print!
+        sch_display(v); // Print!
         printf("\n");
     }
     printf("\n");
