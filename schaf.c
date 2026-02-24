@@ -342,19 +342,7 @@ Value sch_string_new(const char *str)
     return string_new_moved(xstrdup(str));
 }
 
-// General macros for error handling
-static Value push_stack_frame(Value ve, const char *name, Value loc);
-#define EXPECT_OR_RETURN(expr, err) do { if (!(expr)) return err; } while (0)
-#define EXPECT_ERROR_WITH_RETVAL(v, val) EXPECT_OR_RETURN(!is_error(v), (val))
-#define EXPECT_ERROR(v) EXPECT_ERROR_WITH_RETVAL((v), (v))
-#define EXPECT_ERROR_LOCATED(v, l) EXPECT_ERROR_WITH_RETVAL((v), ({ \
-            if (scary_length(ERROR(v)) == 0) \
-                push_stack_frame((v), NULL, (l)); \
-            (v); \
-        }))
-// Error happened at the n-th argument in the caller (list)
-#define EXPECT_ERROR_LOCATED_BY_CALLER(v, n) \
-    EXPECT_ERROR_LOCATED(v, sch_integer_new(n))
+// General macros for error handling with some functions
 
 static inline bool is_length_min_2(Value args)
 {
@@ -371,6 +359,25 @@ static inline bool is_length_3(Value args)
     return is_length_min_2(args) && cddr(args) != Qnil && cdddr(args) == Qnil;
 }
 
+// Trigger runtime errors
+#define EXPECT_OR_RETURN(expr, err) do { if (!(expr)) return err; } while (0)
+#define EXPECT(expr, ...) EXPECT_OR_RETURN((expr), runtime_error(__VA_ARGS__))
+#define EXPECT_WITH_OBJ(expr, ...) EXPECT_OR_RETURN((expr), runtime_error_with_obj(__VA_ARGS__))
+
+// Check then forward error from others
+static Value push_stack_frame(Value ve, const char *name, Value loc);
+#define EXPECT_ERROR_WITH_RETVAL(v, val) EXPECT_OR_RETURN(!is_error(v), (val))
+#define EXPECT_ERROR(v) EXPECT_ERROR_WITH_RETVAL((v), (v))
+#define EXPECT_ERROR_LOCATED(v, l) EXPECT_ERROR_WITH_RETVAL((v), ({ \
+            if (scary_length(ERROR(v)) == 0) \
+                push_stack_frame((v), NULL, (l)); \
+            (v); \
+        }))
+// Check error too but the error happened at the n-th argument in the caller (list)
+#define EXPECT_ERROR_LOCATED_BY_CALLER(v, n) \
+    EXPECT_ERROR_LOCATED(v, sch_integer_new(n))
+
+// Trigger errors about arity
 static Value arity_error(const char *op, int64_t expected, int64_t actual);
 
 #define EXPECT_ARITY_N(expr, op, exp, act) \
@@ -383,6 +390,25 @@ static Value arity_error(const char *op, int64_t expected, int64_t actual);
     EXPECT_ARITY_N(is_length_2(args), "", 2, length(args))
 #define EXPECT_ARITY_3(args) \
     EXPECT_ARITY_N(is_length_3(args), "", 3, length(args))
+
+#define EXPECT_ARITY(expected, args) \
+    EXPECT_ARITY_N(expected < 0 || length_in_range(args, expected, expected), \
+                   "", expected, length(args))
+#define EXPECT_ARITY_RANGE(min, max, args) \
+    EXPECT(length_in_range(args, min, max), \
+           "wrong number of arguments: expected %d..%d but got %"PRId64, \
+           min, max, length(args))
+#define EXPECT_ARITY_MIN_1(args) EXPECT_ARITY_N(args != Qnil, ">= ", 1, 0)
+#define EXPECT_ARITY_MIN_2(args) EXPECT_ARITY_N(is_length_min_2(args), ">= ", 2, length(args))
+
+// Trigger errors about types
+static inline Value type_error(const char *expected, Value v);
+#define EXPECT_TYPE(type, v) \
+    EXPECT_OR_RETURN(sch_value_is_ ## type(v), type_error(#type, v))
+#define EXPECT_TYPE_TWIN(type, x, y) EXPECT_TYPE(type, x); EXPECT_TYPE(type, y)
+#define EXPECT_TYPE_OR(t1, t2, v) \
+    EXPECT(sch_value_is_ ## t1(v) || sch_value_is_ ## t2(v), \
+           "expected " #t1 " or " #t2 " but got %s", sch_value_to_type_name(v))
 
 static Value apply_cfunc_v(Value env, Value f, Value args)
 {
@@ -497,10 +523,6 @@ static bool length_in_range(Value l, int64_t min, int64_t max)
     return len >= min;
 }
 
-#define EXPECT_ARITY(expected, args) \
-    EXPECT_ARITY_N(expected < 0 || length_in_range(args, expected, expected), \
-                   "", expected, length(args))
-
 static Value eval_body(Value env, Value body);
 static Value env_inherit(Value parent);
 static void env_put(Value env, Value key, Value value);
@@ -600,23 +622,6 @@ static inline Value type_error(const char *expected, Value v)
     return runtime_error("expected %s but got %s",
                          expected, sch_value_to_type_name(v));
 }
-
-#define EXPECT(expr, ...) EXPECT_OR_RETURN((expr), runtime_error(__VA_ARGS__))
-#define EXPECT_WITH_OBJ(expr, ...) EXPECT_OR_RETURN((expr), runtime_error_with_obj(__VA_ARGS__))
-
-#define EXPECT_TYPE(type, v) \
-    EXPECT_OR_RETURN(sch_value_is_ ## type(v), type_error(#type, v))
-#define EXPECT_TYPE_TWIN(type, x, y) EXPECT_TYPE(type, x); EXPECT_TYPE(type, y)
-#define EXPECT_TYPE_OR(t1, t2, v) \
-    EXPECT(sch_value_is_ ## t1(v) || sch_value_is_ ## t2(v), \
-           "expected " #t1 " or " #t2 " but got %s", sch_value_to_type_name(v))
-
-#define EXPECT_ARITY_RANGE(min, max, args) \
-    EXPECT(length_in_range(args, min, max), \
-           "wrong number of arguments: expected %d..%d but got %"PRId64, \
-           min, max, length(args))
-#define EXPECT_ARITY_MIN_1(args) EXPECT_ARITY_N(args != Qnil, ">= ", 1, 0)
-#define EXPECT_ARITY_MIN_2(args) EXPECT_ARITY_N(is_length_min_2(args), ">= ", 2, length(args))
 
 //
 // Environments
@@ -1305,7 +1310,6 @@ static bool is_do_binding_form(Value b)
          (sch_value_is_pair(cddr(b)) && cdddr(b) == Qnil)); // or 3
 }
 
-#define EXPECT_DO_BINDING_FORM(b) EXPECT_WITH_OBJ(is_do_binding_form(b), "malformed binding", b)
 #define EXPECT_UNIQUE_VARNAME(vars, v) \
     EXPECT(memq(v, vars) == Qfalse, "duplicated variable: %s", sch_symbol_to_cstr(v))
 
@@ -1322,7 +1326,7 @@ static Value syn_do(Value env, Value args)
     Value steps = Qnil, vars = Qnil, v;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
-        EXPECT_DO_BINDING_FORM(b);
+        EXPECT_WITH_OBJ(is_do_binding_form(b), "malformed binding", b);
         Value var = car(b), inits = cdr(b), step = cddr(b);
         EXPECT_UNIQUE_VARNAME(vars, var);
         vars = cons(var, vars);
@@ -2255,15 +2259,12 @@ static Value proc_apply(Value env, Value args)
     return apply(env, proc, appargs);
 }
 
-#define EXPECT_LIST_OF_LISTS(ls) do { \
+#define EXPECT_LIST_EVERY(ls, f) do { \
         for (Value p = ls; p != Qnil; p = cdr(p)) \
-            EXPECT_LIST_HEAD(car(p)); \
-    } while (0)
-#define EXPECT_LIST_OF_NIL(ls)  do { \
-        for (Value p = ls; p != Qnil; p = cdr(p)) \
-            EXPECT(car(p) == Qnil, "different length list in arguments"); \
+            f(car(p)); \
     } while (0)
 
+#define EXPECT_NIL_ELEMENT(a) EXPECT(a == Qnil, "different length list in arguments");
 static Value get_cars(Value *pls)
 {
     Value ls = *pls;
@@ -2271,10 +2272,10 @@ static Value get_cars(Value *pls)
         return Qnil;
     Value first = car(ls);
     if (first == Qnil) {
-        EXPECT_LIST_OF_NIL(cdr(ls));
+        EXPECT_LIST_EVERY(ls, EXPECT_NIL_ELEMENT); // a list of nil
         return Qnil;
     }
-    EXPECT_LIST_OF_LISTS(ls);
+    EXPECT_LIST_EVERY(ls, EXPECT_LIST_HEAD); // a list of lists
     Value cars = list1(car(first)), cdrs = list1(cdr(first));
     for (Value p = cdr(ls), lcars = cars, lcdrs = cdrs; p != Qnil; p = cdr(p)) {
         Value l = car(p);
