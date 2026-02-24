@@ -372,7 +372,6 @@ static inline bool is_length_3(Value args)
 }
 
 static Value arity_error(const char *op, int64_t expected, int64_t actual);
-
 #define EXPECT_ARITY_N(expr, op, exp, act) \
     EXPECT_OR_RETURN((expr), arity_error((op), (exp), (act)))
 #define EXPECT_ARITY_0(args) \
@@ -383,6 +382,17 @@ static Value arity_error(const char *op, int64_t expected, int64_t actual);
     EXPECT_ARITY_N(is_length_2(args), "", 2, length(args))
 #define EXPECT_ARITY_3(args) \
     EXPECT_ARITY_N(is_length_3(args), "", 3, length(args))
+
+#define EXPECT_ARITY(expected, args) \
+    EXPECT_ARITY_N(expected < 0 || length_in_range(args, expected, expected), \
+                   "", expected, length(args))
+#define EXPECT_ARITY_RANGE(min, max, args) \
+    EXPECT(length_in_range(args, min, max), \
+           "wrong number of arguments: expected %d..%d but got %"PRId64, \
+           min, max, length(args))
+#define EXPECT_ARITY_MIN_1(args) EXPECT_ARITY_N(args != Qnil, ">= ", 1, 0)
+#define EXPECT_ARITY_MIN_2(args) EXPECT_ARITY_N(is_length_min_2(args), ">= ", 2, length(args))
+#define EXPECT_ARITY_MIN_N(n, args) EXPECT_ARITY_N(is_length_min_n(args, n), ">= ", n, length(args))
 
 static Value apply_cfunc_v(Value env, Value f, Value args)
 {
@@ -508,10 +518,6 @@ static inline bool is_length_min_n(Value l, int64_t min)
     return false;
 }
 
-#define EXPECT_ARITY(expected, args) \
-    EXPECT_ARITY_N(expected < 0 || length_in_range(args, expected, expected), \
-                   "", expected, length(args))
-
 static inline Value type_error(const char *expected, Value v);
 
 #define EXPECT(expr, ...) EXPECT_OR_RETURN((expr), runtime_error(__VA_ARGS__))
@@ -523,14 +529,6 @@ static inline Value type_error(const char *expected, Value v);
 #define EXPECT_TYPE_OR(t1, t2, v) \
     EXPECT(sch_value_is_ ## t1(v) || sch_value_is_ ## t2(v), \
            "expected " #t1 " or " #t2 " but got %s", sch_value_to_type_name(v))
-
-#define EXPECT_ARITY_RANGE(min, max, args) \
-    EXPECT(length_in_range(args, min, max), \
-           "wrong number of arguments: expected %d..%d but got %"PRId64, \
-           min, max, length(args))
-#define EXPECT_ARITY_MIN_1(args) EXPECT_ARITY_N(args != Qnil, ">= ", 1, 0)
-#define EXPECT_ARITY_MIN_2(args) EXPECT_ARITY_N(is_length_min_2(args), ">= ", 2, length(args))
-#define EXPECT_ARITY_MIN_N(n, args) EXPECT_ARITY_N(is_length_min_n(args, n), ">= ", n, length(args))
 
 #define EXPECT_CLOSURE_ARITY(closure, args) do { \
         int64_t arity = PROCEDURE(closure)->arity, amin = CLOSURE(proc)->arity_min; \
@@ -552,51 +550,24 @@ static Value apply_closure(UNUSED Value env, Value proc, Value args)
     int64_t arity = cl->proc.arity;
     Value localenv = env_inherit(cl->env);
     Value params = cl->params;
-    if (arity == -1) {
-        Value pa = args, pp = params;
-        for (size_t i = 0; i < cl->arity_min; i++) {
-            env_put(localenv, car(pp), car(pa));
-            pa = cdr(pa), pp = cdr(pp);
-        }
-        EXPECT_TYPE(symbol, pp);
-        env_put(localenv, pp, pa);
-    } else {
-        for (Value pa = args, pp = params; pa != Qnil; pa = cdr(pa), pp = cdr(pp))
-            env_put(localenv, car(pp), car(pa));
-    }
+    size_t max = arity == -1 ? cl->arity_min : (size_t) arity;
+    Value pargs = args, pparams = params;
+    for (size_t i = 0; i < max; i++, pargs = cdr(pargs), pparams = cdr(pparams))
+        env_put(localenv, car(pparams), car(pargs));
+    if (arity == -1)
+        env_put(localenv, pparams, pargs);
     return eval_body(localenv, cl->body);
 }
 
-int64_t length_with_improper_list(Value l, bool *improper)
-{
-    int64_t len = 0;
-    for (Value p = l; p != Qnil; p = cdr(p)) {
-        if (!sch_value_is_pair(p)) {
-            *improper = true;
-            break;
-        }
-        len++;
-    }
-    return len;
-}
-
-static Value closure_new(Value env, Value params, Value body)
+static Value closure_new(Value env, Value params, uint64_t arity, Value rest, Value body)
 {
     Closure *f = obj_new(TAG_CLOSURE, sizeof(Closure));
-    bool headp = params == Qnil || sch_value_is_pair(params);
-    bool improper = false;
-    if (headp) {
-        int64_t len = length_with_improper_list(params, &improper);
-        if (improper) {
-            f->proc.arity = -1;
-            f->arity_min = len;
-        } else {
-            f->proc.arity = len;
-            f->arity_min = 0;
-        }
+    if (rest == Qnil) {
+        f->proc.arity = arity;
+        f->arity_min = 0;
     } else {
         f->proc.arity = -1;
-        f->arity_min = 0;
+        f->arity_min = arity;
     }
     f->proc.apply = apply_closure;
     f->env = env;
@@ -1124,14 +1095,33 @@ static Value syn_quote(UNUSED Value env, Value datum)
 }
 
 // 4.1.4. Procedures
+static Value parse_params(Value params, uint64_t *len, Value *rest)
+{
+    uint64_t n = 0;
+    for (Value p = params; p != Qnil; p = cdr(p)) {
+        if (!sch_value_is_pair(p)) {
+            EXPECT_TYPE(symbol, p);
+            *rest = p;
+            break;
+        }
+        EXPECT_TYPE(symbol, car(p));
+        n++;
+    }
+    *len = n;
+    return Qfalse;
+}
+
 //PTR -- proper tail recursion needed
 static Value syn_lambda(Value env, Value args)
 {
-    Value params = car(args), body = cdr(args);
-    if (params != Qnil)
-        EXPECT_TYPE_OR(pair, symbol, params);
+    Value params = car(args), body = cdr(args), rest = Qnil;
+    uint64_t len = 0;
+    if (params != Qnil) {
+        Value e = parse_params(params, &len, &rest);
+        EXPECT_ERROR(e);
+    }
     EXPECT_TYPE(pair, body);
-    return closure_new(env, params, body);
+    return closure_new(env, params, len, rest, body);
 }
 
 // 4.1.5. Conditionals
@@ -1278,7 +1268,9 @@ static Value let(Value env, Value var, Value bindings, Value body)
         env_put(localenv, ident, val);
     }
     if (named) {
-        Value proc = closure_new(localenv, cdr(params), body);
+        Value rparams = cdr(params);
+        int64_t len = length(rparams);
+        Value proc = closure_new(localenv, rparams, len, Qnil, body);
         env_put(localenv, var, proc); // letenv affects as proc->env
     }
     return eval_body(localenv, body);
@@ -1530,8 +1522,11 @@ static Value define_variable(Value env, Value ident, Value expr)
 
 static Value define_proc_closure(Value env, Value heads, Value body)
 {
-    Value ident = car(heads), params = cdr(heads);
-    Value val = closure_new(env, params, body);
+    Value ident = car(heads), params = cdr(heads), rest = Qnil;
+    uint64_t len = 0;
+    Value e = parse_params(params, &len, &rest);
+    EXPECT_ERROR(e);
+    Value val = closure_new(env, params, len, rest, body);
     return define_variable(env, ident, val);
 }
 
