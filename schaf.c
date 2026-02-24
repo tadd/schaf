@@ -549,17 +549,35 @@ static void env_put(Value env, Value key, Value value);
 //PTR
 static Value apply_closure(UNUSED Value env, Value proc, Value args)
 {
-    EXPECT_CLOSURE_ARITY(proc, args);
+    EXPECT_ARITY(PROCEDURE(proc)->arity, args);
     Closure *cl = CLOSURE(proc);
-    int64_t arity = cl->proc.arity;
     Value localenv = env_inherit(cl->env);
-    Value params = cl->params;
-    size_t max = arity == -1 ? cl->arity_min : (size_t) arity;
-    Value pargs = args, pparams = params;
-    for (size_t i = 0; i < max; i++, pargs = cdr(pargs), pparams = cdr(pparams))
-        env_put(localenv, car(pparams), car(pargs));
-    if (arity == -1)
-        env_put(localenv, pparams, pargs);
+    for (Value pa = args, pp = cl->params; pa != Qnil; pa = cdr(pa), pp = cdr(pp))
+        env_put(localenv, car(pp), car(pa));
+    return eval_body(localenv, cl->body);
+}
+
+//PTR
+static Value apply_closure_v(UNUSED Value env, Value proc, Value args)
+{
+    Closure *cl = CLOSURE(proc);
+    Value localenv = env_inherit(cl->env);
+    env_put(localenv, cl->params, args);
+    return eval_body(localenv, cl->body);
+}
+
+//PTR
+static Value apply_closure_v_n(UNUSED Value env, Value proc, Value args)
+{
+    EXPECT_ARITY_MIN_N(CLOSURE(proc)->arity_min, args);
+    Closure *cl = CLOSURE(proc);
+    Value localenv = env_inherit(cl->env);
+    Value pa = args, pp = cl->params;
+    for (size_t i = 0; i < cl->arity_min; i++) {
+        env_put(localenv, car(pp), car(pa));
+        pa = cdr(pa), pp = cdr(pp);
+    }
+    env_put(localenv, pp, pa);
     return eval_body(localenv, cl->body);
 }
 
@@ -569,11 +587,12 @@ static Value closure_new(Value env, Value params, uint64_t arity, Value rest, Va
     if (rest == Qnil) {
         f->proc.arity = arity;
         f->arity_min = 0;
+        f->proc.apply = apply_closure;
     } else {
         f->proc.arity = -1;
         f->arity_min = arity;
+        f->proc.apply = arity == 0 ? apply_closure_v : apply_closure_v_n;
     }
-    f->proc.apply = apply_closure;
     f->env = env;
     f->params = params;
     f->body = body;
