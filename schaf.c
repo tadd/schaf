@@ -1263,18 +1263,20 @@ static bool is_let_binding_form(Value b)
         cddr(b) == Qnil;
 }
 
-#define EXPECT_LET_BINDING_FORM(b) \
-    EXPECT_WITH_OBJ(is_let_binding_form(b), "malformed binding", b)
+#define EXPECT_LET_BINDING_FORM(b, vars) do { \
+        EXPECT_WITH_OBJ(is_let_binding_form(b), "malformed binding", b); \
+        EXPECT_UNIQUE_VARNAME(vars, car(b)); \
+    } while (0)
 
 static Value let(Value env, Value var, Value bindings, Value body)
 {
     EXPECT_LIST_HEAD(bindings);
     bool named = var != Qfalse;
-    Value localenv = env_inherit(env);
+    Value localenv = env_inherit(env), vars = Qnil;
     Value params = DUMMY_PAIR(), lparams = params;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
-        EXPECT_LET_BINDING_FORM(b);
+        EXPECT_LET_BINDING_FORM(b, vars);
         Value ident = car(b), exprs = cdr(b);
         if (named)
             lparams = PAIR(lparams)->cdr = list1(ident);
@@ -1307,10 +1309,10 @@ static Value syn_let(Value env, Value args)
 static Value let_star(Value env, Value bindings, Value body)
 {
     EXPECT_LIST_HEAD(bindings);
-    Value localenv = env;
+    Value localenv = env, vars = Qnil;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         vValue b = car(p); // workaround for clang -O2
-        EXPECT_LET_BINDING_FORM(b);
+        EXPECT_LET_BINDING_FORM(b, vars);
         Value ident = car(b), exprs = cdr(b);
         localenv = env_inherit(localenv);
         Value val = eval_loc(localenv, exprs);
@@ -1330,10 +1332,10 @@ static Value letrec(Value env, Value bindings, Value body)
 {
     EXPECT_LIST_HEAD(bindings);
     EXPECT_TYPE(pair, body);
-    Value localenv = env_inherit(env);
+    Value localenv = env_inherit(env), vars = Qnil;
     for (Value p = bindings; p != Qnil; p = cdr(p)) {
         Value b = car(p);
-        EXPECT_LET_BINDING_FORM(b);
+        EXPECT_LET_BINDING_FORM(b, vars);
         Value ident = car(b), exprs = cdr(b);
         Value val = eval_loc(localenv, exprs);
         env_put(localenv, ident, val);
