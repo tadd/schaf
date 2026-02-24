@@ -6,6 +6,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "libscary.h"
 #include "schaf.h"
 #include "utils.h"
 
@@ -78,6 +79,7 @@ static void usage(FILE *out)
     usage_opt(out, "<file>", "Path or - (stdin).");
     usage_opt(out, "-e <source>", "Evaluate <source> string directly instead of <file>.");
     usage_opt(out, "-H <MiB>", "Specify initial heap size.");
+    usage_opt(out, "-l <file>", "Load specified file in advance. Can be specified multiple.");
     usage_opt(out, "-M", "Print memory usage (VmHWM) at exit.");
     usage_opt(out, "-p", "Print the last expression before exit.");
     usage_opt(out, "-P", "Only parse and print syntax list without evaluation.");
@@ -97,6 +99,7 @@ static void usage(FILE *out)
 typedef struct {
     const char *path;
     const char *script;
+    const char **loaded_files;
     double init_heap_size_mib;
     int gc_algorithm;
     bool print;
@@ -148,6 +151,13 @@ static double parse_posnum(const char *s)
     return val;
 }
 
+static void append_load_file(SchOption *o, const char *load_file)
+{
+    if (o->loaded_files == NULL)
+        o->loaded_files = scary_new(sizeof(const char *));
+    scary_push((char ***) &o->loaded_files, load_file);
+}
+
 static SchOption parse_opt(int argc, char *const *argv)
 {
     const OptLonger opts[] = {
@@ -162,13 +172,16 @@ static SchOption parse_opt(int argc, char *const *argv)
     };
     OptLongerData data = { 0 };
     int opt;
-    while ((opt = getopt_longer(argc, argv, "e:H:MPpSsTh", opts, &data)) != -1) {
+    while ((opt = getopt_longer(argc, argv, "e:H:l:MPpSsTh", opts, &data)) != -1) {
         switch (opt) {
         case 'e':
             o.script = optarg;
             break;
         case 'H':
             o.init_heap_size_mib = parse_posnum(optarg);
+            break;
+        case 'l':
+            append_load_file(&o, optarg);
             break;
         case 'M':
             o.memory = true;
@@ -284,6 +297,18 @@ static int repl(void)
     return 0;
 }
 
+static SchValue load_files(const char **files)
+{
+    SchValue v = SCH_UNDEF;
+    for (size_t i = 0, len = scary_length(files); i < len; i++) {
+        v = sch_load(files[i]);
+        if (v == SCH_UNDEF)
+            break;
+    }
+    scary_free(files);
+    return v;
+}
+
 int main(int argc, char **argv)
 {
     SchOption o = parse_opt(argc, argv);
@@ -295,9 +320,14 @@ int main(int argc, char **argv)
         sch_set_gc_algorithm(o.gc_algorithm);
 
     SCH_INIT();
+    SchValue v;
+    if (o.loaded_files != NULL) {
+        v = load_files(o.loaded_files);
+        if (v == SCH_UNDEF)
+            error("%s", sch_error_message()); // error while loading
+    }
     if (o.interacitve)
         return repl();
-    SchValue v;
     if (o.script)
         v = o.parse_only ? sch_parse_string(o.script) : sch_eval_string(o.script);
     else {
