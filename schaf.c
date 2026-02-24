@@ -1099,16 +1099,26 @@ static Value syn_quote(UNUSED Value env, Value datum)
 }
 
 // 4.1.4. Procedures
+static Value memq(Value key, Value l);
+#define EXPECT_UNIQUE_VARNAME(vars, v)  do { \
+        EXPECT(memq(v, vars) == Qfalse, "duplicated variable: %s", sch_symbol_to_cstr(v)); \
+        vars = cons(v, vars); \
+    } while (0)
+
 static Value parse_params(Value params, uint64_t *len, Value *rest)
 {
     uint64_t n = 0;
-    for (Value p = params; p != Qnil; p = cdr(p)) {
+    Value vars = Qnil;
+    for (Value p = params, var = Qfalse; p != Qnil; p = cdr(p)) {
         if (!sch_value_is_pair(p)) {
             EXPECT_TYPE(symbol, p);
+            EXPECT_UNIQUE_VARNAME(vars, p);
             *rest = p;
             break;
         }
-        EXPECT_TYPE(symbol, car(p));
+        var = car(p);
+        EXPECT_TYPE(symbol, var);
+        EXPECT_UNIQUE_VARNAME(vars, var);
         n++;
     }
     *len = n;
@@ -1199,7 +1209,6 @@ static Value syn_cond(Value env, Value clauses)
 #define EXPECT_LIST_HEAD(v) \
     EXPECT(v == Qnil || sch_value_is_pair(v), \
            "expected null or pair but got %s", sch_value_to_type_name(v))
-static Value memq(Value key, Value l);
 
 //PTR
 static Value syn_case(Value env, Value args)
@@ -1355,9 +1364,6 @@ static bool is_do_binding_form(Value b)
          (sch_value_is_pair(cddr(b)) && cdddr(b) == Qnil)); // or 3
 }
 
-#define EXPECT_UNIQUE_VARNAME(vars, v) \
-    EXPECT(memq(v, vars) == Qfalse, "duplicated variable: %s", sch_symbol_to_cstr(v))
-
 //PTR
 static Value syn_do(Value env, Value args)
 {
@@ -1374,7 +1380,6 @@ static Value syn_do(Value env, Value args)
         EXPECT_WITH_OBJ(is_do_binding_form(b), "malformed binding", b);
         Value var = car(b), inits = cdr(b), step = cddr(b);
         EXPECT_UNIQUE_VARNAME(vars, var);
-        vars = cons(var, vars);
         if (step != Qnil) {
             vValue datum = cons(var, step); // workaround for clang -Og
             steps = cons(datum, steps);
