@@ -1804,13 +1804,13 @@ static Value proc_real_p(UNUSED Value env, Value obj)
     return BOOL_VAL(sch_value_is_number(obj));
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wfloat-equal"
 static bool is_integer_like_double(double d)
 {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
     return isfinite(d) && d == floor(d);
-}
 #pragma GCC diagnostic pop
+}
 
 static bool is_integer_like_real(Value x)
 {
@@ -1903,15 +1903,15 @@ static Value proc_ge(UNUSED Value env, Value args)
     return relop(relop_ge, args);
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wfloat-equal"
 static bool zero_p(Value x)
 {
     if (sch_value_is_integer(x))
         return INT(x) == 0;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
     return sch_value_is_real(x) && REAL(x) == 0.0;
-}
 #pragma GCC diagnostic pop
+}
 
 static Value proc_zero_p(UNUSED Value env, Value obj)
 {
