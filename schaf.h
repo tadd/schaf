@@ -24,6 +24,8 @@ char *sch_stringify(SchValue v);
 [[nodiscard, gnu::malloc, gnu::returns_nonnull]]
 char *sch_inspect(SchValue v);
 void sch_display(SchValue v);
+SchValue sch_p(SchValue args);
+
 SchValue sch_parse(const char *path);
 SchValue sch_parse_string(const char *in);
 SchValue sch_parse_file(FILE *in, const char *name);

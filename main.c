@@ -339,10 +339,8 @@ int main(int argc, char **argv)
     }
     if (v == SCH_UNDEF)
         error("%s", sch_error_message()); // runtime error occurred
-    if (o.print) {
-        sch_display(v);
-        printf("\n");
-    }
+    if (o.print)
+        sch_p(v);
     if (o.cputime)
         print_cputime();
     if (o.memory)

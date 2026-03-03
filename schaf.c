@@ -3076,17 +3076,24 @@ static Value proc_schaf_environment(UNUSED Value env)
     return env_dup(NULL, env_default);
 }
 
+static void inspect_string(FILE *f, const char *s)
+{
+    fprintf(f, "\"");
+    const char *t = s;
+    for (const char *p; (p = strpbrk(t, "\\\"")) != NULL; t = p + 1) {
+        fprintf(f, "%.*s", (int) (p - t), t);
+        fprintf(f, "\\%c", *p); // escaped
+    }
+    fprintf(f, "%s\"", t);
+}
+
 static void inspect_single(FILE *f, Value v)
 {
     switch (sch_value_type_of(v)) {
     case TYPE_STRING:
-        fprintf(f, "\"");
-        fdisplay_single(f, v);
-        fprintf(f, "\"");
+        inspect_string(f, STRING(v));
         break;
     case TYPE_SYMBOL:
-        fprintf(f, "'");
-        // fall through
     case TYPE_UNDEF:
     case TYPE_NULL:
     case TYPE_EOF:
@@ -3118,9 +3125,14 @@ char *sch_inspect(Value v)
     return s;
 }
 
-static Value proc_p(UNUSED Value env, Value args)
+Value sch_p(Value args)
 {
     return print_foreach(args, inspect);
+}
+
+static Value proc_p(UNUSED Value env, Value args)
+{
+    return sch_p(args);
 }
 
 //
