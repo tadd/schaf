@@ -29,6 +29,15 @@ SchValue sch_p(SchValue args);
 SchValue sch_parse(const char *path);
 SchValue sch_parse_string(const char *in);
 SchValue sch_parse_file(FILE *in, const char *name);
+#if 0
+SchValue sch_transform(const char *path);
+SchValue sch_transform_string(const char *in);
+SchValue sch_transform_file(FILE *in, const char *name);
+#else
+#define sch_transform sch_parse
+#define sch_transform_string sch_parse_string
+#define sch_transform_file sch_parse_file
+#endif
 SchValue sch_load(const char *path);
 SchValue sch_eval_string(const char *s);
 SchValue sch_load_file(FILE *in, const char *name);

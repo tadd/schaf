@@ -82,11 +82,12 @@ static void usage(FILE *out)
     usage_opt(out, "-l <file>", "Load specified file in advance. Can be specified multiple.");
     usage_opt(out, "-M", "Print memory usage (VmHWM) at exit.");
     usage_opt(out, "-p", "Print the last expression before exit.");
-    usage_opt(out, "-P", "Only parse and print syntax list without evaluation.");
+    usage_opt(out, "-P", "Only parse then print syntax list without transformation/evaluation. Supersede -R.");
     usage_opt(out, "-s", "Print heap statistics before/after GC.");
     usage_opt(out, "--gc=<algorithm>", "Specify GC algorithm: mark-sweep, mark-sweep+bitmap, epsilon.");
     usage_opt(out, "-S, --gc-stress", "Put stress on GC.");
     usage_opt(out, "-T", "Print consumed CPU time at exit.");
+    usage_opt(out, "-R", "Only parse/transform then print syntax list without evaluation.");
     usage_opt(out, "-h, --help", "Print this help.");
     exit(out == stdout ? 0 : 2);
 }
@@ -104,6 +105,7 @@ typedef struct {
     int gc_algorithm;
     bool print;
     bool parse_only;
+    bool transform_only;
     bool cputime;
     bool memory;
     bool heap_stat;
@@ -172,7 +174,7 @@ static SchOption parse_opt(int argc, char *const *argv)
     };
     OptLongerData data = { 0 };
     int opt;
-    while ((opt = getopt_longer(argc, argv, "e:H:l:MPpSsTh", opts, &data)) != -1) {
+    while ((opt = getopt_longer(argc, argv, "e:H:l:MPpRSsTh", opts, &data)) != -1) {
         switch (opt) {
         case 'e':
             o.script = optarg;
@@ -191,6 +193,9 @@ static SchOption parse_opt(int argc, char *const *argv)
             break;
         case 'p':
             o.print = true;
+            break;
+        case 'R':
+            o.transform_only = o.print = true;
             break;
         case 'S':
             o.stress_gc = true;
@@ -309,6 +314,33 @@ static SchValue load_files(const char **files)
     return v;
 }
 
+static SchValue parse(SchOption o)
+{
+    if (o.script)
+        return sch_parse_string(o.script);
+    if (strcmp(o.path, "-") == 0)
+        return sch_parse_file(stdin, "<stdin>");
+    return sch_parse(o.path);
+}
+
+static SchValue transform(SchOption o)
+{
+    if (o.script)
+        return sch_transform_string(o.script);
+    if (strcmp(o.path, "-") == 0)
+        return sch_transform_file(stdin, "<stdin>");
+    return sch_transform(o.path);
+}
+
+static SchValue eval(SchOption o)
+{
+    if (o.script)
+        return sch_eval_string(o.script);
+    if (strcmp(o.path, "-") == 0)
+        return sch_load_file(stdin, "<stdin>");
+    return sch_load(o.path);
+}
+
 int main(int argc, char **argv)
 {
     SchOption o = parse_opt(argc, argv);
@@ -328,15 +360,12 @@ int main(int argc, char **argv)
     }
     if (o.interacitve)
         return repl();
-    if (o.script)
-        v = o.parse_only ? sch_parse_string(o.script) : sch_eval_string(o.script);
-    else {
-        if (strcmp(o.path, "-") == 0)
-            v = o.parse_only ?
-                sch_parse_file(stdin, "<stdin>") : sch_load_file(stdin, "<stdin>");
-        else
-            v = o.parse_only ? sch_parse(o.path) : sch_load(o.path);
-    }
+    if (o.parse_only)
+        v = parse(o);
+    else if (o.transform_only)
+        v = transform(o);
+    else
+        v = eval(o);
     if (v == SCH_UNDEF)
         error("%s", sch_error_message()); // runtime error occurred
     if (o.print)
