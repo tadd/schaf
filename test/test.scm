@@ -495,6 +495,9 @@
     (define (f . a) 42)
     (expect = (f) 42))
   (let ()
+    (define (f x . a) (* x (car a)))
+    (expect = (f 2 3) 6))
+  (let ()
     (define (f . a) (* -1 (car a)))
     (expect = (f 42) -42))))
 
